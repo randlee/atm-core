@@ -119,7 +119,7 @@ the code cannot keep drifting between old and new identity models.
 
 - new ADR under `docs/adr/`
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-message-schema.md`

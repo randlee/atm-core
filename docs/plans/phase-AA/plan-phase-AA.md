@@ -51,10 +51,10 @@ Current violated state that `Phase AA` must delete:
 - daemon test support composes SQLite assemblies directly
 
 Authoritative planning support artifacts:
-- `docs/phase-AA/readiness.md`
-- `docs/phase-AA/issues.md`
-- `docs/phase-AA/daemon-state-machines.md`
-- `docs/phase-AA/daemon-sqlite-leak-ledger.md`
+- `docs/plans/phase-AA/readiness.md`
+- `docs/plans/phase-AA/issues.md`
+- `docs/plans/phase-AA/daemon-state-machines.md`
+- `docs/plans/phase-AA/daemon-sqlite-leak-ledger.md`
 - `.claude/agents/boundary-guard.md`
 
 ## Why Phase AA Exists
@@ -333,7 +333,7 @@ finish the daemon/runtime simplification line cleanly.
 ## Exit Criteria
 
 Authoritative Phase `AA` exit criteria live only in
-`docs/phase-AA/readiness.md`.
+`docs/plans/phase-AA/readiness.md`.
 
 This overview intentionally does not restate the closure checklist. Any
 Phase `AA` closeout review must use `readiness.md` as the sole source of truth

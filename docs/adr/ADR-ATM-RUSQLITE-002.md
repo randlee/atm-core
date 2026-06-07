@@ -20,7 +20,7 @@ related_boundaries:
 code_references:
   - crates/atm-rusqlite/src/shared_db.rs
   - crates/atm-rusqlite/src/lib.rs
-  - docs/phase-S/sprint-S15-rusqlite-plan.md
+  - docs/plans/phase-S/sprint-S15-rusqlite-plan.md
 ```
 
 ## Context
@@ -60,7 +60,7 @@ Introduce one crate-private in-process SQLite write worker that:
 
 ## Follow-Up
 
-- use `docs/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
+- use `docs/plans/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
   the S.15 implementation shape and any follow-on QA reconciliation
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires

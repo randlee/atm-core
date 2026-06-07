@@ -116,7 +116,7 @@ Keep heartbeat, status cache, and doctor together. Splitting them risks inventin
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/team-member-state.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

@@ -187,7 +187,7 @@ Malformed durable SQLite rows are different:
 ## Follow-Up Work
 
 - S.5 planning for `atm list` and single-message `atm read` semantics is
-  recorded in `docs/phase-S/sprint-S5.md` Required Work §7.
+  recorded in `docs/plans/phase-S/sprint-S5.md` Required Work §7.
 - update product and crate-local CLI documentation so `atm list` owns queue
   search and `atm read` owns detail fetch
 - redesign the mailbox query service so default list/read flows are bounded by

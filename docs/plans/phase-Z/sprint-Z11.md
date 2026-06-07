@@ -62,17 +62,17 @@ operator-facing error/recovery contract and the closure proof for that path.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 ## Exact Targets
 
 - `crates/atm-core/src/delivery_policy.rs`
 - `crates/atm-core/src/send/mod.rs`
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `docs/project-plan.md`
 
 ## Delete / Narrow Inventory
@@ -102,7 +102,7 @@ operator-facing error/recovery contract and the closure proof for that path.
    Required tests:
    - prove the clean-start first-send failure returns the new recovery text
    Required docs:
-   - update `docs/phase-Z/smoke-findings-ledger.md`
+   - update `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 2. Prove no ambient fallback was added.
    Development work:
@@ -113,11 +113,11 @@ operator-facing error/recovery contract and the closure proof for that path.
    - prove first-send still fails cleanly when ATM roster is empty
    - prove the failure is now actionable rather than opaque
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 3. Stamp closure records.
    Development work:
-   - stamp `Z.11` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.11` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    - add the `Z.11` ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
@@ -125,7 +125,7 @@ operator-facing error/recovery contract and the closure proof for that path.
    - update `docs/project-plan.md`
 
 4. Close the `Z.11`-owned hardening follow-up items already assigned in
-   `docs/phase-Z/readiness.md`.
+   `docs/plans/phase-Z/readiness.md`.
    Development work:
    - close `RSH-008` for the `deliver_payloads` payload-size gate without
      widening into a broader send-path redesign
@@ -134,7 +134,7 @@ operator-facing error/recovery contract and the closure proof for that path.
    - prove the accepted `Z.11` branch includes the payload-size gate and the
      remaining `RSH-010` hardening closure
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 ## Split Recommendation
 
@@ -150,10 +150,10 @@ scope into `Z.12`, `Z.13`, or `Z.14` instead of widening `Z.11`.
   - `Repair or reload the team roster before retrying delivery.`
   - `Use 'atm teams add-member' for all active team members.`
 - no `config.json` roster-truth fallback is introduced
-- `docs/phase-Z/readiness.md` records the accepted `Z.11` head and verdict
+- `docs/plans/phase-Z/readiness.md` records the accepted `Z.11` head and verdict
 - `docs/project-plan.md` includes the `Z.11` sprint ledger row
 - `RSH-008` and `RSH-010` close in `Z.11` exactly as assigned in
-  `docs/phase-Z/readiness.md`
+  `docs/plans/phase-Z/readiness.md`
 
 ## Non-Closure
 
@@ -177,8 +177,8 @@ guidance and no hidden fallback behavior.
 
 ## Required Document Updates
 
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

@@ -17,9 +17,9 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/plan-phase-Yd.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/adr/INDEX.md`
 - `docs/adr/ADR-014-runtime-health-projection-and-liveness-signal-ownership.md`
 - `docs/requirements.md`
@@ -27,7 +27,7 @@ target: integrate/phase-Y
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `boundaries/atm-core/status-source.toml`
 - `boundaries/atm-daemon/daemon-status-source.toml`
 - `docs/testing-guidelines.md`
@@ -40,17 +40,17 @@ target: integrate/phase-Y
 - any runtime-owned liveness signal source required by the accepted design
 - `docs/atm-daemon/boundaries.md`
 - `boundaries/atm-daemon/daemon-status-source.toml`
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 
 ## Deliverables
 
 - the notification-worker liveness blocker is resolved either by:
   - a thin runtime-owned signal that `runtime_health` projects directly
   - or an explicit documented reclassification to non-blocking in
-    `docs/phase-Y/issues.md`
+    `docs/plans/phase-Y/issues.md`
 - `runtime_health` remains a projection layer, not a compensating recovery
   engine
 - one explicit readiness record states whether `Phase Y` may land on `develop`
@@ -100,7 +100,7 @@ fn project_runtime_health(
 ## Required Work
 
 - close or explicitly reclassify the final liveness/readiness blocker from
-  `docs/phase-Y/issues.md` without growing logic-heavy inference inside
+  `docs/plans/phase-Y/issues.md` without growing logic-heavy inference inside
   `runtime_health`
 - update the readiness record with the final `develop`-gate verdict
 - update `Phase Z` docs so they remain blocked until that verdict is positive
@@ -128,14 +128,14 @@ fn project_runtime_health(
   - named test proves the health projection does not inspect queue internals:
     - `runtime_health_projection_does_not_inspect_queue_internals`
 - reclassification path:
-  - `docs/phase-Y/issues.md` contains the reclassification entry and rationale
+  - `docs/plans/phase-Y/issues.md` contains the reclassification entry and rationale
     stating why the issue no longer blocks landing on `develop`
   - `arch-qa` verifies that reclassification entry and rationale
   - named runtime-health liveness tests are not required for this path
-- `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
-- `docs/phase-Yd/readiness.md` names the final accepted candidate line that is
+- `docs/plans/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
+- `docs/plans/phase-Yd/readiness.md` names the final accepted candidate line that is
   authorized for merge to `develop`
-- `docs/plan-phase-Z.md` reflects the final `Phase Z` gate state accurately
+- `docs/plans/phase-Z/plan-phase-Z.md` reflects the final `Phase Z` gate state accurately
 
 ## Required Validation
 

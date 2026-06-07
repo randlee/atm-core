@@ -218,15 +218,15 @@ Every smoke row must capture:
 
 ## Immediate Planning Outputs
 
-- `docs/plan-phase-AB.md`
-- `docs/phase-AB/cross-host-smoke-checklist.md`
-- `docs/phase-AB/cross-host-findings-ledger.md`
-- `docs/phase-AB/readiness.md`
-- `docs/phase-AB/sprint-AB1.md`
-- `docs/phase-AB/sprint-AB2.md`
-- `docs/phase-AB/sprint-AB3.md`
-- `docs/phase-AB/sprint-AB4.md`
-- `docs/phase-AB/sprint-AB5.md`
+- `docs/plans/phase-AB/plan-phase-AB.md`
+- `docs/plans/phase-AB/cross-host-smoke-checklist.md`
+- `docs/plans/phase-AB/cross-host-findings-ledger.md`
+- `docs/plans/phase-AB/readiness.md`
+- `docs/plans/phase-AB/sprint-AB1.md`
+- `docs/plans/phase-AB/sprint-AB2.md`
+- `docs/plans/phase-AB/sprint-AB3.md`
+- `docs/plans/phase-AB/sprint-AB4.md`
+- `docs/plans/phase-AB/sprint-AB5.md`
 
 ## Acceptance / Phase Entry Gate
 

@@ -16,15 +16,15 @@ is no longer encoded as hook metadata plus implied behavior.
 
 ## Hard Dependencies
 
-- `docs/phase-Yb/sprint-Y8.md` must be complete first
+- `docs/plans/phase-Yb/sprint-Y8.md` must be complete first
 
 ## Governing Requirements
 
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 
 ## Exact Code And Document Targets
@@ -34,7 +34,7 @@ is no longer encoded as hook metadata plus implied behavior.
 - `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
 - `boundaries/atm-core/non-claude-outbound.toml`
 - `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
-- `docs/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 

@@ -32,7 +32,7 @@ decision is documented explicitly.
 
 ## Governing Plan
 
-- `docs/plan-phase-AB.md`
+- `docs/plans/phase-AB/plan-phase-AB.md`
 
 ## Execution Branch
 
@@ -47,7 +47,7 @@ decision is documented explicitly.
 - copied-state rerun of the approved smoke subset for both hosts
 - captured operator setup/repair guidance discovered during copied-state
   revalidation
-- final `docs/phase-AB/readiness.md` verdict update
+- final `docs/plans/phase-AB/readiness.md` verdict update
 - findings-ledger updates for any revalidated or newly discovered issues
 
 ## Acceptance Criteria

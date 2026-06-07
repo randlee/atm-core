@@ -39,7 +39,7 @@ This sprint closes the current runtime-admission gap: host-wide launch/serve own
 ## Prerequisites
 
 - `sc-lint` inventory-parity and planning-metadata verification support is available as the external prerequisite gate for Phase R continuation work.
-- Process gates `PG-001` through `PG-004` from `docs/phase-R/issues.md` are approved and in effect before coding starts.
+- Process gates `PG-001` through `PG-004` from `docs/plans/phase-R/issues.md` are approved and in effect before coding starts.
 
 ## Hard Dependencies
 
@@ -109,8 +109,8 @@ Do not split unless the lifecycle state machine lands cleanly but the host-wide 
 
 ## Required Document Updates
 
-- `docs/phase-R/issues.md`
-- `docs/plan-phase-R.md`
+- `docs/plans/phase-R/issues.md`
+- `docs/plans/phase-R/plan-phase-R.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md` when lifecycle/control-plane facades change
 

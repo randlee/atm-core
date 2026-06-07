@@ -251,7 +251,7 @@ Implemented seam on this branch:
 - `crates/atm-core/src/delivery_execution.rs`
   - `ClaudeInboxWriter` now delegates to the narrowed Claude append seam
     without route checking in the low-level runtime helper
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
   - the shared validation matrix now names outbound-boundary proof instead of
     the obsolete hook-path wording
 

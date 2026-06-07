@@ -120,8 +120,8 @@ belong to the implementation sprint on this same worktree after plan review.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-S.md`
-- `docs/phase-S/issues.md`
+- `docs/plans/phase-S/plan-phase-S.md`
+- `docs/plans/phase-S/issues.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm/requirements.md`

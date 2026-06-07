@@ -21,12 +21,12 @@ worktree: ../atm-core-worktrees/feature/pW-s7-triage-closeout
 
 - merged `origin/integrate/phase-W` into the sprint branch so `W.5` and `W.6`
   were included before final closeout
-- updated `docs/phase-W/sprint-W4.md` so the CLI / doctor split names
+- updated `docs/plans/phase-W/sprint-W4.md` so the CLI / doctor split names
   `DaemonRequestDispatcher::project_doctor_report(...)` as the shared doctor
   projection surface for replay durability follow-through
 - verified the `W.4` carry-forward findings already fixed on the branch and
   recorded their closeout in the earlier `17ec8cd` branch head
-- added this sprint doc and updated `docs/plan-phase-W.md` /
+- added this sprint doc and updated `docs/plans/phase-W/plan-phase-W.md` /
   `docs/project-plan.md` so the authoritative Phase `W` sequence and merged
   sprint registry include the final closeout sprint
 - documented the `sqlite_ready` caller-responsibility invariant in
@@ -36,13 +36,13 @@ worktree: ../atm-core-worktrees/feature/pW-s7-triage-closeout
 
 ## Acceptance Criteria
 
-- `docs/phase-W/sprint-W7.md` exists with goals, implementation notes, and
+- `docs/plans/phase-W/sprint-W7.md` exists with goals, implementation notes, and
   acceptance criteria for the closeout work
-- `docs/plan-phase-W.md` includes `W.7` in the authoritative sprint sequence
+- `docs/plans/phase-W/plan-phase-W.md` includes `W.7` in the authoritative sprint sequence
   and deliverables list
 - `docs/project-plan.md` records the merged `W.1` through `W.6` sprint status,
   includes `W.5` / `W.6` in the Phase `W` execution shape, and points back to
-  the Phase `W` closeout gate in `docs/plan-phase-W.md`
+  the Phase `W` closeout gate in `docs/plans/phase-W/plan-phase-W.md`
 - `build_runtime_status_cache_state(...)` documents that callers own
   re-applying SQLite unavailability after assembly failures
 - `replay_metadata_for_request(...)` returns `Option<...>` and no longer

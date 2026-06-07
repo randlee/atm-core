@@ -33,9 +33,9 @@ The final section of this document must record:
 
 The final release verdict must remain `PENDING` until:
 
-- `docs/phase-Z/release-checklist.md` records a final checklist result for the
+- `docs/plans/phase-Z/release-checklist.md` records a final checklist result for the
   closeout candidate
-- every row in `docs/phase-Z/canary-findings-ledger.md` records a final
+- every row in `docs/plans/phase-Z/canary-findings-ledger.md` records a final
   `z4_disposition`
 - every deferred `Z.3` finding records explicit `team-lead` approval
 
@@ -60,7 +60,7 @@ The final release verdict must remain `PENDING` until:
 | Z.19 | `fa36120d` | `PASS` | `complete` | `just smoke fast` now creates the clean-room team shell, repairs ATM roster truth with `atm teams add-member`, proves both send modes plus recipient read/ack/nudge flow, writes `reports/smoke/smoke-fast.md`, and fails on missing retained-log events or any warning/error records |
 | Z.20 | `a26b5e99` | `PASS` | `complete` | `just smoke` now executes the default normal lane, includes the full fast clean-room path, verifies recipient-side pending-ack inspection, post-ack clear/re-read behavior, post-activity log snapshot, and invalid-ack recovery guidance, and writes `reports/smoke/smoke.md` with root-cause fields reserved for any non-pass row |
 | Z.21 | `5dbcd3c3` | `PASS` | `complete` | `just smoke thorough` now reports every frozen `Z1-001` through `Z1-009` row plus both retained-log gates, covers the full top-level CLI happy/common-error-path inventory, and proves the disposable copied-state lane, degraded compatibility-append warning, and retry-visible daemon/runtime evidence end-to-end |
-| Z.22 | `be68e147` | `PASS` | `complete` | `docs/phase-Z/smoke-findings-review.md` is now the authoritative major-smoke-findings queue; the accepted `Z.19` through `Z.21` smoke line promoted no larger rework items beyond active-sprint fixes, so the queue is explicitly empty for this batch and linked back to readiness/canary evidence. |
+| Z.22 | `be68e147` | `PASS` | `complete` | `docs/plans/phase-Z/smoke-findings-review.md` is now the authoritative major-smoke-findings queue; the accepted `Z.19` through `Z.21` smoke line promoted no larger rework items beyond active-sprint fixes, so the queue is explicitly empty for this batch and linked back to readiness/canary evidence. |
 | Z.23 | `562478ef` | `PASS` | `complete` | `just test coverage` now runs explicit local coverage reporting through `cargo llvm-cov`, writes canonical JSON plus tracked latest `reports/coverage/mac.md` / `reports/coverage/win.md`, keeps plain `just test` unchanged, and preserves the non-host tracked platform report as its last real run or an explicit placeholder. |
 | Z.24 | `a9704dd2` | `PASS` | `complete` | `sc-observability` / `sc-observability-types` `1.1.0` adoption moves retained-log rotation, pruning, and maintenance shutdown ownership onto `RetainedLogPolicy` and the logger-owned maintenance runtime; ATM keeps only policy selection, health projection, and doctor/report presentation. |
 | Z.3 | `97518da5` | `PASS` | `complete` | `Z.17` executed the `atm-dev` canary on the accepted post-`Z.16` integration baseline with the frozen participant minimum `team-lead + arch-ctm`; retained command, send, read, and log-reporting flows succeeded; no validated canary findings were promoted to `Z.4`. |

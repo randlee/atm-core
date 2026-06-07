@@ -50,16 +50,16 @@ This sprint owns team-admin views and member mutation, not restore automation.
 ## Hard Dependencies
 
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
 - `crates/atm-core/src/team_admin.rs`
 - `crates/atm-core/src/schema/agent_member.rs`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -84,7 +84,7 @@ This sprint owns team-admin views and member mutation, not restore automation.
    - prove members/teams output reflects ATM roster state without requiring
      `config.json` membership reads
    Required docs:
-   - update `docs/phase-Z/config-json-violation-inventory.md`
+   - update `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 2. Cut over `atm team member add`.
    Development work:
@@ -95,7 +95,7 @@ This sprint owns team-admin views and member mutation, not restore automation.
    - prove duplicate detection and team existence validation still work
    - prove ATM roster truth and projected config remain aligned after add
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 3. Canonicalize retained Claude member metadata.
    Development work:
@@ -147,11 +147,11 @@ This sprint owns team-admin views and member mutation, not restore automation.
 
 4. Update the planning/closure records.
    Development work:
-   - stamp `Z.9` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.9` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 ## Split Recommendation
 
@@ -168,7 +168,7 @@ If the work starts rebuilding teams from backup material or preserving recreated
   `.atm.toml` state
 - legacy `AgentMember` payloads remain backward-compatible under serde when
   `tmux_pane_id` is omitted or serialized in the current Claude-compatible form
-- `docs/phase-Z/readiness.md` is stamped with the `Z.9` accepted head and
+- `docs/plans/phase-Z/readiness.md` is stamped with the `Z.9` accepted head and
   closure verdict
 
 ## Non-Closure
@@ -189,13 +189,13 @@ must preserve backward-compatible serde behavior.
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src/team_admin.rs`
   - expected: no production matches
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 

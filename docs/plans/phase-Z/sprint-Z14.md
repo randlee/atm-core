@@ -61,7 +61,7 @@ Approved surviving wrappers for this sprint are limited to:
 ## Hard Dependencies
 
 - `docs/atm-core/boundaries.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -73,7 +73,7 @@ Approved surviving wrappers for this sprint are limited to:
 - `crates/atm-rusqlite/src/lib.rs`
 - `.just/allowlists/scb_singleton_allowlist.toml`
 - `.just/fixtures/scb_singleton_known_bad.rs`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Delete / Narrow Inventory
@@ -108,7 +108,7 @@ atm_runtime_test_support::install_sqlite_retained_runtime_factory();
    Required tests:
    - prove downstream callers no longer use the crate-root install surface
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 2. Add the mechanical boundary gate.
    Development work:
@@ -126,7 +126,7 @@ atm_runtime_test_support::install_sqlite_retained_runtime_factory();
 
 3. Stamp closure records.
    Development work:
-   - stamp `Z.14` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.14` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    - add the `Z.14` ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
@@ -171,7 +171,7 @@ onto the public crate-root API without tripping lint.
 ## Required Document Updates
 
 - `docs/atm-core/boundaries.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

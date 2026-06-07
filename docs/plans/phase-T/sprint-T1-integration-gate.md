@@ -47,9 +47,9 @@ PR-target rationale:
 - `crates/atm-daemon/src/notification_runtime.rs`
 - `crates/atm-daemon/src/peer_transport.rs`
 - `docs/project-plan.md`
-- `docs/plan-phase-S.md`
-- `docs/phase-S/sprint-S14-runtime-plan.md`
-- `docs/phase-S/sprint-S15-rusqlite-hardening.md`
+- `docs/plans/phase-S/plan-phase-S.md`
+- `docs/plans/phase-S/sprint-S14-runtime-plan.md`
+- `docs/plans/phase-S/sprint-S15-rusqlite-hardening.md`
 
 ## Acceptance Criteria
 
@@ -64,7 +64,7 @@ PR-target rationale:
 - run a focused integration-gate recheck against the triage records rather than
   a new sprint-wide discovery pass
 - require `req-qa` to verify doc-sync fixes against `docs/project-plan.md`,
-  `docs/plan-phase-S.md`, and the affected sprint docs
+  `docs/plans/phase-S/plan-phase-S.md`, and the affected sprint docs
 - require `arch-qa` / hardening review for the runtime and spawn-failure fixes
 
 ## Notes

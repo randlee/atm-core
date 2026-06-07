@@ -144,12 +144,12 @@ Lean-design rule:
 
 ## Required Document Updates
 
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/project-plan.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-core/boundaries.md`
-- `docs/phase-U/removal-inventory.md`
+- `docs/plans/phase-U/removal-inventory.md`
 
 ## Risks And Watchouts
 

@@ -118,7 +118,7 @@ Do not split peer transport from replay unless the replay state model is still b
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/architecture.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

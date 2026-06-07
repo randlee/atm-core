@@ -39,7 +39,7 @@ Sprint:
 - `X.2`
 
 Source:
-- `docs/phase-X/sprint-X2.md:85`
+- `docs/plans/phase-X/sprint-X2.md:85`
 
 Details:
 - The integration worktree still contains raw conflict markers:
@@ -60,10 +60,10 @@ Sprint / phase scope:
 - phase-level
 
 Source:
-- `docs/phase-X/plan-phase-X.md:107`
-- `docs/phase-X/plan-phase-X.md:129`
-- `docs/phase-X/plan-phase-X.md:141`
-- `docs/phase-X/plan-phase-X.md:153`
+- `docs/plans/phase-X/plan-phase-X.md:107`
+- `docs/plans/phase-X/plan-phase-X.md:129`
+- `docs/plans/phase-X/plan-phase-X.md:141`
+- `docs/plans/phase-X/plan-phase-X.md:153`
 
 Details:
 - The `Current-State Analysis` section still says the current restart line:
@@ -89,10 +89,10 @@ Sprints:
 - `X.5`
 
 Source:
-- `docs/phase-X/sprint-X1.md:3`
-- `docs/phase-X/sprint-X2.md:3`
-- `docs/phase-X/sprint-X3.md:3`
-- `docs/phase-X/sprint-X5.md:3`
+- `docs/plans/phase-X/sprint-X1.md:3`
+- `docs/plans/phase-X/sprint-X2.md:3`
+- `docs/plans/phase-X/sprint-X3.md:3`
+- `docs/plans/phase-X/sprint-X5.md:3`
 
 Details:
 - These frontmatter titles omit the `Sprint X.n --` prefix that the H1 uses.

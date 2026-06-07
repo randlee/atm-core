@@ -60,19 +60,19 @@ This sprint does not fix findings or produce the final release verdict.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Exact Targets
 
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
-- `docs/phase-Z/sprint-Z17.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
+- `docs/plans/phase-Z/sprint-Z17.md`
 
 ## Delete / Narrow Inventory
 
@@ -91,7 +91,7 @@ This sprint does not fix findings or produce the final release verdict.
    - use `integrate/phase-Z @ 97518da5` as the accepted binary baseline
    - freeze the active participant minimum as `team-lead` and `arch-ctm`
    Required docs:
-   - update `docs/phase-Z/canary-dogfood-checklist.md`
+   - update `docs/plans/phase-Z/canary-dogfood-checklist.md`
 
 2. Execute canary operator flows on `atm-dev`.
    Development work:
@@ -102,17 +102,17 @@ This sprint does not fix findings or produce the final release verdict.
    - run `atm read --all --json`
    - run `atm log snapshot --json`
    Required docs:
-   - update `docs/phase-Z/canary-dogfood-checklist.md`
-   - update `docs/phase-Z/canary-findings-ledger.md`
+   - update `docs/plans/phase-Z/canary-dogfood-checklist.md`
+   - update `docs/plans/phase-Z/canary-findings-ledger.md`
 
 3. Stamp closure records.
    Development work:
    - record the final `Z.3` verdict
    - add the `Z.17` sprint ledger row
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
    - update `docs/project-plan.md`
-   - update `docs/plan-phase-Z.md`
+   - update `docs/plans/phase-Z/plan-phase-Z.md`
 
 ## Split Recommendation
 
@@ -121,12 +121,12 @@ and promote it to `Z.4` instead of widening `Z.17`.
 
 ## Acceptance Criteria
 
-- `docs/phase-Z/sprint-Z17.md` exists with `status: complete`
-- `docs/phase-Z/canary-dogfood-checklist.md` records the frozen participant
+- `docs/plans/phase-Z/sprint-Z17.md` exists with `status: complete`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md` records the frozen participant
   list, binary baseline, operator-report path, and final verdict rows
-- `docs/phase-Z/canary-findings-ledger.md` truthfully records the canary
+- `docs/plans/phase-Z/canary-findings-ledger.md` truthfully records the canary
   findings state for this sprint
-- `docs/phase-Z/readiness.md` records `Z.3` with a non-`PENDING` verdict
+- `docs/plans/phase-Z/readiness.md` records `Z.3` with a non-`PENDING` verdict
 - `cargo build --release -p agent-team-mail -p atm-daemon` passes
 - `cargo test --workspace` passes
 - `python3 .just/run_lint.py all` passes
@@ -150,12 +150,12 @@ without manual reconstruction of participants, baseline, or verdicts.
 
 ## Required Document Updates
 
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
-- `docs/phase-Z/sprint-Z17.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
+- `docs/plans/phase-Z/sprint-Z17.md`
 
 ## Risks And Watchouts
 
@@ -172,7 +172,7 @@ without manual reconstruction of participants, baseline, or verdicts.
   - `team-lead`
   - `arch-ctm`
 - operator-report path:
-  - record validated canary issues in `docs/phase-Z/canary-findings-ledger.md`
+  - record validated canary issues in `docs/plans/phase-Z/canary-findings-ledger.md`
   - report branch status to `team-lead` over ATM
 - canary evidence summary:
   - `atm doctor --json` completed with warning-only status and no runtime

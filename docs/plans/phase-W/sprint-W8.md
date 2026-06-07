@@ -19,7 +19,7 @@ worktree: ../atm-core-worktrees/feature/pW-s8-phase-w-closeout
 
 ## Implementation Notes
 
-- `docs/plan-phase-W.md` now records `W.8` in the authoritative sprint
+- `docs/plans/phase-W/plan-phase-W.md` now records `W.8` in the authoritative sprint
   sequence and deliverables list
 - `docs/project-plan.md` section 27 now carries the `W.8` pending-merge status
   entry for `feature/pW-s8-phase-w-closeout` / PR `#277`
@@ -28,7 +28,7 @@ worktree: ../atm-core-worktrees/feature/pW-s8-phase-w-closeout
   - `W.8` phase closeout: typed SQLite subsystem identity and ATM error
     inventory correction
 - this sprint closes the gap called out in
-  `docs/phase-W/sprint-W1.md` lines 75-78:
+  `docs/plans/phase-W/sprint-W1.md` lines 75-78:
   `DaemonSubsystem::Sqlite` was added and
   `emit_subsystem_event(...)` was tightened from `&'static str` subsystem ids
   to typed `DaemonSubsystem` on the retained-log path
@@ -40,9 +40,9 @@ worktree: ../atm-core-worktrees/feature/pW-s8-phase-w-closeout
 
 ## Acceptance Criteria
 
-- `docs/phase-W/sprint-W8.md` exists with goals, implementation notes, and
+- `docs/plans/phase-W/sprint-W8.md` exists with goals, implementation notes, and
   acceptance criteria
-- `docs/plan-phase-W.md` includes `W.8` in the authoritative sprint sequence
+- `docs/plans/phase-W/plan-phase-W.md` includes `W.8` in the authoritative sprint sequence
   and deliverables list
 - `docs/project-plan.md` section 27 records the merged `W.7` status and the
   pending `W.8` status

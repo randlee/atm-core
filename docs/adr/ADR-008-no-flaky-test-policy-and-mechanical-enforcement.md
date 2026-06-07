@@ -131,7 +131,7 @@ default lint.
 ## Follow-Up Work
 
 - Phase-wide policy hardening and lint-family expansion planning is recorded in
-  `docs/phase-S/sprint-S5.md`.
+  `docs/plans/phase-S/sprint-S5.md`.
 - tighten top-level and Phase S sprint language so “no fixed sleeps” becomes
   the broader “no flaky or unbounded waits” contract
 - add a feasible-now vs deferred lint inventory to the Phase S planning docs

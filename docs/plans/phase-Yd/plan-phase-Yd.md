@@ -47,8 +47,8 @@ Phase `Yd` hardening and implementation must remain aligned with:
 - testing and validation guidance:
   - `docs/testing-guidelines.md`
 - issue and readiness tracking:
-  - `docs/phase-Y/issues.md`
-  - `docs/phase-Yd/readiness.md`
+  - `docs/plans/phase-Y/issues.md`
+  - `docs/plans/phase-Yd/readiness.md`
 
 If any sprint-level deliverable cannot be justified against this governing set,
 the sprint is not hardened yet.
@@ -97,7 +97,7 @@ So:
 - `Yc` therefore remains a valid historical closure line, but not the final
   `develop` authorization line
 
-`docs/phase-Yc/readiness.md` must describe this as a valid focused close on
+`docs/plans/phase-Yc/readiness.md` must describe this as a valid focused close on
 the `Yc` line whose invariants are consumed and re-proved by `Phase Yd`, not
 as the final `develop` gate itself.
 

@@ -53,9 +53,9 @@ restore.
 ## Hard Dependencies
 
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -64,9 +64,9 @@ restore.
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm-core/src/doctor/mod.rs`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -99,7 +99,7 @@ restore.
    - command-path tests that prove missing ATM roster members fail without any
      `config.json` dependency
    Required docs:
-   - update `docs/phase-Z/config-json-violation-inventory.md`
+   - update `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 2. Narrow `doctor` to an explicit comparison-only role.
    Development work:
@@ -108,11 +108,11 @@ restore.
    Required tests:
    - drift-report coverage when Claude roster differs from ATM roster truth
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 3. Update the planning/closure records.
    Development work:
-   - stamp `Z.5` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.5` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
@@ -131,8 +131,8 @@ trait changes, or watcher/reconcile import logic, stop and move that scope into
 - `doctor` is the only retained runtime surface in this sprint still allowed to
   compare against `config.json`
 - the path inventory row for each deleted runtime read is marked closed in
-  `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md` is stamped with the `Z.5` accepted head and
+  `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md` is stamped with the `Z.5` accepted head and
   closure verdict
 
 ## Non-Closure
@@ -157,13 +157,13 @@ remains a deliberate comparison surface rather than a generic lookup seam.
 - `rg -n "load_team_config\\(" crates/atm-core/src/doctor/mod.rs`
   - expected: any surviving match is comparison-only drift reporting; zero
     production membership-lookup matches are allowed
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 

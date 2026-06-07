@@ -16,10 +16,10 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
-- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/plan-phase-Yd.md`
+- `docs/plans/phase-Yd/readiness.md`
+- `docs/plans/phase-Yc/plan-phase-Yc.md`
 - `docs/adr/INDEX.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/requirements.md`
@@ -28,7 +28,7 @@ target: integrate/phase-Y
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/boundaries.md`
 - `boundaries/atm-core/inbox-export.toml`
-- `docs/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
 - `docs/testing-guidelines.md`
 - the authoritative implementation baseline remains `integrate/phase-Y`
 
@@ -37,8 +37,8 @@ target: integrate/phase-Y
 - `crates/atm-core/src/delivery_execution.rs`
 - any directly supporting `atm-core` files required to close the recovered
   Claude message-set contract cleanly
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/project-plan.md`
 
 ## Deliverables
@@ -62,7 +62,7 @@ a new semantic redesign of the recovered Claude path.
 ## Required Work
 
 - close the recovered Claude logical-message-set blocker recorded in
-  `docs/phase-Y/issues.md`
+  `docs/plans/phase-Y/issues.md`
 - update the blocker inventory and readiness record to reflect the closure
   state
 - keep `Phase Z` blocked while the later `Y.15` through `Y.18` closures remain
@@ -109,7 +109,7 @@ match disposition {
 
 ## Acceptance Criteria
 
-- the recovered Claude blocker assigned to `Y.14` in `docs/phase-Y/issues.md`
+- the recovered Claude blocker assigned to `Y.14` in `docs/plans/phase-Y/issues.md`
   is closed or explicitly reclassified with documented rationale
 - `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
   returns no matches
@@ -123,7 +123,7 @@ match disposition {
   - `sqlite_failure_for_claude_does_not_emit_message1_without_message2`
 - the final accepted `Phase Y` merge candidate is behavioral-clean for the
   recovered Claude scope
-- `docs/phase-Yd/readiness.md` is updated with the `Y.14` closure result
+- `docs/plans/phase-Yd/readiness.md` is updated with the `Y.14` closure result
 
 ## Required Validation
 

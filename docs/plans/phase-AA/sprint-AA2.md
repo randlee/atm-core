@@ -215,7 +215,7 @@ about composition ownership transfer.
 
 - `Cargo.toml`
 - `docs/project-plan.md`
-- `docs/plan-phase-AA.md`
+- `docs/plans/phase-AA/plan-phase-AA.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-core/architecture.md`

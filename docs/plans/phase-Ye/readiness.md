@@ -14,7 +14,7 @@ line. `Y.23` owns the final update and phase-end PASS record.
   drain/persistence ownership
 - `ReconcileRuntime` uses actor-owned request, debounce, and completion
   routing
-- `docs/phase-Ye/issues.md` marks the tracked ownership redesign items closed
+- `docs/plans/phase-Ye/issues.md` marks the tracked ownership redesign items closed
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
   accepted and matches the final implementation
 - daemon requirements, architecture, and boundaries docs match the final line

@@ -22,7 +22,7 @@ target: integrate/phase-Y
 - `integrate/phase-Y` at `4d6bd883` is the authoritative implementation
   baseline
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
-- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/plans/phase-Yc/plan-phase-Yc.md`
 - the existing `Yb` line is a dependency, not a reopen target
 - `Y.12` is the first implementation sprint in the new `Yc` line
 

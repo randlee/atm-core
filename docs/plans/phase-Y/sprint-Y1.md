@@ -19,10 +19,10 @@ target: integrate/phase-Y
 ## Hard Dependencies
 
 - `Y.0` must land on `develop`
-- `docs/plan-phase-Y.md`
-- `docs/phase-Y/help.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
+- `docs/plans/phase-Y/help.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
 - `GH #83`
 
 ## GH #83 Design Ruling (approved by team-lead)
@@ -53,13 +53,13 @@ target: integrate/phase-Y
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/commands/help.rs`
 - `crates/atm/src/output.rs`
-- `docs/phase-Y/help.md`
+- `docs/plans/phase-Y/help.md`
 - `docs/atm/commands/help.md`
 - `docs/atm/requirements.md`
 - `docs/atm/architecture.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
-- `docs/phase-Y/sprint-Y1.md`
+- `docs/plans/phase-Y/sprint-Y1.md`
 - `docs/project-plan.md`
 
 ## Required Work

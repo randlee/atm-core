@@ -102,7 +102,7 @@ Goal:
   without broadening scope into new architecture work
 
 Artifacts:
-- [`docs/phase-T/sprint-T1-integration-gate.md`](./phase-T/sprint-T1-integration-gate.md)
+- [`docs/plans/phase-T/sprint-T1-integration-gate.md`](./phase-T/sprint-T1-integration-gate.md)
 
 ### T.2 SQLite Single-Writer Lane
 
@@ -111,7 +111,7 @@ Goal:
   S.15 and `ADR-ATM-RUSQLITE-002`
 
 Artifacts:
-- [`docs/phase-T/sprint-T2-sqlite-writer.md`](./phase-T/sprint-T2-sqlite-writer.md)
+- [`docs/plans/phase-T/sprint-T2-sqlite-writer.md`](./phase-T/sprint-T2-sqlite-writer.md)
 
 ### T.3 Immutable Message Rows
 
@@ -120,7 +120,7 @@ Goal:
   updates and removing the pre-write probe
 
 Artifacts:
-- [`docs/phase-T/sprint-T3-immutable-rows.md`](./phase-T/sprint-T3-immutable-rows.md)
+- [`docs/plans/phase-T/sprint-T3-immutable-rows.md`](./phase-T/sprint-T3-immutable-rows.md)
 
 ### T.4 Windows Runtime Parity
 
@@ -129,7 +129,7 @@ Goal:
   daemon singleton, lifecycle, local IPC, and retained-log startup/shutdown
 
 Artifacts:
-- [`docs/phase-T/sprint-T4-windows-runtime.md`](./phase-T/sprint-T4-windows-runtime.md)
+- [`docs/plans/phase-T/sprint-T4-windows-runtime.md`](./phase-T/sprint-T4-windows-runtime.md)
 
 ### T.5 Remaining Hardening
 
@@ -138,7 +138,7 @@ Goal:
   items left open after S.14 / S.15
 
 Artifacts:
-- [`docs/phase-T/sprint-T5-hardening.md`](./phase-T/sprint-T5-hardening.md)
+- [`docs/plans/phase-T/sprint-T5-hardening.md`](./phase-T/sprint-T5-hardening.md)
 
 ### T.6 Graft Client Surface
 
@@ -146,7 +146,7 @@ Goal:
 - define the small embeddable daemon-client surface needed by `atm-graft`
 
 Artifacts:
-- [`docs/phase-T/sprint-T6-graft-client-surface.md`](./phase-T/sprint-T6-graft-client-surface.md)
+- [`docs/plans/phase-T/sprint-T6-graft-client-surface.md`](./phase-T/sprint-T6-graft-client-surface.md)
 - [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
 - [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
@@ -158,7 +158,7 @@ Goal:
   behavior for embedded and hook/poll consumers
 
 Artifacts:
-- [`docs/phase-T/sprint-T7-graft-runtime.md`](./phase-T/sprint-T7-graft-runtime.md)
+- [`docs/plans/phase-T/sprint-T7-graft-runtime.md`](./phase-T/sprint-T7-graft-runtime.md)
 - [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
 
 ### T.8 ATM-Graft Crate
@@ -167,7 +167,7 @@ Goal:
 - land `atm-graft` as a thin ATM client embedded inside a Rust host agent
 
 Artifacts:
-- [`docs/phase-T/sprint-T8-atm-graft-crate.md`](./phase-T/sprint-T8-atm-graft-crate.md)
+- [`docs/plans/phase-T/sprint-T8-atm-graft-crate.md`](./phase-T/sprint-T8-atm-graft-crate.md)
 - [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
 
 ## 6. Cross-Sprint Acceptance

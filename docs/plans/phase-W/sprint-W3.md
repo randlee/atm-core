@@ -72,7 +72,7 @@ worktree: ../atm-core-worktrees/feature/pW-s3-sqlite-observability
   become the single source of truth for each touched SQLite-backed failure
   class
 - the sprint reconciles its local code inventory with the shared Phase `W`
-  ATM code inventory in `docs/plan-phase-W.md`
+  ATM code inventory in `docs/plans/phase-W/plan-phase-W.md`
 - req-qa can verify from the sprint doc that SQLite-backed parity and protocol
   envelope preservation are explicitly owned here
 

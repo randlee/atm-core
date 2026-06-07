@@ -59,14 +59,14 @@ This sprint owns the remaining deferred follow-up line after the narrower
 
 ## Hard Dependencies
 
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
 - `docs/atm-core/boundaries.md`
 
 ## Exact Targets
 
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 - concrete source files named by the deferred findings accepted into `Z.15`
 
@@ -88,18 +88,18 @@ This sprint owns the remaining deferred follow-up line after the narrower
 1. Close the remaining deferred hardening list.
    Development work:
    - resolve every deferred finding assigned to `Z.15` in
-     `docs/phase-Z/readiness.md`
+     `docs/plans/phase-Z/readiness.md`
    - keep the accepted home list in `readiness.md` the single planning
      source-of-truth for the remaining hardening line
    Required tests:
    - prove every deferred finding row assigned to `Z.15` records a final
      disposition or closure note
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 2. Stamp closure records.
    Development work:
-   - stamp `Z.15` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.15` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    - add the `Z.15` ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
@@ -115,8 +115,8 @@ post-`Z.15` sprint instead of widening this closure line.
 ## Acceptance Criteria
 
 - every deferred finding that does not belong to `Z.11`, `Z.12`, `Z.13`, or
-  `Z.14` has `Z.15` as its explicit home in `docs/phase-Z/readiness.md`
-- `docs/phase-Z/readiness.md` remains the single deferred-findings
+  `Z.14` has `Z.15` as its explicit home in `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md` remains the single deferred-findings
   source-of-truth for the `Z.11` through `Z.15` line
 - `docs/project-plan.md` includes the `Z.15` sprint ledger row
 
@@ -140,7 +140,7 @@ before `Phase Z` can proceed into canary execution.
 
 ## Required Document Updates
 
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

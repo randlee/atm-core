@@ -26,9 +26,9 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 ## Hard Dependencies
 
 - `Y.22` must close first
-- `docs/phase-Ye/plan-phase-Ye.md`
-- `docs/phase-Ye/issues.md`
-- `docs/phase-Ye/readiness.md`
+- `docs/plans/phase-Ye/plan-phase-Ye.md`
+- `docs/plans/phase-Ye/issues.md`
+- `docs/plans/phase-Ye/readiness.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
@@ -43,8 +43,8 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 
 ## Exact Targets
 
-- `docs/phase-Ye/issues.md`
-- `docs/phase-Ye/readiness.md`
+- `docs/plans/phase-Ye/issues.md`
+- `docs/plans/phase-Ye/readiness.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/adr/INDEX.md`
 - `docs/atm-daemon/requirements.md`
@@ -86,15 +86,15 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 1. review the accepted `Phase Ye` line after `Y.22`
 2. verify each ownership redesign is present and the old lock path is absent
 3. update the issue ledger to closed state
-4. update `docs/phase-Ye/readiness.md` with the final proof record
+4. update `docs/plans/phase-Ye/readiness.md` with the final proof record
 5. mark `ADR-015` accepted if the final line matches the decision
 6. leave one final phase-end validation record in the planning/docs surfaces
 
 ## Deliverables
 
-- `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
+- `docs/plans/phase-Ye/issues.md` marks the ownership redesign items closed on the
   accepted line
-- `docs/phase-Ye/readiness.md` records the final closure verdict, accepted
+- `docs/plans/phase-Ye/readiness.md` records the final closure verdict, accepted
   implementation commit(s), per-sprint closure record, and validation stack
   for the phase
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
@@ -112,9 +112,9 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
   `REQ-DAEMON-RUNTIME-009`, `ADR-015`, or the `Phase Ye` readiness record
   updates planned earlier in the phase, `Y.23` must land those governance and
   proof updates on that line before phase closure can be claimed
-- update `docs/phase-Ye/issues.md` to record final closure of `Y.19` through
+- update `docs/plans/phase-Ye/issues.md` to record final closure of `Y.19` through
   `Y.23`
-- update `docs/phase-Ye/readiness.md` with the final accepted commit set,
+- update `docs/plans/phase-Ye/readiness.md` with the final accepted commit set,
   verdicts, and validation record for the phase; `Y.23` owns writing the
   final readiness rows for `Y.19` through `Y.22` if earlier sprint executors
   left those rows in placeholder state
@@ -126,9 +126,9 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 
 Doc-state verification (`rg`):
 
-- `docs/phase-Ye/issues.md` must record `Y.19` through `Y.23` as closed on
+- `docs/plans/phase-Ye/issues.md` must record `Y.19` through `Y.23` as closed on
   the accepted line
-- `docs/phase-Ye/readiness.md` must name the final accepted commit(s) and
+- `docs/plans/phase-Ye/readiness.md` must name the final accepted commit(s) and
   phase verdict
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` must set
   `status: accepted` and describe the final runtime ownership model
@@ -170,8 +170,8 @@ not claim completion.
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
-- `rg -n "closed on accepted line|Y\\.19 closes|Y\\.20 closes|Y\\.21 closes|Y\\.22 closes|Y\\.23 closes" docs/phase-Ye/issues.md`
-- `rg -n "accepted commit:|verdict:" docs/phase-Ye/readiness.md`
+- `rg -n "closed on accepted line|Y\\.19 closes|Y\\.20 closes|Y\\.21 closes|Y\\.22 closes|Y\\.23 closes" docs/plans/phase-Ye/issues.md`
+- `rg -n "accepted commit:|verdict:" docs/plans/phase-Ye/readiness.md`
 - `rg -n "status: accepted|Y\\.23.*phase-end proof" docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `rg -n "immutable snapshot|bounded command-channel handoff|actor-owned request" docs/atm-daemon/requirements.md docs/atm-daemon/architecture.md docs/atm-daemon/boundaries.md`
 - `rg -n "Phase Ye.*closed|Y\\.23.*phase-end architecture proof" docs/project-plan.md`

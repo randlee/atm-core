@@ -121,7 +121,7 @@ deliverable is one explicit behavioral matrix for both modes.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`

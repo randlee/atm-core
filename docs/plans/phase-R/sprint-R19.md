@@ -218,8 +218,8 @@ Validation run for this sprint:
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-R.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/plan-phase-R.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

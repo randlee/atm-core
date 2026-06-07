@@ -14,7 +14,7 @@ implementation gaps that the `Z.5` through `Z.10` sprint line must close.
 
 The exact per-path delete / narrow / keep map lives in:
 
-- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 ## Accepted Ownership Model
 
@@ -170,7 +170,7 @@ These fields are:
 
 ## Current Production Touchpoints To Remove Or Narrow
 
-See `docs/phase-Z/config-json-violation-inventory.md` for the authoritative
+See `docs/plans/phase-Z/config-json-violation-inventory.md` for the authoritative
 path inventory, sprint ownership, and exact delete / rewrite expectations.
 
 ## Phase Z Follow-On Sprint Split

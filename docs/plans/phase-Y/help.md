@@ -41,7 +41,7 @@ Y.2 follow-up scope:
 Ownership split:
 
 - sprint/product design and scope:
-  - `docs/phase-Y/sprint-Y1.md`
+  - `docs/plans/phase-Y/sprint-Y1.md`
   - `docs/requirements.md`
 - crate-local command ownership:
   - `docs/atm/commands/help.md`
@@ -52,6 +52,6 @@ Ownership split:
 References:
 
 - `GH #83`
-- `docs/phase-Y/sprint-Y1.md`
+- `docs/plans/phase-Y/sprint-Y1.md`
 - `docs/atm/commands/help.md`
-- `docs/phase-Z/cli-json-io-audit.md` (planned)
+- `docs/plans/phase-Z/cli-json-io-audit.md` (planned)

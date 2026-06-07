@@ -24,7 +24,7 @@ Baseline:
 - `develop` at `0f5e11c`
 - inherited pre-phase prerequisite already merged from `feature/pX-lint-gates`
 - authoritative inputs:
-  - `docs/phase-W/post-mortem.md`
+  - `docs/plans/phase-W/post-mortem.md`
   - `crates/atm-core/src/service_runtime_store.rs`
   - `crates/atm-core/src/ack/mod.rs`
   - `crates/atm-core/src/read/mod.rs`

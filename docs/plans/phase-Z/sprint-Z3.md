@@ -27,8 +27,8 @@ release sign-off.
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `Z.2` must have closed the executable smoke findings first
 - `Z.5` through `Z.10` must have closed the roster/config/restore follow-on
   line first
@@ -50,17 +50,17 @@ release sign-off.
 
 ## Exact Targets
 
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
 - the approved canary binary baseline under test on `integrate/phase-Z`
 
 ## Deliverables
 
-- `docs/phase-Z/canary-dogfood-checklist.md`, containing the frozen
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`, containing the frozen
   `atm-dev` canary participant list for at least two `atm-dev` participants,
   the approved binary baseline under evaluation, and the operator reporting
   path used during the sprint
-- `docs/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
+- `docs/plans/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
 
 ## Required Work
 
@@ -70,23 +70,23 @@ release sign-off.
   pre-Phase-Y file-migration inbox behavior documented in
   `docs/archive/file-migration-plan.md`
 - record only validated canary findings in
-  `docs/phase-Z/canary-findings-ledger.md` for `Z.4`
+  `docs/plans/phase-Z/canary-findings-ledger.md` for `Z.4`
 
 ## Acceptance Criteria
 
 - `atm-dev` canary usage is completed on the approved binaries
-- `docs/phase-Z/canary-dogfood-checklist.md` records the approved participant
+- `docs/plans/phase-Z/canary-dogfood-checklist.md` records the approved participant
   list and reporting path as frozen at sprint start, with evidence that
   predates the first operator report
 - operator-facing findings are recorded for `Z.4`
-- every canary-checklist row in `docs/phase-Z/canary-dogfood-checklist.md`
+- every canary-checklist row in `docs/plans/phase-Z/canary-dogfood-checklist.md`
   records one authoritative verdict before `Z.3` closes; any row left without
   a final verdict is blocking for this sprint
 - the deprecated pre-Phase-Y file-migration inbox behavior from
   `docs/archive/file-migration-plan.md` is not required by any canary flow on
   the approved binaries
-- `docs/phase-Z/canary-dogfood-checklist.md` and
-  `docs/phase-Z/canary-findings-ledger.md` are frozen for `Z.4`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md` and
+  `docs/plans/phase-Z/canary-findings-ledger.md` are frozen for `Z.4`
 
 ## Non-Closure
 
@@ -104,7 +104,7 @@ interpretation.
 
 - `cargo build --release` or equivalent release build that refreshes the
   canary executable baseline under test
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
 - `cargo test --workspace`
 - `git diff --check`

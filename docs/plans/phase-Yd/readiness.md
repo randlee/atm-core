@@ -56,7 +56,7 @@ this table.
 - any remaining notification-worker liveness requirement is either:
   - closed by a thin runtime-owned signal projected by `runtime_health`
   - or explicitly reclassified as non-blocking with documented rationale in
-    `docs/phase-Y/issues.md`
+    `docs/plans/phase-Y/issues.md`
 - `runtime_health` did not grow compensating recovery logic merely to satisfy
   the liveness requirement
 

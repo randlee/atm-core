@@ -52,8 +52,8 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
 ## Hard Dependencies
 
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -66,8 +66,8 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
 - `docs/architecture.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -167,11 +167,11 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
 
 3. Sync the planning records.
    Development work:
-   - stamp `Z.7` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.7` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 ## Split Recommendation
 
@@ -222,13 +222,13 @@ mechanically runnable rather than prose-only guidance.
     only, except for one permitted `boundary_support.rs` match:
     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`, which is
     temporary, allowlisted, and deleted in `Z.8`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/boundaries.md`

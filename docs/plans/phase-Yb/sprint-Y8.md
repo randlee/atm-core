@@ -16,16 +16,16 @@ transition surfaces from the runtime.
 
 ## Hard Dependencies
 
-- `docs/phase-Yb/sprint-Y7.md` must be complete first
+- `docs/plans/phase-Yb/sprint-Y7.md` must be complete first
 
 ## Governing Requirements
 
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 
 ## Exact Code And Document Targets
@@ -35,8 +35,8 @@ transition surfaces from the runtime.
 - `crates/atm-core/src/send/persistence.rs`
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm-core/src/service_runtime.rs`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
 
 ## Required Work
 
@@ -67,16 +67,16 @@ transition surfaces from the runtime.
   - `YB-RM-011`
 - impossible transition surfaces are deleted, not merely ignored
 - unsupported requests fail closed with typed errors and named tests
-- `docs/phase-Yb/removal-ledger.md` marks all Y.8 targets closed, moved, or
+- `docs/plans/phase-Yb/removal-ledger.md` marks all Y.8 targets closed, moved, or
   blocked explicitly
 - lint/boundary documentation identifies the only approved callers of
   low-level delivery primitives and the enforcement point for each rule
 
 ## Required Document Updates
 
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 

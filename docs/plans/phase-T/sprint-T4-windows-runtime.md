@@ -39,7 +39,7 @@ startup/shutdown.
 - `crates/atm-daemon/src/test_support.rs`
 - `docs/atm-daemon/architecture.md`
 - `docs/requirements.md`
-- `docs/plan-phase-S.md`
+- `docs/plans/phase-S/plan-phase-S.md`
 
 ## Acceptance Criteria
 

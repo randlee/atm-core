@@ -6,7 +6,7 @@ Track the accepted closure state for the daemon simplification line that
 removes concrete SQLite knowledge from `atm-daemon`.
 
 Authoritative supporting inventory:
-- `docs/phase-AA/issues.md`
+- `docs/plans/phase-AA/issues.md`
 
 ## Sprint Status
 
@@ -42,5 +42,5 @@ Authoritative supporting inventory:
 - ATM has completed the `sc-observability` / `sc-observability-types` `1.2.0`
   upgrade and no remaining migration blocker from the deprecated
   `Logger::emit()` path or the old retained-log policy field surface remains
-- `docs/phase-AA/issues.md` has no open issue whose planned closure sprint is
+- `docs/plans/phase-AA/issues.md` has no open issue whose planned closure sprint is
   still incomplete

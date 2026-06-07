@@ -41,7 +41,7 @@ runtime lock dependence on inbox-file rewrites.
 
 ## Governing Requirements
 
-- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
 - only the Claude Code harness may receive JSONL append output
 - non-Claude harnesses must never receive JSONL append output
 - SQLite and outward delivery error behavior must match the planning contract
@@ -67,7 +67,7 @@ runtime lock dependence on inbox-file rewrites.
 
 - final accepted wire-format decision
 - final accepted SQLite-failure/original+error emission contract
-- `docs/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
 
 ## Non-Goals
 
@@ -91,9 +91,9 @@ Required tests:
 - long-run repeated writes do not require mailbox rewrite locks
 
 Required doc or boundary updates:
-- update `docs/phase-Y/inbox-write-path-audit.md`
+- update `docs/plans/phase-Y/inbox-write-path-audit.md`
 - update `docs/atm-message-schema.md` if wire-format wording changes
-- update `docs/phase-Y/delivery-state-machines.md` if the append contract
+- update `docs/plans/phase-Y/delivery-state-machines.md` if the append contract
   changes any machine transitions
 
 ### 2. Encode the exact failure truth table
@@ -113,7 +113,7 @@ Required tests:
 - no hidden alternate path exists
 
 Required doc or boundary updates:
-- update `docs/phase-Y/sprint-Y6.md`
+- update `docs/plans/phase-Y/sprint-Y6.md`
 
 ## Split Recommendation
 
@@ -138,8 +138,8 @@ partial, ambiguous notification contract.
 
 ## Required Document Updates
 
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/sprint-Y6.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/sprint-Y6.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

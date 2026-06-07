@@ -26,15 +26,15 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
+- `docs/plans/phase-Yd/readiness.md`
 - the merged `Phase Ye` closeout state on `develop`
 - all delivery-policy and write-boundary behavior must already match the
   accepted `Phase Y` state machines on the develop-ready baseline
 
 ## Prerequisites
 
-- `docs/phase-Yd/readiness.md` says:
+- `docs/plans/phase-Yd/readiness.md` says:
   - `Phase Y` may land on `develop`
   - `Phase Z` may begin
 - the current `develop` baseline already includes the accepted `Phase Ye`
@@ -42,38 +42,38 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 
 ## Exact Targets
 
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - the approved executable baseline under test on `integrate/phase-Z`
 
 ## Deliverables
 
-- `docs/phase-Z/smoke-checklist.md` frozen for the real-binary flows covered
+- `docs/plans/phase-Z/smoke-checklist.md` frozen for the real-binary flows covered
   in `Z.1`
 - real-binary bring-up evidence for the daemon baseline under test
-- `docs/phase-Z/smoke-findings-ledger.md` containing only validated `Z.1`
+- `docs/plans/phase-Z/smoke-findings-ledger.md` containing only validated `Z.1`
   findings promoted to `Z.2`
-- `docs/phase-Z/readiness.md` Z.1 row updated with smoke verdict and commit
+- `docs/plans/phase-Z/readiness.md` Z.1 row updated with smoke verdict and commit
 
 ## Required Work
 
 - launch the daemon using the real built binaries
-- freeze `docs/phase-Z/smoke-checklist.md` before the pass begins and use that
+- freeze `docs/plans/phase-Z/smoke-checklist.md` before the pass begins and use that
   frozen matrix for the entire sprint
 - verify end-to-end feature behavior across the supported operator flows
 - verify corner cases and recovery behavior called out by:
-  - `docs/phase-Y/issues.md`
-  - `docs/phase-Yd/readiness.md`
-  - `docs/plan-phase-Y.md`
+  - `docs/plans/phase-Y/issues.md`
+  - `docs/plans/phase-Yd/readiness.md`
+  - `docs/plans/phase-Y/plan-phase-Y.md`
   - the explicit recovery/corner-case coverage categories frozen in
-    `docs/phase-Z/smoke-checklist.md`
+    `docs/plans/phase-Z/smoke-checklist.md`
 - record only validated smoke findings in
-  `docs/phase-Z/smoke-findings-ledger.md` for `Z.2`
+  `docs/plans/phase-Z/smoke-findings-ledger.md` for `Z.2`
 
 ## Acceptance Criteria
 
 - daemon bring-up is proven on the executable baseline
-- `docs/phase-Z/smoke-checklist.md` exists and covers every planned `Z.1`
+- `docs/plans/phase-Z/smoke-checklist.md` exists and covers every planned `Z.1`
   operator flow plus all four required recovery/corner-case categories defined
   in the smoke checklist schema:
   - daemon startup failure or degraded-start behavior
@@ -82,7 +82,7 @@ the first full feature-by-feature smoke pass before broader team dogfood.
   - retained CLI command error reporting and operator recovery guidance
 - every planned smoke flow has a pass/fail verdict
 - only verified smoke findings roll forward to `Z.2`
-- `docs/phase-Z/smoke-findings-ledger.md` is the only authoritative `Z.2`
+- `docs/plans/phase-Z/smoke-findings-ledger.md` is the only authoritative `Z.2`
   handoff ledger
 
 ## Non-Closure
@@ -101,8 +101,8 @@ for independent QA review.
 
 - `cargo build --release` or equivalent release build that produces the smoke
   executable baseline
-- `docs/phase-Z/smoke-checklist.md` is present and populated for supported
+- `docs/plans/phase-Z/smoke-checklist.md` is present and populated for supported
   flows
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `cargo test --workspace`
 - `git diff --check`

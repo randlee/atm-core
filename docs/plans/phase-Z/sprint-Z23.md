@@ -50,8 +50,8 @@ collecting coverage.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 
 ## Exact Targets
@@ -170,8 +170,8 @@ artifacts.
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/testing-guidelines.md`
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 - `.gitignore`
 

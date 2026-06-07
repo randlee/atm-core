@@ -18,9 +18,9 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/phase-Yc/sprint-Y12.md` must close first
+- `docs/plans/phase-Yc/sprint-Y12.md` must close first
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
-- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/plans/phase-Yc/plan-phase-Yc.md`
 - the authoritative implementation baseline is `integrate/phase-Y` plus the
   landed `Y.12` branch
 
@@ -41,7 +41,7 @@ target: integrate/phase-Y
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/project-plan.md` (Section 33, `Phase Yc Final Production-Readiness Closure`)
-- `docs/phase-Yc/readiness.md`
+- `docs/plans/phase-Yc/readiness.md`
 
 ## Deliverables
 
@@ -61,7 +61,7 @@ silently dropped or partially deferred.
   specifically rechecks the two `Yc` closure invariants before the later
   `Phase Yd` develop-gate closeout proceeds
 - the sprint leaves one explicit readiness record artifact,
-  `docs/phase-Yc/readiness.md`, naming both `Yc` closure invariants and the
+  `docs/plans/phase-Yc/readiness.md`, naming both `Yc` closure invariants and the
   handoff into `Phase Yd`
 
 ## Required Work
@@ -288,7 +288,7 @@ fn notification_event_from_target(
   - `Y.12` closed the Claude recovered-message-set contract
   - `Y.13` closed the notification boundary bypass
   - `Phase Yd` may now consume the focused `Yc` readiness result, but
-    `Phase Z` remains blocked until `docs/phase-Yd/readiness.md` says it may
+    `Phase Z` remains blocked until `docs/plans/phase-Yd/readiness.md` says it may
     begin
 
 ## Required Validation

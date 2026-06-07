@@ -84,7 +84,7 @@ documentation set:
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/requirements.md`
-- `docs/plan-phase-R.md`
+- `docs/plans/phase-R/plan-phase-R.md`
 
 Known review themes that the plan must address:
 - singleton ownership teardown safety
@@ -143,7 +143,7 @@ Discrete motivating defects for this sprint:
    - tighten `docs/atm-daemon/architecture.md`
    - tighten `docs/atm-daemon/requirements.md`
    - tighten `docs/atm-daemon/boundaries.md`
-   - update `docs/plan-phase-R.md` so the daemon follow-on sprint is part of
+   - update `docs/plans/phase-R/plan-phase-R.md` so the daemon follow-on sprint is part of
      the authoritative Phase R continuation plan
    Required outputs:
    - explicit rules for singleton cleanup safety
@@ -189,12 +189,12 @@ Discrete motivating defects for this sprint:
 
 ## Required Document Updates
 
-- `docs/plan-phase-R.md`
+- `docs/plans/phase-R/plan-phase-R.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/requirements.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

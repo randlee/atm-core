@@ -36,7 +36,7 @@ worktree: ../atm-core-worktrees/feature/pW-s6-sqlite-error-contract
 - `crates/atm-daemon/src/tests.rs`
 - `crates/atm-daemon/src/test_observability.rs`
 - `crates/atm-daemon/bin_support/daemon_observability.rs`
-- `docs/phase-W/sprint-W6.md`
+- `docs/plans/phase-W/sprint-W6.md`
 
 ## Acceptance Criteria
 

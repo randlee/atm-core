@@ -54,9 +54,9 @@ redefining the contract.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -160,9 +160,9 @@ level for the infrastructure contract this sprint claims.
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/testing-guidelines.md`
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/readiness.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 - `.gitignore`
 

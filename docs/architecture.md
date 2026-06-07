@@ -64,7 +64,7 @@ Phase-R redesign note:
   through Phase U as the supported thin-client host line rather than removed)
 - for the boundary / adapter model, Phase R supersedes any earlier
   pre-Phase-R architecture statements in this document that conflict with the
-  crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
+  crate-local boundary inventories, ADRs, or `docs/plans/phase-R/plan-phase-R.md`
 
 Phase-S portability note:
 - the Phase R integrated daemon proved the runtime split, but it still hard-
@@ -86,7 +86,7 @@ Phase-S portability note:
   implementation line that refines the queue-query packet mapping instead of
   preserving the old multi-message `read` response shape as the final
   contract
-- Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- Phase S planning is tracked in [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
 
 Phase-AA simplification note:
 - the current daemon composition root and daemon-routed doctor model are not

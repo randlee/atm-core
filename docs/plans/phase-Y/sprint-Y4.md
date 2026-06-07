@@ -48,9 +48,9 @@ command and daemon code.
 
 ## Governing Requirements
 
-- `docs/plan-phase-Y.md`
-- `docs/phase-Y/delivery-state-machines.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
 - event-family routing must occur through one central coordinator rather than
   through scattered `if` branches in command code
 - `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
@@ -86,9 +86,9 @@ command and daemon code.
 
 ## Hard Dependencies
 
-- `docs/phase-Y/delivery-state-machines.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
-- `docs/phase-Y/state-diagrams.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/state-diagrams.md`
 
 ## Non-Goals
 
@@ -116,8 +116,8 @@ Required tests:
 - observability confirms each routed transition explicitly
 
 Required doc or boundary updates:
-- update `docs/phase-Y/delivery-state-machines.md`
-- update `docs/phase-Y/state-machine-coverage-audit.md`
+- update `docs/plans/phase-Y/delivery-state-machines.md`
+- update `docs/plans/phase-Y/state-machine-coverage-audit.md`
 
 ### 2. Land the required event-family machines
 
@@ -141,8 +141,8 @@ Required tests:
 - observability confirms each state transition explicitly
 
 Required doc or boundary updates:
-- update `docs/phase-Y/delivery-state-machines.md`
-- update `docs/phase-Y/state-diagrams.md`
+- update `docs/plans/phase-Y/delivery-state-machines.md`
+- update `docs/plans/phase-Y/state-diagrams.md`
 
 ### 3. Encode the exact failure and nudge contract
 
@@ -165,8 +165,8 @@ Required tests:
 - no hidden alternate path exists
 
 Required doc or boundary updates:
-- update `docs/phase-Y/delivery-state-machines.md`
-- update `docs/phase-Y/state-diagrams.md`
+- update `docs/plans/phase-Y/delivery-state-machines.md`
+- update `docs/plans/phase-Y/state-diagrams.md`
 
 ## Acceptance Criteria
 
@@ -189,9 +189,9 @@ Required doc or boundary updates:
 
 ## Required Document Updates
 
-- `docs/phase-Y/delivery-state-machines.md`
-- `docs/phase-Y/state-diagrams.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/state-diagrams.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

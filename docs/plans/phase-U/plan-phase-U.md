@@ -19,19 +19,19 @@ Execution model:
 - `U.11` is the final `atm-graft` cleanup pass after `U.10`
 
 Authoritative sprint sequence:
-- `docs/phase-U/sprint-U0.md`
-- `docs/phase-U/sprint-U1.md`
-- `docs/phase-U/sprint-U2.md`
-- `docs/phase-U/sprint-U3.md`
-- `docs/phase-U/sprint-U4.md`
-- `docs/phase-U/sprint-U5.md`
-- `docs/phase-U/sprint-U6.md`
-- `docs/phase-U/sprint-U7.md`
-- `docs/phase-U/sprint-U8.md`
-- `docs/phase-U/sprint-U9.md`
-- `docs/phase-U/sprint-U10.md`
-- `docs/phase-U/sprint-U11.md`
-- `docs/phase-U/removal-inventory.md`
+- `docs/plans/phase-U/sprint-U0.md`
+- `docs/plans/phase-U/sprint-U1.md`
+- `docs/plans/phase-U/sprint-U2.md`
+- `docs/plans/phase-U/sprint-U3.md`
+- `docs/plans/phase-U/sprint-U4.md`
+- `docs/plans/phase-U/sprint-U5.md`
+- `docs/plans/phase-U/sprint-U6.md`
+- `docs/plans/phase-U/sprint-U7.md`
+- `docs/plans/phase-U/sprint-U8.md`
+- `docs/plans/phase-U/sprint-U9.md`
+- `docs/plans/phase-U/sprint-U10.md`
+- `docs/plans/phase-U/sprint-U11.md`
+- `docs/plans/phase-U/removal-inventory.md`
 
 Sprint summary:
 - `U.0` remove the old `atm-graft` implementation line (`completed by team-lead`)
@@ -95,4 +95,4 @@ Phase rules:
   `crates/atm-rusqlite/src/shared_db.rs`; use that discovery work as evidence
   when executing the schema sprints rather than re-inventing the removal set
   - the authoritative file/line removal inventory for the Phase U cleanup line
-  lives in `docs/phase-U/removal-inventory.md`
+  lives in `docs/plans/phase-U/removal-inventory.md`

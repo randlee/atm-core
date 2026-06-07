@@ -19,18 +19,18 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Y.md`
-- `docs/phase-Y/sprint-Y1.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
+- `docs/plans/phase-Y/sprint-Y1.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
 - approved `Y.1` closeout notes
 
 ## Exact Targets
 
 - `crates/atm/src/commands/help.rs`
-- `docs/phase-Y/help.md`
+- `docs/plans/phase-Y/help.md`
 - `docs/atm/commands/help.md`
-- `docs/phase-Y/sprint-Y2.md`
+- `docs/plans/phase-Y/sprint-Y2.md`
 - `docs/project-plan.md`
 
 ## Required Work

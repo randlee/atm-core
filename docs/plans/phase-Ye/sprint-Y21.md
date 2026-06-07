@@ -35,7 +35,7 @@ without first freezing the actor contract.
 
 - `Y.20` must close first; this sprint reuses `JoinHandleOwner` from
   `crates/atm-daemon/src/worker_support.rs` introduced by `Y.20`.
-- `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/plans/phase-Ye/plan-phase-Ye.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
@@ -203,7 +203,7 @@ again before implementation.
 
 - `rg -n 'struct ReconcileWorkerState' crates/atm-daemon/src/reconcile_runtime.rs`
 - `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/worker_support.rs`
-- `rg -n 'worker_support.rs|struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md docs/phase-Ye/sprint-Y22.md`
+- `rg -n 'worker_support.rs|struct JoinHandleOwner' docs/plans/phase-Ye/sprint-Y20.md docs/plans/phase-Ye/sprint-Y21.md docs/plans/phase-Ye/sprint-Y22.md`
 - `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key -- --nocapture`

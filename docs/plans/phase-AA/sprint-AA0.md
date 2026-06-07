@@ -75,10 +75,10 @@ delete code instead of arguing about ownership.
   - top-level doctor code may compare subsystem reports for drift
   - top-level doctor code must not reimplement backend-specific diagnosis
 
-- `docs/phase-AA/daemon-state-machines.md` exists and freezes the target
+- `docs/plans/phase-AA/daemon-state-machines.md` exists and freezes the target
   top-level daemon machine inventory at five or fewer machines.
 
-- `docs/phase-AA/daemon-sqlite-leak-ledger.md` exists and classifies every
+- `docs/plans/phase-AA/daemon-sqlite-leak-ledger.md` exists and classifies every
   current daemon-side SQLite leak as one of:
   - `delete`
   - `move`
@@ -93,10 +93,10 @@ delete code instead of arguing about ownership.
   - `crates/atm-daemon/src/tests.rs`
   - `crates/atm-daemon/src/tests_advisory.rs`
 
-- `docs/phase-AA/readiness.md` exists and records the AA sprint line plus
+- `docs/plans/phase-AA/readiness.md` exists and records the AA sprint line plus
   phase exit criteria.
 
-- `docs/phase-AA/issues.md` exists and is the authoritative Phase AA issues
+- `docs/plans/phase-AA/issues.md` exists and is the authoritative Phase AA issues
   inventory for architectural findings that remain open across multiple
   sprints.
 
@@ -123,16 +123,16 @@ will reintroduce ambiguity.
 
 ## Required Document Updates
 
-- `docs/plan-phase-AA.md`
+- `docs/plans/phase-AA/plan-phase-AA.md`
 - `docs/project-plan.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
-- `docs/phase-AA/readiness.md`
-- `docs/phase-AA/issues.md`
-- `docs/phase-AA/daemon-state-machines.md`
-- `docs/phase-AA/daemon-sqlite-leak-ledger.md`
+- `docs/plans/phase-AA/readiness.md`
+- `docs/plans/phase-AA/issues.md`
+- `docs/plans/phase-AA/daemon-state-machines.md`
+- `docs/plans/phase-AA/daemon-sqlite-leak-ledger.md`
 
 ## Risks And Watchouts
 

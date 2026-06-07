@@ -16,7 +16,7 @@ Define the final daemon observability boundary so observability sits at the
 bottom of the stack and subsystem semantics stay in the owning subsystem.
 
 Carry-forward reference:
-- `RULE-002` / `ARCH-PU-002` from `docs/phase-U/sprint-U11.md` are the direct
+- `RULE-002` / `ARCH-PU-002` from `docs/plans/phase-U/sprint-U11.md` are the direct
   source findings for this sprint.
 
 Dependency note:

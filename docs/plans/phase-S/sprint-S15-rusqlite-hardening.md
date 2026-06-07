@@ -8,7 +8,7 @@
 ## Goal
 
 Implement the S.15 rusqlite write-worker plan from
-`docs/phase-S/sprint-S15-rusqlite-plan.md` and land the first bounded
+`docs/plans/phase-S/sprint-S15-rusqlite-plan.md` and land the first bounded
 single-writer migration for the hot mailbox write path.
 
 ## Scope
@@ -51,9 +51,9 @@ This sprint hardens:
 
 ## References
 
-- `docs/phase-S/sprint-S15.md`
-- `docs/phase-S/sprint-S15-rusqlite-plan.md`
-- `docs/plan-phase-S.md`
+- `docs/plans/phase-S/sprint-S15.md`
+- `docs/plans/phase-S/sprint-S15-rusqlite-plan.md`
+- `docs/plans/phase-S/plan-phase-S.md`
 - `docs/atm-rusqlite/requirements.md`
 - `docs/atm-rusqlite/architecture.md`
 - `docs/adr/ADR-ATM-RUSQLITE-002.md`

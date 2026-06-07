@@ -322,10 +322,10 @@ Out of scope:
 
 | Component | Authority | Bound | Timeout / saturation outcome |
 |---|---|---:|---|
-| Lifecycle wake worker join | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plan-phase-S.md §4.1` | `1s` | typed `daemon_unavailable` failure if the wake worker cannot join cleanly |
+| Lifecycle wake worker join | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plans/phase-S/plan-phase-S.md §4.1` | `1s` | typed `daemon_unavailable` failure if the wake worker cannot join cleanly |
 | Reconcile runtime drain | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines) | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
 | Watch runtime drain | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines) | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
-| Retained-log flush | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plan-phase-S.md §4.1` | `2s` best-effort | typed observability-health failure if flush/sync cannot complete on the active sink |
+| Retained-log flush | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plans/phase-S/plan-phase-S.md §4.1` | `2s` best-effort | typed observability-health failure if flush/sync cannot complete on the active sink |
 | Status-cache insert / evict | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `4096` live entries | new-key insert must evict-before-insert so retained cardinality never exceeds the cap |
 | Reconcile fingerprint registry | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `1024` keys | evict oldest tracked key, log the eviction, and continue with the newest target |
 

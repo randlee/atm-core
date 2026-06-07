@@ -131,10 +131,10 @@ The following must be completed on the planning branch before numbered Phase
 
 - shared-inbox field inventory plus the decision framework that `Y.5` will use
   to justify each surviving field
-- `docs/phase-Y/inbox-field-inventory.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
-- `docs/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/inbox-field-inventory.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/state-machine-coverage-audit.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
 - backlog list for any missing command/request/query diagrams
 - line-numbered write/removal ledger for every inbox/config write stack
 - explicit enum + transition definitions for every required write-affecting
@@ -176,7 +176,7 @@ Purpose:
   subsystem
 - add machine-checkable enforcement so command code cannot bypass that owner
 - execute the line-numbered removal ledger from
-  `docs/phase-Y/inbox-write-path-audit.md`
+  `docs/plans/phase-Y/inbox-write-path-audit.md`
 
 Current status:
 
@@ -267,7 +267,7 @@ Current status:
   by the approved wire-contract decision
 
 The progressive executable smoke, `atm-dev` canary, and release sign-off work
-then moves to `docs/plan-phase-Z.md`.
+then moves to `docs/plans/phase-Z/plan-phase-Z.md`.
 
 ## Phase Rules
 

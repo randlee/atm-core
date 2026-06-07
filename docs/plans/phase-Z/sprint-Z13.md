@@ -57,7 +57,7 @@ inconsistent with the architecture even though they are not Claude
 ## Hard Dependencies
 
 - `docs/atm-core/boundaries.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -68,7 +68,7 @@ inconsistent with the architecture even though they are not Claude
 - `crates/atm-core/src/boundary/store.rs`
 - `.just/allowlists/scb_workspace_allowlist.toml`
 - `.just/fixtures/scb_workspace_known_bad.rs`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Delete / Narrow Inventory
@@ -110,7 +110,7 @@ let config = load_config(&current_dir)?;
    - prove `team_admin.rs`, `teams.rs`, and `members.rs` no longer contain
      direct `load_config(...)` calls
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 2. Add the mechanical boundary gate.
    Development work:
@@ -129,7 +129,7 @@ let config = load_config(&current_dir)?;
 
 3. Stamp closure records.
    Development work:
-   - stamp `Z.13` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.13` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    - add the `Z.13` ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
@@ -178,7 +178,7 @@ lint-enforced, not ambient.
 ## Required Document Updates
 
 - `docs/atm-core/boundaries.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

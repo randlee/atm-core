@@ -263,26 +263,26 @@ Critical path rationale:
   peer replay persistence and prevents ambiguous retry behavior
 
 Authoritative sprint sequence:
-- `docs/phase-W/sprint-W1.md`
-- `docs/phase-W/sprint-W2.md`
-- `docs/phase-W/sprint-W3.md`
-- `docs/phase-W/sprint-W4.md`
-- `docs/phase-W/sprint-W5.md`
-- `docs/phase-W/sprint-W6.md`
-- `docs/phase-W/sprint-W7.md`
-- `docs/phase-W/sprint-W8.md`
+- `docs/plans/phase-W/sprint-W1.md`
+- `docs/plans/phase-W/sprint-W2.md`
+- `docs/plans/phase-W/sprint-W3.md`
+- `docs/plans/phase-W/sprint-W4.md`
+- `docs/plans/phase-W/sprint-W5.md`
+- `docs/plans/phase-W/sprint-W6.md`
+- `docs/plans/phase-W/sprint-W7.md`
+- `docs/plans/phase-W/sprint-W8.md`
 
 Deliverables:
-- `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
-- `docs/phase-W/sprint-W2.md` — daemon-client traceability plan
-- `docs/phase-W/sprint-W3.md` — SQLite observability plan
-- `docs/phase-W/sprint-W4.md` — peer replay recovery-text plan
-- `docs/phase-W/sprint-W5.md` — doctor projection of bootstrap traceability
-- `docs/phase-W/sprint-W6.md` — SQLite error-contract and typed daemon-event
+- `docs/plans/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
+- `docs/plans/phase-W/sprint-W2.md` — daemon-client traceability plan
+- `docs/plans/phase-W/sprint-W3.md` — SQLite observability plan
+- `docs/plans/phase-W/sprint-W4.md` — peer replay recovery-text plan
+- `docs/plans/phase-W/sprint-W5.md` — doctor projection of bootstrap traceability
+- `docs/plans/phase-W/sprint-W6.md` — SQLite error-contract and typed daemon-event
   cleanup
-- `docs/phase-W/sprint-W7.md` — final triage closeout and merged-status
+- `docs/plans/phase-W/sprint-W7.md` — final triage closeout and merged-status
   registry
-- `docs/phase-W/sprint-W8.md` — Phase `W` closeout audit fixes for typed
+- `docs/plans/phase-W/sprint-W8.md` — Phase `W` closeout audit fixes for typed
   SQLite subsystem identity and shared ATM error inventory alignment
 
 Cross-sprint dependencies:

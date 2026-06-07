@@ -175,10 +175,10 @@ actually clean will either fail immediately or produce more policy cheating.
 
 ## Required Document Updates
 
-- `docs/phase-AA/readiness.md`
-- `docs/phase-AA/issues.md`
+- `docs/plans/phase-AA/readiness.md`
+- `docs/plans/phase-AA/issues.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-AA.md`
+- `docs/plans/phase-AA/plan-phase-AA.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-rusqlite/boundaries.md`

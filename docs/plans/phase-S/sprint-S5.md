@@ -190,16 +190,16 @@ Close the remaining Phase S process and product-surface gaps by:
 
 ## Required Document Updates
 
-- `docs/plan-phase-S.md`
-- `docs/phase-S/issues.md`
-- `docs/phase-S/sprint-S0.md`
-- `docs/phase-S/sprint-S1.md`
-- `docs/phase-S/sprint-S2.md`
-- `docs/phase-S/sprint-S3.md`
-- `docs/phase-S/sprint-S4.md`
-- `docs/phase-S/sprint-S6.md`
-- `docs/phase-S/sprint-S7.md`
-- `docs/phase-S/sprint-S8.md`
+- `docs/plans/phase-S/plan-phase-S.md`
+- `docs/plans/phase-S/issues.md`
+- `docs/plans/phase-S/sprint-S0.md`
+- `docs/plans/phase-S/sprint-S1.md`
+- `docs/plans/phase-S/sprint-S2.md`
+- `docs/plans/phase-S/sprint-S3.md`
+- `docs/plans/phase-S/sprint-S4.md`
+- `docs/plans/phase-S/sprint-S6.md`
+- `docs/plans/phase-S/sprint-S7.md`
+- `docs/plans/phase-S/sprint-S8.md`
 - `docs/testing-guidelines.md`
 - `docs/cross-platform-guidelines.md`
 - `docs/requirements.md`

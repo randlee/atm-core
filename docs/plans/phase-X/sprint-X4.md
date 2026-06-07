@@ -149,7 +149,7 @@ Implementation result:
 ### Resolved Findings
 
 - `ATM-QA-F03`
-  - `docs/phase-X/sprint-X4.md`
+  - `docs/plans/phase-X/sprint-X4.md`
   - closed by `cb18a9c`
   - aligned the frontmatter title with the sprint H1 so the completion record
     uses the canonical sprint title everywhere

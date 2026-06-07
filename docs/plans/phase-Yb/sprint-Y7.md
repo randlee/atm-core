@@ -26,11 +26,11 @@ Make the degraded-delivery contract exact and symmetric across
 
 ## Governing Requirements
 
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
@@ -43,9 +43,9 @@ Make the degraded-delivery contract exact and symmetric across
 - `crates/atm-core/src/send/persistence.rs`
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/ack/mod.rs`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/testing-and-validation.md`
-- `docs/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
 
 ## Required Work
 
@@ -210,9 +210,9 @@ implementation that preserves convenience helpers with hidden policy.
 
 ## Required Document Updates
 
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/testing-and-validation.md`
-- `docs/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
 
 ## Required Validation
 

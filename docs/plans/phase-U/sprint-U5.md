@@ -127,7 +127,7 @@ state decision. `atm list` and `atm read` should move together.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-rusqlite/query-diagrams.md` (update existing content to reflect SQLite query cutover)

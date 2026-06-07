@@ -14,16 +14,16 @@ observability gaps that are still open across lifecycle control, reconcile,
 watch, runtime health, and daemon observability.
 
 S.0-S.4 remain fully closed on the Phase S line, including the temporary
-Windows lint-guardrail removal recorded in `docs/plan-phase-S.md` §6.
+Windows lint-guardrail removal recorded in `docs/plans/phase-S/plan-phase-S.md` §6.
 
-`docs/phase-S/sprint-S14-runtime-plan.md` is the authoritative design document
+`docs/plans/phase-S/sprint-S14-runtime-plan.md` is the authoritative design document
 for this sprint.
 
 ## Required Work
 
 ### 1. Write the authoritative runtime plan
 
-Add `docs/phase-S/sprint-S14-runtime-plan.md` covering all S.14 inventory
+Add `docs/plans/phase-S/sprint-S14-runtime-plan.md` covering all S.14 inventory
 findings:
 - `S14-001` through `S14-011`
 - exact file:line target for each finding
@@ -52,16 +52,16 @@ The follow-on implementation worktree should target:
 
 ## Acceptance Criteria
 
-- `docs/phase-S/sprint-S14.md` designates
-  `docs/phase-S/sprint-S14-runtime-plan.md` as authoritative
-- `docs/phase-S/sprint-S14-runtime-plan.md` covers all 11 S.14 findings with
+- `docs/plans/phase-S/sprint-S14.md` designates
+  `docs/plans/phase-S/sprint-S14-runtime-plan.md` as authoritative
+- `docs/plans/phase-S/sprint-S14-runtime-plan.md` covers all 11 S.14 findings with
   concrete fix approach and exact file:line target
 - no implementation code is included in the planning sprint
 - `just lint` PASS
 
 ## References
 
-- `docs/phase-S/sprint-S14-runtime-plan.md`
+- `docs/plans/phase-S/sprint-S14-runtime-plan.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `crates/atm-daemon/src/lifecycle_control.rs`

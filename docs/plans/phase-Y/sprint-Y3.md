@@ -26,8 +26,8 @@ before append-only work or smoke testing begins.
 
 ## Governing Requirements
 
-- `docs/plan-phase-Y.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
 - normal runtime JSONL append is allowed only for `Claude Code` harnesses
 - harness selection is based on harness type, not model
 - non-Claude harnesses must never receive ATM-authored JSONL append output
@@ -47,12 +47,12 @@ before append-only work or smoke testing begins.
 ## Prerequisites
 
 - `Y.1` and `Y.2` are complete
-- the line-numbered write ledger in `docs/phase-Y/inbox-write-path-audit.md`
+- the line-numbered write ledger in `docs/plans/phase-Y/inbox-write-path-audit.md`
   has been reviewed and accepted as the authoritative removal list
 
 ## Hard Dependencies
 
-- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
 - the current sampled implementation call stacks recorded in that audit
 
 ## Non-Goals
@@ -82,7 +82,7 @@ Required tests:
 - no direct `send`/`ack` path can reach the low-level compatibility writer
 
 Required doc or boundary updates:
-- update `docs/phase-Y/inbox-write-path-audit.md`
+- update `docs/plans/phase-Y/inbox-write-path-audit.md`
 - update crate boundary docs if any public/private owner edge changes
 
 ### 2. Retain exactly one normal runtime inbox writer owner
@@ -102,7 +102,7 @@ Required tests:
 - non-owner attempts fail mechanically or are impossible to compile
 
 Required doc or boundary updates:
-- update `docs/phase-Y/inbox-write-path-audit.md`
+- update `docs/plans/phase-Y/inbox-write-path-audit.md`
 - update `docs/atm-core/boundaries.md`
 - update `docs/atm-daemon/boundaries.md`
 
@@ -124,7 +124,7 @@ Required tests:
 - restore still rebuilds inbox/config/task state deterministically
 
 Required doc or boundary updates:
-- update `docs/phase-Y/inbox-write-path-audit.md`
+- update `docs/plans/phase-Y/inbox-write-path-audit.md`
 - update `docs/atm-core/modules/team_admin.md`
 
 ## Removal Ledger
@@ -235,8 +235,8 @@ second, but do not leave the repo in a mixed command-owned state between them.
 
 ## Required Document Updates
 
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/plan-phase-Y.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
 - `docs/project-plan.md`
 - any boundary docs touched by the retained owner shape
 

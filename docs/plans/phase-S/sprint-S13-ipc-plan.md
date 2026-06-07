@@ -413,5 +413,5 @@ planning/implementation target unless later tasking expands scope:
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
-- `docs/phase-S/sprint-S12.md`
+- `docs/plans/phase-S/sprint-S12.md`
 - `TASK-1219-PROD-REVIEW`

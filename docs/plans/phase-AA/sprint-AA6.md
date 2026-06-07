@@ -159,7 +159,7 @@ unrelated observability refactors or feature work once the migration compiles.
 
 ## Acceptance Criteria
 
-- `docs/phase-AA/sprint-AA6.md` exists with `status: complete`,
+- `docs/plans/phase-AA/sprint-AA6.md` exists with `status: complete`,
   `branch: feature/pAA-s6-obs-upgrade`, and a populated `worktree:`
 - the sprint doc enumerates every `sc-observability` `1.2.0` migration item
   currently required by ATM:
@@ -170,7 +170,7 @@ unrelated observability refactors or feature work once the migration compiles.
   - `Logger<Stopped>` shutdown typestate
   - `LoggingHealthReport` queue/writer/maintenance projection review
   - `writer_shutdown_timeout` and typed retained-log policy field migration
-- `docs/plan-phase-AA.md` contains an `AA.6` section after `AA.5`
+- `docs/plans/phase-AA/plan-phase-AA.md` contains an `AA.6` section after `AA.5`
 - `docs/project-plan.md` includes the `AA.6` sprint entry before closeout
 - `docs/architecture.md` is either updated by this sprint or removed from
   Required Document Updates if no `AA.6` migration detail lands there
@@ -188,9 +188,9 @@ unrelated observability refactors or feature work once the migration compiles.
 
 ## Required Document Updates
 
-- `docs/phase-AA/sprint-AA6.md`
-- `docs/phase-AA/readiness.md`
-- `docs/plan-phase-AA.md`
+- `docs/plans/phase-AA/sprint-AA6.md`
+- `docs/plans/phase-AA/readiness.md`
+- `docs/plans/phase-AA/plan-phase-AA.md`
 - `docs/project-plan.md`
 - `docs/architecture.md`
 - `docs/requirements.md`

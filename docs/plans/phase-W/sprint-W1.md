@@ -61,7 +61,7 @@ worktree: ../atm-core-worktrees/feature/pW-s1-emit-fallback
   warning/failure and names the exact regressions that must be restored where
   they do not
 - the sprint reconciles its local code inventory with the shared Phase `W`
-  ATM code inventory in `docs/plan-phase-W.md`
+  ATM code inventory in `docs/plans/phase-W/plan-phase-W.md`
 - the sprint names the shared runtime-health / doctor projection points that
   carry observability impairment across CLI, graft, and peer-triggered
   diagnostics

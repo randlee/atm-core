@@ -100,7 +100,7 @@ Unix-only behavior.
   `crates/atm-daemon/src/local_ipc_transport.rs` because no filesystem socket path exists to
   create or unlink.
 - Phase S records the remaining accepted production polling exceptions in
-  `docs/plan-phase-S.md §4.1`:
+  `docs/plans/phase-S/plan-phase-S.md §4.1`:
   - Windows lifecycle-control wake propagation
   - CLI daemon auto-start endpoint publication wait
   - retained-observability shutdown flush deadline

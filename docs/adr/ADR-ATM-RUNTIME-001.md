@@ -17,8 +17,8 @@ related_boundaries:
   - BOUNDARY-RuntimeFactory
   - BOUNDARY-AtmRuntime-Composition
 code_references:
-  - docs/phase-AA/sprint-AA2.md
-  - docs/phase-AA/sprint-AA3.md
+  - docs/plans/phase-AA/sprint-AA2.md
+  - docs/plans/phase-AA/sprint-AA3.md
   - docs/atm-runtime/architecture.md
 ```
 

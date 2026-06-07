@@ -49,18 +49,18 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - current manual restore procedure received from `team-lead`
 
 ## Exact Targets
 
 - `crates/atm-core/src/team_admin/restore.rs`
 - `crates/atm-core/src/team_admin.rs`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -88,7 +88,7 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
    Required tests:
    - prove backup still captures the required artifacts
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 2. Rewrite restore around ATM projection.
    Development work:
@@ -100,7 +100,7 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
    - prove restore no longer reads backup `config.json` as roster truth
    - prove recreated `config.json` is rebuilt from ATM state
    Required docs:
-   - update `docs/phase-Z/config-json-violation-inventory.md`
+   - update `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 3. Preserve recreated lead shell identity and metadata.
    Development work:
@@ -120,11 +120,11 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
 
 4. Update the planning/closure records.
    Development work:
-   - stamp `Z.10` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.10` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 ## Split Recommendation
 
@@ -142,7 +142,7 @@ ownership, stop and push that scope back into `Z.5` through `Z.9`.
   canonical member metadata such as `tmux_pane_id`
 - the automated restore path replaces manual file-edit steps before `Z.3`
   begins
-- `docs/phase-Z/readiness.md` is stamped with the `Z.10` accepted head and
+- `docs/plans/phase-Z/readiness.md` is stamped with the `Z.10` accepted head and
   closure verdict
 
 ## Non-Closure
@@ -165,13 +165,13 @@ to backup `config.json` authority or manual file surgery.
   - expected: no production matches; if any surviving read is still narrowly
     justified, the exact call site must be named explicitly in the sprint-close
     evidence
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/atm-core/requirements.md`
 - `docs/project-plan.md`
 

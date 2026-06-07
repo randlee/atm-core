@@ -55,7 +55,7 @@ worktree: ../atm-core-worktrees/feature/pW-s4-peer-replay-recovery
   become the single source of truth for each touched replay-persistence
   failure class
 - the sprint reconciles its local code inventory with the shared Phase `W`
-  ATM code inventory in `docs/plan-phase-W.md`
+  ATM code inventory in `docs/plans/phase-W/plan-phase-W.md`
 - the sprint makes the CLI / doctor split verifiable in acceptance criteria:
   concise send failure at the command surface, deeper replay durability detail
   through the shared doctor/runtime-health surfaces

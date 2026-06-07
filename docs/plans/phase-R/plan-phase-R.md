@@ -857,7 +857,7 @@ Status:
   `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
 - route listener/accept failures through the same `Running -> Draining ->
   Stopped` shutdown path as signal-driven termination
-- sprint plan: `docs/phase-R/sprint-R13.md`
+- sprint plan: `docs/plans/phase-R/sprint-R13.md`
 
 ### R.14 SQLite Root And Message-Thread Semantics
 
@@ -866,7 +866,7 @@ Status:
 - keep `atm ack` as one visible reply with `requires_ack = false`
 - implement ephemeral stale-time retention without read-triggered deletion
 - finish SQLite error-mapping and test-fixture policy updates
-- sprint plan: `docs/phase-R/sprint-R14.md`
+- sprint plan: `docs/plans/phase-R/sprint-R14.md`
 
 ### R.15 Heartbeat, Status Cache, And Doctor Health
 
@@ -874,7 +874,7 @@ Status:
 - implement runtime-owned heartbeat/member state
 - implement daemon-owned live status cache
 - wire doctor to daemon-backed liveness/readiness projection
-- sprint plan: `docs/phase-R/sprint-R15.md`
+- sprint plan: `docs/plans/phase-R/sprint-R15.md`
 
 ### R.16 Peer Delivery And Replay
 
@@ -882,7 +882,7 @@ Status:
 - replace `PeerClientTransport` stub with real outbound daemon-to-daemon
   transport
 - wire durable replay/re-export around the outbound peer path
-- sprint plan: `docs/phase-R/sprint-R16.md`
+- sprint plan: `docs/plans/phase-R/sprint-R16.md`
 
 ### R.17 Watch, Reconcile, And Notifier Runtime
 
@@ -890,7 +890,7 @@ Status:
 - replace one-shot boundary-support helpers with runtime-owned watch and
   reconcile loops
 - add daemon-owned notifier/plugin runtime delivery
-- sprint plan: `docs/phase-R/sprint-R17.md`
+- sprint plan: `docs/plans/phase-R/sprint-R17.md`
 
 ### R.18 Production Hardening And Closeout
 
@@ -898,7 +898,7 @@ Status:
 - finish config reload, request-id, type-safety, env/test portability, and
   remaining runtime-boundary hardening
 - update plan/requirements/architecture/boundaries to the final landed state
-- sprint plan: `docs/phase-R/sprint-R18.md`
+- sprint plan: `docs/plans/phase-R/sprint-R18.md`
 
 ### R.19 Postmortem Linter Backfill
 
@@ -947,7 +947,7 @@ Acceptance:
   - reusable and intended for later `sc-lint` migration, or
   - ATM-local and retained in repository-local lint glue
 - no family is left as “QA-only tribal knowledge”
-- sprint plan: `docs/phase-R/sprint-R19.md`
+- sprint plan: `docs/plans/phase-R/sprint-R19.md`
 
 ### R.20 Daemon Partitioning And Enforcement Hardening
 
@@ -969,7 +969,7 @@ Status:
 - run a repeated plan-hardening loop over code and docs until the daemon
   planning set is internally consistent and specific enough for a production
   cleanup sprint
-- sprint plan: `docs/phase-R/sprint-R20.md`
+- sprint plan: `docs/plans/phase-R/sprint-R20.md`
 
 ## 6. Working Rule
 

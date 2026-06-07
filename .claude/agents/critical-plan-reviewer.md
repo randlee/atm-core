@@ -140,7 +140,7 @@ Return fenced JSON only.
     }
   ],
   "docs_read": [
-    "docs/phase-X/sprint-X.md"
+    "docs/plans/phase-X/sprint-X.md"
   ],
   "findings": [
     {
@@ -150,7 +150,7 @@ Return fenced JSON only.
       "classification": "structural | wording",
       "affects_ac": false,
       "target_refs": [
-        "docs/phase-X/sprint-X.md:10"
+        "docs/plans/phase-X/sprint-X.md:10"
       ],
       "issue": "clear statement of the planning problem",
       "required_correction": "specific corrective action"
@@ -162,7 +162,7 @@ Return fenced JSON only.
       "category": "VAGUE | GAP",
       "affects_ac": false,
       "target_refs": [
-        "docs/phase-X/sprint-X.md:10"
+        "docs/plans/phase-X/sprint-X.md:10"
       ],
       "issue": "non-blocking wording problem",
       "suggested_cleanup": "specific wording cleanup"

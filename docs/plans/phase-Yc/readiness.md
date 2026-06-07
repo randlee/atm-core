@@ -40,7 +40,7 @@ accepted `Phase Y` merge-candidate line before landing on `develop`.
 
 `Phase Z` still remains blocked after `Yc` closes.
 
-Only the later `docs/phase-Yd/readiness.md` record may state that:
+Only the later `docs/plans/phase-Yd/readiness.md` record may state that:
 - `Phase Y` may land on `develop`
 - `Phase Z` may begin
 
@@ -51,7 +51,7 @@ The `Y.13` readiness closeout states that:
 - the send/ack execution path can submit at least one notification request
   through `NotificationSink::deliver(...)`
 - this liveness proof satisfies the explicit startup/liveness acceptance
-  requirement in `docs/phase-Yc/sprint-Y13.md`
+  requirement in `docs/plans/phase-Yc/sprint-Y13.md`
 
 ## Planned Ownership
 

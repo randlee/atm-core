@@ -125,17 +125,17 @@ The documented lintable boundary plan must forbid direct calls from:
 
 ## Required Follow-On
 
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/sprint-Y7.md`
-- `docs/phase-Yb/sprint-Y8.md`
-- `docs/phase-Yb/sprint-Y9.md`
-- `docs/phase-Yb/sprint-Y10.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/sprint-Y7.md`
+- `docs/plans/phase-Yb/sprint-Y8.md`
+- `docs/plans/phase-Yb/sprint-Y9.md`
+- `docs/plans/phase-Yb/sprint-Y10.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/phase-Yc/plan-phase-Yc.md`
-- `docs/phase-Yc/issues.md`
-- `docs/phase-Yc/readiness.md`
-- `docs/phase-Yc/sprint-Y12.md`
-- `docs/phase-Yc/sprint-Y13.md`
+- `docs/plans/phase-Yc/plan-phase-Yc.md`
+- `docs/plans/phase-Yc/issues.md`
+- `docs/plans/phase-Yc/readiness.md`
+- `docs/plans/phase-Yc/sprint-Y12.md`
+- `docs/plans/phase-Yc/sprint-Y13.md`

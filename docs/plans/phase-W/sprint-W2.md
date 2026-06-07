@@ -80,7 +80,7 @@ worktree: ../atm-core-worktrees/feature/pW-s2-daemon-client-traceability
   `crates/atm-daemon-client/src/lib.rs` must apply the `W.1` fallback rule; no
   silent `let _ =` discard is permitted in the added traceability sites
 - the sprint reconciles its local code inventory with the shared Phase `W`
-  ATM code inventory in `docs/plan-phase-W.md`
+  ATM code inventory in `docs/plans/phase-W/plan-phase-W.md`
 - the sprint documents the LaunchGateGuard ownership decision explicitly:
   `W.2` does not introduce a new public typestate/`PhantomData` guard; it keeps
   the existing single-owner runtime lock model and limits scope to reporting

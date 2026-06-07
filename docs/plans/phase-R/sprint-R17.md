@@ -110,7 +110,7 @@ If the notifier runtime is blocked on separate plugin work, split it late. The w
 - `docs/architecture.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

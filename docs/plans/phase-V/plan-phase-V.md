@@ -38,10 +38,10 @@ Rationale:
   hardening because system testing needs actionable daemon/runtime failures
 
 Authoritative sprint sequence:
-- `docs/phase-V/sprint-V1.md`
-- `docs/phase-V/sprint-V2.md`
-- `docs/phase-V/sprint-V3.md`
-- `docs/phase-V/sprint-V4.md`
+- `docs/plans/phase-V/sprint-V1.md`
+- `docs/plans/phase-V/sprint-V2.md`
+- `docs/plans/phase-V/sprint-V3.md`
+- `docs/plans/phase-V/sprint-V4.md`
 
 Sprint summary:
 - `V.1` observability boundary and event model

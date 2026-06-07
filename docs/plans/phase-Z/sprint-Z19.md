@@ -54,9 +54,9 @@ events with no warnings or errors.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -105,7 +105,7 @@ silently dropped or partially deferred.
   the only local blocker
 - fix minor localized requirement or architecture violations when they are the
   only local blocker to predictable fast execution
-- promote larger rework findings into `docs/phase-Z/smoke-findings-review.md`
+- promote larger rework findings into `docs/plans/phase-Z/smoke-findings-review.md`
 
 ## Explicit Code Samples
 
@@ -153,7 +153,7 @@ just smoke fast
   expected events or any warning/error output
 - the fast report is rendered to the tracked-latest and timestamped artifacts
 - any remaining large issue is captured in
-  `docs/phase-Z/smoke-findings-review.md`
+  `docs/plans/phase-Z/smoke-findings-review.md`
 
 ## Required Validation
 
@@ -174,11 +174,11 @@ level for deterministic fast smoke execution.
 
 ## Required Document Updates
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/readiness.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/smoke-findings-review.md`, when needed
+- `docs/plans/phase-Z/smoke-findings-review.md`, when needed
 
 ## Risks And Watchouts
 

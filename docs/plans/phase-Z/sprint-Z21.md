@@ -56,8 +56,8 @@ be promoted into the findings review artifact.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
 
 ## Exact Targets
 
@@ -114,7 +114,7 @@ silently dropped or partially deferred.
   local blocker
 - fix minor localized requirement or architecture violations when they are the
   only local blocker to predictable thorough execution
-- promote larger rework findings into `docs/phase-Z/smoke-findings-review.md`
+- promote larger rework findings into `docs/plans/phase-Z/smoke-findings-review.md`
 
 ## Explicit Code Samples
 
@@ -146,7 +146,7 @@ just smoke thorough
   advisory plus unary ICD lane
 - the thorough run retains the fast-lane log-analysis gate:
   `FAST-LOG-001` and `FAST-LOG-002` must still pass at the thorough level
-- every row in `docs/phase-Z/smoke-checklist.md` maps to one report row
+- every row in `docs/plans/phase-Z/smoke-checklist.md` maps to one report row
 - copied-state fixture coverage is part of the thorough lane where the
   checklist requires it
 - every CLI interface listed in Required Work is covered on happy path plus
@@ -160,7 +160,7 @@ just smoke thorough
 - every deviation includes observed behavior, expected behavior, likely root
   cause, and artifact pointer
 - any remaining large issue is captured in
-  `docs/phase-Z/smoke-findings-review.md`
+  `docs/plans/phase-Z/smoke-findings-review.md`
 
 ## Required Validation
 
@@ -180,11 +180,11 @@ level for deterministic thorough smoke execution and row-level reporting.
 
 ## Required Document Updates
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/readiness.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/smoke-findings-review.md`, when needed
+- `docs/plans/phase-Z/smoke-findings-review.md`, when needed
 
 ## Risks And Watchouts
 

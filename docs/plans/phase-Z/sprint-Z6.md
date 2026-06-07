@@ -51,9 +51,9 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 ## Hard Dependencies
 
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
@@ -62,9 +62,9 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 - `crates/atm-core/src/boundary/store.rs`
 - `crates/atm-rusqlite/src/lib.rs`
 - `crates/atm-rusqlite/Cargo.toml`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -103,7 +103,7 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
      member is absent from the immutable Claude roster projection, while the
      warning text still names the underlying `config.json` roster mismatch
    Required docs:
-   - update `docs/phase-Z/config-json-violation-inventory.md`
+   - update `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 2. Introduce immutable runtime roster projection.
    Development work:
@@ -163,7 +163,7 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
      from `RosterStore` / SQLite rather than `ConfigIngress` or
      `config::load_team_config(...)`
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 3. Remove the generic runtime helper seam.
    Development work:
@@ -176,11 +176,11 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 
 4. Update the planning/closure records.
    Development work:
-   - stamp `Z.6` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.6` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 ## Split Recommendation
 
@@ -197,7 +197,7 @@ or watcher/reconcile import ownership, stop and move that scope into `Z.7` or
   direct `config.json` reads
 - generic runtime `load_team_config(...)` helper use is removed from
   `send`-driven command/runtime behavior
-- `docs/phase-Z/readiness.md` is stamped with the `Z.6` accepted head and
+- `docs/plans/phase-Z/readiness.md` is stamped with the `Z.6` accepted head and
   closure verdict
 
 ## Non-Closure
@@ -221,13 +221,13 @@ immutable public roster surface rather than another mutable source of truth.
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src/send/mod.rs crates/atm-core/src/service_runtime.rs`
   - expected: no production matches
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`

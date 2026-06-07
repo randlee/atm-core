@@ -28,7 +28,7 @@ implementation in parallel.
 ## Hard Dependencies
 
 - `Y.21` must close first
-- `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/plans/phase-Ye/plan-phase-Ye.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`

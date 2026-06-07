@@ -103,7 +103,7 @@ Do not split. This sprint should be small and decisive.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/atm-rusqlite/architecture.md`
 - `docs/atm-rusqlite/requirements.md` (update clauses for removed provenance fields)

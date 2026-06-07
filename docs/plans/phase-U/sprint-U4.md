@@ -128,7 +128,7 @@ If the field set is approved, land the schema and code cleanup together.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-rusqlite/architecture.md`

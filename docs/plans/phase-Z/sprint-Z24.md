@@ -53,9 +53,9 @@ ATM keeps policy selection, health projection, and doctor/report presentation.
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/sprint-Z24.md`
+- `docs/plans/phase-Z/sprint-Z24.md`
 
 ## Exact Targets
 
@@ -66,7 +66,7 @@ ATM keeps policy selection, health projection, and doctor/report presentation.
 - `crates/atm-daemon/bin_support/daemon_observability.rs`
 - `crates/atm/src/main.rs`
 - `crates/atm/src/output.rs`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 
 ## Deliverables

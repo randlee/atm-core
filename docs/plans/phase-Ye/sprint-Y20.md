@@ -32,7 +32,7 @@ That design blurs the real ownership model:
 
 - `Y.19` must close first; this sprint reuses the `arc_swap` dependency
   introduced in `Y.19`.
-- `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/plans/phase-Ye/plan-phase-Ye.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
@@ -63,7 +63,7 @@ ADR-015 ownership in this sprint:
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
   - update the `DaemonNotificationSinkAdapter` record
-- `docs/phase-Ye/sprint-Y20.md`
+- `docs/plans/phase-Ye/sprint-Y20.md`
 
 ## Proposed Design
 
@@ -237,7 +237,7 @@ or plugin contracts, the sprint must split before implementation.
 
 - `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
 - `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/worker_support.rs`
-- `rg -n 'worker_support.rs|struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md docs/phase-Ye/sprint-Y22.md`
+- `rg -n 'worker_support.rs|struct JoinHandleOwner' docs/plans/phase-Ye/sprint-Y20.md docs/plans/phase-Ye/sprint-Y21.md docs/plans/phase-Ye/sprint-Y22.md`
 - `rg -n "Mutex<NotificationState>|Condvar|VecDeque" crates/atm-daemon/src/notification_runtime.rs` # expected: zero matches
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace notification_runtime_persistence_failure_publishes_degraded_status -- --nocapture`

@@ -27,10 +27,10 @@ into `Z.3` canary.
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Yd/readiness.md`
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
+- `docs/plans/phase-Yd/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - accepted `Z.1` smoke closeout at `70f4fa7f`
 - `Z.1` smoke results are the only finding source for this sprint
 
@@ -41,9 +41,9 @@ into `Z.3` canary.
 
 ## Exact Targets To Modify
 
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
@@ -72,9 +72,9 @@ into `Z.3` canary.
 ## Deliverables
 
 - fixed branch containing only `Z.1` finding closure work
-- updated `docs/phase-Z/smoke-findings-ledger.md` with fix/defer disposition
+- updated `docs/plans/phase-Z/smoke-findings-ledger.md` with fix/defer disposition
   for every carried `Z.1` finding
-- updated `docs/phase-Z/readiness.md` with the accepted `Z.2` verdict and head
+- updated `docs/plans/phase-Z/readiness.md` with the accepted `Z.2` verdict and head
 - smoke revalidation result on the fixed branch
 - explicit canary-entry decision for `Z.3`: either proceed immediately or stop
   on a serious blocker
@@ -82,13 +82,13 @@ into `Z.3` canary.
 ## Required Work
 
 - fix only the findings promoted from `Z.1`
-- only findings recorded in `docs/phase-Z/smoke-findings-ledger.md` are in
+- only findings recorded in `docs/plans/phase-Z/smoke-findings-ledger.md` are in
   scope; newly discovered issues found during `Z.2` must be recorded but not
   fixed in this sprint, using the `notes` field and `status: out_of_scope`
-  marker in `docs/phase-Z/smoke-findings-ledger.md`
+  marker in `docs/plans/phase-Z/smoke-findings-ledger.md`
 - keep the branch aligned with the approved `Phase Y` architecture and state
   machines
-- rerun the frozen `docs/phase-Z/smoke-checklist.md` checklist after fixes
+- rerun the frozen `docs/plans/phase-Z/smoke-checklist.md` checklist after fixes
   land
 - if the `Z.2` rerun clears `Z1-F001` and `Z1-F002`, or leaves only
   non-serious follow-up items that do not block canary, record those outcomes
@@ -145,7 +145,7 @@ into `Z.3` canary.
      no `load_team_config(...)` call occurs and no roster write is emitted
    Required docs:
    - update `docs/atm-daemon/boundaries.md`
-   - update `docs/phase-Z/smoke-findings-ledger.md`
+   - update `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 2. Fix the preexisting SQLite schema-init ordering bug for `Z1-F002`.
    Development work:
@@ -155,16 +155,16 @@ into `Z.3` canary.
    - prove the copied/preexisting DB starts without silently discarding mail
      rows
    Required docs:
-   - update `docs/phase-Z/smoke-findings-ledger.md`
+   - update `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 3. Re-run frozen smoke validation and close the records.
    Development work:
    - rerun the frozen smoke checklist after fixes land
-   - stamp `Z.2` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.2` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 ## Follow-On Inventory After Z.2
 
@@ -183,7 +183,7 @@ closes, the remaining planned execution line is:
 ## Acceptance Criteria
 
 - every `Z.1` finding is either fixed or explicitly deferred with `team-lead`
-  approval recorded in `docs/phase-Z/smoke-findings-ledger.md`
+  approval recorded in `docs/plans/phase-Z/smoke-findings-ledger.md`
 - any deferred `Z.1` finding is resolved or explicitly waived by `team-lead`
   before `Z.3` may begin
 - `Z1-F001` closeout proves that a clean host with no preexisting SQLite DB
@@ -203,18 +203,18 @@ closes, the remaining planned execution line is:
   daemon line
 - the smoke checklist is rerun on the fixed branch
 - all smoke-checklist rows linked to a `Z.1` finding marked fixed, not
-  deferred, in `docs/phase-Z/smoke-findings-ledger.md` record a passing
+  deferred, in `docs/plans/phase-Z/smoke-findings-ledger.md` record a passing
   `z2_revalidation_verdict`; any such row that still fails is a blocking
   finding for this sprint
 - all checklist rows that passed in `Z.1` still pass after the `Z.2` fixes;
   any new failure is a blocking finding for this sprint
-- `docs/phase-Z/smoke-findings-ledger.md` records final per-finding
+- `docs/plans/phase-Z/smoke-findings-ledger.md` records final per-finding
   disposition and revalidation outcome
-- `docs/phase-Z/readiness.md` records the accepted `Z.2` head and verdict
+- `docs/plans/phase-Z/readiness.md` records the accepted `Z.2` head and verdict
 - the closeout notes make one explicit transition decision:
   - proceed to `Z.3` immediately, or
   - stop on a named serious blocker with the blocker recorded in
-    `docs/phase-Z/smoke-findings-ledger.md`
+    `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 ## Non-Closure
 
@@ -234,9 +234,9 @@ the `Z.1` handoff without silent carry-forward.
 
 - `cargo build --release` or equivalent release build that refreshes the
   executable baseline under test
-- rerun `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- rerun `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `cargo test --workspace`
 - `cargo test --workspace z2_startup_hydration_skips_non_empty_roster -- --nocapture`
   - expected: startup-only hydration helper exits without calling

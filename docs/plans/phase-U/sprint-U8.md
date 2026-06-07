@@ -139,7 +139,7 @@ only on the identity, query, and member-addressing surfaces above.
 - U.8 owns protocol/DTO family ownership and rename planning only
 - U.8 owns generic replacement of `GraftSessionId`
 - actual removal or generic replacement of the following
-  `docs/phase-U/removal-inventory.md` items is split across U.8 through U.10:
+  `docs/plans/phase-U/removal-inventory.md` items is split across U.8 through U.10:
   - `GraftSessionPort`
   - `GraftSessionState`
   - `GraftSessionId`
@@ -159,14 +159,14 @@ only on the identity, query, and member-addressing surfaces above.
 
 ## Required Document Updates
 
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/project-plan.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/protocol-icd.md`
-- `docs/phase-U/removal-inventory.md`
+- `docs/plans/phase-U/removal-inventory.md`
 
 ## Risks And Watchouts
 

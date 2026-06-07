@@ -17,7 +17,7 @@ message-path contract.
 
 ## Hard Dependencies
 
-- `docs/phase-Yb/sprint-Y10.md` must be complete first
+- `docs/plans/phase-Yb/sprint-Y10.md` must be complete first
 - the `Y.10` implementation review findings are authoritative for this sprint:
   - low-level Claude append seam still receives `DeliveryHarnessPath::NonClaude`
     traffic and rejects it internally
@@ -28,11 +28,11 @@ message-path contract.
 
 ## Governing Requirements
 
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 
 ## Exact Code And Document Targets
@@ -40,11 +40,11 @@ message-path contract.
 - `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/delivery_execution.rs`
 - `crates/atm-core/src/send/mod.rs`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
-- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
 - `docs/project-plan.md`
 
 ## Required Work
@@ -77,18 +77,18 @@ message-path contract.
   `atm_core::delivery_execution::ClaudeInboxWriter`
 - repair/rebuild rewrite remains reachable only through the explicit
   repair/rebuild seam and not through a generic recipient-routed runtime helper
-- `docs/phase-Yb/testing-and-validation.md` no longer cites the obsolete
+- `docs/plans/phase-Yb/testing-and-validation.md` no longer cites the obsolete
   hook-path non-Claude proof name
 - final Yb closeout docs do not claim the line is complete until these reopened
   issues are closed
 
 ## Required Document Updates
 
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
-- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
 - `docs/project-plan.md`
 
 ## Required Validation

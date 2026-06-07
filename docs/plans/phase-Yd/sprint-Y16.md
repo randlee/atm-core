@@ -15,9 +15,9 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/plan-phase-Yd.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/adr/INDEX.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/requirements.md`
@@ -40,8 +40,8 @@ target: integrate/phase-Y
 - `crates/atm-daemon/src/notification_runtime.rs`
 - any directly supporting daemon/runtime assembly files required to install the
   live production `NotificationSink`
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/project-plan.md`
 
 ## Deliverables
@@ -54,7 +54,7 @@ target: integrate/phase-Y
 ## Required Work
 
 - close the retained-runtime composition blocker recorded in
-  `docs/phase-Y/issues.md`
+  `docs/plans/phase-Y/issues.md`
 - keep `atm_daemon::composition::compose_runtime` as the machine-readable
   composition root and treat `build_production_runtime(...)` as an internal
   helper that is called from within `compose_runtime(...)`
@@ -73,7 +73,7 @@ target: integrate/phase-Y
 ## Acceptance Criteria
 
 - the retained-runtime composition blocker assigned to `Y.16` in
-  `docs/phase-Y/issues.md` is closed or explicitly reclassified with
+  `docs/plans/phase-Y/issues.md` is closed or explicitly reclassified with
   documented rationale
 - the production retained-runtime path installs the live `NotificationSink`
   without fallback/helper-owned bypass behavior
@@ -85,7 +85,7 @@ target: integrate/phase-Y
 - named test proves production retained-runtime composition installs the live
   notification sink:
   - `production_runtime_installs_daemon_notification_sink`
-- `docs/phase-Yd/readiness.md` is updated with the `Y.16` closure result
+- `docs/plans/phase-Yd/readiness.md` is updated with the `Y.16` closure result
 
 ## Explicit Code Samples
 

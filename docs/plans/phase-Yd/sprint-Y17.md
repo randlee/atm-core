@@ -16,9 +16,9 @@ target: integrate/phase-Y
 
 ## Hard Dependencies
 
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/plan-phase-Yd.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/adr/INDEX.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/testing-guidelines.md`
@@ -43,8 +43,8 @@ target: integrate/phase-Y
   - any directly adjacent files required to merge those accepted fixes onto the
     final candidate line cleanly
 - the accepted merge candidate branch state itself
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/plans/phase-Y/issues.md`
+- `docs/plans/phase-Yd/readiness.md`
 - `docs/project-plan.md`
 
 ## Deliverables
@@ -63,7 +63,7 @@ target: integrate/phase-Y
   does not stay as a second independent candidate gate
 - validate the accepted candidate line cleanly
 - record the accepted candidate commit identity in
-  `docs/phase-Yd/readiness.md` so QA does not have to infer which line
+  `docs/plans/phase-Yd/readiness.md` so QA does not have to infer which line
   satisfied the candidate gate
 - update the blocker inventory and readiness record to reflect the closure
   state
@@ -82,8 +82,8 @@ target: integrate/phase-Y
 - git confirms commit `243e473a` (`PY-EOP-FIX-R2`) is an ancestor of the
   accepted merge candidate
 - the accepted candidate commit used for the `Y.17` gate is named explicitly
-  in `docs/phase-Yd/readiness.md`
-- `docs/phase-Yd/readiness.md` is updated with the `Y.17` closure result
+  in `docs/plans/phase-Yd/readiness.md`
+- `docs/plans/phase-Yd/readiness.md` is updated with the `Y.17` closure result
 
 ## Required Validation
 

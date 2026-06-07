@@ -60,20 +60,20 @@ This sprint does not begin canary or release execution.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Exact Targets
 
 - `crates/atm-rusqlite/src/shared_db.rs`
 - `crates/atm-rusqlite/src/lib.rs`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/sprint-Z16.md`
+- `docs/plans/phase-Z/sprint-Z16.md`
 
 ## Delete / Narrow Inventory
 
@@ -101,7 +101,7 @@ This sprint does not begin canary or release execution.
    - add a regression test that creates the older schema shape and proves the
      current initialization path upgrades it successfully
    Required docs:
-   - update `docs/phase-Z/smoke-findings-ledger.md`
+   - update `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 2. Rerun the frozen `Z.1` smoke matrix.
    Development work:
@@ -113,19 +113,19 @@ This sprint does not begin canary or release execution.
    - copied-state lane proves daemon start, IPC publication, and retained
      daemon-backed commands now succeed
    Required docs:
-   - update `docs/phase-Z/smoke-checklist.md`
-   - update `docs/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/smoke-checklist.md`
+   - update `docs/plans/phase-Z/readiness.md`
 
 3. Stamp closure records.
    Development work:
-   - close `Z1-F002` in `docs/phase-Z/smoke-findings-ledger.md`
+   - close `Z1-F002` in `docs/plans/phase-Z/smoke-findings-ledger.md`
    - stamp the `Z.2` readiness row with final verdict and accepted commit
    - add the `Z.16` sprint ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
    Required docs:
    - update `docs/project-plan.md`
-   - update `docs/phase-Z/sprint-Z16.md`
+   - update `docs/plans/phase-Z/sprint-Z16.md`
 
 ## Split Recommendation
 
@@ -141,9 +141,9 @@ sprint rather than silently widening `Z.16`.
 - `cargo test --workspace` passes
 - `python3 .just/run_lint.py all` passes
 - the frozen `Z.1` smoke rows show final `PASS` revalidation verdicts
-- `docs/phase-Z/smoke-findings-ledger.md` records `Z1-F002` as `closed` with
+- `docs/plans/phase-Z/smoke-findings-ledger.md` records `Z1-F002` as `closed` with
   `revalidation_result = PASS`
-- `docs/phase-Z/readiness.md` records `Z.2` verdict `PASS`
+- `docs/plans/phase-Z/readiness.md` records `Z.2` verdict `PASS`
 - `docs/project-plan.md` includes the `Z.16` sprint ledger row
 
 ## Non-Closure
@@ -165,11 +165,11 @@ and the retained command surface must be production-ready before canary begins.
 
 ## Required Document Updates
 
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/sprint-Z16.md`
+- `docs/plans/phase-Z/sprint-Z16.md`
 
 ## Risks And Watchouts
 

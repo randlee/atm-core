@@ -19,7 +19,7 @@ Output fenced JSON findings only; do not send ATM messages directly.
 
 Always read:
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
-- `docs/phase-AA/sprint-AA5.md`
+- `docs/plans/phase-AA/sprint-AA5.md`
 
 ## Required Checks
 

@@ -25,7 +25,7 @@ Each finding entry must record:
 - `Z.4` fixes only findings recorded here
 - deferred items must record explicit approval in the ledger notes
 - every row must record one final `z4_disposition` before the release verdict
-  in `docs/phase-Z/readiness.md` may leave `PENDING`
+  in `docs/plans/phase-Z/readiness.md` may leave `PENDING`
 - newly discovered issues found during `Z.4` that are out of scope for the
   frozen `Z.3` handoff must be recorded here using `status: out_of_scope`
   rather than fixed in the `Z.4` sprint

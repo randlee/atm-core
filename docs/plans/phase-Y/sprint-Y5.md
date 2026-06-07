@@ -25,7 +25,7 @@ before release smoke work begins.
 ## Governing Requirements
 
 - `docs/atm-message-schema.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/plans/phase-Y/inbox-write-path-audit.md`
 - only immutable correlation/context fields may survive on the shared inbox
   surface
 - mutable workflow truth belongs in SQLite, not compatibility JSONL
@@ -48,8 +48,8 @@ before release smoke work begins.
 ## Hard Dependencies
 
 - `docs/atm-message-schema.md`
-- `docs/phase-Y/delivery-state-machines.md`
-- `docs/phase-Y/inbox-field-inventory.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/inbox-field-inventory.md`
 - the planning-branch field inventory and audit conclusions that identify the
   candidate compatibility fields
 
@@ -74,8 +74,8 @@ Required tests:
 
 Required doc or boundary updates:
 - update `docs/atm-message-schema.md`
-- update `docs/phase-Y/sprint-Y5.md`
-- update `docs/phase-Y/delivery-state-machines.md` if field removal changes any
+- update `docs/plans/phase-Y/sprint-Y5.md`
+- update `docs/plans/phase-Y/delivery-state-machines.md` if field removal changes any
   transition contracts
 
 ### 2. Remove mutable workflow-state fields
@@ -115,7 +115,7 @@ whole point of `Y.5` is to expose hidden dependencies immediately.
 ## Required Document Updates
 
 - `docs/atm-message-schema.md`
-- `docs/phase-Y/sprint-Y5.md`
+- `docs/plans/phase-Y/sprint-Y5.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

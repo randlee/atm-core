@@ -24,10 +24,10 @@ Current gap notes:
   subcommand or equivalent Phase `Y` UX surface, which `Y.1` is expected to
   implement
 - the delivery-machine diagram set now exists in:
-  - `docs/phase-Y/state-diagrams.md`
+  - `docs/plans/phase-Y/state-diagrams.md`
   - `docs/reports/delivery-state-diagrams.html`
 - the normative enum + transition definitions live in:
-  - `docs/phase-Y/delivery-state-machines.md`
+  - `docs/plans/phase-Y/delivery-state-machines.md`
 - remaining missing ownership diagrams:
   - compatibility inbox export / rewrite owner
   - watcher/import/export write ownership
@@ -148,7 +148,7 @@ Planning must produce:
 - one diagram set for the central delivery-policy coordinator and the required
   event-family state machines
 - one normative design note for those machines:
-  - `docs/phase-Y/delivery-state-machines.md`
+  - `docs/plans/phase-Y/delivery-state-machines.md`
 - one explicit QA-owned diagram artifact for each required machine:
   - `ClaudeHarnessNewMessage`
   - `NonClaudeHarnessNewMessage`

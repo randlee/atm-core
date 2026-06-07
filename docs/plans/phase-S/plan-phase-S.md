@@ -240,9 +240,9 @@ Required outcomes:
   deletion-based handoff semantics
 
 Required artifacts:
-- `docs/plan-phase-S.md`
-- `docs/phase-S/sprint-S0.md`
-- `docs/phase-S/issues.md`
+- `docs/plans/phase-S/plan-phase-S.md`
+- `docs/plans/phase-S/sprint-S0.md`
+- `docs/plans/phase-S/issues.md`
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
@@ -450,7 +450,7 @@ Required outcomes:
   envelope
 
 Required closeout work:
-- add the S.5 sprint plan under `docs/phase-S/sprint-S5.md`
+- add the S.5 sprint plan under `docs/plans/phase-S/sprint-S5.md`
 - add an ADR for the repository-wide no-flaky-test policy and enforcement
   partition if the existing ADRs are not sufficient
 - add an ADR for the bounded queue-query surface (`atm list` / single-message
@@ -590,9 +590,9 @@ Required closeout work:
 - keep the Unix-only headless unset-`HOME` test, but add non-gated override
   coverage that works on Windows CI
 - amend `docs/adr/ADR-011-host-scoped-retained-log-root.md` and
-  `docs/phase-S/sprint-S11.md` so the override-first contract and overlap
+  `docs/plans/phase-S/sprint-S11.md` so the override-first contract and overlap
   scope are explicit
-- record the detailed sprint authority in `docs/phase-S/sprint-S11.md`
+- record the detailed sprint authority in `docs/plans/phase-S/sprint-S11.md`
 
 ### S.12 Integration Gate Findings
 
@@ -608,7 +608,7 @@ Required outcomes:
   canonical INTG triage records
 - the machine-readable INTG triage records are updated to closed status for
   the fixes landed at `bd9e0e8`
-- `docs/phase-S/sprint-S12.md` stays aligned with the canonical triage
+- `docs/plans/phase-S/sprint-S12.md` stays aligned with the canonical triage
   inventory
 
 Required closeout work:
@@ -616,7 +616,7 @@ Required closeout work:
   the accepted INTG shutdown and recovery contracts
 - remove the last known flake vectors from the targeted runtime tests
 - keep the `config/discovery.rs` PATH_MAX guard carried forward on the branch
-- update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
+- update `docs/plans/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
   documentation and machine-readable triage state agree on closure
 
 ### S.13 IPC And Socket Shutdown Hardening
@@ -649,7 +649,7 @@ Goal:
   lifecycle control, reconcile/watch shutdown, runtime status bounds, doctor
   projection detail, and retained-observability flush behavior
 - carry forward the accepted S.13 direct-accept-loop contract from
-  `docs/phase-S/sprint-S13-ipc-plan.md` as the runtime baseline that S.14
+  `docs/plans/phase-S/sprint-S13-ipc-plan.md` as the runtime baseline that S.14
   hardens rather than redesigns
 
 Required outcomes:
@@ -659,7 +659,7 @@ Required outcomes:
 - `atm doctor` projects daemon runtime health with the full required detail
 
 Required closeout work:
-- add the S.14 sprint authority docs under `docs/phase-S/`
+- add the S.14 sprint authority docs under `docs/plans/phase-S/`
 - land the S.14 runtime hardening fixes on the follow-on implementation branch
 - keep daemon architecture and phase-plan docs aligned on the accepted
   resource-cap and eviction contracts
@@ -680,8 +680,8 @@ Required outcomes:
   recorded before code changes start
 
 Required closeout work:
-- produce `docs/phase-S/sprint-S15.md`,
-  `docs/phase-S/sprint-S15-rusqlite-plan.md`, and
+- produce `docs/plans/phase-S/sprint-S15.md`,
+  `docs/plans/phase-S/sprint-S15-rusqlite-plan.md`, and
   `docs/adr/ADR-ATM-RUSQLITE-002.md` as the governing S.15 planning set
 - document queue capacity, batching constants, `spawn_blocking` requirements,
   and per-batch isolation semantics for the future implementation sprint

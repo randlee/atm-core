@@ -37,7 +37,7 @@ project-plan.md entry to be present before close.
 
 **Recommended action**: `planning_process_improvement`
 - Add to `dev-template.xml.j2` AC section: doc deliverables block requiring
-  (a) `docs/phase-X/sprint-XN.md` exists with `status: complete`, `branch:`, `worktree:` set, and
+  (a) `docs/plans/phase-X/sprint-XN.md` exists with `status: complete`, `branch:`, `worktree:` set, and
   (b) `docs/project-plan.md` section has the sprint entry added.
 - Add to `qa-template.xml.j2` step (b): verify sprint doc and project-plan.md entry as explicit
   acceptance gate items (not just Rust output).

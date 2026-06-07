@@ -31,8 +31,8 @@ publication is the real ownership model.
 ## Hard Dependencies
 
 - `Phase Y` must be landed on `develop`
-- `docs/phase-Ye/plan-phase-Ye.md`
-- `docs/phase-Ye/issues.md`
+- `docs/plans/phase-Ye/plan-phase-Ye.md`
+- `docs/plans/phase-Ye/issues.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`

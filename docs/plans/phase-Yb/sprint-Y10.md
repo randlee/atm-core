@@ -17,24 +17,24 @@ are verified.
 
 ## Hard Dependencies
 
-- `docs/phase-Yb/sprint-Y9.md` must be complete first
+- `docs/plans/phase-Yb/sprint-Y9.md` must be complete first
 
 ## Governing Requirements
 
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 
 ## Exact Code And Document Targets
 
 - `boundaries/atm-core/inbox-export.toml`
 - `boundaries/atm-daemon/daemon-inbox-export.toml`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/project-plan.md`
 
 ## Required Work
@@ -61,10 +61,10 @@ are verified.
 
 ## Required Document Updates
 
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/qa-handoff.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/project-plan.md`
 
 ## Required Validation

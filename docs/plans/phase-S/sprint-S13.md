@@ -23,7 +23,7 @@ faults use supervisor restart rather than in-process IPC re-bind.
 
 ### 1. Write the design document
 
-Add `docs/phase-S/sprint-S13-ipc-plan.md` covering:
+Add `docs/plans/phase-S/sprint-S13-ipc-plan.md` covering:
 - the single receive-loop per connection model
 - async dispatch ownership and cancellation rules
 - `ShutdownBeacon`
@@ -64,16 +64,16 @@ concerns only in S.13.
 
 ## Acceptance Criteria
 
-- `docs/phase-S/sprint-S13-ipc-plan.md` exists and covers all required design
+- `docs/plans/phase-S/sprint-S13-ipc-plan.md` exists and covers all required design
   areas
-- `docs/phase-S/sprint-S13.md` exists and names the implementation scope and
+- `docs/plans/phase-S/sprint-S13.md` exists and names the implementation scope and
   acceptance criteria
-- `docs/plan-phase-S.md` records S.13 in the sprint sequence
+- `docs/plans/phase-S/plan-phase-S.md` records S.13 in the sprint sequence
 - `just lint` PASS
 
 ## References
 
-- `docs/phase-S/sprint-S13-ipc-plan.md`
+- `docs/plans/phase-S/sprint-S13-ipc-plan.md`
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`

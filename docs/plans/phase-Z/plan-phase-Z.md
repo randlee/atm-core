@@ -39,8 +39,8 @@ the final `Phase Yd` record says `Phase Z` may begin:
 - the append-only/export contract decision is complete
 - the later `Phase Yb` / `Phase Yc` message-path and production-readiness
   follow-up work is closed on the accepted `Phase Y` line
-- the blocking issues in `docs/phase-Y/issues.md` are closed
-- the readiness record in `docs/phase-Yd/readiness.md` explicitly states:
+- the blocking issues in `docs/plans/phase-Y/issues.md` are closed
+- the readiness record in `docs/plans/phase-Yd/readiness.md` explicitly states:
   - `Phase Y` may land on `develop`
   - `Phase Z` may begin
 - the post-`Phase Y` daemon ownership simplification line in `Phase Ye` is
@@ -57,7 +57,7 @@ Current gate status:
 
 The CLI JSON I/O audit is already complete:
 
-- audit record: `docs/phase-Z/cli-json-io-audit.md`
+- audit record: `docs/plans/phase-Z/cli-json-io-audit.md`
 - retained-command `--json` output is already implemented on all 9 commands
 - no `Phase Y` or `Phase Z` output retrofit work is required
 - structured JSON input remains absent and is explicitly deferred until after
@@ -452,39 +452,39 @@ Execution worktree:
 `Phase Z` uses one named artifact set throughout execution:
 
 - `Z.1` / `Z.2`:
-  - `docs/phase-Z/smoke-checklist.md`
-  - `docs/phase-Z/smoke-findings-ledger.md`
+  - `docs/plans/phase-Z/smoke-checklist.md`
+  - `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `Z.5` / `Z.6` / `Z.7` / `Z.8` / `Z.9` / `Z.10`:
-  - `docs/phase-Z/claude-roster-sync-and-restore.md`
-  - `docs/phase-Z/config-json-violation-inventory.md`
+  - `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+  - `docs/plans/phase-Z/config-json-violation-inventory.md`
   - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `Z.18` / `Z.19` / `Z.20`:
-  - `docs/phase-Z/smoke-skill-plan.md`
-  - `docs/phase-Z/sprint-Z18.md`
-  - `docs/phase-Z/sprint-Z19.md`
-  - `docs/phase-Z/sprint-Z20.md`
+  - `docs/plans/phase-Z/smoke-skill-plan.md`
+  - `docs/plans/phase-Z/sprint-Z18.md`
+  - `docs/plans/phase-Z/sprint-Z19.md`
+  - `docs/plans/phase-Z/sprint-Z20.md`
   - `.claude/skills/smoke-test/`
   - `scripts/smoke/`
   - `templates/smoke-report/`
   - `reports/smoke/`
 - `Z.21`:
-  - `docs/phase-Z/sprint-Z21.md`
+  - `docs/plans/phase-Z/sprint-Z21.md`
   - `templates/smoke-report/`
   - `reports/smoke/`
 - `Z.22`:
-  - `docs/phase-Z/sprint-Z22.md`
-  - `docs/phase-Z/smoke-findings-review.md`
+  - `docs/plans/phase-Z/sprint-Z22.md`
+  - `docs/plans/phase-Z/smoke-findings-review.md`
 - `Z.23`:
-  - `docs/phase-Z/sprint-Z23.md`
+  - `docs/plans/phase-Z/sprint-Z23.md`
   - `templates/coverage-report/`
   - `reports/coverage/`
 - `Z.3`:
-  - `docs/phase-Z/canary-dogfood-checklist.md`
-  - `docs/phase-Z/canary-findings-ledger.md`
+  - `docs/plans/phase-Z/canary-dogfood-checklist.md`
+  - `docs/plans/phase-Z/canary-findings-ledger.md`
 - `Z.4`:
-  - `docs/phase-Z/release-checklist.md`
-  - `docs/phase-Z/readiness.md`
-  - `docs/phase-Z/canary-findings-ledger.md`
+  - `docs/plans/phase-Z/release-checklist.md`
+  - `docs/plans/phase-Z/readiness.md`
+  - `docs/plans/phase-Z/canary-findings-ledger.md`
 
 The sprint docs remain the only authoritative source for per-sprint
 deliverables, acceptance criteria, and closure rules.
@@ -586,39 +586,39 @@ Current execution state:
 
 ## Initial Planning Outputs
 
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/cli-json-io-audit.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
-- `docs/phase-Z/release-checklist.md`
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/sprint-Z1.md`
-- `docs/phase-Z/sprint-Z2.md`
-- `docs/phase-Z/sprint-Z5.md`
-- `docs/phase-Z/sprint-Z6.md`
-- `docs/phase-Z/sprint-Z7.md`
-- `docs/phase-Z/sprint-Z8.md`
-- `docs/phase-Z/sprint-Z9.md`
-- `docs/phase-Z/sprint-Z10.md`
-- `docs/phase-Z/sprint-Z11.md`
-- `docs/phase-Z/sprint-Z12.md`
-- `docs/phase-Z/sprint-Z13.md`
-- `docs/phase-Z/sprint-Z14.md`
-- `docs/phase-Z/sprint-Z15.md`
-- `docs/phase-Z/sprint-Z16.md`
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/sprint-Z18.md`
-- `docs/phase-Z/sprint-Z19.md`
-- `docs/phase-Z/sprint-Z20.md`
-- `docs/phase-Z/sprint-Z21.md`
-- `docs/phase-Z/sprint-Z22.md`
-- `docs/phase-Z/sprint-Z23.md`
-- `docs/phase-Z/sprint-Z24.md`
-- `docs/phase-Z/smoke-findings-review.md`
-- `docs/phase-Z/sprint-Z3.md`
-- `docs/phase-Z/sprint-Z4.md`
+- `docs/plans/phase-Z/cli-json-io-audit.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/canary-findings-ledger.md`
+- `docs/plans/phase-Z/release-checklist.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/sprint-Z1.md`
+- `docs/plans/phase-Z/sprint-Z2.md`
+- `docs/plans/phase-Z/sprint-Z5.md`
+- `docs/plans/phase-Z/sprint-Z6.md`
+- `docs/plans/phase-Z/sprint-Z7.md`
+- `docs/plans/phase-Z/sprint-Z8.md`
+- `docs/plans/phase-Z/sprint-Z9.md`
+- `docs/plans/phase-Z/sprint-Z10.md`
+- `docs/plans/phase-Z/sprint-Z11.md`
+- `docs/plans/phase-Z/sprint-Z12.md`
+- `docs/plans/phase-Z/sprint-Z13.md`
+- `docs/plans/phase-Z/sprint-Z14.md`
+- `docs/plans/phase-Z/sprint-Z15.md`
+- `docs/plans/phase-Z/sprint-Z16.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/sprint-Z18.md`
+- `docs/plans/phase-Z/sprint-Z19.md`
+- `docs/plans/phase-Z/sprint-Z20.md`
+- `docs/plans/phase-Z/sprint-Z21.md`
+- `docs/plans/phase-Z/sprint-Z22.md`
+- `docs/plans/phase-Z/sprint-Z23.md`
+- `docs/plans/phase-Z/sprint-Z24.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/sprint-Z3.md`
+- `docs/plans/phase-Z/sprint-Z4.md`

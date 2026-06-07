@@ -10,12 +10,12 @@ mechanically rather than by prose summary.
 
 QA for every Yb sprint must treat these as authoritative:
 
-- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/plans/phase-Yb/plan-phase-Yb.md`
 - the active Yb sprint doc
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/testing-and-validation.md`
+- `docs/plans/phase-Yb/removal-ledger.md`
+- `docs/plans/phase-Yb/message-path-call-stacks.md`
+- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- `docs/plans/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 
 ## Required QA Coverage
@@ -90,9 +90,9 @@ Final Yb closeout through Y.11 is not complete unless QA can prove:
 
 | Closure condition | Satisfying artifact |
 | --- | --- |
-| All removal-ledger items closed or tracked | `docs/phase-Yb/removal-ledger.md` — every row has a `closed-by` sprint entry or an explicit `BLOCKER` annotation |
-| Only approved executors call low-level delivery primitives | `docs/phase-Yb/lintable-boundary-plan.md` caller allowlist table; `python3 .just/run_lint.py all` passes |
-| Smoke/dogfood planning can resume | Sprint Y.11 closeout sign-off in `docs/phase-Yb/sprint-Y11.md` §Completion |
+| All removal-ledger items closed or tracked | `docs/plans/phase-Yb/removal-ledger.md` — every row has a `closed-by` sprint entry or an explicit `BLOCKER` annotation |
+| Only approved executors call low-level delivery primitives | `docs/plans/phase-Yb/lintable-boundary-plan.md` caller allowlist table; `python3 .just/run_lint.py all` passes |
+| Smoke/dogfood planning can resume | Sprint Y.11 closeout sign-off in `docs/plans/phase-Yb/sprint-Y11.md` §Completion |
 | Claude append fails closed on legacy array inboxes | `service_runtime::tests::append_compat_inbox_message_rejects_legacy_array_mailbox_from_runtime_path` |
 | Rebuild/reexport only through explicit repair/rebuild path | `service_runtime::tests::rebuild_compat_inbox_projection_reexports_store_backed_mailbox`; lintable-boundary-plan allowlist row for `mailbox::store::write_compat_mailbox_projection` |
 | Claude append seam not selected for `DeliveryHarnessPath::NonClaude` | `delivery_execution` runtime fail-closed checks; lintable-boundary-plan §3 rule 6 |

@@ -35,7 +35,7 @@ Each checklist row must record:
 
 - accepted binary baseline: `97518da5`
 - sprint execution branch: `feature/pZ-s17-smoke-z3-rerun`
-- operator-report path: `docs/phase-Z/canary-findings-ledger.md` plus ATM
+- operator-report path: `docs/plans/phase-Z/canary-findings-ledger.md` plus ATM
   status reports to `team-lead`
 
 ## Frozen Participant List

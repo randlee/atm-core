@@ -53,15 +53,15 @@ or cross-cutting rework.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
 
 ## Exact Targets
 
-- `docs/phase-Z/smoke-findings-review.md`
-- `docs/phase-Z/readiness.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 
 ## Deliverables
@@ -86,7 +86,7 @@ silently dropped or partially deferred.
 
 ## Canonical Finding Record
 
-Every promoted finding in `docs/phase-Z/smoke-findings-review.md` must use
+Every promoted finding in `docs/plans/phase-Z/smoke-findings-review.md` must use
 this canonical serialization format:
 
 ```json
@@ -112,7 +112,7 @@ this canonical serialization format:
 
 ## Acceptance Criteria
 
-- `docs/phase-Z/smoke-findings-review.md` exists as the single authoritative
+- `docs/plans/phase-Z/smoke-findings-review.md` exists as the single authoritative
   major-findings queue
 - the artifact includes the canonical concrete finding-record format shown in
   this sprint plan
@@ -137,9 +137,9 @@ level for findings triage and readiness linkage.
 
 ## Required Document Updates
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/readiness.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

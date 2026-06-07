@@ -100,4 +100,4 @@ The closeout also added:
   shared frame helpers and daemon server transport on supported hosts with a
   bounded `5ms` readiness backoff and bounded serve-thread completion wait
 - explicit accepted-exception documentation for the remaining bounded production
-  polling and flush-deadline paths in `docs/plan-phase-S.md §4.1`
+  polling and flush-deadline paths in `docs/plans/phase-S/plan-phase-S.md §4.1`

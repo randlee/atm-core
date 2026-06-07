@@ -49,7 +49,7 @@ that only exists to preserve `metadata.atm` read behavior.
 ## Prerequisites
 
 - the current Phase U decisions recorded in `docs/project-plan.md`
-- the Phase U summary in `docs/plan-phase-U.md`
+- the Phase U summary in `docs/plans/phase-U/plan-phase-U.md`
 
 ## Hard Dependencies
 
@@ -132,7 +132,7 @@ should be zero surviving `metadata.atm` fields, not deferral.
 ## Required Document Updates
 
 - `docs/project-plan.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-message-schema.md`

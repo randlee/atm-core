@@ -342,7 +342,7 @@ Current note:
   canonical `crates/atm-core/src/roles.rs` `ROLE_TEAM_LEAD` definition
 
 Tracking doc:
-- `docs/phase-R/sprint-R19.md`
+- `docs/plans/phase-R/sprint-R19.md`
 
 Dispatcher calls `atm_core::doctor::run_doctor()` directly — no daemon-backed health
 projection. Missing: daemon reachability, singleton ownership status, live status-cache
@@ -751,7 +751,7 @@ mutation with `temp_env::with_var(...)` for scoped, safe environment overrides.
 
 ### m-001 — Plan doc R.10 status stale
 **Source**: quality-mgr REQ-R-003/REQ-R-004
-**File**: `docs/plan-phase-R.md`
+**File**: `docs/plans/phase-R/plan-phase-R.md`
 
 R.10 section still shows `Status: planned`. ARCH-SINGLETON [B] and CI-WIN-001 [B] recorded
 as open on `feature/pR-s10-thin-client` — both resolved in R.10.
@@ -928,6 +928,6 @@ Two items planned for arch-inj's next sprint after feature/pR-s3-boundary-lint m
 ## NEXT STEPS
 
 1. team-lead / arch-ctm planning discussion on scope, sequencing, and sprint definitions
-2. Keep `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` as the authoritative continuation sprint set
+2. Keep `docs/plans/phase-R/sprint-R13.md` through `docs/plans/phase-R/sprint-R18.md` as the authoritative continuation sprint set
 3. Implement process gates PG-001 through PG-004 — required before any `R.13` sprint begins
 4. QA after each implementation sprint with full no-round-limit sweep (PG-001 enforced)

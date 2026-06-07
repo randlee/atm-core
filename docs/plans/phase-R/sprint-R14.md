@@ -132,7 +132,7 @@ Prefer one sprint because the host-scoped DB root, message-thread rules, and ack
 - `docs/atm-core/architecture.md`
 - `docs/atm-rusqlite/requirements.md`
 - `docs/project-plan.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

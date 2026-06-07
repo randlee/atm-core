@@ -32,7 +32,7 @@ misclassified as durable-delivery failures.
 
 ## Governing Plan
 
-- `docs/plan-phase-AB.md`
+- `docs/plans/phase-AB/plan-phase-AB.md`
 
 ## Execution Branch
 

@@ -134,7 +134,7 @@ Only split if earlier sprints finish with a small residual list that can be carv
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-rusqlite/boundaries.md`
-- `docs/phase-R/issues.md`
+- `docs/plans/phase-R/issues.md`
 
 ## Risks And Watchouts
 

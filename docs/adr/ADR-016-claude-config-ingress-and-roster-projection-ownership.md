@@ -174,4 +174,4 @@ This ADR is implemented by `Phase Z` follow-on sprints:
 
 The authoritative path-by-path delete / narrow / keep map is:
 
-- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`

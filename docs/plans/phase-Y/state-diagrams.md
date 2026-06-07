@@ -4,7 +4,7 @@ These diagrams are the visual companion to
 [delivery-state-machines.md](./delivery-state-machines.md).
 
 Source of truth:
-- authored Mermaid files live in `docs/phase-Y/*.mmd`
+- authored Mermaid files live in `docs/plans/phase-Y/*.mmd`
 - rendered report lives at [delivery-state-diagrams.html](../reports/delivery-state-diagrams.html)
 - rendered panel fragments live under `docs/reports/panels/`
 

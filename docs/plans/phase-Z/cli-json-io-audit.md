@@ -54,8 +54,8 @@ Purpose:
 - `crates/atm/src/output.rs`
 - `docs/requirements.md`
 - `docs/atm/commands/`
-- `docs/plan-phase-Y.md`
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Y/plan-phase-Y.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 
 ## Contract Boundary Notes
 

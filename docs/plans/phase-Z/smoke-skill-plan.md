@@ -43,11 +43,11 @@ triaged so the operator, QA, and release gate can see:
 
 ## Hard Dependencies
 
-- `docs/plan-phase-Z.md`
+- `docs/plans/phase-Z/plan-phase-Z.md`
 - `docs/project-plan.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-checklist.md`
+- `docs/plans/phase-Z/canary-dogfood-checklist.md`
+- `docs/plans/phase-Z/readiness.md`
 - accepted `Z.16` and `Z.17` smoke rerun expectations on the execution line
 
 ## Smoke Levels
@@ -84,7 +84,7 @@ Minimum coverage:
 
 Checklist alignment:
 
-- fast happy-path subset of `docs/phase-Z/smoke-checklist.md`
+- fast happy-path subset of `docs/plans/phase-Z/smoke-checklist.md`
 - additional smoke-runner log-analysis checks that summarize whether the
   retained event trail matches the happy-path contract
 
@@ -114,7 +114,7 @@ Minimum coverage:
 
 Checklist alignment:
 
-- covers the normal operator-facing subset of `docs/phase-Z/smoke-checklist.md`
+- covers the normal operator-facing subset of `docs/plans/phase-Z/smoke-checklist.md`
 - becomes the default `just smoke` target
 
 ### `thorough`
@@ -132,7 +132,7 @@ Expected runtime:
 Minimum coverage:
 
 - everything in `normal`
-- every operator flow from `docs/phase-Z/smoke-checklist.md`
+- every operator flow from `docs/plans/phase-Z/smoke-checklist.md`
 - every CLI interface on happy path plus common error paths
 - one real same-host `atm-graft` lane proving advisory registration/nudge
   delivery plus unary `read` / `ack` / `send` over the shared daemon contract
@@ -331,12 +331,12 @@ Instead, it augments them.
 
 Rules:
 
-- `docs/phase-Z/smoke-checklist.md` remains the authoritative source for row
+- `docs/plans/phase-Z/smoke-checklist.md` remains the authoritative source for row
   IDs, row descriptions, and expected executable behavior
 - `just smoke thorough` must emit one report row per checklist row
 - the human-readable summary must make it obvious which checklist rows failed
   or were skipped
-- `docs/phase-Z/canary-dogfood-checklist.md` remains the authoritative source
+- `docs/plans/phase-Z/canary-dogfood-checklist.md` remains the authoritative source
   for canary/dogfood execution, but the smoke skill must define how the same
   reporting format can later be reused for canary-adjacent executable checks
 - manual operator notes remain allowed, but the smoke report becomes the
@@ -354,9 +354,9 @@ Minimum tracked fields:
 
 Accepted linkage behavior:
 
-- `docs/phase-Z/readiness.md` records the accepted `Z.19` through `Z.21`
+- `docs/plans/phase-Z/readiness.md` records the accepted `Z.19` through `Z.21`
   smoke execution heads used for release gating
-- `docs/phase-Z/smoke-findings-review.md` records promoted major smoke
+- `docs/plans/phase-Z/smoke-findings-review.md` records promoted major smoke
   findings and defines how those findings map back to the accepted readiness
   rows and later canary/release evidence
 
@@ -376,7 +376,7 @@ Rules:
 
 The durable review queue for those larger findings is:
 
-- `docs/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
 
 Logging expectations:
 
@@ -515,7 +515,7 @@ Execution worktree:
 
 Primary deliverables:
 
-- `docs/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
 - major smoke finding triage contract
 - accepted binary-baseline linkage notes
 
@@ -550,14 +550,14 @@ Primary deliverables:
 
 Planned new files:
 
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/sprint-Z18.md`
-- `docs/phase-Z/sprint-Z19.md`
-- `docs/phase-Z/sprint-Z20.md`
-- `docs/phase-Z/sprint-Z21.md`
-- `docs/phase-Z/sprint-Z22.md`
-- `docs/phase-Z/sprint-Z23.md`
-- `docs/phase-Z/smoke-findings-review.md`
+- `docs/plans/phase-Z/smoke-skill-plan.md`
+- `docs/plans/phase-Z/sprint-Z18.md`
+- `docs/plans/phase-Z/sprint-Z19.md`
+- `docs/plans/phase-Z/sprint-Z20.md`
+- `docs/plans/phase-Z/sprint-Z21.md`
+- `docs/plans/phase-Z/sprint-Z22.md`
+- `docs/plans/phase-Z/sprint-Z23.md`
+- `docs/plans/phase-Z/smoke-findings-review.md`
 - `.claude/skills/smoke-test/SKILL.md`
 - `.claude/skills/smoke-test/references/level-matrix.md`
 - `.claude/skills/smoke-test/references/report-schema.md`
@@ -606,8 +606,8 @@ Planned output locations:
   the active smoke sprint and larger rework findings are promoted to the
   findings review artifact
 - the plan defines integration points with both
-  `docs/phase-Z/smoke-checklist.md` and
-  `docs/phase-Z/canary-dogfood-checklist.md`
+  `docs/plans/phase-Z/smoke-checklist.md` and
+  `docs/plans/phase-Z/canary-dogfood-checklist.md`
 - the plan defines binary baseline tracking expectations
 
 ## Risks And Watchouts

@@ -167,8 +167,8 @@ Named closure artifact:
   request/worker ownership
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
   accepted and reflected in daemon requirement/architecture docs
-- `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
+- `docs/plans/phase-Ye/issues.md` marks the ownership redesign items closed on the
   accepted line
-- `docs/phase-Ye/readiness.md` records the final accepted proof state for the
+- `docs/plans/phase-Ye/readiness.md` records the final accepted proof state for the
   phase
 - the daemon validation stack passes on the final accepted `Phase Ye` line

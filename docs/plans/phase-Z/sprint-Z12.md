@@ -62,8 +62,8 @@ misuse from command-entry paths.
 
 ## Hard Dependencies
 
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `docs/atm-core/boundaries.md`
 
 ## Exact Targets
@@ -73,8 +73,8 @@ misuse from command-entry paths.
 - `crates/atm-core/src/team_admin.rs`
 - `.just/allowlists/scb_retained_allowlist.toml`
 - `.just/fixtures/scb_runtime_known_bad.rs`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Delete / Narrow Inventory
@@ -131,8 +131,8 @@ fn add_member_with_roster_store(
    - prove `atm teams add-member z1-team z1-operator --json` succeeds once a
      valid clean-room `z1-team` shell exists
    Required docs:
-   - update `docs/phase-Z/readiness.md`
-   - update `docs/phase-Z/smoke-findings-ledger.md`
+   - update `docs/plans/phase-Z/readiness.md`
+   - update `docs/plans/phase-Z/smoke-findings-ledger.md`
 
 2. Add the mechanical boundary gate.
    Development work:
@@ -152,7 +152,7 @@ fn add_member_with_roster_store(
 
 3. Stamp closure records.
    Development work:
-   - stamp `Z.12` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.12` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    - add the `Z.12` ledger row to `docs/project-plan.md`
    Required tests:
    - `git diff --check`
@@ -203,9 +203,9 @@ level for this exact command-wiring and boundary-enforcement scope.
 
 ## Required Document Updates
 
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/plans/phase-Z/smoke-findings-ledger.md`
 - `docs/atm-core/boundaries.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts

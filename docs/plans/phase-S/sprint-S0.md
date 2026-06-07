@@ -145,7 +145,7 @@ implementation sprints will follow.
    Required tests:
    - none
    Required doc or boundary updates:
-   - add `docs/plan-phase-S.md`
+   - add `docs/plans/phase-S/plan-phase-S.md`
 
 5. Shared test and CI contract
    Development work:
@@ -223,15 +223,15 @@ They must not use:
 
 ## Required Document Updates
 
-- `docs/plan-phase-S.md`
-- `docs/phase-S/sprint-S0.md`
+- `docs/plans/phase-S/plan-phase-S.md`
+- `docs/plans/phase-S/sprint-S0.md`
 - `docs/atm-daemon/protocol-icd.md`
-- `docs/phase-S/sprint-S1.md`
-- `docs/phase-S/sprint-S2.md`
-- `docs/phase-S/sprint-S3.md`
-- `docs/phase-S/sprint-S4.md`
-- `docs/phase-S/sprint-S5.md`
-- `docs/phase-S/issues.md`
+- `docs/plans/phase-S/sprint-S1.md`
+- `docs/plans/phase-S/sprint-S2.md`
+- `docs/plans/phase-S/sprint-S3.md`
+- `docs/plans/phase-S/sprint-S4.md`
+- `docs/plans/phase-S/sprint-S5.md`
+- `docs/plans/phase-S/issues.md`
 - `docs/project-plan.md`
 - `docs/requirements.md`
 - `docs/architecture.md`

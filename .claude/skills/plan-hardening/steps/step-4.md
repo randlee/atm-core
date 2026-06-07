@@ -23,7 +23,7 @@ Expected reviewer launch input shape:
 
 ```json
 {
-  "source_of_truth": "docs/phase-X/plan-phase-X.md",
+  "source_of_truth": "docs/plans/phase-X/plan-phase-X.md",
   "references": [
     "docs/project-plan.md"
   ],

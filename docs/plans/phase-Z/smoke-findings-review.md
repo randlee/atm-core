@@ -60,7 +60,7 @@ Disposition summary:
 
 ## Readiness And Binary Baseline Linkage
 
-- `docs/phase-Z/readiness.md` is the authoritative release-signoff ledger for
+- `docs/plans/phase-Z/readiness.md` is the authoritative release-signoff ledger for
   accepted smoke execution heads and later canary/release verdicts.
 - this queue records only promoted major smoke findings; when it remains empty,
   the corresponding readiness rows still carry the accepted smoke binary SHAs

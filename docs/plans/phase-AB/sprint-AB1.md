@@ -32,7 +32,7 @@ baseline for every later `Phase AB` smoke row.
 
 ## Governing Plan
 
-- `docs/plan-phase-AB.md`
+- `docs/plans/phase-AB/plan-phase-AB.md`
 
 ## Execution Branch
 
@@ -44,7 +44,7 @@ baseline for every later `Phase AB` smoke row.
 
 ## Deliverables
 
-- frozen `docs/phase-AB/cross-host-smoke-checklist.md`
+- frozen `docs/plans/phase-AB/cross-host-smoke-checklist.md`
 - documented disposable `ATM_HOME`, `ATM_CONFIG_HOME`, and `ATM_LOG_DIR` rules
   for Windows and macOS hosts
 - explicit host-pair setup guidance for clean-room bring-up

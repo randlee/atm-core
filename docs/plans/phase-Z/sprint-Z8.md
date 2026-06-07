@@ -53,17 +53,17 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
 ## Hard Dependencies
 
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Exact Targets
 
 - `crates/atm-daemon/src/watch_runtime.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-core/src/config/mod.rs`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Delete / Narrow Inventory
 
@@ -99,7 +99,7 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
    - prove the startup-only bootstrap helper no longer exists on the production
      call surface after `Z.8` closes
    Required docs:
-   - update `docs/phase-Z/config-json-violation-inventory.md`
+   - update `docs/plans/phase-Z/config-json-violation-inventory.md`
 
 2. Add daemon-owned write suppression.
    Development work:
@@ -123,11 +123,11 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
      restart clears suppression state, and a post-crash event is handled as an
      ordinary external ingest candidate
    Required docs:
-   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+   - update `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
 
 3. Close the ingest ownership records.
    Development work:
-   - stamp `Z.8` accepted head and verdict in `docs/phase-Z/readiness.md`
+   - stamp `Z.8` accepted head and verdict in `docs/plans/phase-Z/readiness.md`
    Required tests:
    - `git diff --check`
    Required docs:
@@ -183,13 +183,13 @@ explicit, bounded, and restart-safe.
     and `crates/atm-core/src/team_admin/restore.rs`; any surviving match for
     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` in
     `boundary_support.rs` or `direct_boundaries.rs` is a failure
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/readiness.md`
 
 ## Required Document Updates
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/readiness.md`
+- `docs/plans/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- `docs/plans/phase-Z/readiness.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-core/requirements.md`
 
