@@ -355,6 +355,12 @@ Execution worktree:
 
 ### AA.8 Claude Code Inbox Schema Contract Alignment
 
+Status:
+- complete on `feature/pAA-s8-claude-schema-contract`
+- the active schema model now freezes the Claude-native contract plus typed
+  approved additive fields only, while any surviving `metadata.atm`
+  derivatives are isolated to explicit read-compat coverage
+
 Purpose:
 - freeze the current Claude Code inbox JSON schema from real
   `team-lead -> quality-mgr` samples
