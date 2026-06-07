@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.8
 worktree: ../atm-core-worktrees/feature/pAA-s8-claude-schema-contract
 branch: feature/pAA-s8-claude-schema-contract
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -70,7 +70,7 @@ the current Claude inbox file shape as legacy.
   3. historical ATM-owned additive fields that are not part of the current
      Claude contract and are queued for `AA.10`
 
-- Any sentence that classifies the current array-backed Claude inbox file shape
+- Any sentence that classifies the current JSON-array Claude inbox file shape
   itself as legacy is corrected or removed.
 
 - The schema enforcement tests prove the current contract against at least:
@@ -94,7 +94,7 @@ fixture-backed model alignment. Runtime behavior changes belong in `AA.9`.
 - `tools/schema_models/claude_code_message_schema.py` matches the current
   contract
 - real `team-lead -> quality-mgr` fixture samples validate against the model
-- no Phase AA or schema-ownership doc still calls the current array-backed
+- no Phase AA or schema-ownership doc still calls the current JSON-array
   Claude inbox file shape “legacy”
 - any remaining historical ATM JSON support is called out explicitly as
   follow-on removal scope for `AA.10`, not as the current Claude contract
@@ -103,7 +103,8 @@ fixture-backed model alignment. Runtime behavior changes belong in `AA.9`.
 
 - `python3 -m unittest tools.schema_models.test_schema_models`
 - `git diff --check`
-- `rg -n "legacy array inbox|array-backed inbox" docs tools crates scripts`
+- `python3 - <<'PY'` contract-term scan proving the banned stale phrases are absent from `docs/`, `tools/`, `crates/`, and `scripts/`
+- record the contract-term scan result in `docs/phase-AA/aa8-contract-term-scan.md`
 
 ## Required Document Updates
 

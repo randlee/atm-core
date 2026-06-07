@@ -18,7 +18,7 @@ use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, AgentType, TeamConfig};
-use crate::types::{AgentName, ModelName, PaneId, TeamName};
+use crate::types::{AgentId, AgentName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/restore.rs"]
 mod restore;
@@ -578,13 +578,17 @@ fn agent_member_from_roster_record(record: &RosterMemberRecord) -> AgentMember {
     let mut extra = compatibility_extra_fields(&record.metadata_json);
     AgentMember {
         name: record.agent_name.clone(),
-        agent_id: metadata_string(&record.metadata_json, "agentId")
-            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
+        agent_id: AgentId::new(
+            metadata_string(&record.metadata_json, "agentId")
+                .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
+        ),
         agent_type: record.agent_type.clone(),
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
-        cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
+        cwd: metadata_string(&record.metadata_json, "cwd")
+            .unwrap_or_default()
+            .into(),
         extra: {
             extra.remove("agentId");
             extra.remove("joinedAt");

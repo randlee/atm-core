@@ -109,6 +109,10 @@ Phase-AA simplification note:
   code-driven merge gate as the sole second enforcement layer, and treats
   policy widening as an architecture change rather than routine lint-data
   churn
+- `AA.11` narrows the active SQLite runtime baseline to the current
+  `message_id` durable schema; abandoned pre-production compatibility shapes
+  such as `legacy_message_id` remain historical documentation only and are not
+  part of normal bootstrap/migration behavior
 
 ## 2. Crate Boundaries
 
@@ -777,8 +781,11 @@ Architectural rules:
   compatibility wire encoding of that identity.
 - if SQLite persists `message_id`, it stores that same identity in the
   compatibility wire form rather than as a second ATM-owned id.
-- Compatibility writes may preserve established top-level additive fields, but
-  they must not become the place where new ATM-owned machine state accumulates.
+- compatibility reads may tolerate established historical top-level additive
+  fields and `metadata.atm` derivatives, but they remain read-compatible
+  inputs rather than the active or forward-write contract
+- compatibility writes may preserve only the current approved additive surface
+  and must not become the place where new ATM-owned machine state accumulates
 - removed compatibility fields such as `source_team`, `pendingAckAt`,
   `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
   SQLite-only or workflow-only even if older inbox files still contain them.
@@ -1365,6 +1372,51 @@ The mailbox layer owns:
 - sender-scoped idle-notification dedup inside the atomic append boundary
 
 The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
+
+### 12.1 Atomic Full-Rewrite Semantics
+
+All inbox modifications use atomic full-rewrite for durability and consistency:
+
+**Atomic write pattern:**
+1. Acquire per-inbox file lock before any read
+2. Read and deserialize the full inbox document (JSON array or JSONL)
+3. Apply modification in memory (append message, update workflow state, replace clear set)
+4. Write to a temporary file with fsync to guarantee data durability
+5. Atomically rename temp file over original (single filesystem operation on POSIX; platform-equivalent on Windows)
+6. Release lock after rename completes
+
+This pattern ensures:
+- crash-safety: partial writes never corrupt the original file
+- consistency: concurrent ATM processes never lose updates due to race conditions
+- idempotency: replay of the same operation twice (e.g., after daemon restart) produces the same state
+
+The lock is held from step 1 through step 5 to prevent concurrent read-modify-write races. Full-rewrite applies to all inbox operations: `append_message`, read-state writeback, ack transition, and clear set replacement.
+
+### 12.2 Repair and Rebuild Seam Scope
+
+**Repair/rebuild is reserved for malformed mailbox state. Normal healthy mailbox operations never trigger repair.**
+
+When an inbox file is encountered:
+
+1. **Normal primary path** - healthy, legal mailbox state
+   - Current Claude inbox: one top-level JSON array of inbox messages
+   - Current ATM JSONL export: one JSON object per line (when ATM owns the export)
+   - Action: parse, validate message structure, apply atomic modification
+   - Repair: not triggered
+
+2. **Malformed or degraded state** - triggers repair/rebuild only when:
+   - JSON parse fails (invalid JSON structure, truncated file from crash)
+   - Required message fields are missing or syntactically invalid
+   - File was partially written or contains mixed/corrupt encodings
+   - Explicitly unsupported mailbox format
+   - Action: emit diagnostic, optionally attempt recovery of salvageable records, rebuild if safe
+
+**Key architectural rule:**
+- The legal current Claude inbox JSON-array shape must always stay on the normal primary path and never require repair/rebuild
+- Repair/rebuild does not apply to healthy, well-formed inbox state that conforms to the documented schema
+- If the current primary path still classifies healthy mailboxes as requiring repair, that is a bug in the path classification logic (see `compat_inbox_uses_legacy_array_format()` and related guards)
+
+Repair guidance for operators is documented separately in [`persisted-data-repair.md`](./persisted-data-repair.md).
 
 ## 13. Identity And File Policy
 
@@ -2407,13 +2459,28 @@ Required architectural rules:
 
 ### 21.2 Compatibility Surfaces
 
-Claude-owned inbox JSONL files remain required for:
+Claude-owned shared inbox files remain required for:
 - Claude context injection
 - compatibility with direct Claude-native writers
+- the current primary shared `.json` inbox path, whose file container is one
+  top-level JSON array of inbox messages
 
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- the legal current Claude `.json` inbox JSON-array shape is a supported
+  primary path, not a degraded fallback
+- the current Claude `.json` inbox contract is an atomic full-rewrite path:
+  load the top-level JSON array, append the new message in memory, then write
+  a replacement array document through temp-file + rename
+- ATM-owned `.jsonl` compatibility projections remain append-only exports and
+  do not redefine the shared Claude `.json` inbox contract
+- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
+  unsupported mailbox content rather than for the legal current `.json` array
+  shape
+- `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)` is the only
+  approved full re-export seam for repair/rebuild and must not run on the
+  normal send or ack path
 - ATM-authored JSONL exports are a bounded compatibility projection over the
   durable SQLite message body
 - the default ATM-authored JSONL body export cap is `128 KiB`
@@ -2451,12 +2518,24 @@ Architectural rules:
 There are three distinct paths:
 
 1. Claude / compatibility path
-   - Claude or legacy writers append JSONL
+   - current Claude inbox files use one top-level JSON-array mailbox document
+     as the primary shared compatibility shape
+   - healthy current Claude `.json` inbox writes use atomic full-document
+     replacement: load existing array, append, write replacement via temp-file
+     + rename
+   - healthy current Claude `.json` inboxes stay on the normal primary path
+     and must not require repair/rebuild warnings
+   - ATM-owned `.jsonl` compatibility projections remain append-style only
+     where ATM explicitly owns that export surface
+   - `rebuild_compat_inbox_projection(...)` is reserved for explicit
+     malformed-state repair/rebuild and is not part of the ordinary send/ack
+     write path
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
-   - ATM-authored oversized-body exports replace JSONL `text` with exactly
-     `atm read --message-id <id>` while keeping the full body durable in SQLite
+   - ATM-authored oversized-body exports replace compatibility-surface `text`
+     with exactly `atm read --message-id <id>` while keeping the full body
+     durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL

@@ -1,0 +1,18 @@
+{
+  "from": "team-lead",
+  "text": "historical ATM 1.1 derivative",
+  "timestamp": "2026-04-04T18:49:59.525Z",
+  "read": true,
+  "summary": "historical ATM 1.1 derivative",
+  "metadata": {
+    "atm": {
+      "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+      "sourceTeam": "test-team",
+      "pendingAckAt": "2026-04-04T18:49:59.525Z",
+      "taskId": "TASK-123"
+    },
+    "foreign": {
+      "keep": true
+    }
+  }
+}

@@ -4,6 +4,13 @@ This file is the authoritative Phase U removal inventory. File paths and line
 numbers below identify the current develop-branch surfaces that the Phase U
 sprints remove, rename, or restack.
 
+Inventory contract:
+- this file is a historical cross-phase removal ledger, not an active support
+  promise for any listed runtime/schema shape
+- references here may remain after later phases delete the corresponding
+  runtime compatibility path, because the ledger records what Phase U removed
+  rather than what current 1.2 runtime behavior still accepts
+
 ## U.0 — Remove Old `atm-graft` Implementation Line
 
 Status:

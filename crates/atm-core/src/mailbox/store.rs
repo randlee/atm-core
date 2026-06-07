@@ -15,6 +15,13 @@ const MAX_RECOVERED_MESSAGE_SET_COUNT: usize = 2;
 const MAX_RECOVERED_MESSAGE_SET_BYTES: usize = 1024 * 1024;
 const MAX_COMPAT_MAILBOX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InboxFileFormat {
+    ClaudeJsonArray,
+    JsonLines,
+    Other,
+}
+
 /// Write one compatibility mailbox file projection through the mailbox layer.
 ///
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
@@ -35,6 +42,19 @@ pub(crate) fn append_compat_mailbox_message(
     message: &MessageEnvelope,
 ) -> Result<(), AtmError> {
     let export_policy = export_policy_for_path(path)?;
+    if inbox_file_format(path) == InboxFileFormat::ClaudeJsonArray {
+        let existing_messages = if path.exists() {
+            crate::mailbox::load_compat_mailbox_messages(path)?
+        } else {
+            Vec::new()
+        };
+        return atomic::write_message_iter(
+            path,
+            existing_messages.iter().chain(std::iter::once(message)),
+            export_policy,
+        );
+    }
+
     atomic::append_message(path, message, export_policy)
 }
 
@@ -96,11 +116,30 @@ pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedInboxExportPol
     })
 }
 
+pub(crate) fn inbox_file_format(path: &Path) -> InboxFileFormat {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .map(|value| {
+            if value.eq_ignore_ascii_case("json") {
+                InboxFileFormat::ClaudeJsonArray
+            } else if value.eq_ignore_ascii_case("jsonl") {
+                InboxFileFormat::JsonLines
+            } else {
+                InboxFileFormat::Other
+            }
+        })
+        .unwrap_or(InboxFileFormat::Other)
+}
+
 fn validate_recovered_message_set(messages: &[MessageEnvelope]) -> Result<(), AtmError> {
     if messages.len() > MAX_RECOVERED_MESSAGE_SET_COUNT {
-        return Err(AtmError::validation(format!(
-            "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_COUNT} messages"
-        ))
+        return Err(AtmError::new_with_code(
+            crate::error_codes::AtmErrorCode::MailboxRecoveredMessageSetTooLarge,
+            crate::error::AtmErrorKind::Validation,
+            format!(
+                "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_COUNT} messages"
+            ),
+        )
         .with_recovery(
             "Keep recovered Claude compatibility delivery to the original message plus one optional companion error message before retrying.",
         ));
@@ -111,9 +150,13 @@ fn validate_recovered_message_set(messages: &[MessageEnvelope]) -> Result<(), At
             .with_source(error)
     })?;
     if encoded.len() > MAX_RECOVERED_MESSAGE_SET_BYTES {
-        return Err(AtmError::validation(format!(
-            "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_BYTES} bytes"
-        ))
+        return Err(AtmError::new_with_code(
+            crate::error_codes::AtmErrorCode::MailboxRecoveredMessageSetTooLarge,
+            crate::error::AtmErrorKind::Validation,
+            format!(
+                "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_BYTES} bytes"
+            ),
+        )
         .with_recovery(
             "Reduce the recovered Claude message bodies or attachments before retrying compatibility export.",
         ));
@@ -127,7 +170,7 @@ fn validate_compat_mailbox_file_size(path: &Path) -> Result<(), AtmError> {
         return Ok(());
     };
     if metadata.len() > MAX_COMPAT_MAILBOX_FILE_BYTES {
-        return Err(AtmError::validation(format!(
+        return Err(AtmError::mailbox_read(format!(
             "compatibility inbox {} exceeded the {MAX_COMPAT_MAILBOX_FILE_BYTES}-byte recovered export ceiling",
             path.display()
         ))
@@ -237,6 +280,46 @@ mod tests {
 
         let raw = std::fs::read_to_string(&path).expect("mailbox contents");
         assert_eq!(raw.lines().count(), 2);
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 2);
+        assert_eq!(read_back[0].text, first.text);
+        assert_eq!(read_back[1].text, second.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_creates_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+
+        append_compat_mailbox_message(&path, &first).expect("append first");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 1);
+        assert_eq!(
+            encoded[0]["text"],
+            serde_json::Value::String(first.text.clone())
+        );
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 1);
+        assert_eq!(read_back[0].text, first.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_rewrites_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+        let second = sample_message(TEST_QA, "second array entry");
+
+        write_compat_mailbox_projection(&path, std::slice::from_ref(&first))
+            .expect("seed array mailbox");
+        append_compat_mailbox_message(&path, &second).expect("append second");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 2);
         let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
         assert_eq!(read_back.len(), 2);
         assert_eq!(read_back[0].text, first.text);

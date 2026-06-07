@@ -251,7 +251,7 @@ Current status:
   record at a time after the durable SQLite/workflow step
 - retained non-Claude harnesses still never receive ATM-authored JSONL append
   output
-- retained runtime legacy array inboxes now rebuild/re-export once before they
+- retained runtime JSON-array inbox files now rebuild/re-export once before they
   join the append-only path
 - retained SQLite-failure recovery now emits the documented original-plus-error
   outward delivery contract instead of silently downgrading to a warning only
