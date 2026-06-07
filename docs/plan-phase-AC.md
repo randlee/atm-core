@@ -269,19 +269,33 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s5-rpc-envelope-and-domain-type-unification`
 
-### AC.6 Cleanup, Deletion, And SQL Server Readiness
+### AC.6 Cleanup And Deletion Closeout
 
 Purpose:
 
 - delete obsolete storage wrappers and transport clones
 - close remaining backend leakage
-- prove the resulting contract is small enough to audit and suitable for a future SQL Server backend
+- leave behind a deletion-closed contract surface that can be audited directly
 
 Execution branch:
-- `feature/pAC-s6-cleanup-deletion-and-sqlserver-readiness`
+- `feature/pAC-s6-cleanup-and-deletion-closeout`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pAC-s6-cleanup-deletion-and-sqlserver-readiness`
+- `../atm-core-worktrees/feature/pAC-s6-cleanup-and-deletion-closeout`
+
+### AC.7 SQL Server Readiness Proof
+
+Purpose:
+
+- prove the resulting contract is small enough to audit and suitable for a
+  future SQL Server backend
+- record the exact remaining backend-only work for `atm-storage-sqlserver`
+
+Execution branch:
+- `feature/pAC-s7-sqlserver-readiness-proof`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof`
 
 ## Immediate Planning Outputs
 
@@ -297,6 +311,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/phase-AC/sprint-AC4.md`
 - `docs/phase-AC/sprint-AC5.md`
 - `docs/phase-AC/sprint-AC6.md`
+- `docs/phase-AC/sprint-AC7.md`
 - `docs/phase-AC/storage-surface-inventory.md`
 - `docs/phase-AC/type-convergence-map.md`
 - `docs/phase-AC/type-ledger.md`
@@ -317,3 +332,14 @@ Phase `AC` is not complete until:
 - `atm-core`, daemon, and runtime composition paths no longer contain direct concrete storage logic above the approved composition seam
 - the repo has no remaining message-shaped RPC/storage/domain struct proliferation that contradicts the generic envelope model
 - the resulting storage contract is explicitly documented as suitable for a future `atm-storage-sqlserver` implementation
+
+## Phase Execution Guardrails
+
+- `capability-candidate` rows are fail-closed:
+  - if a later sprint does not explicitly promote one to a named capability
+    trait, it must be deleted or internalized
+- `AC.3` owns the backend naming cutover to `atm-storage-rusqlite`; rename
+  deferral is not an accepted outcome
+- any new public type introduced during `AC.1`..`AC.7` must be added to
+  `docs/phase-AC/type-ledger.md` in the same change or the sprint is not
+  complete

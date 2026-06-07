@@ -29,6 +29,8 @@ Primary closure rule:
 - `AC.1` may cap the shared contract, but `AC.3` decides whether replay,
   doctor, health, and lifecycle seams become optional capabilities,
   backend-internal details, or deletions
+- `AC.3` also owns the backend naming cutover itself: this sprint does not
+  defer the final crate identity to a later rename-only follow-up
 
 ## Governing Sources
 
@@ -51,7 +53,8 @@ Primary closure rule:
 
 - the concrete SQLite backend implements the shared core traits from `atm-storage`
 - the backend naming is explicit: the current `atm-rusqlite` implementation is
-  converged toward the target backend crate identity `atm-storage-rusqlite`
+  renamed and converged into the target backend crate identity
+  `atm-storage-rusqlite`
 - the SQLite backend no longer depends on `atm-core`
 - SQLite-specific power stays in capability traits rather than the base CRUD traits
 - notifications are explicitly post-commit:
@@ -60,6 +63,11 @@ Primary closure rule:
   - only then may `message_received` / `roster_changed` fire
 
 - If stronger delivery guarantees are needed, the sprint documents the outbox/future delayed-notification design rather than burying it in ad hoc runtime logic.
+- capability-candidate seams are resolved explicitly:
+  - promoted to a named capability trait
+  - internalized below `atm-storage-rusqlite`
+  - or deleted
+  - leaving them as undecided candidates is not an accepted outcome
 
 ## Ledger-Driven Type Work
 
@@ -103,6 +111,8 @@ Implementation order for `AC.3`:
 4. Make the rename/convergence intent explicit in docs and boundaries:
    - current source crate: `atm-rusqlite`
    - target backend identity: `atm-storage-rusqlite`
+   - the rename lands in `AC.3`; if the backend is still named
+     `atm-rusqlite` at sprint close, the sprint is incomplete
 5. Review each capability-candidate seam explicitly:
    - keep as optional capability trait
    - internalize below the backend line
@@ -115,29 +125,37 @@ Implementation order for `AC.3`:
 
 Proof this sprint must leave behind:
 
-- `atm-storage-rusqlite` is the target backend identity, and the current `atm-rusqlite` implementation is only the source implementation being converged
+- `atm-storage-rusqlite` is the backend identity left behind by the sprint, and
+  `atm-rusqlite` survives only as the pre-convergence source state
 - the SQLite backend is a backend implementation, not a second copy of `atm-core` storage semantics
 - SQLite-only observability and lifecycle helpers are no longer exposed as if they were shared contract concepts
 - capability traits are explicit and few, not an escape hatch for old surface-area sprawl
 - `SqliteBoundaryAssembly` closure happens here; `AC.4` may only remove
   remaining consumers of its replacement
+- every capability-candidate row from the ledger has an explicit keep/delete
+  outcome by sprint close; no "decide later" carry-forward is allowed
 
 ## Acceptance Criteria
 
 - the SQLite backend can satisfy the shared CRUD contract without importing `atm-core`
 - no base trait method is widened purely to fit SQLite-specific power
 - notification semantics are documented as post-commit only
+- the backend crate rename to `atm-storage-rusqlite` lands in this sprint
 - `SqliteBoundaryAssembly` does not survive as a required public assembly bundle above the trait line
 - no SQLite-only observability or replay helper is promoted into the base CRUD contract by convenience
+- every `capability-candidate` ledger row owned by `AC.3` is either:
+  - a named optional capability trait
+  - an internal backend detail
+  - or deleted
 
 ## Required Validation
 
-- `cargo test -p atm-rusqlite` or the renamed backend crate once the rename lands
-- `cargo clippy -p atm-rusqlite -- -D warnings` or the renamed backend crate once the rename lands
-- `cargo tree -p atm-rusqlite` or the renamed backend crate once the rename lands
+- `cargo test -p atm-storage-rusqlite`
+- `cargo clippy -p atm-storage-rusqlite -- -D warnings`
+- `cargo tree -p atm-storage-rusqlite`
 - `git diff --check`
 - verify the updated boundary TOMLs and `cargo tree` output both show `atm-storage`, not `atm-core`, as the shared storage dependency
-- `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-rusqlite crates/atm-runtime crates/atm-core -S`
+- `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-storage-rusqlite crates/atm-runtime crates/atm-core -S`
 
 ## Required Document Updates
 
@@ -145,9 +163,10 @@ Proof this sprint must leave behind:
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - backend architecture docs for SQLite storage ownership
-- update `boundaries/atm-rusqlite/mail-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
-- update `boundaries/atm-rusqlite/task-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
-- update `boundaries/atm-rusqlite/roster-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
+- rename the backend crate path to `crates/atm-storage-rusqlite/`
+- update `boundaries/atm-storage-rusqlite/mail-store-sqlite.toml`
+- update `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
+- update `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`
 - replace `atm-core` with `atm-storage` in `allowed_dependencies` for the shared storage ownership records
 - pair the dependency-tree check with a boundary-lint consistency check before sprint closure
 
@@ -156,3 +175,5 @@ Proof this sprint must leave behind:
 - if SQLite still needs `atm-core`, the shared type move is incomplete
 - if notification behavior happens before commit, the notifier contract is wrong
 - if replay/doctor/finalizer seams are promoted wholesale instead of trimmed, `atm-storage` will regrow the old DTO problem under new names
+- if the rename is deferred, later sprints will inherit avoidable boundary TOML,
+  docs, and cargo-tree drift

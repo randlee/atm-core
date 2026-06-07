@@ -24,6 +24,15 @@ Disposition labels:
 - `capability-candidate` — candidate capability / health / replay type that
   must stay out of the core CRUD contract unless explicitly justified
 
+Capability review rule:
+
+- `capability-candidate` is fail-closed
+- unless a later sprint explicitly promotes the type family into a named
+  capability trait with a documented justification, the default outcome is
+  deletion or backend-internalization
+- unresolved capability-candidate rows are not allowed to roll past their
+  owning sprint as an open-ended bucket
+
 Planning rule:
 
 - every type family has exactly one primary closure sprint
@@ -41,6 +50,8 @@ Final action shorthand used throughout the ledger:
 - `internalize-rusqlite` — move below `atm-storage-rusqlite` as backend-only detail
 - `retain-outside-storage` — remains in the repo but stays outside the storage contract
 - `capability-review` — only survives if later sprint explicitly keeps it as a small capability type
+- `capability-review` rows default to delete-or-internalize; promotion to a
+  named capability requires an explicit sprint-level keep decision
 
 ## Count Summary
 

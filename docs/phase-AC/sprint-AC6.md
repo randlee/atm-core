@@ -1,31 +1,32 @@
-# AC.6 Cleanup, Deletion, And SQL Server Readiness
+# AC.6 Cleanup And Deletion Closeout
 
 ```yaml
 plan_type: sprint_plan
 phase: AC
 sprint: AC.6
-worktree: ../atm-core-worktrees/feature/pAC-s6-cleanup-deletion-and-sqlserver-readiness
-branch: feature/pAC-s6-cleanup-deletion-and-sqlserver-readiness
+worktree: ../atm-core-worktrees/feature/pAC-s6-cleanup-and-deletion-closeout
+branch: feature/pAC-s6-cleanup-and-deletion-closeout
 status: planned
 estimated_scope: large
 ```
 
 ## Goal
 
-Delete the obsolete storage/RPC scaffolding and prove the resulting contract is
-small enough and clean enough for a future SQL Server backend.
+Delete the obsolete storage/RPC scaffolding and close the residual wrapper and
+backend-leakage surface against the final ledger.
 
 ## Scope Summary
 
-This sprint is the closeout line for the contract reset. It removes obsolete
-request/response wrappers, deletes backend-shaped leftovers, and records the
-future SQL Server readiness claim explicitly.
+This sprint is the closeout line for contract-surface deletion. It removes
+obsolete request/response wrappers and backend-shaped leftovers after earlier
+sprints have already made the contract and ownership decisions.
 
 Primary closure rule:
-- `AC.6` is primarily a verification, residual-deletion, and readiness-proof
+- `AC.6` is primarily a verification and residual-deletion
   sprint
 - it must not become the first place where shared contract ownership, Claude
   internalization, or SQLite capability decisions are actually made
+- SQL Server readiness proof is out of scope here and moves to `AC.7`
 
 ## Governing Sources
 
@@ -49,7 +50,7 @@ Primary closure rule:
 - obsolete storage request/response wrappers are deleted
 - obsolete RPC/storage/domain clone structs are deleted
 - backend-specific seams that survived only because of the old architecture are deleted
-- docs explicitly state that a future `atm-storage-sqlserver` backend should implement the same contract without requiring a new architectural reset
+- docs explicitly state that `AC.7` owns the final SQL Server readiness proof
 
 ## Ledger-Driven Deletion Sweep
 
@@ -83,14 +84,15 @@ Implementation order for `AC.6`:
    - boundary TOMLs
    - tests
 3. Reconfirm that backend-only Claude and SQLite types are still internal after the deletion pass.
-4. Write the SQL Server readiness proof against the actual resulting contract, not the planned one.
-5. Update the ledger with final closure notes so later phases do not resurrect deleted seams by accident.
+4. Update the ledger with final closure notes so later phases do not resurrect deleted seams by accident.
+5. Hand the resulting contract surface to `AC.7` as the fixed basis for SQL Server readiness review.
 
 Proof this sprint must leave behind:
 
 - the old storage/RPC wrapper architecture is materially gone from the repo
 - the remaining shared contract is small enough for direct manual audit
-- SQL Server readiness is a demonstrated property of the simplified contract surface
+- the resulting contract surface is clean enough to serve as the fixed input to
+  `AC.7`
 - any row still needing a first-time ownership decision in `AC.6` should be
   treated as a prior-sprint planning defect, not normal scope
 
@@ -98,8 +100,9 @@ Proof this sprint must leave behind:
 
 - the shared storage contract remains small enough to audit directly
 - no remaining obsolete wrapper families survive only for compatibility with the old design
-- the repo documents SQL Server readiness as a consequence of the cleaned contract, not as a hypothetical wish
 - the deletion sweep is checked against `docs/phase-AC/type-ledger.md`, not only ad hoc grep patterns
+- `AC.6` does not reopen capability or ownership decisions that earlier sprints
+  were required to close
 
 ## Required Validation
 
@@ -120,5 +123,4 @@ Proof this sprint must leave behind:
 ## Risks And Watchouts
 
 - if deletion is deferred, the old architecture will remain readable and therefore reusable by accident
-- if SQL Server readiness is claimed without a truly backend-neutral contract, the phase will false-close
 - if docs keep stale wrapper names alive after code deletion, future work will quietly rebuild the old model

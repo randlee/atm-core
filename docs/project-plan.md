@@ -322,7 +322,8 @@ Sprint line:
 - `AC.3` `feature/pAC-s3-sqlite-backend-convergence`
 - `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption`
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification`
-- `AC.6` `feature/pAC-s6-cleanup-deletion-and-sqlserver-readiness`
+- `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout`
+- `AC.7` `feature/pAC-s7-sqlserver-readiness-proof`
 
 Acceptance:
 - Phase AC exit criteria are satisfied only through

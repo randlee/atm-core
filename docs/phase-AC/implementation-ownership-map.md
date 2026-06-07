@@ -111,4 +111,10 @@ Owns:
 
 Owns:
 
-- final delete / keep decisions for old wrappers and backend leakage
+- residual deletion closeout for old wrappers and backend leakage
+
+### AC.7
+
+Owns:
+
+- SQL Server readiness proof against the final post-cleanup contract
