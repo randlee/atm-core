@@ -34,8 +34,8 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
 - `crates/atm-core/src/mailbox/`
 - `crates/atm-core/src/read/`
 - `crates/atm-core/src/list/`
@@ -166,8 +166,8 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC2.md`
-- `docs/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sprint-AC2.md`
+- `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - storage architecture docs that currently treat Claude inbox logic as `atm-core` internals
 - create `boundaries/atm-storage-claude/` TOML records covering the Claude backend implementation of the shared contracts

@@ -191,7 +191,7 @@ Phase `AC` must establish durable enforcement around this ADR:
 - RPC message bodies must converge on canonical domain structs instead of
   layer-specific clones
 
-The readiness and sprint plans in `docs/phase-AC/` are the authoritative
+The readiness and sprint plans in `docs/plans/phase-AC/` are the authoritative
 closure gates for this ADR.
 
 ## Phase AC Implementation Split

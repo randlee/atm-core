@@ -35,9 +35,9 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
 - the new `atm-storage` and backend crates
 
 ## Prerequisites
@@ -101,7 +101,7 @@ Proof this sprint must leave behind:
 
 - the shared storage contract remains small enough to audit directly
 - no remaining obsolete wrapper families survive only for compatibility with the old design
-- the deletion sweep is checked against `docs/phase-AC/type-ledger.md`, not only ad hoc grep patterns
+- the deletion sweep is checked against `docs/plans/phase-AC/type-ledger.md`, not only ad hoc grep patterns
 - `AC.6` does not reopen capability or ownership decisions that earlier sprints
   were required to close
 
@@ -116,11 +116,11 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC6.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
+- `docs/plans/phase-AC/sprint-AC6.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
 - `docs/project-plan.md`
-- `docs/phase-AC/type-ledger.md`
+- `docs/plans/phase-AC/type-ledger.md`
 
 ## Risks And Watchouts
 

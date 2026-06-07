@@ -296,11 +296,11 @@ Status summary:
 - `AC.0` planning prerequisite is complete at `ce02b9ff`.
 - latest accepted planning tip is the current `plan/phase-AC` branch head,
   which carries the full plan-hardening sequence, the
-  [exhaustive AC.0 type ledger](./phase-AC/type-ledger.md), and the final
+  [exhaustive AC.0 type ledger](./plans/phase-AC/type-ledger.md), and the final
   cross-document consistency corrections for the AC sprint set.
-- The authoritative plan is [`docs/plan-phase-AC.md`](./plan-phase-AC.md).
+- The authoritative plan is [`docs/plans/phase-AC/plan-phase-AC.md`](./plans/phase-AC/plan-phase-AC.md).
 - The authoritative closure checklist is
-  [`docs/phase-AC/readiness.md`](./phase-AC/readiness.md).
+  [`docs/plans/phase-AC/readiness.md`](./plans/phase-AC/readiness.md).
 
 Goal:
 - create a small audited `atm-storage` contract
@@ -328,7 +328,7 @@ Sprint line:
 
 Acceptance:
 - Phase AC exit criteria are satisfied only through
-  `docs/phase-AC/readiness.md`
+  `docs/plans/phase-AC/readiness.md`
 
 ### Phase 0: Document Lock [COMPLETE]
 

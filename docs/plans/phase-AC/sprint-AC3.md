@@ -39,8 +39,8 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
 - current crate source: `crates/atm-rusqlite/`
 - target backend crate name: `crates/atm-storage-rusqlite/`
 - current SQLite-related boundary traits in `atm-core`
@@ -182,8 +182,8 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC3.md`
-- `docs/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sprint-AC3.md`
+- `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - backend architecture docs for SQLite storage ownership
 - rename the backend crate path to `crates/atm-storage-rusqlite/`

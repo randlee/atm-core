@@ -73,14 +73,14 @@ Phase `AC` must not:
   - Phase `AA` and its follow-up fixes are either merged or frozen as the baseline
 - authoritative supporting artifacts for this planning line:
   - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
-  - `docs/phase-AC/readiness.md`
-  - `docs/phase-AC/issues.md`
-  - `docs/phase-AC/storage-surface-inventory.md`
-  - `docs/phase-AC/type-convergence-map.md`
-  - `docs/phase-AC/type-ledger.md`
-  - `docs/phase-AC/crate-graph-migration-map.md`
-  - `docs/phase-AC/implementation-ownership-map.md`
-  - `docs/phase-AC/atm-storage-contract-candidate.md`
+  - `docs/plans/phase-AC/readiness.md`
+  - `docs/plans/phase-AC/issues.md`
+  - `docs/plans/phase-AC/storage-surface-inventory.md`
+  - `docs/plans/phase-AC/type-convergence-map.md`
+  - `docs/plans/phase-AC/type-ledger.md`
+  - `docs/plans/phase-AC/crate-graph-migration-map.md`
+  - `docs/plans/phase-AC/implementation-ownership-map.md`
+  - `docs/plans/phase-AC/atm-storage-contract-candidate.md`
 
 ## Phase Entry Criteria
 
@@ -307,24 +307,24 @@ Execution worktree:
 
 Phase `AC` planning is not complete until these artifacts exist and agree:
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
-- `docs/phase-AC/sprint-AC0.md`
-- `docs/phase-AC/sprint-AC1.md`
-- `docs/phase-AC/sprint-AC2.md`
-- `docs/phase-AC/sprint-AC3.md`
-- `docs/phase-AC/sprint-AC4.md`
-- `docs/phase-AC/sprint-AC5.md`
-- `docs/phase-AC/sprint-AC6.md`
-- `docs/phase-AC/sprint-AC7.md`
-- `docs/phase-AC/storage-surface-inventory.md`
-- `docs/phase-AC/type-convergence-map.md`
-- `docs/phase-AC/type-ledger.md`
-- `docs/phase-AC/crate-graph-migration-map.md`
-- `docs/phase-AC/implementation-ownership-map.md`
-- `docs/phase-AC/atm-storage-contract-candidate.md`
-- `docs/phase-AC/sqlserver-readiness-proof.md` reserved as the AC.7 proof artifact path
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
+- `docs/plans/phase-AC/sprint-AC0.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/sprint-AC2.md`
+- `docs/plans/phase-AC/sprint-AC3.md`
+- `docs/plans/phase-AC/sprint-AC4.md`
+- `docs/plans/phase-AC/sprint-AC5.md`
+- `docs/plans/phase-AC/sprint-AC6.md`
+- `docs/plans/phase-AC/sprint-AC7.md`
+- `docs/plans/phase-AC/storage-surface-inventory.md`
+- `docs/plans/phase-AC/type-convergence-map.md`
+- `docs/plans/phase-AC/type-ledger.md`
+- `docs/plans/phase-AC/crate-graph-migration-map.md`
+- `docs/plans/phase-AC/implementation-ownership-map.md`
+- `docs/plans/phase-AC/atm-storage-contract-candidate.md`
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md` reserved as the AC.7 proof artifact path
 
 ## Phase Exit Criteria
 
@@ -348,5 +348,5 @@ Phase `AC` is not complete until:
 - `AC.3` owns the backend naming cutover to `atm-storage-rusqlite`; rename
   deferral is not an accepted outcome
 - any new public type introduced during `AC.1`..`AC.7` must be added to
-  `docs/phase-AC/type-ledger.md` in the same change or the sprint is not
+  `docs/plans/phase-AC/type-ledger.md` in the same change or the sprint is not
   complete

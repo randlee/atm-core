@@ -34,10 +34,10 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/sprint-AC1.md`
-- `docs/phase-AC/sprint-AC2.md`
-- `docs/phase-AC/sprint-AC3.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/sprint-AC2.md`
+- `docs/plans/phase-AC/sprint-AC3.md`
 - `crates/atm-core/src/`
 - `crates/atm-daemon/src/`
 - `crates/atm-runtime/src/`
@@ -136,8 +136,8 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC4.md`
-- `docs/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sprint-AC4.md`
+- `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - core/runtime/daemon architecture docs
 - update `atm-core`, `atm-daemon`, and `atm-runtime` boundary TOMLs for the

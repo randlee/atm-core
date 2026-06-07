@@ -82,7 +82,7 @@ search categories above.
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
 - `docs/project-plan.md`
 - `crates/atm-core/src/boundary/mail.rs`
 - `crates/atm-core/src/boundary/store.rs`
@@ -108,7 +108,7 @@ search categories above.
   - `atm-storage-claude`, SQLite, and future SQL Server are peer backends
   - notifications are a separate post-commit trait
 
-- `docs/phase-AC/issues.md` captures the accepted violation inventory and the
+- `docs/plans/phase-AC/issues.md` captures the accepted violation inventory and the
   oversized current-surface baseline:
   - request/response storage DTO proliferation
   - duplicate domain structs across layers
@@ -126,32 +126,32 @@ search categories above.
   atm-core -> atm-storage
   ```
 
-- `docs/phase-AC/storage-surface-inventory.md` records:
+- `docs/plans/phase-AC/storage-surface-inventory.md` records:
   - the concrete storage-facing modules searched
   - the accepted size baseline for the current surface
   - the major overgrowth categories later sprints must shrink
 
-- `docs/phase-AC/type-convergence-map.md` records:
+- `docs/plans/phase-AC/type-convergence-map.md` records:
   - the semantic families that must converge into canonical shared types
   - the current duplicate message / roster / task families
   - the handoff expectations for `AC.1` and `AC.5`
 
-- `docs/phase-AC/type-ledger.md` records:
+- `docs/plans/phase-AC/type-ledger.md` records:
   - the exhaustive storage-adjacent type list for the `AC.0` search scope
   - the keep / merge / delete / backend-only disposition for each current type
   - the owning sprint for each type-level transition
 
-- `docs/phase-AC/crate-graph-migration-map.md` records:
+- `docs/plans/phase-AC/crate-graph-migration-map.md` records:
   - the approved target graph
   - the forbidden graph
   - which later sprint owns each transition
 
-- `docs/phase-AC/implementation-ownership-map.md` records:
+- `docs/plans/phase-AC/implementation-ownership-map.md` records:
   - the current concrete implementers of storage-facing traits
   - the current mailbox module ownership candidates
   - which later sprint owns each migration or deletion lane
 
-- `docs/phase-AC/atm-storage-contract-candidate.md` records:
+- `docs/plans/phase-AC/atm-storage-contract-candidate.md` records:
   - the first-pass shared trait surface for `AC.1`
   - the first-pass canonical shared type set
   - the explicit non-goals that must stay out of the shared contract
@@ -175,15 +175,15 @@ search categories above.
 
 ## Required Document Updates
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/issues.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/storage-surface-inventory.md`
-- `docs/phase-AC/type-convergence-map.md`
-- `docs/phase-AC/type-ledger.md`
-- `docs/phase-AC/crate-graph-migration-map.md`
-- `docs/phase-AC/implementation-ownership-map.md`
-- `docs/phase-AC/atm-storage-contract-candidate.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/issues.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/storage-surface-inventory.md`
+- `docs/plans/phase-AC/type-convergence-map.md`
+- `docs/plans/phase-AC/type-ledger.md`
+- `docs/plans/phase-AC/crate-graph-migration-map.md`
+- `docs/plans/phase-AC/implementation-ownership-map.md`
+- `docs/plans/phase-AC/atm-storage-contract-candidate.md`
 - `docs/project-plan.md`
 - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 

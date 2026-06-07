@@ -34,8 +34,8 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
 - current RPC/protocol code in `atm-core`, `atm-daemon`, and `atm-daemon-client`
 
 ## Prerequisites
@@ -134,8 +134,8 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC5.md`
-- `docs/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sprint-AC5.md`
+- `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - protocol and architecture docs that describe transport/body shapes
 - create or update `atm-daemon-client` boundary TOML records to make its

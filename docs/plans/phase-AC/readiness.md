@@ -10,7 +10,7 @@ Track accepted closure for the storage-contract reset line that restores:
 - Claude storage as a first-class backend
 
 Authoritative supporting inventory:
-- `docs/phase-AC/issues.md`
+- `docs/plans/phase-AC/issues.md`
 
 ## Sprint Status
 
@@ -40,4 +40,4 @@ Phase `AC` is not complete until all of the following are true:
 - notifications happen only after durable write success
 - daemon/runtime/core no longer carry concrete storage logic above the approved composition seam
 - the repo has no remaining message-shaped RPC/storage/domain clone families that contradict the generic RPC envelope model
-- `docs/phase-AC/issues.md` has no open issue whose owning sprint is still incomplete
+- `docs/plans/phase-AC/issues.md` has no open issue whose owning sprint is still incomplete

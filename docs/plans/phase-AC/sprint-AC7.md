@@ -36,11 +36,11 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
-- `docs/phase-AC/type-ledger.md`
-- `docs/phase-AC/crate-graph-migration-map.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
+- `docs/plans/phase-AC/type-ledger.md`
+- `docs/plans/phase-AC/crate-graph-migration-map.md`
 - final post-`AC.6` state of `crates/atm-storage`
 
 ## Prerequisites
@@ -55,7 +55,7 @@ Primary closure rule:
 
 ## Deliverables
 
-- `docs/phase-AC/sqlserver-readiness-proof.md` exists as the written SQL
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md` exists as the written SQL
   Server readiness proof against the actual final contract
 - an explicit statement of which existing traits and canonical shared structs a
   future `atm-storage-sqlserver` backend must implement
@@ -94,7 +94,7 @@ Proof this sprint must leave behind:
 ## Acceptance Criteria
 
 - the repo documents SQL Server readiness as a consequence of the cleaned
-  contract in `docs/phase-AC/sqlserver-readiness-proof.md`, not as a
+  contract in `docs/plans/phase-AC/sqlserver-readiness-proof.md`, not as a
   hypothetical wish
 - no backend crate still depends on `atm-core`
 - the final `atm-storage` surface is small enough to audit directly and to hand
@@ -112,16 +112,16 @@ Proof this sprint must leave behind:
 - `git diff --check`
 - `python3 scripts/lint_boundaries.py`
 - `rg -n "Request|Response" crates/atm-storage crates/atm-storage-claude crates/atm-storage-rusqlite -S`
-- `rg -n "SqliteObservability|SqliteBoundaryAssembly|ClaudeCodeRosterMember|ClaudeCodeTeamRoster" crates/atm-storage docs/phase-AC -S`
+- `rg -n "SqliteObservability|SqliteBoundaryAssembly|ClaudeCodeRosterMember|ClaudeCodeTeamRoster" crates/atm-storage docs/plans/phase-AC -S`
 
 ## Required Document Updates
 
-- `docs/phase-AC/sqlserver-readiness-proof.md`
-- `docs/phase-AC/sprint-AC7.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md`
+- `docs/plans/phase-AC/sprint-AC7.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-AC.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
 
 ## Risks And Watchouts
 

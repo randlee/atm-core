@@ -34,7 +34,7 @@ Primary closure rule:
 
 ## Governing Sources
 
-- `docs/plan-phase-AC.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
 - the Phase `AC` ADR created in `AC.0`
 - `crates/atm-core/src/boundary/mail.rs`
 - `crates/atm-core/src/boundary/store.rs`
@@ -203,10 +203,10 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
-- `docs/phase-AC/sprint-AC1.md`
-- `docs/phase-AC/readiness.md`
-- `docs/phase-AC/issues.md`
-- `docs/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/issues.md`
+- `docs/plans/phase-AC/plan-phase-AC.md`
 - `docs/project-plan.md`
 - create `boundaries/atm-storage/` TOML records for:
   - `MessageStore`
