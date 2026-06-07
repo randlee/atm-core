@@ -416,6 +416,77 @@ fn mailbox_record_parse_error(
     .with_recovery("Inspect the mailbox file for malformed JSON records or partial writes, then retry atm read. If corruption persists, archive or remove the malformed mailbox file.")
 }
 
+fn parse_salvaged_array_fragment(raw: &str, path: &Path, object_index: usize) -> InboxReadItem {
+    match serde_json::from_str::<Value>(raw) {
+        Ok(mut value) => parse_mailbox_item(&mut value, path, object_index),
+        Err(error) => InboxReadItem::Degraded {
+            summary: format!(
+                "malformed mailbox array fragment skipped at {} object {}",
+                path.display(),
+                object_index
+            ),
+            warning: mailbox_record_parse_error(path, object_index, error).message,
+            // bounded: one degraded fragment clone is capped independently
+            raw_fragment: Some(truncate_raw_fragment(raw)),
+        },
+    }
+}
+
+fn push_salvaged_array_fragment(
+    items: &mut Vec<InboxReadItem>,
+    raw: &str,
+    path: &Path,
+    object_index: &mut usize,
+    start: usize,
+    end: usize,
+) {
+    *object_index += 1;
+    items.push(parse_salvaged_array_fragment(
+        &raw[start..=end],
+        path,
+        *object_index,
+    ));
+}
+
+fn truncated_array_fragment(path: &Path, object_index: usize, raw_fragment: &str) -> InboxReadItem {
+    InboxReadItem::Degraded {
+        summary: format!(
+            "truncated mailbox array fragment skipped at {} object {}",
+            path.display(),
+            object_index
+        ),
+        warning: format!(
+            "mailbox array {} ended before object {} closed",
+            path.display(),
+            object_index
+        ),
+        raw_fragment: Some(truncate_raw_fragment(raw_fragment)),
+    }
+}
+
+fn mailbox_array_parse_error(path: &Path, parse_error: serde_json::Error) -> AtmError {
+    AtmError::new(
+        AtmErrorKind::MailboxRead,
+        format!("failed to parse mailbox array {}: {parse_error}", path.display()),
+    )
+    .with_recovery(
+        "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm read`.",
+    )
+    .with_source(parse_error)
+}
+
+fn mailbox_array_recovery_banner(path: &Path, parse_error: &serde_json::Error) -> InboxReadItem {
+    InboxReadItem::Degraded {
+        summary: format!("mailbox array recovery activated for {}", path.display()),
+        warning: format!(
+            "ATM recovered valid message objects from malformed mailbox array {} after parse failure: {}",
+            path.display(),
+            parse_error
+        ),
+        raw_fragment: None,
+    }
+}
+
 fn salvage_mailbox_array(
     raw: &str,
     path: &Path,
@@ -456,22 +527,14 @@ fn salvage_mailbox_array(
                 if depth == 0
                     && let Some(start) = object_start.take()
                 {
-                    object_index += 1;
-                    let fragment = &raw[start..=offset];
-                    let item = match serde_json::from_str::<Value>(fragment) {
-                        Ok(mut value) => parse_mailbox_item(&mut value, path, object_index),
-                        Err(error) => InboxReadItem::Degraded {
-                            summary: format!(
-                                "malformed mailbox array fragment skipped at {} object {}",
-                                path.display(),
-                                object_index
-                            ),
-                            warning: mailbox_record_parse_error(path, object_index, error).message,
-                            // bounded: one degraded fragment clone is capped independently
-                            raw_fragment: Some(truncate_raw_fragment(fragment)),
-                        },
-                    };
-                    items.push(item);
+                    push_salvaged_array_fragment(
+                        &mut items,
+                        raw,
+                        path,
+                        &mut object_index,
+                        start,
+                        offset,
+                    );
                 }
             }
             _ => {}
@@ -480,46 +543,14 @@ fn salvage_mailbox_array(
 
     if let Some(start) = object_start {
         object_index += 1;
-        items.push(InboxReadItem::Degraded {
-            summary: format!(
-                "truncated mailbox array fragment skipped at {} object {}",
-                path.display(),
-                object_index
-            ),
-            warning: format!(
-                "mailbox array {} ended before object {} closed",
-                path.display(),
-                object_index
-            ),
-            raw_fragment: Some(truncate_raw_fragment(&raw[start..])),
-        });
+        items.push(truncated_array_fragment(path, object_index, &raw[start..]));
     }
 
     if items.is_empty() {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!("failed to parse mailbox array {}: {parse_error}", path.display()),
-            )
-            .with_recovery(
-                "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm read`.",
-            )
-            .with_source(parse_error),
-        );
+        return Err(mailbox_array_parse_error(path, parse_error));
     }
 
-    items.insert(
-        0,
-        InboxReadItem::Degraded {
-            summary: format!("mailbox array recovery activated for {}", path.display()),
-            warning: format!(
-                "ATM recovered valid message objects from malformed mailbox array {} after parse failure: {}",
-                path.display(),
-                parse_error
-            ),
-            raw_fragment: None,
-        },
-    );
+    items.insert(0, mailbox_array_recovery_banner(path, &parse_error));
     Ok(items)
 }
 
