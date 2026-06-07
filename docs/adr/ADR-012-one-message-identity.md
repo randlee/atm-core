@@ -63,3 +63,10 @@ Required implementation consequences:
   UUID-wire boundary cast
 - future ATM features must use `AtmMessageId` as the only ATM-owned message
   identity
+
+Implementation status:
+- `AA.11` closes the SQLite-side `legacy_*` consequence on
+  `feature/pAA-s11-delete-sqlite-legacy-compat`.
+- No `legacy_message_id` code paths remain under `crates/atm-rusqlite/`; any
+  surviving `legacy_*` references are historical planning or removal-ledger
+  context only.

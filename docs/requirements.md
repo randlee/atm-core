@@ -33,6 +33,9 @@ Phase-AA simplification direction:
 - the supported 1.2 SQLite bootstrap/migration contract is the current
   `message_id`-based durable schema only; abandoned pre-production identity
   scaffolding such as `legacy_message_id` is not an accepted runtime shape
+- no repair path is offered for abandoned pre-production databases carrying
+  only a `legacy_message_id` column; operators with such databases must
+  discard them and allow ATM to initialize a fresh schema
 - `atm doctor` now uses that direct local path for config/store diagnostics
   through `atm-runtime`; daemon routing remains only for daemon-owned runtime
   state

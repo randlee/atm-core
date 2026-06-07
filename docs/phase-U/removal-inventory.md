@@ -62,6 +62,19 @@ Primary code/doc targets:
 - `crates/atm-rusqlite/src/mailbox_metadata.rs:4-12,39-40,106-125`
   - metadata query use of `LegacyMessageId`
 
+AA.11 closure note:
+- `AA.11` is the canonical cross-phase ledger entry for deleting the abandoned
+  pre-production SQLite `legacy_message_id` path from the active 1.2 line.
+- Deleted code locations:
+  - `crates/atm-rusqlite/src/shared_db.rs:21-22,93-94,375-376`
+    - removed `legacy_message_id` durable column and index references
+  - `crates/atm-rusqlite/src/lib.rs:307,323-347`
+    - removed SQLite persistence and migration handling for
+      `legacy_message_id`
+- Any surviving `legacy_message_id` mentions in this file or related ADR/plan
+  docs are historical-only removal-ledger context and are not active runtime
+  support promises.
+
 ## U.3 — Thread / Update / Supersede Hardening
 
 Primary behavior targets:
