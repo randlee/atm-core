@@ -78,7 +78,7 @@ fn missing_config_warning(recipient: &ResolvedRecipient, team_dir: &Path) -> War
 }
 
 fn notify_team_lead_missing_config(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -176,7 +176,7 @@ fn resolve_team_lead_snapshot(
 }
 
 fn persist_missing_config_notice(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     snapshot: &DeliveryRecipientSnapshot,
     team_lead_inbox: &Path,

@@ -2463,9 +2463,17 @@ Architectural rule:
 - JSONL is not ATM's authoritative durable mail state
 - the legal current Claude `.json` inbox JSON-array shape is a supported
   primary path, not a degraded fallback
+- the current Claude `.json` inbox contract is an atomic full-rewrite path:
+  load the top-level JSON array, append the new message in memory, then write
+  a replacement array document through temp-file + rename
+- ATM-owned `.jsonl` compatibility projections remain append-only exports and
+  do not redefine the shared Claude `.json` inbox contract
 - repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
   unsupported mailbox content rather than for the legal current `.json` array
   shape
+- `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)` is the only
+  approved full re-export seam for repair/rebuild and must not run on the
+  normal send or ack path
 - ATM-authored JSONL exports are a bounded compatibility projection over the
   durable SQLite message body
 - the default ATM-authored JSONL body export cap is `128 KiB`
@@ -2505,10 +2513,16 @@ There are three distinct paths:
 1. Claude / compatibility path
    - current Claude inbox files use one top-level JSON-array mailbox document
      as the primary shared compatibility shape
+   - healthy current Claude `.json` inbox writes use atomic full-document
+     replacement: load existing array, append, write replacement via temp-file
+     + rename
    - healthy current Claude `.json` inboxes stay on the normal primary path
      and must not require repair/rebuild warnings
    - ATM-owned `.jsonl` compatibility projections remain append-style only
      where ATM explicitly owns that export surface
+   - `rebuild_compat_inbox_projection(...)` is reserved for explicit
+     malformed-state repair/rebuild and is not part of the ordinary send/ack
+     write path
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
