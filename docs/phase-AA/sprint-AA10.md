@@ -49,6 +49,12 @@ through a named admin path, but do not treat them as supported live schema.
 - The repo no longer presents historical ATM JSON variants as supported active
   shared inbox schema for 1.2.
 
+- ATM 1.1 messages that extend the Claude Code schema by adding metadata fields
+  such as `metadata.atm.*` MUST parse successfully. The read path silently
+  ignores unknown or ATM-owned additive fields. Removing live-contract status
+  means no new code depends on those fields; it does not mean reading them
+  fails.
+
 - The removal set is explicit and authoritative:
   - historical top-level ATM fields such as `message_id`, `source_team`,
     `pendingAckAt`, `acknowledgedAt`, and `acknowledgesMessageId`
@@ -82,6 +88,9 @@ schema removal is its own risk surface and belongs in `AA.11`.
   the active test gate
 - no requirements/architecture/Phase AA doc still promises normal read-path
   support for historical ATM top-level JSON or `metadata.atm.*`
+- schema-derivative messages (ATM 1.1 format = Claude Code schema + metadata
+  extension fields) parse without error; tests explicitly assert non-failure
+  for these inputs
 - the active tests validate the current Claude contract and the chosen fail
   behavior for obsolete ATM-authored JSON
 
@@ -90,6 +99,9 @@ schema removal is its own risk surface and belongs in `AA.11`.
 - `python3 -m unittest tools.schema_models.test_schema_models`
 - `cargo test -p agent-team-mail-core`
 - `git diff --check`
+- tests include at least one schema-derivative fixture (ATM 1.1 payload with
+  Claude schema fields plus `metadata.atm` additions) that asserts parse
+  success and field-ignore behavior
 
 ## Required Document Updates
 
