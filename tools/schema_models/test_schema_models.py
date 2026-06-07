@@ -9,16 +9,18 @@ from unittest.mock import patch
 
 from tools.schema_models.atm_message_schema import (
     AtmInboxMessage,
-    AtmMetadataEnvelope,
-    AtmMetadataFields,
     AtmMissingTeamConfigAlertMessage,
-    MessageMetadata,
 )
 from tools.schema_models.claude_code_message_schema import (
     ClaudeCodeIdleNotificationText,
     ClaudeCodeInboxMessage,
 )
-from tools.schema_models.legacy_atm_message_schema import LegacyAtmInboxMessage
+from tools.schema_models.legacy_atm_message_schema import (
+    LegacyAtmInboxMessage,
+    LegacyAtmMetadataEnvelope,
+    LegacyAtmMetadataFields,
+    LegacyMessageMetadata,
+)
 
 TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
@@ -117,6 +119,28 @@ class SchemaModelTests(unittest.TestCase):
             "81286baa-e783-4f0c-bfea-82d070750fae",
         )
 
+    def test_atm_superset_named_thread_fields_validate(self) -> None:
+        """Write-path: approved immutable compatibility fields stay typed explicitly."""
+
+        message = AtmInboxMessage.model_validate(
+            {
+                "from": TEST_TEAM_LEAD,
+                "text": "thread update",
+                "timestamp": "2026-04-04T18:49:59.525805+00:00",
+                "read": True,
+                "summary": "thread update",
+                "parentMessageId": "81286baa-e783-4f0c-bfea-82d070750fae",
+                "threadMode": "add-details",
+                "taskId": "TASK-123",
+            }
+        )
+        self.assertEqual(
+            str(message.parentMessageId),
+            "81286baa-e783-4f0c-bfea-82d070750fae",
+        )
+        self.assertEqual(message.threadMode, "add-details")
+        self.assertEqual(message.taskId, "TASK-123")
+
     def test_atm_missing_config_alert_validates(self) -> None:
         """Write-path: validates current ATM-owned alert additions during migration."""
 
@@ -165,10 +189,10 @@ class SchemaModelTests(unittest.TestCase):
         )
         self.assertEqual(message.source_team, TEST_TEAM)
 
-    def test_forward_atm_metadata_fields_validate(self) -> None:
-        """Write-path: validates docs/atm-message-schema.md forward metadata.atm rules."""
+    def test_legacy_metadata_atm_fields_validate_on_read(self) -> None:
+        """Read-path: historical metadata.atm derivatives remain accepted on read."""
 
-        metadata = AtmMetadataFields.model_validate(
+        metadata = LegacyAtmMetadataFields.model_validate(
             {
                 "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                 "sourceTeam": TEST_TEAM,
@@ -178,7 +202,7 @@ class SchemaModelTests(unittest.TestCase):
         )
         self.assertEqual(metadata.sourceTeam, TEST_TEAM)
 
-        envelope = AtmMetadataEnvelope.model_validate(
+        envelope = LegacyAtmMetadataEnvelope.model_validate(
             {
                 "from": TEST_TEAM_LEAD,
                 "text": "ping",
@@ -194,29 +218,9 @@ class SchemaModelTests(unittest.TestCase):
                 },
             }
         )
-        self.assertIsInstance(envelope.metadata, MessageMetadata)
+        self.assertIsInstance(envelope.metadata, LegacyMessageMetadata)
         self.assertEqual(envelope.metadata.atm.sourceTeam, TEST_TEAM)
         self.assertEqual(envelope.metadata.atm.taskId, "TASK-123")
-
-    def test_forward_metadata_rejects_top_level_atm_machine_fields(self) -> None:
-        """Write-path: top-level ATM machine fields are forbidden on forward inbox writes."""
-
-        with self.assertRaises(Exception):
-            AtmMetadataEnvelope.model_validate(
-                {
-                    "from": TEST_TEAM_LEAD,
-                    "text": "ping",
-                    "timestamp": "2026-04-04T18:49:59.525Z",
-                    "read": True,
-                    "summary": "ping",
-                    "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
-                    "metadata": {
-                        "atm": {
-                            "sourceTeam": TEST_TEAM,
-                        }
-                    },
-                }
-            )
 
     def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
         """Write-path: guards docs/atm-message-schema.md legacy top-level UUID placement."""
@@ -232,11 +236,11 @@ class SchemaModelTests(unittest.TestCase):
                 }
             )
 
-    def test_forward_metadata_message_id_rejects_uuid(self) -> None:
-        """Write-path: guards docs/atm-message-schema.md forward metadata.atm ULID placement."""
+    def test_legacy_metadata_message_id_rejects_uuid(self) -> None:
+        """Read-path guard: metadata.atm.messageId stays typed as the historical ULID derivative."""
 
         with self.assertRaises(Exception):
-            AtmMetadataFields.model_validate(
+            LegacyAtmMetadataFields.model_validate(
                 {
                     "messageId": "81286baa-e783-4f0c-bfea-82d070750fae",
                 }

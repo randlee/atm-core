@@ -104,6 +104,7 @@ fixture-backed model alignment. Runtime behavior changes belong in `AA.9`.
 - `python3 -m unittest tools.schema_models.test_schema_models`
 - `git diff --check`
 - `python3 - <<'PY'` contract-term scan proving the banned stale phrases are absent from `docs/`, `tools/`, `crates/`, and `scripts/`
+- record the contract-term scan result in `docs/phase-AA/aa8-contract-term-scan.md`
 
 ## Required Document Updates
 
