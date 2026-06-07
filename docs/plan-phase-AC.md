@@ -172,6 +172,9 @@ pub struct RpcEnvelope {
 
 Rules:
 
+- `RpcEnvelope` is owned by `atm-daemon-client` for this phase line
+- `atm-storage` is not an allowed owner because the envelope is transport, not
+  storage
 - RPC carries one generic envelope
 - message-like bodies decode into canonical domain structs
 - storage persists those same canonical domain structs

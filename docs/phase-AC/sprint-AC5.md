@@ -125,6 +125,7 @@ Proof this sprint must leave behind:
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
+- `python3 scripts/lint_boundaries.py`
 - `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 - `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember|TaskStoreTaskRecord|TaskStoreTaskMetadata" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 
@@ -134,7 +135,7 @@ Proof this sprint must leave behind:
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - protocol and architecture docs that describe transport/body shapes
-- update `atm-daemon-client` boundary TOML records to make its
+- create or update `atm-daemon-client` boundary TOML records to make its
   transport-envelope ownership explicit and to document whether it remains
   transport-only or consumes canonical `atm-storage` domain bodies without
   becoming a storage crate

@@ -160,6 +160,9 @@ Proof this sprint must leave behind:
 - the backend crate rename to `atm-storage-rusqlite` lands in this sprint
 - `lint_boundaries.py` accepts the updated `atm-storage-rusqlite` boundary
   TOMLs before sprint closure
+- `boundaries/atm-rusqlite/` TOML records do not exist after the rename lands;
+  stale pre-rename boundary records are removed and verified absent by
+  `lint_boundaries.py`
 - `SqliteBoundaryAssembly` does not survive as a required public assembly bundle above the trait line
 - no SQLite-only observability or replay helper is promoted into the base CRUD contract by convenience
 - every `capability-candidate` ledger row owned by `AC.3` is either:
@@ -187,6 +190,8 @@ Proof this sprint must leave behind:
 - update `boundaries/atm-storage-rusqlite/mail-store-sqlite.toml`
 - update `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
 - update `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`
+- delete `boundaries/atm-rusqlite/` TOML records when the crate rename to
+  `atm-storage-rusqlite` lands
 - replace `atm-core` with `atm-storage` in `allowed_dependencies` for the shared storage ownership records
 - pair the dependency-tree check with a boundary-lint consistency check before sprint closure so `lint_boundaries.py` accepts the updated `atm-storage-rusqlite` ownership TOMLs
 
