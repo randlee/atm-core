@@ -125,9 +125,9 @@ The documented lintable boundary plan must forbid direct calls from:
 
 ## Required Follow-On
 
-- `docs/plans/phase-Yb/removal-ledger.md`
-- `docs/plans/phase-Yb/message-path-call-stacks.md`
-- `docs/plans/phase-Yb/lintable-boundary-plan.md`
+- [`docs/plans/phase-Yb/removal-ledger.md`](../plans/phase-Yb/removal-ledger.md)
+- [`docs/plans/phase-Yb/message-path-call-stacks.md`](../plans/phase-Yb/message-path-call-stacks.md)
+- [`docs/plans/phase-Yb/lintable-boundary-plan.md`](../plans/phase-Yb/lintable-boundary-plan.md)
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 

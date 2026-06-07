@@ -28,7 +28,7 @@ Phase-Q disposition note:
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
-  in [`docs/plans/phase-R/plan-phase-R.md`](./plan-phase-R.md)
+  in [`docs/plans/phase-R/plan-phase-R.md`](./plans/phase-R/plan-phase-R.md)
 - Phase R starts with boundary documents, ADR alignment, and lint/parser gates
   before new implementation work
 - the active integration branch for this redesign line is `integrate/phase-R`
@@ -37,7 +37,7 @@ Phase-S planning note:
 - Phase R is the merged daemon baseline, but it missed the requirement that the
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
-  [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
+  [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
 - the canonical daemon wire contract, current daemon packet surface, and shared
   local-IPC/host-host frame rules are tracked in
   [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
@@ -65,7 +65,7 @@ Phase-AA simplification note:
   accumulated concrete SQLite composition and health/observability ownership
   that violated the intended boundary
 - the corrective planning line is Phase AA, tracked in
-  [`docs/plans/phase-AA/plan-phase-AA.md`](./plan-phase-AA.md)
+  [`docs/plans/phase-AA/plan-phase-AA.md`](./plans/phase-AA/plan-phase-AA.md)
 - Phase AA restores the original daemon role as a thin router by moving
   concrete SQLite construction to a dedicated `atm-runtime` crate and
   restoring a direct local doctor/store-health path
@@ -74,7 +74,7 @@ Phase-AB planning note:
 - `Phase AB` is the active cross-host smoke planning line that follows the
   completed same-host release-readiness work in `Phase Z`
 - the authoritative planning document is
-  [`docs/plans/phase-AB/plan-phase-AB.md`](./plan-phase-AB.md)
+  [`docs/plans/phase-AB/plan-phase-AB.md`](./plans/phase-AB/plan-phase-AB.md)
 - `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
   disposable clean-room state first, then disposable copied-state revalidation
 - the planning branch is `plan/phase-AB`
@@ -194,9 +194,9 @@ Status summary:
 - Phase AA is the active simplification planning line for restoring
   `atm-daemon` to a thin-router role.
 - Integration Branch: `integrate/phase-AA`
-- The authoritative plan is [`docs/plans/phase-AA/plan-phase-AA.md`](./plan-phase-AA.md).
+- The authoritative plan is [`docs/plans/phase-AA/plan-phase-AA.md`](./plans/phase-AA/plan-phase-AA.md).
 - The authoritative closure checklist is
-  [`docs/plans/phase-AA/readiness.md`](./phase-AA/readiness.md).
+  [`docs/plans/phase-AA/readiness.md`](./plans/phase-AA/readiness.md).
 - `AA.0` completed the daemon-role restatement, top-level state-machine
   inventory, and daemon-side SQLite leak ledger that later AA sprints must
   follow.
