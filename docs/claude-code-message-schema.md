@@ -52,6 +52,8 @@ they are tolerated by the read path.
 
 Current ATM compatibility note:
 
+- healthy current Claude `.json` inbox files are one top-level JSON array of
+  inbox-message objects
 - healthy current Claude `.json` inbox files are the primary shared inbox
   path ATM must support directly
 - repair/rebuild is reserved for malformed or truly unsupported inbox content,

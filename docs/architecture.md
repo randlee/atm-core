@@ -2407,13 +2407,20 @@ Required architectural rules:
 
 ### 21.2 Compatibility Surfaces
 
-Claude-owned inbox JSONL files remain required for:
+Claude-owned shared inbox files remain required for:
 - Claude context injection
 - compatibility with direct Claude-native writers
+- the current primary shared `.json` inbox path, whose file container is one
+  top-level JSON array of inbox messages
 
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- the legal current Claude `.json` inbox JSON-array shape is a supported
+  primary path, not a degraded fallback
+- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
+  unsupported mailbox content rather than for the legal current `.json` array
+  shape
 - ATM-authored JSONL exports are a bounded compatibility projection over the
   durable SQLite message body
 - the default ATM-authored JSONL body export cap is `128 KiB`
@@ -2451,8 +2458,8 @@ Architectural rules:
 There are three distinct paths:
 
 1. Claude / compatibility path
-   - current Claude inbox files use JSON-array mailbox documents as the
-     primary shared compatibility shape
+   - current Claude inbox files use one top-level JSON-array mailbox document
+     as the primary shared compatibility shape
    - healthy current Claude `.json` inboxes stay on the normal primary path
      and must not require repair/rebuild warnings
    - ATM-owned `.jsonl` compatibility projections remain append-style only

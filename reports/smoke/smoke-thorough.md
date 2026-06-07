@@ -1,9 +1,9 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-06-07T05:10:37.166077+00:00`
-- binary SHA: `7d0fb831ee9627db8f10b286c86adaf9241f594f`
-- duration secs: `13.913`
+- timestamp: `2026-06-07T05:18:56.225388+00:00`
+- binary SHA: `7b355937f5e18744435ee52a8825800a3ded4e91`
+- duration secs: `2.568`
 - summary: `pass=13`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
