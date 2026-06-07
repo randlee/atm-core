@@ -103,6 +103,8 @@ Planning consequence:
 - `AC.1` must not lift these families into `atm-storage`
 - they are raw deletion / collapse candidates unless a true semantic query or
   mutation type survives the redesign
+- `docs/phase-AC/type-ledger.md` is the exhaustive manifest that names each
+  current type and its planned disposition
 
 ### 2. Claude Storage Seams Outside A Shared Storage Contract
 

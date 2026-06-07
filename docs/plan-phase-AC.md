@@ -77,6 +77,7 @@ Phase `AC` must not:
   - `docs/phase-AC/issues.md`
   - `docs/phase-AC/storage-surface-inventory.md`
   - `docs/phase-AC/type-convergence-map.md`
+  - `docs/phase-AC/type-ledger.md`
   - `docs/phase-AC/crate-graph-migration-map.md`
   - `docs/phase-AC/implementation-ownership-map.md`
   - `docs/phase-AC/atm-storage-contract-candidate.md`
@@ -298,6 +299,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/phase-AC/sprint-AC6.md`
 - `docs/phase-AC/storage-surface-inventory.md`
 - `docs/phase-AC/type-convergence-map.md`
+- `docs/phase-AC/type-ledger.md`
 - `docs/phase-AC/crate-graph-migration-map.md`
 - `docs/phase-AC/implementation-ownership-map.md`
 - `docs/phase-AC/atm-storage-contract-candidate.md`

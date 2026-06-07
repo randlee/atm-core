@@ -131,6 +131,11 @@ search categories above.
   - the current duplicate message / roster / task families
   - the handoff expectations for `AC.1` and `AC.5`
 
+- `docs/phase-AC/type-ledger.md` records:
+  - the exhaustive storage-adjacent type list for the `AC.0` search scope
+  - the keep / merge / delete / backend-only disposition for each current type
+  - the owning sprint for each type-level transition
+
 - `docs/phase-AC/crate-graph-migration-map.md` records:
   - the approved target graph
   - the forbidden graph
@@ -170,6 +175,7 @@ search categories above.
 - `docs/phase-AC/readiness.md`
 - `docs/phase-AC/storage-surface-inventory.md`
 - `docs/phase-AC/type-convergence-map.md`
+- `docs/phase-AC/type-ledger.md`
 - `docs/phase-AC/crate-graph-migration-map.md`
 - `docs/phase-AC/implementation-ownership-map.md`
 - `docs/phase-AC/atm-storage-contract-candidate.md`
