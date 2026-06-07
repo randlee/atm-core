@@ -235,9 +235,12 @@ Status summary:
   primary compatibility path, `.json` inboxes rewrite atomically as current
   Claude arrays, and the thorough smoke lane no longer expects compatibility
   degradation for a healthy current Claude inbox.
-- `AA.10` will remove historical ATM-owned inbox JSON from the active primary
-  1.2 contract while preserving read compatibility for legal additive
-  derivatives such as tolerated top-level ATM fields and `metadata.atm.*`.
+- `AA.10` Remove Historical ATM JSON Compatibility From 1.2
+  (`feature/pAA-s10-remove-historical-atm-json`) is complete: historical
+  ATM-owned inbox JSON is no longer presented as the active primary 1.2
+  contract, while legal additive derivatives such as tolerated top-level ATM
+  fields and `metadata.atm.*` remain read-compatible only and are ignored for
+  active machine-state behavior.
 - `AA.11` will delete pre-production SQLite compatibility scaffolding such as
   `legacy_message_id` unless an explicit user-approved exception survives.
 - `AA.12` will harden malformed Claude inbox recovery so one bad fragment does

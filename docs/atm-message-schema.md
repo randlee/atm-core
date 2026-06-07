@@ -126,4 +126,5 @@ Rules:
 - ATM must not rely on `metadata.atm` reads for normal mailbox behavior.
 - The active implementation must expose zero surviving `metadata.atm` fields.
 - inbound shared-inbox records that still carry `metadata.atm` for backward
-  compatibility are silently stripped, not rejected
+  compatibility must be tolerated on read, ignored for active machine-state
+  behavior, and must not be promoted back into the forward-write contract

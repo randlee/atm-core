@@ -777,8 +777,11 @@ Architectural rules:
   compatibility wire encoding of that identity.
 - if SQLite persists `message_id`, it stores that same identity in the
   compatibility wire form rather than as a second ATM-owned id.
-- Compatibility writes may preserve established top-level additive fields, but
-  they must not become the place where new ATM-owned machine state accumulates.
+- compatibility reads may tolerate established historical top-level additive
+  fields and `metadata.atm` derivatives, but they remain read-compatible
+  inputs rather than the active or forward-write contract
+- compatibility writes may preserve only the current approved additive surface
+  and must not become the place where new ATM-owned machine state accumulates
 - removed compatibility fields such as `source_team`, `pendingAckAt`,
   `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
   SQLite-only or workflow-only even if older inbox files still contain them.

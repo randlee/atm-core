@@ -77,7 +77,8 @@ This repository distinguishes three categories at the shared inbox boundary:
 3. historical ATM-owned additive fields
    - documented separately in [`atm-message-schema.md`](./atm-message-schema.md)
    - not part of the current Claude-owned contract
-   - queued for narrower compatibility handling in `AA.10`
+   - handled in `AA.10` as read-compatible derivative input only, not as the
+     active or forward-write contract
 
 ## 3. Native Claude Code System Messages
 

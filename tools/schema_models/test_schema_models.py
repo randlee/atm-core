@@ -203,25 +203,20 @@ class SchemaModelTests(unittest.TestCase):
         )
         self.assertEqual(metadata.sourceTeam, TEST_TEAM)
 
-        envelope = LegacyAtmMetadataEnvelope.model_validate(
-            {
-                "from": TEST_TEAM_LEAD,
-                "text": "ping",
-                "timestamp": "2026-04-04T18:49:59.525Z",
-                "read": True,
-                "summary": "ping",
-                "metadata": {
-                    "atm": {
-                        "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
-                        "sourceTeam": TEST_TEAM,
-                        "taskId": "TASK-123",
-                    }
-                },
-            }
+        derivative_sample = json.loads(
+            (FIXTURES_DIR / "atm11_metadata_derivative.json").read_text()
         )
+
+        envelope = LegacyAtmMetadataEnvelope.model_validate(derivative_sample)
         self.assertIsInstance(envelope.metadata, LegacyMessageMetadata)
         self.assertEqual(envelope.metadata.atm.sourceTeam, TEST_TEAM)
         self.assertEqual(envelope.metadata.atm.taskId, "TASK-123")
+
+        current_model = AtmInboxMessage.model_validate(derivative_sample)
+        self.assertIsNone(current_model.message_id)
+        self.assertIsNone(current_model.parentMessageId)
+        self.assertIsNone(current_model.threadMode)
+        self.assertIsNone(current_model.taskId)
 
     def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
         """Write-path: current top-level message_id stays typed as the UUID wire form."""
