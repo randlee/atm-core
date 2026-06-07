@@ -18,7 +18,7 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
-const DEGRADED_RAW_FRAGMENT_MAX_BYTES: usize = 512;
+const DEGRADED_RAW_FRAGMENT_MAX_CHARS: usize = 512;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum InboxReadItem {
@@ -524,7 +524,7 @@ fn salvage_mailbox_array(
 }
 
 fn truncate_raw_fragment(raw: &str) -> String {
-    raw.chars().take(DEGRADED_RAW_FRAGMENT_MAX_BYTES).collect()
+    raw.chars().take(DEGRADED_RAW_FRAGMENT_MAX_CHARS).collect()
 }
 
 #[cfg(test)]
