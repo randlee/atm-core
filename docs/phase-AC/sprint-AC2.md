@@ -83,6 +83,27 @@ Required scope-reduction rule:
   layout, that type must be backend-internal or deleted, not promoted into
   `atm-storage`
 
+## Execution Checklist
+
+Implementation order for `AC.2`:
+
+1. Create `crates/atm-storage-claude` and make it depend on `atm-storage`, not `atm-core`.
+2. Move Claude inbox read/write/repair ownership out of `atm-core` module seams.
+3. Rework roster projection so:
+   - canonical `RosterMember` / `RosterSnapshot` stay shared
+   - `ClaudeCodeRosterMember` / `ClaudeCodeTeamRoster` become backend-internal translation helpers or disappear entirely
+4. Rework inbox import/export ownership so:
+   - `InboxIngress*` and `InboxExport*` wrappers no longer define the shared contract
+   - Claude-specific compatibility machinery lives behind backend-internal functions or private helper structs
+5. Delete or internalize `delivery_execution::ClaudeInboxWriter`.
+6. Update boundary TOMLs to make `atm-storage-claude -> atm-storage` explicit and `atm-storage-claude -X-> atm-core` explicit.
+
+Proof this sprint must leave behind:
+
+- the Claude backend owns its own projection and repair logic
+- `atm-core` no longer exposes Claude-specific public storage types as if they were shared domain types
+- the shared contract remains clean even if the backend still has rich internal helpers
+
 ## Acceptance Criteria
 
 - `atm-core` no longer owns Claude inbox storage internals that belong in the backend crate
@@ -115,3 +136,4 @@ Required scope-reduction rule:
 
 - if file paths or lock semantics leak into the shared trait surface, the backend extraction has widened the contract incorrectly
 - if Claude storage introduces a backend-specific `Message` variant, interchangeability is already lost
+- if Claude-specific public types remain visible outside the backend crate only because tests or compatibility code still use them, the extraction is incomplete

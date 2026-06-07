@@ -72,6 +72,22 @@ be left standing if they are not backend seams:
 - `WatchEventSource`
 - `ReconcileCoordinator`
 
+## Execution Checklist
+
+Implementation order for `AC.4`:
+
+1. Replace core-owned storage trait imports with `atm-storage` traits.
+2. Move backend assembly to approved composition seams only.
+3. Delete direct Claude storage seams still owned by `atm-core`.
+4. Delete direct SQLite storage seams still owned by `atm-core`, `atm-runtime`, or `atm-daemon`.
+5. Re-run the forbidden-edge and grep checks before touching docs so the code graph is proven clean first.
+
+Proof this sprint must leave behind:
+
+- `atm-core` orchestrates semantic storage behavior only
+- backend crates own backend mechanics
+- daemon/runtime no longer need storage-specific knowledge above composition
+
 ## Acceptance Criteria
 
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon -S` is clean outside approved composition seams
@@ -97,3 +113,4 @@ be left standing if they are not backend seams:
 
 - if composition roots remain mixed with backend logic, the daemon leak problem will recur
 - if this sprint keeps “temporary” direct backend seams, later deletion will become much harder
+- if old boundary types remain imported in core just for convenience, the storage reset has not actually crossed the crate line

@@ -45,6 +45,14 @@ Phase-AA simplification direction:
   same behavior-named trait family rather than forcing backend-shaped parallel
   trait trees
 
+Phase-AC supersession note:
+- the Phase `AA` simplification-line store traits above are transitional only
+- Phase `AC` replaces `MailStore` with canonical `MessageStore`, and converges
+  the corresponding task and roster seams into the small shared
+  `atm-storage` contract
+- after Phase `AC`, `MailStore` / `TaskStore` / `RosterStore` are historical
+  transition names rather than the authoritative long-term storage boundary
+
 The retained product surface is:
 - `atm send`
 - `atm list`

@@ -66,6 +66,26 @@ Minimum scope-reduction proof:
 - SQLite-only observability helpers remain internal to `atm-storage-rusqlite`
 - no deleted wrapper family survives in docs or code only because the old architecture used it
 
+## Execution Checklist
+
+Implementation order for `AC.6`:
+
+1. Run the full ledger as a deletion checklist, not just grep-driven cleanup.
+2. Remove any wrapper family still standing from:
+   - code
+   - docs
+   - boundary TOMLs
+   - tests
+3. Reconfirm that backend-only Claude and SQLite types are still internal after the deletion pass.
+4. Write the SQL Server readiness proof against the actual resulting contract, not the planned one.
+5. Update the ledger with final closure notes so later phases do not resurrect deleted seams by accident.
+
+Proof this sprint must leave behind:
+
+- the old storage/RPC wrapper architecture is materially gone from the repo
+- the remaining shared contract is small enough for direct manual audit
+- SQL Server readiness is a demonstrated property of the simplified contract surface
+
 ## Acceptance Criteria
 
 - the shared storage contract remains small enough to audit directly
@@ -93,3 +113,4 @@ Minimum scope-reduction proof:
 
 - if deletion is deferred, the old architecture will remain readable and therefore reusable by accident
 - if SQL Server readiness is claimed without a truly backend-neutral contract, the phase will false-close
+- if docs keep stale wrapper names alive after code deletion, future work will quietly rebuild the old model

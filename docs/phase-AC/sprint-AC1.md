@@ -135,6 +135,36 @@ Must remain outside `atm-storage` even if they still exist elsewhere:
 - `WatchEventSource`
 - `ReconcileCoordinator`
 
+## Execution Checklist
+
+Implementation order for `AC.1`:
+
+1. Scaffold `crates/atm-storage` with the smallest possible public surface.
+2. Freeze the canonical shared type list before moving any trait signatures:
+   - `Message`
+   - `MessageKey`
+   - `MessageQuery`
+   - `RosterMember`
+   - `RosterSnapshot`
+   - `Task`
+   - `TaskKey`
+   - `TaskQuery`
+   - notification event types
+3. Reuse existing semantic seeds where possible rather than cloning them:
+   - `schema::AtmMessageId`
+   - `TeamName`
+   - `AgentName`
+   - `TaskId`
+4. Replace the old store traits with the new CRUD traits in `atm-storage`.
+5. Delete the wrapper families instead of re-homing them.
+6. Update the boundary TOMLs so ownership moves from `atm-core` to `atm-storage`.
+
+Proof this sprint must leave behind:
+
+- `atm-storage` is small enough to audit directly
+- the old boundary traits are no longer the authoritative shared contract
+- no surviving shared public type is backend-shaped or request/response-shaped
+
 ## Acceptance Criteria
 
 - `atm-storage` exposes a small audited contract rather than a lifted copy of current boundary DTOs
@@ -168,7 +198,7 @@ Must remain outside `atm-storage` even if they still exist elsewhere:
   - `RosterStore`
   - `TaskStore`
   - `StorageNotifier`
-- each `boundaries/atm-storage/` TOML record must include `allowed_dependents = ["atm-core", "atm-storage-claude", "atm-rusqlite"]` so `lint_boundaries.py` can enforce the ownership topology
+- each `boundaries/atm-storage/` TOML record must include `allowed_dependents = ["atm-core", "atm-storage-claude", "atm-storage-rusqlite"]` so `lint_boundaries.py` can enforce the ownership topology
 - update existing `boundaries/atm-core/` store TOMLs to reflect the ownership move into `atm-storage`
 - verify `lint_boundaries.py` accepts the new ownership topology before sprint closure
 
@@ -176,3 +206,4 @@ Must remain outside `atm-storage` even if they still exist elsewhere:
 
 - if the contract copies the current boundary request/response volume, the phase has failed
 - if the shared structs are still transport-shaped rather than semantic, `AC.5` will stall
+- if this sprint leaves both old and new shared contracts standing indefinitely, `AC.4` and `AC.6` will false-close

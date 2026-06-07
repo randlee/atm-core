@@ -1,4 +1,4 @@
-# AC.3 SQLite Backend Convergence
+# AC.3 SQLite Backend Convergence (`atm-rusqlite` -> `atm-storage-rusqlite`)
 
 ```yaml
 plan_type: sprint_plan
@@ -12,20 +12,23 @@ estimated_scope: large
 
 ## Goal
 
-Make the concrete SQLite backend implement the same `atm-storage` contract and
-remove its dependency on `atm-core`.
+Make the current concrete SQLite backend (`crates/atm-rusqlite`) converge into
+the target backend crate shape `crates/atm-storage-rusqlite`, implement the
+same `atm-storage` contract, and remove its dependency on `atm-core`.
 
 ## Scope Summary
 
-This sprint adapts the SQLite implementation to the shared traits, moves any
-required shared types into `atm-storage`, and freezes post-commit notification
-semantics for the SQL backend.
+This sprint adapts the current SQLite implementation to the shared traits,
+moves any required shared types into `atm-storage`, freezes post-commit
+notification semantics for the SQL backend, and makes the final backend naming
+explicit.
 
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
 - `docs/phase-AC/sprint-AC1.md`
-- `crates/atm-rusqlite/`
+- current crate source: `crates/atm-rusqlite/`
+- target backend crate name: `crates/atm-storage-rusqlite/`
 - current SQLite-related boundary traits in `atm-core`
 
 ## Prerequisites
@@ -40,6 +43,8 @@ semantics for the SQL backend.
 ## Deliverables
 
 - the concrete SQLite backend implements the shared core traits from `atm-storage`
+- the backend naming is explicit: the current `atm-rusqlite` implementation is
+  converged toward the target backend crate identity `atm-storage-rusqlite`
 - the SQLite backend no longer depends on `atm-core`
 - SQLite-specific power stays in capability traits rather than the base CRUD traits
 - notifications are explicitly post-commit:
@@ -81,6 +86,33 @@ traits or remain backend-internal:
 - `RemoteReplayStore`
 - `RuntimeStorageFinalizer`
 
+## Execution Checklist
+
+Implementation order for `AC.3`:
+
+1. Point the SQLite backend at `atm-storage` first; do not start by copying `atm-core` helpers.
+2. Re-home any truly shared helper into `atm-storage`; keep SQLite-only helpers in the backend crate.
+3. Convert the main storage implementation to the canonical shared types selected in `AC.1`.
+4. Make the rename/convergence intent explicit in docs and boundaries:
+   - current source crate: `atm-rusqlite`
+   - target backend identity: `atm-storage-rusqlite`
+5. Review each capability-candidate seam explicitly:
+   - keep as optional capability trait
+   - internalize below the backend line
+   - or delete
+6. Delete or replace `SqliteBoundaryAssembly`.
+7. Freeze the post-commit notification rule in code and docs:
+   - durable write
+   - commit
+   - only then notify
+
+Proof this sprint must leave behind:
+
+- `atm-storage-rusqlite` is the target backend identity, and the current `atm-rusqlite` implementation is only the source implementation being converged
+- the SQLite backend is a backend implementation, not a second copy of `atm-core` storage semantics
+- SQLite-only observability and lifecycle helpers are no longer exposed as if they were shared contract concepts
+- capability traits are explicit and few, not an escape hatch for old surface-area sprawl
+
 ## Acceptance Criteria
 
 - the SQLite backend can satisfy the shared CRUD contract without importing `atm-core`
@@ -91,11 +123,11 @@ traits or remain backend-internal:
 
 ## Required Validation
 
-- `cargo test -p atm-rusqlite`
-- `cargo clippy -p atm-rusqlite -- -D warnings`
-- `cargo tree -p atm-rusqlite`
+- `cargo test -p atm-rusqlite` or the renamed backend crate once the rename lands
+- `cargo clippy -p atm-rusqlite -- -D warnings` or the renamed backend crate once the rename lands
+- `cargo tree -p atm-rusqlite` or the renamed backend crate once the rename lands
 - `git diff --check`
-- verify the updated boundary TOMLs and `cargo tree -p atm-rusqlite` both show `atm-storage`, not `atm-core`, as the shared storage dependency
+- verify the updated boundary TOMLs and `cargo tree` output both show `atm-storage`, not `atm-core`, as the shared storage dependency
 - `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-rusqlite crates/atm-runtime crates/atm-core -S`
 
 ## Required Document Updates
@@ -104,9 +136,9 @@ traits or remain backend-internal:
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - backend architecture docs for SQLite storage ownership
-- update `boundaries/atm-rusqlite/mail-store-sqlite.toml`
-- update `boundaries/atm-rusqlite/task-store-sqlite.toml`
-- update `boundaries/atm-rusqlite/roster-store-sqlite.toml`
+- update `boundaries/atm-rusqlite/mail-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
+- update `boundaries/atm-rusqlite/task-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
+- update `boundaries/atm-rusqlite/roster-store-sqlite.toml` or the renamed backend ownership path if the crate rename lands in this sprint
 - replace `atm-core` with `atm-storage` in `allowed_dependencies` for the shared storage ownership records
 - pair the dependency-tree check with a boundary-lint consistency check before sprint closure
 
@@ -114,3 +146,4 @@ traits or remain backend-internal:
 
 - if SQLite still needs `atm-core`, the shared type move is incomplete
 - if notification behavior happens before commit, the notifier contract is wrong
+- if replay/doctor/finalizer seams are promoted wholesale instead of trimmed, `atm-storage` will regrow the old DTO problem under new names

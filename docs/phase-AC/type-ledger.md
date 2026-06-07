@@ -61,6 +61,28 @@ Grouped source counts:
 | `boundary/runtime.rs` | `2` | `2` | `0` |
 | `atm-rusqlite` public support types | `1` | `4` | `1` |
 
+## Expected Reduction Shape
+
+The ledger is intentionally biased toward deletion or scope reduction rather
+than relocation.
+
+Expected dominant outcomes:
+
+- request / response wrapper families -> `merge-and-delete`
+- backend-shaped bundle helpers -> `replace-and-delete`
+- Claude projection and compatibility types -> `internalize-claude`
+- SQLite observability and assembly helpers -> `internalize-rusqlite`
+- transport / config / outbound seams -> `retain-outside-storage`
+- replay / doctor / health seams -> `capability-review`
+
+Planning constraint:
+
+- a type only survives publicly if it is either:
+  - part of the small shared `atm-storage` contract, or
+  - a deliberate non-storage seam that remains outside the storage boundary
+- all other public types are presumed deletion or backend-internalization
+  candidates unless a later sprint justifies them explicitly
+
 ## `crates/atm-core/src/boundary/mod.rs`
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
@@ -122,104 +144,104 @@ Grouped source counts:
 
 ## `crates/atm-core/src/boundary/store.rs`
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `TaskStoreTaskMetadata` | struct | `merge-into-shared` | canonical `Task` in `AC.1` | Merge into one task model unless narrowly justified. |
-| `TaskStoreTaskRecord` | struct | `merge-into-shared` | canonical `Task` in `AC.1` / `AC.5` | Main task storage record to collapse. |
-| `RosterStoreHealthSnapshot` | struct | `capability-candidate` | storage health capability in `AC.1` / `AC.3` | Not part of CRUD core. |
-| `RosterMemberKind` | enum | `retain-shared` | shared enum in `AC.1` | Semantic roster member property. |
-| `RosterHarness` | enum | `retain-shared` | shared enum in `AC.1` | Semantic roster harness property. |
-| `RosterMemberRecord` | struct | `merge-into-shared` | canonical `RosterMember` in `AC.1` | Main roster member record to collapse. |
-| `ClaudeCodeRosterMember` | struct | `backend-only` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
-| `ClaudeCodeTeamRoster` | struct | `backend-only` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
-| `TaskStoreCreateTaskRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreCreateTaskResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreLoadTaskRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreLoadTaskResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreUpdateTaskRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreUpdateTaskResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreAttachMessageLinkRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreAttachMessageLinkResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreDetachMessageLinkRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreDetachMessageLinkResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreRecordAckTransitionRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreRecordAckTransitionResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `TaskStoreQueryTaskMetadataRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into `TaskQuery`. |
-| `TaskStoreQueryTaskMetadataResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into `TaskQuery`. |
-| `TaskStoreRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
-| `TaskStoreResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
-| `TaskStoreDoctorReport` | struct | `capability-candidate` | storage health / doctor capability in `AC.1` / `AC.3` | Keep only if doctor remains separate. |
-| `RosterStoreReplaceRosterRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `RosterStoreReplaceRosterResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `RosterStoreLoadRosterRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `RosterStoreLoadRosterResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
-| `RosterStoreQueryMembershipRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into shared roster query helpers or disappear. |
-| `RosterStoreQueryMembershipResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into shared roster query helpers or disappear. |
-| `RosterStoreHealthSnapshotRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Health capability must not use wrapper DTOs. |
-| `RosterStoreHealthSnapshotResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Health capability must not use wrapper DTOs. |
-| `RosterStoreListTeamsRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | `list_teams` method should not need a request DTO. |
-| `RosterStoreListTeamsResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | `list_teams` method should not need a response DTO. |
-| `RosterStoreRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
-| `RosterStoreResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
-| `RosterStoreDoctorReport` | struct | `capability-candidate` | storage health / doctor capability in `AC.1` / `AC.3` | Keep only if doctor remains separate. |
-| `ConfigLoadRequest` | struct | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Config ingress is not part of the shared storage CRUD contract. |
-| `ConfigLoadResponse` | struct | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Config ingress is not part of the shared storage CRUD contract. |
-| `ConfigDoctorReport` | struct | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Config doctor is not part of the shared storage CRUD contract. |
-| `InboxSourceFileRecord` | struct | `backend-only` | `atm-storage-claude` in `AC.2` | Claude inbox file discovery detail. |
-| `InboxIngressImportRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressImportResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressIdentityFingerprintRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressIdentityFingerprintResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressDiagnosticsRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressDiagnosticsResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
-| `InboxIngressRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
-| `InboxIngressResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
-| `InboxExportRecordRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `InboxExportRecordResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `InboxExportReexportMessageRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `InboxExportReexportMessageResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `ClaudeCompatibilityDeliveryMode` | enum | `backend-only` | `atm-storage-claude` in `AC.2` | Compatibility delivery policy is Claude-backend-only. |
-| `InboxExportAppendMessageSetRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `InboxExportAppendMessageSetResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
-| `InboxExportRequest` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
-| `InboxExportResponse` | struct | `delete-wrapper` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
-| `NonClaudeOutboundDeliveryRequest` | struct | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Outbound delivery seam is not part of the shared storage CRUD contract. |
-| `NonClaudeOutboundDeliveryResponse` | struct | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Outbound delivery seam is not part of the shared storage CRUD contract. |
-| `TaskStore` | trait | `replace-trait` | `atm-storage::TaskStore` in `AC.1` | Old trait deleted when shared contract lands. |
-| `TaskStoreDoctor` | trait | `replace-trait` | health / doctor capability in `AC.1` / `AC.3` | Must not survive unchanged into `atm-storage`. |
-| `RosterStore` | trait | `replace-trait` | `atm-storage::RosterStore` in `AC.1` | Old trait deleted when shared contract lands. |
-| `RosterStoreDoctor` | trait | `replace-trait` | health / doctor capability in `AC.1` / `AC.3` | Must not survive unchanged into `atm-storage`. |
-| `ConfigIngress` | trait | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Config seam remains outside shared storage contract. |
-| `ConfigDoctor` | trait | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Config seam remains outside shared storage contract. |
-| `InboxIngress` | trait | `replace-trait` | backend-only import seam review in `AC.2` / `AC.6` | Must not survive as a shared storage trait. |
-| `InboxExport` | trait | `replace-trait` | backend-only export seam review in `AC.2` / `AC.6` | Must not survive as a shared storage trait. |
-| `NonClaudeOutbound` | trait | `out-of-scope-transport` | review in `AC.4` / `AC.6` | Outbound delivery seam remains outside shared storage CRUD contract. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `TaskStoreTaskMetadata` | struct | `merge-into-shared` | `merge-and-delete` | canonical `Task` in `AC.1` | Merge into one task model unless narrowly justified. |
+| `TaskStoreTaskRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `Task` in `AC.1` / `AC.5` | Main task storage record to collapse. |
+| `RosterStoreHealthSnapshot` | struct | `capability-candidate` | `capability-review` | storage health capability in `AC.1` / `AC.3` | Not part of CRUD core. |
+| `RosterMemberKind` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster member property. |
+| `RosterHarness` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster harness property. |
+| `RosterMemberRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `RosterMember` in `AC.1` | Main roster member record to collapse. |
+| `ClaudeCodeRosterMember` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
+| `ClaudeCodeTeamRoster` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
+| `TaskStoreCreateTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreCreateTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreLoadTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreLoadTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreUpdateTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreUpdateTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreAttachMessageLinkRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreAttachMessageLinkResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreDetachMessageLinkRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreDetachMessageLinkResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreRecordAckTransitionRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreRecordAckTransitionResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `TaskStoreQueryTaskMetadataRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into `TaskQuery`. |
+| `TaskStoreQueryTaskMetadataResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into `TaskQuery`. |
+| `TaskStoreRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
+| `TaskStoreResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
+| `TaskStoreDoctorReport` | struct | `capability-candidate` | `capability-review` | storage health / doctor capability in `AC.1` / `AC.3` | Keep only if doctor remains separate. |
+| `RosterStoreReplaceRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `RosterStoreReplaceRosterResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `RosterStoreLoadRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `RosterStoreLoadRosterResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper collapse. |
+| `RosterStoreQueryMembershipRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into shared roster query helpers or disappear. |
+| `RosterStoreQueryMembershipResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Query semantics must collapse into shared roster query helpers or disappear. |
+| `RosterStoreHealthSnapshotRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Health capability must not use wrapper DTOs. |
+| `RosterStoreHealthSnapshotResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Health capability must not use wrapper DTOs. |
+| `RosterStoreListTeamsRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | `list_teams` method should not need a request DTO. |
+| `RosterStoreListTeamsResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | `list_teams` method should not need a response DTO. |
+| `RosterStoreRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
+| `RosterStoreResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Envelope wrapper family must disappear. |
+| `RosterStoreDoctorReport` | struct | `capability-candidate` | `capability-review` | storage health / doctor capability in `AC.1` / `AC.3` | Keep only if doctor remains separate. |
+| `ConfigLoadRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Config ingress is not part of the shared storage CRUD contract. |
+| `ConfigLoadResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Config ingress is not part of the shared storage CRUD contract. |
+| `ConfigDoctorReport` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Config doctor is not part of the shared storage CRUD contract. |
+| `InboxSourceFileRecord` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude inbox file discovery detail. |
+| `InboxIngressImportRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressImportResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressIdentityFingerprintRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressIdentityFingerprintResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressDiagnosticsRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressDiagnosticsResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose inbox import wrappers. |
+| `InboxIngressRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
+| `InboxIngressResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
+| `InboxExportRecordRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `InboxExportRecordResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `InboxExportReexportMessageRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `InboxExportReexportMessageResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `ClaudeCompatibilityDeliveryMode` | enum | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Compatibility delivery policy is Claude-backend-only. |
+| `InboxExportAppendMessageSetRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `InboxExportAppendMessageSetResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Shared contract must not expose export wrappers. |
+| `InboxExportRequest` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
+| `InboxExportResponse` | struct | `delete-wrapper` | `internalize-claude` | move or delete in `AC.2` / `AC.6` | Envelope wrapper family must disappear. |
+| `NonClaudeOutboundDeliveryRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Outbound delivery seam is not part of the shared storage CRUD contract. |
+| `NonClaudeOutboundDeliveryResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Outbound delivery seam is not part of the shared storage CRUD contract. |
+| `TaskStore` | trait | `replace-trait` | `replace-and-delete` | `atm-storage::TaskStore` in `AC.1` | Old trait deleted when shared contract lands. |
+| `TaskStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.1` / `AC.3` | Must not survive unchanged into `atm-storage`. |
+| `RosterStore` | trait | `replace-trait` | `replace-and-delete` | `atm-storage::RosterStore` in `AC.1` | Old trait deleted when shared contract lands. |
+| `RosterStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.1` / `AC.3` | Must not survive unchanged into `atm-storage`. |
+| `ConfigIngress` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Config seam remains outside shared storage contract. |
+| `ConfigDoctor` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Config seam remains outside shared storage contract. |
+| `InboxIngress` | trait | `replace-trait` | `internalize-claude` | backend-only import seam review in `AC.2` / `AC.6` | Must not survive as a shared storage trait. |
+| `InboxExport` | trait | `replace-trait` | `internalize-claude` | backend-only export seam review in `AC.2` / `AC.6` | Must not survive as a shared storage trait. |
+| `NonClaudeOutbound` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` / `AC.6` | Outbound delivery seam remains outside shared storage CRUD contract. |
 
 ## `crates/atm-core/src/boundary/runtime.rs`
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `RemoteReplayStateRecord` | struct | `capability-candidate` | replay capability review in `AC.1` / `AC.3` | Replay state belongs below the shared CRUD core unless explicitly promoted. |
-| `RuntimeBundle` | struct | `delete-bundle` | deleted in `AC.4` / `AC.6` | Backend-shaped runtime assembly bundle must not survive. |
-| `RemoteReplayStore` | trait | `replace-trait` | replay capability review in `AC.1` / `AC.3` | Shared capability only if justified. |
-| `RuntimeStorageFinalizer` | trait | `replace-trait` | finalizer / lifecycle capability review in `AC.3` / `AC.4` | Must not remain an `atm-core`-owned backend seam. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `RemoteReplayStateRecord` | struct | `capability-candidate` | `capability-review` | replay capability review in `AC.1` / `AC.3` | Replay state belongs below the shared CRUD core unless explicitly promoted. |
+| `RuntimeBundle` | struct | `delete-bundle` | `replace-and-delete` | deleted in `AC.4` / `AC.6` | Backend-shaped runtime assembly bundle must not survive. |
+| `RemoteReplayStore` | trait | `replace-trait` | `capability-review` | replay capability review in `AC.1` / `AC.3` | Shared capability only if justified. |
+| `RuntimeStorageFinalizer` | trait | `replace-trait` | `capability-review` | finalizer / lifecycle capability review in `AC.3` / `AC.4` | Must not remain an `atm-core`-owned backend seam. |
 
 ## Decisive Internal Seam
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `delivery_execution::ClaudeInboxWriter` | `pub(crate)` trait | `replace-trait` | move below `atm-storage-claude` in `AC.2` / `AC.4` | Key proof that Claude storage is still an ad hoc `atm-core` seam instead of a backend crate. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `delivery_execution::ClaudeInboxWriter` | `pub(crate)` trait | `replace-trait` | `internalize-claude` | move below `atm-storage-claude` in `AC.2` / `AC.4` | Key proof that Claude storage is still an ad hoc `atm-core` seam instead of a backend crate. |
 
 ## Public `atm-rusqlite` Support Types
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `SqliteWriterLockGuard` | struct | `backend-only` | `atm-storage-rusqlite` in `AC.3` | SQLite implementation detail, not shared contract. |
-| `SqliteBoundaryAssembly` | struct | `delete-bundle` | deleted or replaced in `AC.3` / `AC.4` | Backend-shaped assembly helper must not survive above trait line. |
-| `SqliteObservabilityOutcome` | enum | `backend-only` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `SqliteObservabilityEvent` | struct | `backend-only` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `SqliteObservability` | trait | `backend-only` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `NullSqliteObservability` | struct | `backend-only` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `SqliteWriterLockGuard` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite implementation detail, not shared contract. |
+| `SqliteBoundaryAssembly` | struct | `delete-bundle` | `replace-and-delete` | deleted or replaced in `AC.3` / `AC.4` | Backend-shaped assembly helper must not survive above trait line. |
+| `SqliteObservabilityOutcome` | enum | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
+| `SqliteObservabilityEvent` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
+| `SqliteObservability` | trait | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
+| `NullSqliteObservability` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
 
 ## Supporting Canonical Seed Types Already Present
 

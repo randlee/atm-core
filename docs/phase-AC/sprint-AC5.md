@@ -79,6 +79,25 @@ Must remain outside this sprint’s storage contract work:
 - config ingress / doctor surfaces
 - outbound delivery-only request/response types unless they directly clone a canonical body
 
+## Execution Checklist
+
+Implementation order for `AC.5`:
+
+1. Define the final generic RPC envelope shape and freeze header/body responsibilities.
+2. Identify every RPC body that is a semantic duplicate of:
+   - `Message`
+   - `RosterMember` / `RosterSnapshot`
+   - `Task`
+3. Convert those operations to decode directly into the canonical shared structs.
+4. Leave transport-only context in headers or operation wrappers, not in cloned body structs.
+5. Delete transport clones after each family is migrated rather than keeping parallel bodies to the end.
+
+Proof this sprint must leave behind:
+
+- one canonical message body shape crosses RPC and storage
+- roster and task bodies follow the same rule
+- the remaining request/response types are transport operations, not cloned domain records
+
 ## Acceptance Criteria
 
 - no new transport-only message clones remain where the shared canonical struct is sufficient
@@ -104,3 +123,4 @@ Must remain outside this sprint’s storage contract work:
 
 - if the generic envelope keeps transport-specific body clones, the type explosion will survive under a new name
 - if transport metadata is pushed back into the shared domain structs, the layering will invert again
+- if this sprint leaves canonical structs unused while transport clones still carry the real traffic, the unification is only cosmetic
