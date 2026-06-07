@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.10
 worktree: ../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json
 branch: feature/pAA-s10-remove-historical-atm-json
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

@@ -495,7 +495,8 @@ Required rules:
 - ATM must not redefine Claude-native fields as if ATM owned them
 - ATM read must accept:
   - Claude Code-native messages
-  - ATM top-level additive compatibility messages
+  - legal ATM additive derivative messages, including historical top-level
+    additive compatibility records and tolerated `metadata.atm` derivatives
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
 - no `metadata.atm` namespace may survive in active compatibility output

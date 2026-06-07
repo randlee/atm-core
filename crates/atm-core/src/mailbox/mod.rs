@@ -233,6 +233,7 @@ fn parse_mailbox_value(
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, AtmError> {
     sanitize_message_id(value, path, line_number);
+    strip_metadata_atm_namespace(value);
     serde_json::from_value::<MessageEnvelope>(value.take())
         .map(Some)
         .map_err(|error| mailbox_record_parse_error(path, line_number, error))
@@ -267,6 +268,21 @@ fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
             "treating malformed ATM-owned field as absent during mailbox read"
         );
         object.remove("message_id");
+    }
+}
+
+fn strip_metadata_atm_namespace(value: &mut Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+
+    let Some(metadata) = object.get_mut("metadata").and_then(Value::as_object_mut) else {
+        return;
+    };
+
+    metadata.remove("atm");
+    if metadata.is_empty() {
+        object.remove("metadata");
     }
 }
 
@@ -454,8 +470,7 @@ mod tests {
         assert!(error.message.contains("exceeds"));
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .is_some_and(|value| value.contains("oversized mailbox"))
         );
     }
@@ -573,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn load_compat_mailbox_messages_preserves_metadata_atm_as_opaque_extra() {
+    fn load_compat_mailbox_messages_ignores_metadata_atm_but_keeps_foreign_metadata() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
         let contents = serde_json::json!({
@@ -600,10 +615,6 @@ mod tests {
         assert_eq!(
             messages[0].extra.get("metadata"),
             Some(&serde_json::json!({
-                "atm": {
-                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
-                    "sourceTeam": TEST_TEAM
-                },
                 "foreign": {
                     "keep": true
                 }

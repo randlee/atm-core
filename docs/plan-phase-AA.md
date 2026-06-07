@@ -394,6 +394,14 @@ Execution worktree:
 
 ### AA.10 Remove Historical ATM JSON Compatibility From 1.2
 
+Status:
+- complete on `feature/pAA-s10-remove-historical-atm-json`
+- legal ATM 1.1 additive derivatives remain read-compatible, but no active
+  doc/model/runtime contract presents them as the primary or forward-write
+  surface
+- `metadata.atm` derivatives are accepted on read and ignored for active
+  machine-state behavior
+
 Purpose:
 - remove primary-contract support promises for historical ATM-owned inbox JSON
   schema variants

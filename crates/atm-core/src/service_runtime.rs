@@ -807,8 +807,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .unwrap_or_default()
                 .contains("explicit repair/rebuild inbox projection path"),
             "unexpected recovery: {error:?}"
@@ -923,7 +922,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
         assert!(error.message.contains("exceeded"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
             )

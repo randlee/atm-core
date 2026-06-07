@@ -4,11 +4,12 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AtmError;
+use crate::types::{AgentName, TeamName};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
-    pub agent: String,
-    pub team: Option<String>,
+    pub agent: AgentName,
+    pub team: Option<TeamName>,
 }
 
 impl FromStr for AgentAddress {
@@ -21,22 +22,14 @@ impl FromStr for AgentAddress {
         }
 
         match trimmed.split_once('@') {
-            Some((agent, team)) => {
-                validate_path_segment(agent, "agent")?;
-                validate_path_segment(team, "team")?;
-
-                Ok(Self {
-                    agent: agent.to_string(),
-                    team: Some(team.to_string()),
-                })
-            }
-            None => {
-                validate_path_segment(trimmed, "agent")?;
-                Ok(Self {
-                    agent: trimmed.to_string(),
-                    team: None,
-                })
-            }
+            Some((agent, team)) => Ok(Self {
+                agent: agent.parse()?,
+                team: Some(team.parse()?),
+            }),
+            None => Ok(Self {
+                agent: trimmed.parse()?,
+                team: None,
+            }),
         }
     }
 }
@@ -93,19 +86,20 @@ mod tests {
 
     use super::AgentAddress;
     use crate::test_support::{TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
+    use crate::types::{AgentName, TeamName};
 
     #[test]
     fn parses_bare_agent_address() {
         let parsed = AgentAddress::from_str(TEST_SENDER).expect("address");
-        assert_eq!(parsed.agent, TEST_SENDER);
+        assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
         assert_eq!(parsed.team, None);
     }
 
     #[test]
     fn parses_agent_with_team() {
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
-        assert_eq!(parsed.agent, TEST_SENDER);
-        assert_eq!(parsed.team.as_deref(), Some(TEST_TEAM));
+        assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
+        assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
     }
 
     #[test]
@@ -134,12 +128,12 @@ mod tests {
     #[test]
     fn accepts_valid_segment_characters() {
         let parsed = AgentAddress::from_str("valid-team_name.1").expect("address");
-        assert_eq!(parsed.agent, "valid-team_name.1");
+        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name.1"));
         assert_eq!(parsed.team, None);
 
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
-        assert_eq!(parsed.agent, TEST_SENDER);
-        assert_eq!(parsed.team.as_deref(), Some(TEST_TEAM));
+        assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
+        assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
     }
 
     #[test]
