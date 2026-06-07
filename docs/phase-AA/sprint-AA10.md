@@ -14,7 +14,9 @@ estimated_scope: medium
 
 Stop treating historical ATM-authored inbox JSON extensions as the primary or
 forward-write contract for 1.2 while preserving read compatibility for legal
-Claude-schema derivatives produced by ATM 1.1.
+Claude-schema derivatives produced by ATM 1.1, the historical ATM producer
+that wrote Claude-envelope messages plus additive ATM-owned fields such as
+`metadata.atm.*`.
 
 ## Scope Summary
 
@@ -78,8 +80,10 @@ salvage policy is not part of this sprint and is planned separately in
     they contain additive ATM metadata
   - those derivatives are not described as the primary or forward-write
     contract
-  - any truly obsolete/non-derivative repair or import path is explicitly named
-    and does not leak into normal send/read/runtime behavior
+  - retirement behavior is explicit for truly obsolete/non-derivative inputs:
+    they are either ignored safely, rejected with a structured error, or
+    routed to a named repair/import-only admin path, and none of those paths
+    leak into normal send/read/runtime behavior
 
 - The repo no longer ships a “legacy ATM message schema” doc/model as if that
   were the accepted primary 1.2 shared inbox contract.
@@ -93,7 +97,8 @@ schema removal is its own risk surface and belongs in `AA.11`.
 
 - `docs/phase-AA/sprint-AA10.md` exists with the planned branch/worktree
 - `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.10
-  closure state
+  closure state, including the retained rule that legal ATM 1.1 additive
+  derivatives still parse successfully on read
 - `docs/legacy-atm-message-schema.md` is retained only as a read-compatibility
   contract for legal additive derivatives or is clearly retired in favor of an
   equivalent read-compatibility contract with no wording that implies

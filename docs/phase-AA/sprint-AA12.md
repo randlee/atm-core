@@ -101,6 +101,8 @@ salvages around malformed input that is outside that legal contract.
   those valid messages are still segmentable
 - malformed ATM-owned metadata on an otherwise valid Claude message does not
   drop that message
+- malformed-salvageable reads return a degraded/error variant, do not panic,
+  and do not corrupt the underlying inbox file
 - the read path emits explicit degraded warnings/sentinels for salvageable bad
   fragments instead of a generic opaque parse failure
 - any remaining terminal-failure cases are enumerated in docs and backed by

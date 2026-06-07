@@ -54,8 +54,8 @@ Authoritative supporting inventory:
   Claude inbox file shape as legacy or degraded-only behavior
 - no active 1.2 documentation or runtime path presents historical ATM-owned
   inbox JSON schema variants such as top-level ATM fields or `metadata.atm.*`
-  as the primary or forward-write contract, while legal additive derivatives
-  remain accepted on read
+  as the primary or forward-write contract, while legal ATM 1.1 additive
+  derivatives still parse successfully on read
 - one malformed shared-inbox fragment cannot hide unrelated valid messages when
   the valid messages are still segmentable from the same Claude inbox file
 - no active 1.2 runtime path depends on pre-production SQLite compatibility
