@@ -15,9 +15,9 @@ AA.0 freezes this inventory as the starting point for the execution line.
 | `AA-ISSUE-002` | `closed` | daemon runtime health currently owns SQLite-specific readiness and status fields. | `AA.3` |
 | `AA-ISSUE-003` | `closed` | daemon still carries SQLite observability, replay-store, and test-support leakage. | `AA.4` |
 | `AA-ISSUE-004` | `closed` | repository enforcement currently trusts boundary TOML as final authority without an independent guard for policy widening. | `AA.5` |
-| `AA-ISSUE-005` | `open` | the repo still misclassifies the current array-backed Claude Code inbox file shape as legacy in runtime/docs/smoke wording even though real `team-lead -> quality-mgr` traffic uses that current Claude path. | `AA.8` and `AA.9` |
-| `AA-ISSUE-006` | `open` | schema docs, Pydantic models, and live historical samples are not frozen together as one current Claude Code inbox contract. | `AA.8` |
-| `AA-ISSUE-007` | `open` | active docs/tests still present historical ATM-owned inbox JSON variants too broadly; 1.2 must stop treating them as the primary contract while still accepting legal additive derivatives on read. | `AA.10` |
+| `AA-ISSUE-005` | `closed` | the repo still misclassifies the current Claude JSON-array inbox file shape as legacy in runtime/docs/smoke wording even though real `team-lead -> quality-mgr` traffic uses that current Claude path. | `AA.9` |
+| `AA-ISSUE-006` | `closed` | schema docs, Pydantic models, and live historical samples are not frozen together as one current Claude Code inbox contract. | `AA.8` |
+| `AA-ISSUE-007` | `closed` | active docs/tests no longer present historical ATM-owned inbox JSON variants as the primary contract; 1.2 now treats them as read-compatible derivatives only while still accepting legal additive inputs on read. | `AA.10` |
 | `AA-ISSUE-008` | `open` | pre-production SQLite identity compatibility scaffolding such as `legacy_message_id` remains on the active runtime line despite no accepted production need. | `AA.11` |
 | `AA-ISSUE-009` | `open` | one malformed Claude inbox fragment can still hide unrelated valid messages or surface an opaque parser failure instead of a degraded salvage result. | `AA.12` |
 

@@ -18,12 +18,13 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
-/// Append one message to a shared inbox file as one JSONL record.
+/// Append one message through the shared inbox compatibility writer.
 ///
-/// Production send flows use the same append-only compatibility writer through
-/// the retained runtime boundary. This helper stays test-only because
-/// production callers must also coordinate workflow persistence and delivery
-/// policy routing.
+/// Production send flows use the same compatibility writer through the
+/// retained runtime boundary. Current Claude `.json` inboxes rewrite the array
+/// projection atomically; `.jsonl` compatibility files remain append-only.
+/// This helper stays test-only because production callers must also coordinate
+/// workflow persistence and delivery policy routing.
 ///
 /// # Errors
 ///
@@ -232,6 +233,7 @@ fn parse_mailbox_value(
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, AtmError> {
     sanitize_message_id(value, path, line_number);
+    strip_metadata_atm_namespace(value);
     serde_json::from_value::<MessageEnvelope>(value.take())
         .map(Some)
         .map_err(|error| mailbox_record_parse_error(path, line_number, error))
@@ -266,6 +268,21 @@ fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
             "treating malformed ATM-owned field as absent during mailbox read"
         );
         object.remove("message_id");
+    }
+}
+
+fn strip_metadata_atm_namespace(value: &mut Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+
+    let Some(metadata) = object.get_mut("metadata").and_then(Value::as_object_mut) else {
+        return;
+    };
+
+    metadata.remove("atm");
+    if metadata.is_empty() {
+        object.remove("metadata");
     }
 }
 
@@ -310,7 +327,7 @@ mod tests {
     #[test]
     fn append_message_persists_one_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message.json");
+        let path = tempdir.path().join("append-message.jsonl");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -327,7 +344,7 @@ mod tests {
     #[test]
     fn append_message_keeps_approved_machine_fields_top_level() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-top-level.json");
+        let path = tempdir.path().join("append-message-top-level.jsonl");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -364,7 +381,7 @@ mod tests {
     #[test]
     fn append_message_does_not_create_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-removes-lock.json");
+        let path = tempdir.path().join("append-removes-lock.jsonl");
 
         assert!(!lock::sentinel_path(&path).exists());
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
@@ -375,7 +392,7 @@ mod tests {
     #[test]
     fn append_message_does_not_remove_preexisting_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-cleans-stale-lock.json");
+        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
         fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
@@ -572,7 +589,7 @@ mod tests {
     }
 
     #[test]
-    fn load_compat_mailbox_messages_preserves_metadata_atm_as_opaque_extra() {
+    fn load_compat_mailbox_messages_ignores_metadata_atm_but_keeps_foreign_metadata() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
         let contents = serde_json::json!({
@@ -599,10 +616,6 @@ mod tests {
         assert_eq!(
             messages[0].extra.get("metadata"),
             Some(&serde_json::json!({
-                "atm": {
-                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
-                    "sourceTeam": TEST_TEAM
-                },
                 "foreign": {
                     "keep": true
                 }
@@ -613,7 +626,7 @@ mod tests {
     #[test]
     fn append_message_preserves_both_records_under_concurrent_writers() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-concurrent.json");
+        let path = tempdir.path().join("append-message-concurrent.jsonl");
         let barrier = Arc::new(Barrier::new(3));
 
         let mut handles = Vec::new();

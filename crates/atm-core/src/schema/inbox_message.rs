@@ -230,9 +230,10 @@ pub struct MessageEnvelope {
     pub timestamp: IsoTimestamp,
     pub read: bool,
 
-    // Legacy ATM additive fields layered on top of the native Claude Code
-    // message schema. Historical provenance analysis in this design sprint
-    // confirmed these persisted fields are ATM-added rather than Claude-native.
+    // ATM-owned additive compatibility fields layered on top of the native
+    // Claude Code message schema. Historical provenance analysis in this
+    // design sprint confirmed these persisted fields are ATM-added rather than
+    // Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<TeamName>,
 

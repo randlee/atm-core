@@ -1201,7 +1201,7 @@ mod tests {
             .find(|member| member.name == TEST_RECIPIENT)
             .expect("recipient");
         assert_eq!(recipient.tmux_pane_id.as_deref(), Some("%12"));
-        assert_eq!(recipient.cwd, "/repo/recipient");
+        assert_eq!(recipient.cwd, std::path::PathBuf::from("/repo/recipient"));
         assert_eq!(config.extra["leadSessionId"], json!("lead-current"));
     }
 

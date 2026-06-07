@@ -20,6 +20,7 @@ Primary source used by this repo:
 Enforcement model in this repo:
 
 - `tools/schema_models/claude_code_message_schema.py`
+- `tools/schema_models/fixtures/claude_code_quality_mgr_samples.json`
 
 ## 2. Native Inbox Message Shape
 
@@ -39,6 +40,45 @@ Documented additive tolerance rule:
 
 - absent fields should be treated as null
 - unknown fields must be tolerated gracefully
+
+Observed current `team-lead -> quality-mgr` sample classes used by this repo:
+
+- plain Claude envelope
+- Claude envelope plus producer/transport additive fields such as `metadata`
+  or `type`
+
+Those additive fields do not become Claude-owned native schema merely because
+they are tolerated by the read path.
+
+Current ATM compatibility note:
+
+- healthy current Claude `.json` inbox files are one top-level JSON array of
+  inbox-message objects
+- healthy current Claude `.json` inbox files are the primary shared inbox
+  path ATM must support directly
+- repair/rebuild is reserved for malformed or truly unsupported inbox content,
+  not for the legal current Claude JSON-array shape
+
+## 2.1 Current Shared Inbox Contract Categories
+
+This repository distinguishes three categories at the shared inbox boundary:
+
+1. Claude Code-native envelope
+   - `from`
+   - `text`
+   - `timestamp`
+   - `read`
+   - optional `summary`
+   - optional producer-owned `color`
+2. tolerated unknown additive fields on that envelope
+   - producer/transport additions such as `metadata` or `type`
+   - these must not fail reads, but they are not promoted into the Claude-owned
+     native contract
+3. historical ATM-owned additive fields
+   - documented separately in [`atm-message-schema.md`](./atm-message-schema.md)
+   - not part of the current Claude-owned contract
+   - handled in `AA.10` as read-compatible derivative input only, not as the
+     active or forward-write contract
 
 ## 3. Native Claude Code System Messages
 
@@ -115,3 +155,6 @@ Historical provenance note:
   `{from, text, timestamp, read, summary, color}`
 - `message_id` first appeared later as an ATM-added field
 - `source_team` appeared later still and always co-occurred with `message_id`
+- current redacted `team-lead -> quality-mgr` fixture samples also show that
+  `metadata` and `type` may appear as tolerated additive fields while the
+  Claude-owned envelope remains the same

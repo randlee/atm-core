@@ -6,6 +6,8 @@ use atm_core::home;
 use atm_runtime::assemble_default_runtime;
 use clap::Args;
 
+use crate::composition::CliComposition;
+
 #[derive(Debug, Args)]
 /// Run ATM health and configuration diagnostics.
 pub struct DoctorCommand {
@@ -65,16 +67,22 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<atm_core::doctor::DoctorReport> {
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
         let runtime = assemble_default_runtime()?;
-        doctor::run_doctor_with_runtime_bundle(
+        let local_report = doctor::run_doctor_with_runtime_bundle(
             query,
             observability,
             &runtime.service_runtime,
             &runtime.runtime_bundle,
             None,
         )
-        .map_err(Into::into)
+        .map_err(anyhow::Error::from)?;
+        let query = self.build_query(home_dir, current_dir)?;
+
+        match CliComposition::bootstrap("doctor", observability) {
+            Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
+            Err(_) => Ok(local_report),
+        }
     }
 }
 
