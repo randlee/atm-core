@@ -377,6 +377,9 @@ Purpose:
   legacy-only input
 - reserve repair/rebuild for malformed or truly unsupported mailbox content
 
+Depends on:
+- `AA.8` (schema contract must be frozen first)
+
 Execution branch:
 - `feature/pAA-s9-claude-inbox-primary-path`
 
@@ -391,6 +394,9 @@ Purpose:
   active 1.2 schema
 - make current Claude Code inbox JSON the only accepted shared inbox contract
   unless a narrower exception is reapproved explicitly
+
+Depends on:
+- `AA.9` (primary path must be proven before compatibility removal)
 
 Execution branch:
 - `feature/pAA-s10-remove-historical-atm-json`
