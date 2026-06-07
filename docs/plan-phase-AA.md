@@ -373,8 +373,8 @@ Execution worktree:
 Purpose:
 - make the current Claude inbox JSON file shape the supported primary ATM
   compatibility path
-- stop treating the current array-backed Claude mailbox file as degraded
-  legacy-only input
+- stop treating the current Claude JSON-array mailbox file as degraded-only
+  input
 - reserve repair/rebuild for malformed or truly unsupported mailbox content
 
 Depends on:

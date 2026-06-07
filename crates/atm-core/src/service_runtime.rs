@@ -1,6 +1,4 @@
 use std::fmt;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -355,16 +353,20 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         inbox_path: &Path,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
-        if compat_inbox_uses_legacy_array_format(inbox_path)? {
-            return Err(AtmError::validation(format!(
-                "append-only compatibility delivery does not support JSON-array inbox {} from this runtime path",
-                inbox_path.display()
-            ))
-            .with_recovery(
-                "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; ATM does not rewrite JSON-array inbox files from the append-only runtime path.",
-            ));
-        }
-        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message)
+        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
+            if compat_inbox_uses_legacy_array_format(inbox_path).unwrap_or(false) {
+                AtmError::validation(format!(
+                    "compatibility inbox {} is malformed or unsupported for the primary Claude delivery path",
+                    inbox_path.display()
+                ))
+                .with_recovery(
+                    "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; healthy current Claude inbox files should not require this path.",
+                )
+                .with_source(error)
+            } else {
+                error
+            }
+        })
     }
 
     fn append_compat_inbox_message_set(
@@ -495,33 +497,17 @@ fn load_projection_message(
 }
 
 fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> {
-    if !path.exists() {
+    if !path.exists() || !uses_claude_json_array_projection(path) {
         return Ok(false);
     }
 
-    let mut file = File::open(path).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to inspect compatibility inbox {} before append: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the inbox file is readable before retrying the append-only compatibility write.",
-        )
-        .with_source(error)
-    })?;
-    let mut prefix = [0_u8; 256];
-    let bytes_read = file.read(&mut prefix).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to read compatibility inbox {} before append: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the inbox file is readable before retrying the append-only compatibility write.",
-        )
-        .with_source(error)
-    })?;
-    let visible = String::from_utf8_lossy(&prefix[..bytes_read]);
-    Ok(visible.trim_start().starts_with('['))
+    Ok(crate::mailbox::load_compat_mailbox_messages(path).is_err())
+}
+
+fn uses_claude_json_array_projection(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("json"))
 }
 
 #[cfg(test)]
@@ -765,14 +751,16 @@ mod tests {
     }
 
     #[test]
-    fn append_compat_inbox_message_rejects_legacy_array_mailbox_from_runtime_path() {
+    fn append_compat_inbox_message_accepts_current_claude_json_array_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.json");
+        let first = message();
+        let second = message();
         std::fs::write(
             &inbox_path,
             format!(
                 "{}\n",
-                serde_json::to_string_pretty(&vec![message()]).expect("mailbox array")
+                serde_json::to_string_pretty(&vec![first.clone()]).expect("mailbox array")
             ),
         )
         .expect("write mailbox");
@@ -787,9 +775,36 @@ mod tests {
             )),
         );
 
+        runtime
+            .append_compat_inbox_message(&inbox_path, &second)
+            .expect("current Claude array path should succeed");
+
+        let raw = std::fs::read_to_string(&inbox_path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 2);
+        assert_eq!(encoded[0]["text"], serde_json::Value::String(first.text));
+        assert_eq!(encoded[1]["text"], serde_json::Value::String(second.text));
+    }
+
+    #[test]
+    fn append_compat_inbox_message_rejects_malformed_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.json");
+        std::fs::write(&inbox_path, "[{ not-json }\n").expect("write malformed mailbox");
+
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(NoopMailStore),
+            Arc::new(NoopTaskStore),
+            Arc::new(NoopRosterStore),
+            Arc::new(LocalFileNonClaudeOutbound::new()),
+            Arc::new(LocalFileNotificationSink::at_path(
+                tempdir.path().join("notifications.jsonl"),
+            )),
+        );
+
         let error = runtime
             .append_compat_inbox_message(&inbox_path, &message())
-            .expect_err("legacy array path must fail closed");
+            .expect_err("malformed Claude array path must fail closed");
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(
             error

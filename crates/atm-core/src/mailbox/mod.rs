@@ -18,12 +18,13 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
-/// Append one message to a shared inbox file as one JSONL record.
+/// Append one message through the shared inbox compatibility writer.
 ///
-/// Production send flows use the same append-only compatibility writer through
-/// the retained runtime boundary. This helper stays test-only because
-/// production callers must also coordinate workflow persistence and delivery
-/// policy routing.
+/// Production send flows use the same compatibility writer through the
+/// retained runtime boundary. Current Claude `.json` inboxes rewrite the array
+/// projection atomically; `.jsonl` compatibility files remain append-only.
+/// This helper stays test-only because production callers must also coordinate
+/// workflow persistence and delivery policy routing.
 ///
 /// # Errors
 ///
@@ -310,7 +311,7 @@ mod tests {
     #[test]
     fn append_message_persists_one_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message.json");
+        let path = tempdir.path().join("append-message.jsonl");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -327,7 +328,7 @@ mod tests {
     #[test]
     fn append_message_keeps_approved_machine_fields_top_level() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-top-level.json");
+        let path = tempdir.path().join("append-message-top-level.jsonl");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -364,7 +365,7 @@ mod tests {
     #[test]
     fn append_message_does_not_create_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-removes-lock.json");
+        let path = tempdir.path().join("append-removes-lock.jsonl");
 
         assert!(!lock::sentinel_path(&path).exists());
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
@@ -375,7 +376,7 @@ mod tests {
     #[test]
     fn append_message_does_not_remove_preexisting_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-cleans-stale-lock.json");
+        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
         fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
@@ -613,7 +614,7 @@ mod tests {
     #[test]
     fn append_message_preserves_both_records_under_concurrent_writers() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-concurrent.json");
+        let path = tempdir.path().join("append-message-concurrent.jsonl");
         let barrier = Arc::new(Barrier::new(3));
 
         let mut handles = Vec::new();

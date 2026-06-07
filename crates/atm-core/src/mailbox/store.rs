@@ -35,6 +35,16 @@ pub(crate) fn append_compat_mailbox_message(
     message: &MessageEnvelope,
 ) -> Result<(), AtmError> {
     let export_policy = export_policy_for_path(path)?;
+    if uses_claude_json_array_projection(path) {
+        let mut existing_messages = if path.exists() {
+            crate::mailbox::load_compat_mailbox_messages(path)?
+        } else {
+            Vec::new()
+        };
+        existing_messages.push(message.clone());
+        return write_compat_mailbox_projection_with_policy(path, &existing_messages, export_policy);
+    }
+
     atomic::append_message(path, message, export_policy)
 }
 
@@ -94,6 +104,12 @@ pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedInboxExportPol
     Ok(SharedInboxExportPolicy {
         atm_authored_body_export_max_bytes,
     })
+}
+
+fn uses_claude_json_array_projection(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("json"))
 }
 
 fn validate_recovered_message_set(messages: &[MessageEnvelope]) -> Result<(), AtmError> {
@@ -237,6 +253,43 @@ mod tests {
 
         let raw = std::fs::read_to_string(&path).expect("mailbox contents");
         assert_eq!(raw.lines().count(), 2);
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 2);
+        assert_eq!(read_back[0].text, first.text);
+        assert_eq!(read_back[1].text, second.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_creates_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+
+        append_compat_mailbox_message(&path, &first).expect("append first");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 1);
+        assert_eq!(encoded[0]["text"], serde_json::Value::String(first.text.clone()));
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 1);
+        assert_eq!(read_back[0].text, first.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_rewrites_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+        let second = sample_message(TEST_QA, "second array entry");
+
+        write_compat_mailbox_projection(&path, std::slice::from_ref(&first))
+            .expect("seed array mailbox");
+        append_compat_mailbox_message(&path, &second).expect("append second");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 2);
         let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
         assert_eq!(read_back.len(), 2);
         assert_eq!(read_back[0].text, first.text);
