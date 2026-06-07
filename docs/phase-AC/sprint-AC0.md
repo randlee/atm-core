@@ -136,6 +136,16 @@ search categories above.
   - the forbidden graph
   - which later sprint owns each transition
 
+- `docs/phase-AC/implementation-ownership-map.md` records:
+  - the current concrete implementers of storage-facing traits
+  - the current mailbox module ownership candidates
+  - which later sprint owns each migration or deletion lane
+
+- `docs/phase-AC/atm-storage-contract-candidate.md` records:
+  - the first-pass shared trait surface for `AC.1`
+  - the first-pass canonical shared type set
+  - the explicit non-goals that must stay out of the shared contract
+
 ## Acceptance Criteria
 
 - the ADR states the storage and RPC reset rules unambiguously
@@ -161,6 +171,8 @@ search categories above.
 - `docs/phase-AC/storage-surface-inventory.md`
 - `docs/phase-AC/type-convergence-map.md`
 - `docs/phase-AC/crate-graph-migration-map.md`
+- `docs/phase-AC/implementation-ownership-map.md`
+- `docs/phase-AC/atm-storage-contract-candidate.md`
 - `docs/project-plan.md`
 - `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md`
 

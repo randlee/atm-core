@@ -78,6 +78,8 @@ Phase `AC` must not:
   - `docs/phase-AC/storage-surface-inventory.md`
   - `docs/phase-AC/type-convergence-map.md`
   - `docs/phase-AC/crate-graph-migration-map.md`
+  - `docs/phase-AC/implementation-ownership-map.md`
+  - `docs/phase-AC/atm-storage-contract-candidate.md`
 
 ## Phase Entry Criteria
 

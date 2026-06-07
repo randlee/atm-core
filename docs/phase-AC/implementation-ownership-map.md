@@ -1,0 +1,114 @@
+# Phase AC Implementation Ownership Map
+
+## Goal
+
+Map the current storage-facing trait implementations and major module owners to
+the sprint that should absorb, replace, or delete them.
+
+This is an `AC.0` planning collateral artifact used to route real execution
+work without rediscovering where the current logic lives.
+
+## Current Implementers
+
+Current concrete trait implementers found during `AC.0`:
+
+| Trait Surface | Current Implementer | Current Location | Planned Owner |
+| --- | --- | --- | --- |
+| `MailStore` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
+| `MailStoreDoctor` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
+| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
+| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
+| `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
+| `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
+| `RemoteReplayStore` | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` and `AC.4` |
+| `RuntimeStorageFinalizer` | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` and `AC.4` |
+| Claude outbound write seam | `ClaudeInboxWriter` trait plus runtime adapters | `crates/atm-core/src/delivery_execution.rs` | `AC.2` and `AC.4` |
+| Non-Claude outbound | `DaemonNonClaudeOutbound` | `crates/atm-daemon/src/non_claude_outbound_runtime.rs` | outside core `AC` storage reset scope unless trait convergence requires touch-up |
+
+## Claude Storage Module Ownership
+
+Current Claude mailbox implementation modules:
+
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/store.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/atomic.rs`
+- `crates/atm-core/src/mailbox/lock.rs`
+- `crates/atm-core/src/mailbox/hash.rs`
+- `crates/atm-core/src/mailbox/surface.rs`
+
+Planned handling:
+
+- `AC.2` evaluates these as the candidate extraction set for
+  `atm-storage-claude`
+- `surface.rs` may remain shared logic only if it is truly backend-agnostic
+- lock / atomic rewrite / salvage mechanics belong below the Claude backend
+  trait line
+
+## Duplicate-Type Pressure Points
+
+Current high-pressure record families that later sprints must collapse:
+
+- `MailStoreMessageRecord` <-> `MessageEnvelope` / logical delivery records
+- `RosterMemberRecord` <-> `ClaudeCodeRosterMember` / `ClaudeCodeTeamRoster`
+- `TaskStoreTaskRecord` <-> `TaskStoreTaskMetadata` and task wrapper families
+
+Representative consumers are spread broadly through:
+
+- `ack/`
+- `read/`
+- `clear/`
+- `team_admin/`
+- `delivery_execution.rs`
+- `service_runtime.rs`
+- `send/`
+- `atm-rusqlite`
+
+Planning consequence:
+
+- `AC.1` must define the canonical shared types before `AC.4` and `AC.5`
+  attempt consumer migration
+
+## Sprint Routing
+
+### AC.1
+
+Owns:
+
+- choosing the canonical shared type set
+- deciding which current boundary types survive only as semantic query / key
+  helpers
+
+### AC.2
+
+Owns:
+
+- deciding which mailbox modules move fully into `atm-storage-claude`
+- deciding which helper logic, if any, is truly backend-agnostic
+
+### AC.3
+
+Owns:
+
+- moving the SQLite backend behind `atm-storage`
+- reducing `atm-rusqlite` dependence on `atm-core`
+- making replay/finalizer seams compatible with the new storage model
+
+### AC.4
+
+Owns:
+
+- consumer migration in `atm-core`
+- deleting backend-shaped seams after shared contract adoption
+
+### AC.5
+
+Owns:
+
+- collapsing RPC body duplication onto the canonical shared types
+
+### AC.6
+
+Owns:
+
+- final delete / keep decisions for old wrappers and backend leakage

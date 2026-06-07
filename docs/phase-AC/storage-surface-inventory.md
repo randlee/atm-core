@@ -37,6 +37,19 @@ The accepted `AC.0` baseline is:
 
 This is too large for the intended shared `atm-storage` contract.
 
+Breakdown of the main boundary files:
+
+| File | Traits | Structs | Enums |
+| --- | ---: | ---: | ---: |
+| `crates/atm-core/src/boundary/mail.rs` | `2` | `35` | `0` |
+| `crates/atm-core/src/boundary/store.rs` | `9` | `58` | `3` |
+| `crates/atm-core/src/boundary/runtime.rs` | `2` | `2` | `0` |
+
+Request / response wrapper counts in the two main storage boundary files:
+
+- `boundary/mail.rs`: `26`
+- `boundary/store.rs`: `48`
+
 ## Main Sources
 
 Primary overgrown storage/RPC boundary sources:
@@ -79,6 +92,11 @@ Representative families:
 - `RosterStore*Request` / `RosterStore*Response`
 - `InboxIngress*Request` / `InboxIngress*Response`
 - `InboxExport*Request` / `InboxExport*Response`
+
+Measured baseline:
+
+- at least `74` explicit `*Request` / `*Response` wrapper structs across
+  `boundary/mail.rs` and `boundary/store.rs` alone
 
 Planning consequence:
 
