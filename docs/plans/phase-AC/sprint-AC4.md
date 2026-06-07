@@ -65,7 +65,7 @@ Primary closure rule:
 - The adoption seam is explicit:
 
   ```rust
-  pub struct StorageBackends<M, R, T> {
+  pub struct StorageBackends<M: MessageStore, R: RosterStore, T: TaskStore> {
       pub messages: M,
       pub rosters: R,
       pub tasks: T,
