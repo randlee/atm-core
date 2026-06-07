@@ -357,11 +357,11 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     ) -> Result<(), AtmError> {
         if compat_inbox_uses_legacy_array_format(inbox_path)? {
             return Err(AtmError::validation(format!(
-                "append-only compatibility delivery does not support legacy array inbox {}",
+                "append-only compatibility delivery does not support JSON-array inbox {} from this runtime path",
                 inbox_path.display()
             ))
             .with_recovery(
-                "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; ATM no longer rewrites legacy array inboxes from the append-only runtime path.",
+                "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; ATM does not rewrite JSON-array inbox files from the append-only runtime path.",
             ));
         }
         crate::mailbox::store::append_compat_mailbox_message(inbox_path, message)

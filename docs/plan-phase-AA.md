@@ -359,7 +359,7 @@ Purpose:
 - freeze the current Claude Code inbox JSON schema from real
   `team-lead -> quality-mgr` samples
 - align docs, schema models, and tests to that current contract
-- remove wording that misclassifies the current array-backed Claude inbox file
+- remove wording that misclassifies the current JSON-array Claude inbox file
   shape as legacy
 
 Execution branch:

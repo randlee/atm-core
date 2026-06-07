@@ -18,9 +18,9 @@ compatibility path instead of treating it as a degraded or legacy fallback.
 ## Scope Summary
 
 This sprint is runtime-behavior repair. It closes the gap where ATM’s retained
-append path treats any inbox file that begins with `[` as a “legacy array
-inbox,” even though the current Claude Code inbox files are array-backed JSON
-mailboxes. The deliverable is a normal append path that works on the current
+append path treats any inbox file that begins with `[` as an unsupported
+rebuild-only mailbox, even though the current Claude Code inbox files are
+JSON-array mailboxes. The deliverable is a normal append path that works on the current
 Claude mailbox shape and reserves repair/rebuild only for malformed or truly
 unsupported inbox state.
 
@@ -50,7 +50,7 @@ unsupported inbox state.
 
 - The current guard in `service_runtime.rs` is replaced with one that
   distinguishes:
-  - current supported Claude array-backed inbox JSON
+  - current supported Claude JSON-array inbox JSON
   - current supported JSONL append surface, if retained intentionally
   - malformed or unsupported mailbox content that really must fail closed
 
@@ -58,7 +58,7 @@ unsupported inbox state.
   path for a healthy current Claude inbox file.
 
 - Smoke/report wording is corrected so a healthy send to a current Claude inbox
-  does not claim success only after a “legacy array inbox projection failed.”
+  does not claim success only after a rebuild-only projection warning.
 
 - The retained runtime tests and smoke coverage prove the supported path using
   the current Claude mailbox shape.
@@ -74,10 +74,10 @@ the current path is fixed, historical JSON removal belongs in `AA.10`.
 - `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.9
   closure state
 - `compat_inbox_uses_legacy_array_format(...)` no longer classifies the current
-  Claude array-backed inbox file by its leading `[` alone
+  Claude JSON-array inbox file by its leading `[` alone
 - ATM can append or otherwise write through the normal primary path to the
-  current Claude inbox file shape without surfacing a degraded “legacy array
-  inbox” warning
+  current Claude inbox file shape without surfacing a degraded rebuild-only
+  warning
 - the retained repair/rebuild seam is reserved for malformed or explicitly
   unsupported mailbox state, not healthy current Claude inbox files
 - smoke/report wording is consistent with the repaired primary path

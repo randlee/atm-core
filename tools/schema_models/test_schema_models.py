@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from tools.schema_models.atm_message_schema import (
@@ -23,6 +24,7 @@ TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
 TEST_QM = "test-qm"
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 class SchemaModelTests(unittest.TestCase):
@@ -64,6 +66,21 @@ class SchemaModelTests(unittest.TestCase):
         )
         self.assertEqual(message.from_, TEST_TEAM_LEAD)
         self.assertEqual(message.color, "#00ff88")
+
+    def test_real_team_lead_to_quality_mgr_samples_validate(self) -> None:
+        """Read-path: current team-lead->quality-mgr sample shapes validate unchanged."""
+
+        samples = json.loads(
+            (FIXTURES_DIR / "claude_code_quality_mgr_samples.json").read_text()
+        )
+        self.assertGreaterEqual(len(samples), 3)
+
+        for sample in samples:
+            validated = ClaudeCodeInboxMessage.model_validate(sample)
+            self.assertEqual(validated.from_, "team-lead")
+            self.assertIsInstance(validated.text, str)
+            self.assertIsInstance(validated.timestamp, str)
+            self.assertIsInstance(validated.read, bool)
 
     def test_claude_native_idle_payload_validates(self) -> None:
         """Write-path: validates docs/claude-code-message-schema.md idle payload rules."""
