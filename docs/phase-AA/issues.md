@@ -18,7 +18,7 @@ AA.0 freezes this inventory as the starting point for the execution line.
 | `AA-ISSUE-005` | `closed` | the repo still misclassifies the current Claude JSON-array inbox file shape as legacy in runtime/docs/smoke wording even though real `team-lead -> quality-mgr` traffic uses that current Claude path. | `AA.9` |
 | `AA-ISSUE-006` | `closed` | schema docs, Pydantic models, and live historical samples are not frozen together as one current Claude Code inbox contract. | `AA.8` |
 | `AA-ISSUE-007` | `closed` | active docs/tests no longer present historical ATM-owned inbox JSON variants as the primary contract; 1.2 now treats them as read-compatible derivatives only while still accepting legal additive inputs on read. | `AA.10` |
-| `AA-ISSUE-008` | `open` | pre-production SQLite identity compatibility scaffolding such as `legacy_message_id` remains on the active runtime line despite no accepted production need. | `AA.11` |
+| `AA-ISSUE-008` | `closed` | pre-production SQLite identity compatibility scaffolding such as `legacy_message_id` no longer remains on the active runtime line; surviving mentions are historical inventory only. | `AA.11` |
 | `AA-ISSUE-009` | `open` | one malformed Claude inbox fragment can still hide unrelated valid messages or surface an opaque parser failure instead of a degraded salvage result. | `AA.12` |
 
 ## Inventory Rules

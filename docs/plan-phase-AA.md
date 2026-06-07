@@ -422,6 +422,13 @@ Execution worktree:
 
 ### AA.11 Delete Pre-Production SQLite Compatibility Scaffolding
 
+Status:
+- complete on `feature/pAA-s11-delete-sqlite-legacy-compat`
+- active 1.2 runtime/bootstrap no longer carries `legacy_message_id`
+  compatibility
+- remaining `legacy_message_id` mentions are historical inventory/ADR context
+  only, not runtime support
+
 Purpose:
 - remove abandoned pre-production SQLite compatibility scaffolding such as
   `legacy_message_id`

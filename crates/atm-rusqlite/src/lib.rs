@@ -834,7 +834,6 @@ mod tests {
     };
     use atm_runtime_test_support::SqliteRuntimeGuard;
     use serial_test::serial;
-    use shared_db::{ensure_schema, open_connection_for_target};
     use tempfile::TempDir;
 
     fn temp_disk_db() -> (TempDir, PathBuf) {
@@ -842,29 +841,6 @@ mod tests {
         let path = tempdir.path().join("phase-r.sqlite3");
         (tempdir, path)
     }
-
-    const LEGACY_MAIL_SCHEMA: &str = r#"
-CREATE TABLE mail_messages (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    envelope_json TEXT NOT NULL,
-    from_agent TEXT NOT NULL,
-    message_text TEXT NOT NULL,
-    summary TEXT NULL,
-    message_at TEXT NOT NULL,
-    legacy_message_id TEXT NULL,
-    parent_message_id TEXT NULL,
-    thread_mode TEXT NULL,
-    stale_at TEXT NULL,
-    imported_from TEXT,
-    recorded_at TEXT,
-    PRIMARY KEY (team, agent, message_key)
-);
-CREATE UNIQUE INDEX uq_mail_messages_legacy_identity
-    ON mail_messages(team, agent, legacy_message_id)
-    WHERE legacy_message_id IS NOT NULL;
-"#;
 
     fn in_memory_assembly() -> SqliteBoundaryAssembly {
         SqliteBoundaryAssembly::in_memory_for_test().expect("in-memory assembly")
@@ -1915,42 +1891,6 @@ CREATE UNIQUE INDEX uq_mail_messages_legacy_identity
                 Ok(())
             })
             .expect("schema inspection");
-    }
-
-    #[test]
-    fn ensure_schema_upgrades_legacy_mail_message_identity_shape() {
-        let (_tempdir, path) = temp_disk_db();
-        let target = SharedDbTarget::Path(path);
-        let connection =
-            open_connection_for_target(&target).expect("open legacy schema connection");
-        connection
-            .execute_batch(LEGACY_MAIL_SCHEMA)
-            .expect("seed legacy mail schema");
-        drop(connection);
-
-        let mut connection =
-            open_connection_for_target(&target).expect("reopen connection for migration");
-        ensure_schema(&mut connection, &target).expect("upgrade legacy schema");
-
-        let mut statement = connection
-            .prepare("PRAGMA table_info(mail_messages);")
-            .expect("prepare mail schema inspection");
-        let columns = statement
-            .query_map([], |row| row.get::<_, String>(1))
-            .expect("query mail schema inspection")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("collect mail schema columns");
-        assert!(columns.iter().any(|column| column == "legacy_message_id"));
-        assert!(columns.iter().any(|column| column == "message_id"));
-
-        let message_id_index_exists: i64 = connection
-            .query_row(
-                "SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'uq_mail_messages_message_id';",
-                [],
-                |row| row.get(0),
-            )
-            .expect("query message_id index");
-        assert_eq!(message_id_index_exists, 1);
     }
 
     #[test]

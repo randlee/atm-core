@@ -109,6 +109,10 @@ Phase-AA simplification note:
   code-driven merge gate as the sole second enforcement layer, and treats
   policy widening as an architecture change rather than routine lint-data
   churn
+- `AA.11` narrows the active SQLite runtime baseline to the current
+  `message_id` durable schema; abandoned pre-production compatibility shapes
+  such as `legacy_message_id` remain historical documentation only and are not
+  part of normal bootstrap/migration behavior
 
 ## 2. Crate Boundaries
 

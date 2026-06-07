@@ -30,6 +30,9 @@ Phase-AA simplification direction:
 - the daemon must not know that the current durable adapter is SQLite
 - direct local diagnostics such as store-openability and baseline SQLite
   health may be answered without routing through the daemon
+- the supported 1.2 SQLite bootstrap/migration contract is the current
+  `message_id`-based durable schema only; abandoned pre-production identity
+  scaffolding such as `legacy_message_id` is not an accepted runtime shape
 - `atm doctor` now uses that direct local path for config/store diagnostics
   through `atm-runtime`; daemon routing remains only for daemon-owned runtime
   state

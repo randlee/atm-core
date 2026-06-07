@@ -23,7 +23,7 @@ Authoritative supporting inventory:
 | `AA.8` | `complete` | `feature/pAA-s8-claude-schema-contract` | `../atm-core-worktrees/feature/pAA-s8-claude-schema-contract` | current Claude Code inbox schema is frozen from real `team-lead -> quality-mgr` samples and all docs/models stop calling the current JSON-array inbox shape legacy |
 | `AA.9` | `complete` | `feature/pAA-s9-claude-inbox-primary-path` | `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path` | the normal retained append path treats the current Claude inbox file shape as supported primary behavior rather than degraded-only behavior, and the smoke lane proves that path without compatibility degradation |
 | `AA.10` | `complete` | `feature/pAA-s10-remove-historical-atm-json` | `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json` | historical ATM-owned JSON schema variants stop being the active 1.2 contract while legal ATM additive derivatives remain accepted on read and ignored for active machine-state behavior |
-| `AA.11` | `planned` | `feature/pAA-s11-delete-sqlite-legacy-compat` | `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat` | pre-production SQLite compatibility scaffolding such as `legacy_message_id` support is removed from the active 1.2 runtime line unless explicitly reapproved |
+| `AA.11` | `complete` | `feature/pAA-s11-delete-sqlite-legacy-compat` | `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat` | pre-production SQLite compatibility scaffolding such as `legacy_message_id` support is removed from the active 1.2 runtime line; any remaining mentions are historical ledger context only |
 | `AA.12` | `planned` | `feature/pAA-s12-malformed-claude-inbox-recovery` | `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery` | malformed Claude inbox content degrades and salvages recoverable messages instead of aborting the entire inbox surface where segmented valid records still exist |
 
 ## Phase Exit Criteria
@@ -59,7 +59,7 @@ Authoritative supporting inventory:
 - one malformed shared-inbox fragment cannot hide unrelated valid messages when
   the valid messages are still segmentable from the same Claude inbox file
 - no active 1.2 runtime path depends on pre-production SQLite compatibility
-  scaffolding such as `legacy_message_id`, unless an explicit exception is
-  recorded in this readiness file
+  scaffolding such as `legacy_message_id`; any remaining mentions are
+  historical ledger context, not runtime support
 - `docs/phase-AA/issues.md` has no open issue whose planned closure sprint is
   still incomplete
