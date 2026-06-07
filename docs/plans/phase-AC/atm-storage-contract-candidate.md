@@ -38,6 +38,11 @@ pub trait StorageNotifier {
 }
 ```
 
+Initial notification-policy note:
+- `StorageNotifier` intentionally does not include `task_changed`
+- task mutations are notification-free in the first `atm-storage` contract
+- any future task-notification expansion requires explicit ADR-level review
+
 ## Candidate Canonical Shared Types
 
 Minimal first-pass shared types:
@@ -118,3 +123,5 @@ Resolved during planning hardening:
 
 - `delete_message` and `delete_task` are both part of the initial core CRUD
   contract and are no longer open review questions
+- `StorageNotifier` remains message/roster-only in the initial contract; task
+  mutations are intentionally notification-free unless a later ADR changes that

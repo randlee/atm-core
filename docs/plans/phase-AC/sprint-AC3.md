@@ -54,12 +54,36 @@ Primary closure rule:
 - no SQL Server implementation yet
 - no full RPC envelope simplification yet
 
+## AC.2 / AC.3 Parallel Ownership Protocol
+
+`AC.3` may run in parallel with `AC.2` only while it stays out of the
+Claude-owned `atm-core` seam surface.
+
+`AC.3` owns:
+- `crates/atm-core/src/boundary/`
+- `crates/atm-runtime/`
+- `crates/atm-rusqlite/` during source-state review
+- `crates/atm-storage-rusqlite/` after the rename lands
+
+`AC.3` must not edit these `AC.2`-owned `atm-core` surfaces in parallel:
+- `crates/atm-core/src/mailbox/`
+- `crates/atm-core/src/read/`
+- `crates/atm-core/src/list/`
+- `crates/atm-core/src/clear/`
+- `crates/atm-core/src/delivery_execution.rs`
+
+Merge-forward rule:
+- if `AC.3` needs a file from the `AC.2` surface, `AC.2` must merge first and
+  `AC.3` must rebase / merge-forward before continuing
+- there is no shared parallel ownership of one `atm-core` file between these
+  sprints
+
 ## Deliverables
 
 - the concrete SQLite backend implements the shared core traits from `atm-storage`
-- the backend naming is explicit: the current `atm-rusqlite` implementation is
-  renamed and converged into the target backend crate identity
-  `atm-storage-rusqlite`
+- the backend naming is explicit: the current `atm-rusqlite` implementation
+  moves on disk and in Cargo package identity to the target backend crate
+  `atm-storage-rusqlite` in this sprint
 - the SQLite backend no longer depends on `atm-core`
 - SQLite-specific power stays in capability traits rather than the base CRUD traits
 - notifications are explicitly post-commit:
@@ -128,6 +152,8 @@ Implementation order for `AC.3`:
 4. Make the rename/convergence intent explicit in docs and boundaries:
    - current source crate: `atm-rusqlite`
    - target backend identity: `atm-storage-rusqlite`
+   - required concrete change: directory move plus Cargo package rename in the
+     same sprint, not only narrative convergence
    - the rename lands in `AC.3`; if the backend is still named
      `atm-rusqlite` at sprint close, the sprint is incomplete
 5. Review each capability-candidate seam explicitly:

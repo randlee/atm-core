@@ -58,6 +58,9 @@ Primary closure rule:
 - daemon/runtime/core no longer carry concrete SQLite or Claude storage logic above the approved composition seam
 - composition roots assemble concrete backends and inject them through the shared traits
 - any remaining backend-specific behaviors above the trait line are either deleted or moved to a backend crate
+- the sprint records an explicit comparison between transport-side
+  `NotificationSink` and storage-side `StorageNotifier`, and names whether they
+  stay separate or are bridged at composition only
 
 - The adoption seam is explicit:
 
@@ -70,6 +73,13 @@ Primary closure rule:
 
   // core/runtime/daemon consume shared traits here, not concrete backend types
   ```
+
+Design note:
+- `StorageBackends<M, R, T>` is a composition-root seam, not a new shared
+  storage contract type
+- it exists to keep concrete backend naming localized to one static assembly
+  point and to avoid reintroducing backend-aware branching into `atm-core`,
+  `atm-runtime`, or `atm-daemon`
 
 ## Ledger-Driven Deletion Targets
 
@@ -123,6 +133,9 @@ Proof this sprint must leave behind:
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon -S` is clean outside approved composition seams
 - the runtime bundle/orchestration layer depends on semantic storage traits
 - backend-specific branching in core orchestration is removed
+- the sprint explicitly compares `NotificationSink` and `StorageNotifier` and
+  records their final relationship so transport notifications are not confused
+  with post-commit storage notifications
 
 ## Required Validation
 

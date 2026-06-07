@@ -247,6 +247,12 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s3-sqlite-backend-convergence`
 
+Parallelism rule for `AC.2` and `AC.3`:
+- the two backend sprints may run in parallel only while they respect the
+  non-overlapping `atm-core` ownership split declared in their sprint docs
+- if either sprint needs to cross that split, `AC.2` merges first and `AC.3`
+  merge-forwards from the updated branch before continuing
+
 ### AC.4 `atm-core` Storage Boundary Adoption
 
 Purpose:

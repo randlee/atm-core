@@ -182,7 +182,7 @@ than one sprint in a non-default way.
 | `MailStoreMailboxMetadataRow` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` result helper in `AC.1` | Metadata must not remain a mail-store-only row type; `AC.5` only migrates remaining RPC/body consumers. |
 | `MailStoreQueryMailboxMetadataRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreQueryMailboxMetadataResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
-| `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | query helper candidate in `AC.1` | Keep only if semantics survive the query redesign. |
+| `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` count helper in `AC.1` | Keep only if semantics survive the query redesign. |
 | `MailStoreQueryMailboxMetadataCountsRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreQueryMailboxMetadataCountsResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreBootstrapRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.4` | Backend bootstrap must not survive as shared storage DTO; `AC.6` only verifies no stragglers survived. |
@@ -209,7 +209,7 @@ than one sprint in a non-default way.
 | `MailStoreResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Envelope wrapper family must disappear; `AC.6` only verifies no stragglers survived. |
 | `MailStoreDoctorReport` | struct | `capability-candidate` | `capability-review` | storage health / doctor capability in `AC.3` | Keep only if doctor remains a separate capability shape; `AC.1` only caps the shared contract surface. |
 | `MailStore` | trait | `replace-trait` | `MessageStore` in `AC.1` | Old trait deleted when shared contract lands. |
-| `MailStoreDoctor` | trait | `replace-trait` | health / doctor capability in `AC.1` / `AC.3` | Must not survive unchanged into `atm-storage`. |
+| `MailStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.3` | Must not survive unchanged into `atm-storage`; `AC.1` only caps capability count and naming. |
 
 ## `crates/atm-core/src/boundary/store.rs`
 

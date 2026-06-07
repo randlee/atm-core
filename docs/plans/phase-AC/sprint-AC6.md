@@ -52,27 +52,33 @@ Primary closure rule:
 
 ## Deliverables
 
-- obsolete storage request/response wrappers are deleted
-- obsolete RPC/storage/domain clone structs are deleted
-- backend-specific seams that survived only because of the old architecture are deleted
-- docs explicitly state that `AC.7` owns the final SQL Server readiness proof
+- [ ] delete any surviving `InboxIngress*` / `InboxExport*` public wrapper
+  families from:
+  - `crates/`
+  - `docs/plans/phase-AC/`
+  - boundary TOMLs
+- [ ] delete any surviving public backend bundle helpers the ledger marks
+  `delete-bundle`, including:
+  - `RuntimeBundle`
+  - `SqliteBoundaryAssembly`
+- [ ] confirm Claude-only projections remain internal to
+  `crates/atm-storage-claude/`, including:
+  - `ClaudeCodeRosterMember`
+  - `ClaudeCodeTeamRoster`
+  - `InboxSourceFileRecord`
+- [ ] confirm SQLite-only observability helpers remain internal to
+  `crates/atm-storage-rusqlite/`, including:
+  - `SqliteObservability`
+  - `SqliteObservabilityEvent`
+  - `SqliteObservabilityOutcome`
+  - `NullSqliteObservability`
+- [ ] update `docs/plans/phase-AC/type-ledger.md` with final closure notes for
+  each deletion family touched in this sprint
+- [ ] keep `AC.7` as the sole owner of SQL Server readiness proof language
 
 ## Ledger-Driven Deletion Sweep
 
 `AC.6` is the explicit closure sprint against the `AC.0` type ledger.
-
-Minimum deletion scope:
-
-- any surviving `InboxIngress*` and `InboxExport*` wrapper families not explicitly retained as backend-internal implementation detail
-- any surviving backend bundles or public helpers that the ledger marked `delete-bundle`
-
-Minimum scope-reduction proof:
-
-- the `MailStore*`, `TaskStore*`, and `RosterStore*` request/response wrapper
-  families were already deleted by `AC.1` and did not reappear
-- Claude-only projections remain internal to `atm-storage-claude`
-- SQLite-only observability helpers remain internal to `atm-storage-rusqlite`
-- no deleted wrapper family survives in docs or code only because the old architecture used it
 
 ## Execution Checklist
 

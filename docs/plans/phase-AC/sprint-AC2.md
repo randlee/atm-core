@@ -51,6 +51,28 @@ Primary closure rule:
 - no daemon/runtime composition refactor yet
 - no new legal schema expansion beyond existing accepted Claude contract work
 
+## AC.2 / AC.3 Parallel Ownership Protocol
+
+`AC.2` and `AC.3` may execute in parallel only while they respect this
+non-overlapping ownership split inside `atm-core`:
+
+- `AC.2` may touch:
+  - `crates/atm-core/src/mailbox/`
+  - `crates/atm-core/src/read/`
+  - `crates/atm-core/src/list/`
+  - `crates/atm-core/src/clear/`
+  - `crates/atm-core/src/delivery_execution.rs`
+- `AC.3` may touch:
+  - `crates/atm-core/src/boundary/`
+  - `crates/atm-runtime/`
+  - `crates/atm-rusqlite/` or `crates/atm-storage-rusqlite/`
+
+Merge-forward rule:
+- if either sprint needs to touch a file outside its declared surface, `AC.2`
+  must merge first and `AC.3` must rebase / merge-forward from the updated
+  branch before continuing
+- no sprint may silently co-own an `atm-core` file with the other sprint
+
 ## Deliverables
 
 - `crates/atm-storage-claude` exists as a concrete backend crate
@@ -159,7 +181,7 @@ Proof this sprint must leave behind:
 - `cargo test -p atm-storage-claude`
 - `cargo clippy -p atm-storage-claude -- -D warnings`
 - `cargo tree -p atm-storage-claude`
-- `cargo test -p agent-team-mail-core`
+- `cargo test -p atm-core`
 - `git diff --check`
 - `rg -n "ClaudeCodeRosterMember|ClaudeCodeTeamRoster|InboxIngress|InboxExport|ClaudeInboxWriter" crates/atm-storage crates/atm-storage-claude crates/atm-core -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage-claude`
@@ -174,6 +196,9 @@ Proof this sprint must leave behind:
 - annotate the Claude backend boundary notes/TOMLs so the `TaskStore`
   omission is explicit and reviewable rather than implied by absence
 - each `boundaries/atm-storage-claude/` TOML record must include `allowed_dependents = ["atm-runtime", "atm-daemon"]` via composition only; `atm-core` must NOT appear in `allowed_dependents`
+- that `allowed_dependents` direction is intentional here because the boundary
+  records live under `atm-storage-claude` and describe which crates may depend
+  on the backend crate
 - document the forbidden edge `atm-storage-claude -> atm-core` in those boundary records and the owning boundary notes
 
 ## Risks And Watchouts

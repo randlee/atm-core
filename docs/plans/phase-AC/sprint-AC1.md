@@ -32,6 +32,13 @@ Primary closure rule:
 - later sprints may migrate consumers or verify deletion, but they do not
   reopen the contract/type decisions made here
 
+Why this sprint is not split:
+- `AC.1` intentionally couples crate creation, canonical-type freeze, and the
+  first wrapper-family deletion pass so the repo does not keep two competing
+  shared-storage contracts alive in parallel
+- the mechanical deletion work in this sprint is allowed only behind the
+  explicit compilation bridge defined below
+
 ## Governing Sources
 
 - `docs/plans/phase-AC/plan-phase-AC.md`
@@ -83,6 +90,10 @@ Primary closure rule:
   }
   ```
 
+- `StorageNotifier` is intentionally limited to `message_received` and
+  `roster_changed` in the initial contract; task mutations are notification-free
+  unless a later ADR deliberately adds a task-notification surface
+
 - Shared canonical structs exist for:
   - `Message`
   - `MessageKey`
@@ -123,7 +134,8 @@ Move into `atm-storage` as canonical shared types or small semantic helpers:
 
 Delete or collapse during `AC.1` rather than carrying them forward:
 
-- all `MailStore*Request` / `MailStore*Response` wrappers
+- all `MailStore*Request` / `MailStore*Response` wrappers except the temporary
+  `MailStoreBootstrap*` compile bridge owned by `AC.4`
 - all `TaskStore*Request` / `TaskStore*Response` wrappers
 - all `RosterStore*Request` / `RosterStore*Response` wrappers
 - `MailStoreRequest` / `MailStoreResponse`
@@ -168,14 +180,25 @@ Implementation order for `AC.1`:
    - `AgentName`
    - `TaskId`
 4. Replace the old store traits with the new CRUD traits in `atm-storage`.
-5. Delete the wrapper families instead of re-homing them.
-6. Update the boundary TOMLs so ownership moves from `atm-core` to `atm-storage`.
+5. Keep the workspace buildable while the consumer cutover is incomplete:
+   - a deprecated compile bridge may remain temporarily inside `atm-core`
+   - that bridge may forward or alias legacy `MailStore` / `TaskStore` /
+     `RosterStore` names to the new `atm-storage` contract
+   - the bridge is not authoritative API surface and must not gain new
+     semantics
+   - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.4`
+     removes the backend bootstrap seam
+6. Delete the wrapper families instead of re-homing them, except for the
+   temporary `MailStoreBootstrap*` bridge noted above.
+7. Update the boundary TOMLs so ownership moves from `atm-core` to `atm-storage`.
 
 Proof this sprint must leave behind:
 
 - `atm-storage` is small enough to audit directly
 - the old boundary traits are no longer the authoritative shared contract
 - no surviving shared public type is backend-shaped or request/response-shaped
+- `cargo build --workspace` still passes because any temporary legacy trait
+  names are carried only by the deprecated compile bridge
 - wrapper-family deletion is committed as an `AC.1` closure obligation and is
   not deferred to `AC.6`; later sprints may only verify that no deleted family
   reappeared
@@ -187,17 +210,22 @@ Proof this sprint must leave behind:
 - no core trait name or method is backend-specific
 - the crate graph remains `atm-core -> atm-storage`, not the reverse
 - `MessageKey` wraps `AtmMessageId` per `ADR-012` rather than introducing a divergent message-identity contract
-- `MailStore` in `atm-core` is deleted in `AC.1` when `MessageStore` lands in `atm-storage`; coexistence beyond `AC.1` is not an accepted outcome
+- `atm-storage` is the only authoritative shared storage contract after
+  `AC.1`; any surviving legacy `MailStore` / `TaskStore` / `RosterStore` names
+  are compile-bridge shims only and must be deleted by `AC.4`
 - no `*Request` / `*Response` storage wrapper families are recreated inside `crates/atm-storage`
 - `RosterMemberRecord`, `ClaudeCodeRosterMember`, and `ClaudeCodeTeamRoster` are not copied into `atm-storage` unchanged
+- task mutations are intentionally notification-free in the initial contract;
+  `StorageNotifier` does not silently grow a `task_changed` event in this sprint
 
 ## Required Validation
 
+- `cargo build --workspace`
 - `cargo test -p atm-storage`
 - `cargo clippy -p atm-storage -- -D warnings`
 - `cargo tree -p atm-storage`
 - `git diff --check`
-- `rg -n "Request|Response" crates/atm-storage -S`
+- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|TaskStore(Create|Load|Update|Attach|Detach|Record|Query|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
 - `rg -n "MailStore|TaskStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
