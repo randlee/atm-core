@@ -177,6 +177,7 @@ class SchemaModelTests(unittest.TestCase):
                 "source_team": TEST_TEAM,
                 "pendingAckAt": "2026-04-04T18:49:59.525Z",
                 "acknowledgedAt": "2026-04-04T18:50:59.525Z",
+                "acknowledgesMessageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                 "atmAlertKind": "missing_team_config",
                 "missingConfigPath": os.path.join(
                     self._temp_home.name,
@@ -189,6 +190,7 @@ class SchemaModelTests(unittest.TestCase):
         )
         self.assertEqual(message.source_team, TEST_TEAM)
         self.assertEqual(message.pendingAckAt, "2026-04-04T18:49:59.525Z")
+        self.assertEqual(message.acknowledgesMessageId, "01JQYVB6W51Q2E7E6T3Y4Q9N2M")
 
     def test_legacy_metadata_atm_fields_validate_on_read(self) -> None:
         """Read-path: historical metadata.atm derivatives remain accepted on read."""

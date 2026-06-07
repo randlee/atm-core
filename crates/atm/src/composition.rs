@@ -830,7 +830,7 @@ mod tests {
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some("retry after the daemon is reachable")
         );
     }
