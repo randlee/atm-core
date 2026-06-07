@@ -1,8 +1,5 @@
 ---
 title: ADR Index
-status: complete
-branch: chore/docs-restructure
-worktree: ../atm-core-worktrees/chore/docs-restructure
 ---
 
 # ADR Index

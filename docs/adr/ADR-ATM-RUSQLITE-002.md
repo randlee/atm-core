@@ -4,8 +4,9 @@
 adr_id: ADR-ATM-RUSQLITE-002
 crate: atm-rusqlite
 title: Single in-process SQLite write worker
-status: proposed
+status: accepted
 date: 2026-05-10
+decided-date: 2026-05-10
 deciders:
   - team-lead
   - arch-ctm
