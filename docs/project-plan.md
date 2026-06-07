@@ -298,7 +298,11 @@ Status summary:
   which carries the full plan-hardening sequence, the
   [exhaustive AC.0 type ledger](./plans/phase-AC/type-ledger.md), and the final
   cross-document consistency corrections for the AC sprint set.
-- The authoritative plan is [`docs/plans/phase-AC/plan-phase-AC.md`](./plans/phase-AC/plan-phase-AC.md).
+- `AC0-DOCS-MIGRATE-1` (`chore/ac-docs-migrate`) is complete: after merging
+  `origin/develop`, the full Phase AC plan set now lives under
+  `docs/plans/phase-AC/`; the legacy pre-restructure Phase AC locations are
+  gone, and all in-repo references were updated to the new layout.
+- The authoritative plan lives in [`docs/plans/phase-AC/`](./plans/phase-AC/).
 - The authoritative closure checklist is
   [`docs/plans/phase-AC/readiness.md`](./plans/phase-AC/readiness.md).
 

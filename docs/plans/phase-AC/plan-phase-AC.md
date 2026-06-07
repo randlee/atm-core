@@ -1,6 +1,6 @@
 ---
 title: Phase AC Plan
-status: planned
+status: complete
 branch: plan/phase-AC
 worktree: ../atm-core-worktrees/plan/phase-AC
 ---
