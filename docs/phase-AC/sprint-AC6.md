@@ -21,6 +21,11 @@ This sprint is the closeout line for contract-surface deletion. It removes
 obsolete request/response wrappers and backend-shaped leftovers after earlier
 sprints have already made the contract and ownership decisions.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the deletion-closeout scope this sprint claims;
+  documentation-only deletion or grep-only closure is not accepted
+
 Primary closure rule:
 - `AC.6` is primarily a verification and residual-deletion
   sprint

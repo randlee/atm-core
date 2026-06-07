@@ -21,6 +21,11 @@ This sprint creates the shared contract only. It does not extract Claude or
 SQLite implementations yet. The work is to define a small semantic API and a
 small shared data model that later backends can implement.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the contract-definition scope this sprint claims;
+  boundary-only, test-only, or placeholder contract closure is not accepted
+
 Primary closure rule:
 - `AC.1` is the primary closure sprint for the shared `atm-storage` contract,
   canonical shared types, and the storage wrapper families being replaced

@@ -23,6 +23,12 @@ the final post-cleanup contract, verifies that storage semantics no longer
 assume Claude JSON or SQLite internals, and records the exact remaining work
 for a future SQL Server backend.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the readiness-proof scope this sprint claims;
+  wishful readiness language without proof from the post-`AC.6` repo state is
+  not accepted
+
 Primary closure rule:
 - `AC.7` is the primary closure sprint for the SQL Server readiness claim
 - it must not become a backdoor code-rework sprint for wrapper deletion,

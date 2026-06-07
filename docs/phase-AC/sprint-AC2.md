@@ -21,6 +21,11 @@ This sprint moves Claude inbox file-backed storage behavior out of `atm-core`
 and behind the new traits. JSON salvage, source discovery, file locking, and
 atomic rewrite remain internal implementation details of the Claude backend.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the Claude-backend extraction scope this sprint
+  claims; a docs-only backend split or partial trait claim is not accepted
+
 Primary closure rule:
 - `AC.2` is the primary closure sprint for Claude-backend-only projection,
   import/export, repair, and writer seams

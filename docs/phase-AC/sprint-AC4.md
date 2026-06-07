@@ -21,6 +21,11 @@ This sprint removes the storage-specific logic that leaked upward because the
 shared contract was missing. It moves orchestration back above the storage
 trait line and keeps backend behavior below it.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the consumer-cutover scope this sprint claims;
+  partial import cleanup without real seam adoption is not accepted
+
 Primary closure rule:
 - `AC.4` is the primary closure sprint for core/runtime/daemon consumer cutover
   and for any seam that is intentionally retained outside `atm-storage`
@@ -71,12 +76,14 @@ Primary closure rule:
 `AC.4` is where the repo stops depending on the old core-owned backend seams.
 The main ledger-owned deletions or migrations in this sprint are:
 
-- `delivery_execution::ClaudeInboxWriter`
 - `RuntimeBundle`
 - any residual direct ownership of:
-  - inbox import/export orchestration that belongs in `atm-storage-claude`
   - replay/finalizer wiring that belongs in backend capability seams
   - concrete SQLite composition helpers
+
+AC.2-owned Claude storage seams are not re-owned here. `AC.4` only verifies
+that no consumer references to those seams remain above the approved
+composition boundary.
 
 Transport and workflow surfaces that remain outside `atm-storage` should still
 be left standing if they are not backend seams:

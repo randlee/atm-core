@@ -21,6 +21,11 @@ This sprint is the RPC/domain reset line. It does not redefine the storage
 contract. It makes the transport layer consume the same canonical structs that
 the storage layer now uses.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the RPC/body convergence scope this sprint claims;
+  leaving the real traffic on old transport clones is not accepted
+
 Primary closure rule:
 - `AC.5` is the primary closure sprint only for remaining RPC/body usage
   convergence

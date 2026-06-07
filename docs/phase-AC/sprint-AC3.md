@@ -23,6 +23,11 @@ moves any required shared types into `atm-storage`, freezes post-commit
 notification semantics for the SQL backend, and makes the final backend naming
 explicit.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the SQLite-backend convergence scope this sprint
+  claims; partial rename-only or boundary-only closure is not accepted
+
 Primary closure rule:
 - `AC.3` is the primary closure sprint for SQLite-backend internalization and
   for every `capability-review` storage seam that survives or is deleted

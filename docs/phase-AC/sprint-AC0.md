@@ -22,6 +22,11 @@ freezes the generic RPC envelope rule, freezes canonical shared domain structs
 as the target model, and records the current storage/RPC drift so later
 sprints delete the right code instead of relocating it.
 
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the planning/reset scope this sprint claims;
+  shape-only inventory or hand-wavy ADR language is not an accepted closure
+
 Although `AC.0` is completed in the planning worktree, it remains a normal
 reviewable sprint artifact. Later planning detail in `AC.1+` is downstream of
 this accepted reset and must not silently reinterpret it.
