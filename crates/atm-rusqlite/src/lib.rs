@@ -747,17 +747,44 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         request: boundary::TaskStoreQueryTaskMetadataRequest,
     ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
+        let limit = request
+            .limit
+            .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
+            .unwrap_or(-1);
         let rows = self.db.with_connection(|connection| {
             let mut statement = connection
-                .prepare("SELECT record_json FROM tasks WHERE team = ?1 ORDER BY task_id;")
+                .prepare(
+                    "SELECT record_json
+                     FROM tasks
+                     WHERE team = ?1
+                       AND (?2 IS NULL OR task_id = ?2)
+                       AND (?3 IS NULL OR json_extract(record_json, '$.state') = ?3)
+                       AND (
+                           ?4 IS NULL
+                           OR EXISTS (
+                               SELECT 1
+                               FROM json_each(tasks.record_json, '$.linked_message_keys')
+                               WHERE value = ?4
+                           )
+                       )
+                     ORDER BY task_id
+                     LIMIT ?5;",
+                )
                 .map_err(|error| {
                     self.db
                         .error("failed to prepare task-store metadata query", error)
                 })?;
             let mapped = statement
-                .query_map(params![request.team.as_str()], |row| {
-                    row.get::<_, String>(0)
-                })
+                .query_map(
+                    params![
+                        request.team.as_str(),
+                        request.task_id.as_ref().map(|value| value.as_ref()),
+                        request.state.as_ref().map(|value| value.as_ref()),
+                        request.message_key.as_ref().map(|value| value.as_ref()),
+                        limit,
+                    ],
+                    |row| row.get::<_, String>(0),
+                )
                 .map_err(|error| {
                     self.db
                         .error("failed to execute task-store metadata query", error)
@@ -776,30 +803,7 @@ impl boundary::TaskStore for SqliteTaskStore {
         for row in rows {
             let record: boundary::TaskStoreTaskRecord =
                 deserialize_json(&row, "task-store record")?;
-            if let Some(task_id) = request.task_id.as_ref()
-                && &record.task_id != task_id
-            {
-                continue;
-            }
-            if let Some(message_key) = request.message_key.as_ref()
-                && !record
-                    .linked_message_keys
-                    .iter()
-                    .any(|existing| existing == message_key)
-            {
-                continue;
-            }
-            if let Some(state) = request.state.as_ref()
-                && &record.state != state
-            {
-                continue;
-            }
             records.push(record);
-            if let Some(limit) = request.limit
-                && records.len() >= limit
-            {
-                break;
-            }
         }
 
         Ok(boundary::TaskStoreQueryTaskMetadataResponse { records })
@@ -1863,6 +1867,10 @@ mod tests {
                 assert!(collected.iter().any(|column| column == "message_text"));
                 assert!(collected.iter().any(|column| column == "message_at"));
                 assert!(collected.iter().any(|column| column == "message_id"));
+                assert!(
+                    !collected.iter().any(|column| column == "legacy_message_id"),
+                    "legacy_message_id must be absent from the 1.2 mail_messages schema"
+                );
                 assert!(!collected.iter().any(|column| column == "expires_at"));
                 assert!(
                     !collected.iter().any(|column| column == "imported_from"),

@@ -17,7 +17,11 @@ use std::time::{Duration, Instant};
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
 pub(crate) const BATCH_SIZE_MAX: usize = 64;
 pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(2);
+// Bound one write request long enough for a short lock wait + flush cycle while
+// still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
+// Keep shutdown bounded if the writer thread stalls after a queue drain or
+// filesystem delay; callers can restart cleanly after this deadline expires.
 const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
 
