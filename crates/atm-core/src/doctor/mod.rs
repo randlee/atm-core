@@ -430,11 +430,12 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
+    let remediation = error.primary_recovery().map(str::to_owned);
     findings.push(DoctorFinding {
         severity,
         code: error.code,
         message: error.message,
-        remediation: error.recovery,
+        remediation,
     });
 }
 

@@ -1136,8 +1136,7 @@ mod tests {
         );
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("at least one second"),
             "{error}"

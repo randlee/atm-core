@@ -1033,8 +1033,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("host-scoped ATM durable replay store")
         );
@@ -1108,8 +1107,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("remote retry budget configuration")
         );
@@ -1365,7 +1363,7 @@ mod tests {
             let response = ResponseEnvelope::Error(ProtocolErrorEnvelope {
                 code: AtmErrorCode::DaemonUnavailable,
                 message: "remote rejected request".to_string(),
-                recovery: None,
+                recovery: Vec::new(),
             });
             write_response_frame(&mut stream, &codec, request_id, response);
         });
@@ -1504,8 +1502,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("let the daemon resume the pending handoff")
         );

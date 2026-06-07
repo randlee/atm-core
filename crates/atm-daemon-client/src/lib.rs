@@ -273,7 +273,7 @@ impl BootstrapTraceState {
 }
 
 fn format_bootstrap_error_detail(error: &AtmError) -> String {
-    match &error.recovery {
+    match error.primary_recovery() {
         Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
         None => error.message.clone(),
     }

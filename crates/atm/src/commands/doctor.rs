@@ -132,7 +132,7 @@ mod tests {
         let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
 
         assert_eq!(
-            atm_error.recovery.as_deref(),
+            atm_error.primary_recovery(),
             Some("Use `--team <team>` with a valid ATM team name when running `atm doctor`.")
         );
     }

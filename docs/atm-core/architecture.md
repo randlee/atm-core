@@ -538,6 +538,13 @@ Architectural rules:
   - read/clear visibility state
   - team roster
 - daemon memory is the live source of truth for agent status
+- current Claude-native inbox schema (`from`, `text`, `timestamp`, `read`,
+  `summary`, `color`) is the primary forward-write contract for ATM 1.2
+- historical ATM additive derivatives (`message_id`, `source_team`,
+  `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `atmAlertKind`,
+  `missingConfigPath`, `metadata.atm.*`) remain read-compatible only
+- derivative fields above must parse without read-time failure, but no new ATM
+  1.2 code may emit them as the primary contract for current Claude inboxes
 - Claude inbox JSONL is ingress/egress compatibility only
 - ATM-authored JSONL export is a bounded compatibility projection over the full
   durable message body

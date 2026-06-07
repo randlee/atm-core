@@ -81,8 +81,8 @@ pub enum ResponseEnvelope {
 pub struct ProtocolErrorEnvelope {
     pub code: AtmErrorCode,
     pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recovery: Vec<String>,
 }
 
 impl ProtocolErrorEnvelope {
@@ -95,12 +95,12 @@ impl ProtocolErrorEnvelope {
     }
 
     pub fn into_atm_error(self) -> AtmError {
-        let error =
+        let mut error =
             AtmError::new_with_code(self.code, error_kind_for_code(self.code), self.message);
-        match self.recovery {
-            Some(recovery) => error.with_recovery(recovery),
-            None => error,
+        for recovery in self.recovery {
+            error = error.with_recovery(recovery);
         }
+        error
     }
 }
 

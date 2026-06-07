@@ -275,25 +275,27 @@ fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<MessageEnvel
     Ok(records
         .into_iter()
         .enumerate()
-        .filter_map(|(index, mut value)| match parse_mailbox_item(&mut value, path, index + 1) {
-            InboxReadItem::Message(message) => Some(message),
-            InboxReadItem::Degraded {
-                summary,
-                warning,
-                raw_fragment,
-            } => {
-                warn!(
-                    code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                    mailbox_path = %path.display(),
-                    line = index + 1,
+        .filter_map(
+            |(index, mut value)| match parse_mailbox_item(&mut value, path, index + 1) {
+                InboxReadItem::Message(message) => Some(message),
+                InboxReadItem::Degraded {
                     summary,
                     warning,
-                    raw_fragment = raw_fragment.as_deref().unwrap_or("<none>"),
-                    "strict mailbox parse skipped malformed record"
-                );
-                None
-            }
-        })
+                    raw_fragment,
+                } => {
+                    warn!(
+                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                        mailbox_path = %path.display(),
+                        line = index + 1,
+                        summary,
+                        warning,
+                        raw_fragment = raw_fragment.as_deref().unwrap_or("<none>"),
+                        "strict mailbox parse skipped malformed record"
+                    );
+                    None
+                }
+            },
+        )
         .collect())
 }
 
@@ -332,11 +334,7 @@ fn parse_mailbox_record(
     Ok(parse_mailbox_item(&mut value, path, line_number))
 }
 
-fn parse_mailbox_item(
-    value: &mut Value,
-    path: &Path,
-    line_number: usize,
-) -> InboxReadItem {
+fn parse_mailbox_item(value: &mut Value, path: &Path, line_number: usize) -> InboxReadItem {
     let raw_fragment = Some(value.to_string());
     sanitize_message_id(value, path, line_number);
     strip_metadata_atm_namespace(value);
@@ -711,8 +709,7 @@ mod tests {
         assert!(error.message.contains("exceeds"));
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .is_some_and(|value| value.contains("oversized mailbox"))
         );
     }

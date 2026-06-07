@@ -102,8 +102,7 @@ mod tests {
         assert!(error.message.contains("stdin message exceeds"));
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .is_some_and(|value| value.contains("--file"))
         );
     }
