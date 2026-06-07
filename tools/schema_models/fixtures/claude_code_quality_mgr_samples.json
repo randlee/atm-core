@@ -1,0 +1,39 @@
+[
+  {
+    "from": "team-lead",
+    "metadata": {
+      "atm": {
+        "messageId": "01KRVDNH978XDFV5JSXDZ9ZPD0",
+        "sourceTeam": "sample-team"
+      }
+    },
+    "read": true,
+    "summary": "Bootstrapped and awaiting acknowledgement",
+    "text": "Hi quality-mgr - team bootstrapped, comms live. Stand by for assignments. Reply to confirm ready.",
+    "timestamp": "2026-05-17T16:52:47.527Z"
+  },
+  {
+    "from": "team-lead",
+    "metadata": {
+      "atm": {}
+    },
+    "read": true,
+    "summary": "New session notification",
+    "text": "New session restored. Please acknowledge and confirm status.",
+    "timestamp": "2026-05-10T00:29:34.325Z",
+    "type": "message"
+  },
+  {
+    "from": "team-lead",
+    "metadata": {
+      "atm": {
+        "sourceTeam": "sample-team"
+      }
+    },
+    "read": true,
+    "summary": "Acknowledged ready status",
+    "text": "Ack your online/awaiting assignment message. Routing will continue shortly.",
+    "timestamp": "2026-05-01T23:36:18.974999Z",
+    "type": "message"
+  }
+]

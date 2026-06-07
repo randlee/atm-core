@@ -143,8 +143,8 @@ Rules:
 4. append-degraded transition emission for `DeliveryHarnessPath::NonClaude`
    fails closed inside `delivery_execution` because non-Claude append
    degradation is not a valid runtime concept
-5. legacy array inboxes fail closed from the normal Claude append path and can
-   be rewritten only through the explicit repair/rebuild seam
+5. JSON-array inbox files fail closed from the normal Claude append path and can
+  be rewritten only through the explicit repair/rebuild seam
 6. the retained Claude append seam fails closed before execution if a
    `DeliveryHarnessPath::NonClaude` route is attempted; the low-level writer is
    not itself the place where that route is supposed to be discovered
