@@ -49,11 +49,45 @@ semantics for the SQL backend.
 
 - If stronger delivery guarantees are needed, the sprint documents the outbox/future delayed-notification design rather than burying it in ad hoc runtime logic.
 
+## Ledger-Driven Type Work
+
+`AC.3` owns the SQLite-only support surface and the replay / finalizer seams
+that the ledger marked as backend-only, capability-candidate, or delete-bundle.
+
+SQLite-internal types that should stay below the trait line:
+
+- `SqliteWriterLockGuard`
+- `SqliteObservabilityOutcome`
+- `SqliteObservabilityEvent`
+- `SqliteObservability`
+- `NullSqliteObservability`
+
+Backend-shaped helpers that must not survive as shared storage abstractions:
+
+- `SqliteBoundaryAssembly`
+- `RuntimeBundle`
+
+Capability review surfaces that must either become small optional capability
+traits or remain backend-internal:
+
+- `ReplaySource`
+- `MailStoreIngestReplayState`
+- `MailStoreHealthSnapshot`
+- `RosterStoreHealthSnapshot`
+- `MailStoreDoctorReport`
+- `TaskStoreDoctorReport`
+- `RosterStoreDoctorReport`
+- `RemoteReplayStateRecord`
+- `RemoteReplayStore`
+- `RuntimeStorageFinalizer`
+
 ## Acceptance Criteria
 
 - the SQLite backend can satisfy the shared CRUD contract without importing `atm-core`
 - no base trait method is widened purely to fit SQLite-specific power
 - notification semantics are documented as post-commit only
+- `SqliteBoundaryAssembly` does not survive as a required public assembly bundle above the trait line
+- no SQLite-only observability or replay helper is promoted into the base CRUD contract by convenience
 
 ## Required Validation
 
@@ -62,6 +96,7 @@ semantics for the SQL backend.
 - `cargo tree -p atm-rusqlite`
 - `git diff --check`
 - verify the updated boundary TOMLs and `cargo tree -p atm-rusqlite` both show `atm-storage`, not `atm-core`, as the shared storage dependency
+- `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-rusqlite crates/atm-runtime crates/atm-core -S`
 
 ## Required Document Updates
 

@@ -52,6 +52,33 @@ the storage layer now uses.
 - per-message transport clones are deleted unless a real semantic difference remains
 - the same canonical `Message` struct is passed over RPC and into storage
 
+## Ledger-Driven Convergence Targets
+
+`AC.5` consumes the canonical types chosen in `AC.1` and collapses the
+remaining duplicated body shapes around them.
+
+Message-family convergence targets:
+
+- `MessageEnvelope` transport/storage duplicates -> canonical `Message`
+- `MailStoreMessageRecord` usage sites -> canonical `Message`
+- mailbox metadata query wrappers -> `MessageQuery` or transport-level filters
+
+Roster-family convergence targets:
+
+- `RosterMemberRecord` usage sites -> canonical `RosterMember`
+- do not let `ClaudeCodeRosterMember` reappear above backend-internal projection code
+
+Task-family convergence targets:
+
+- `TaskStoreTaskRecord` / `TaskStoreTaskMetadata` usage sites -> canonical `Task`
+- task query wrapper bodies -> `TaskQuery`
+
+Must remain outside this sprint’s storage contract work:
+
+- transport traits from `boundary/mod.rs`
+- config ingress / doctor surfaces
+- outbound delivery-only request/response types unless they directly clone a canonical body
+
 ## Acceptance Criteria
 
 - no new transport-only message clones remain where the shared canonical struct is sufficient
@@ -64,6 +91,7 @@ the storage layer now uses.
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
 - `rg -n ".*Request|.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
+- `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember|TaskStoreTaskRecord|TaskStoreTaskMetadata" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 
 ## Required Document Updates
 

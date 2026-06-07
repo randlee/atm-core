@@ -48,6 +48,30 @@ trait line and keeps backend behavior below it.
 - composition roots assemble concrete backends and inject them through the shared traits
 - any remaining backend-specific behaviors above the trait line are either deleted or moved to a backend crate
 
+## Ledger-Driven Deletion Targets
+
+`AC.4` is where the repo stops depending on the old core-owned backend seams.
+The main ledger-owned deletions or migrations in this sprint are:
+
+- `delivery_execution::ClaudeInboxWriter`
+- `RuntimeBundle`
+- any residual direct ownership of:
+  - inbox import/export orchestration that belongs in `atm-storage-claude`
+  - replay/finalizer wiring that belongs in backend capability seams
+  - concrete SQLite composition helpers
+
+Transport and workflow surfaces that remain outside `atm-storage` should still
+be left standing if they are not backend seams:
+
+- `AtmProtocol`
+- `ClientTransport`
+- `ServerTransport`
+- `RequestDispatcher`
+- `AdvisoryStreamSink`
+- `StatusSource`
+- `WatchEventSource`
+- `ReconcileCoordinator`
+
 ## Acceptance Criteria
 
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon -S` is clean outside approved composition seams
@@ -60,6 +84,7 @@ trait line and keeps backend behavior below it.
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`
+- `rg -n "ClaudeInboxWriter|RuntimeBundle|InboxIngress|InboxExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 
 ## Required Document Updates
 

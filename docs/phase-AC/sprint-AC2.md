@@ -54,11 +54,42 @@ atomic rewrite remain internal implementation details of the Claude backend.
 
 - Unsupported ATM-only fields may be ignored or degraded by implementation policy, but the shared contract types remain the same.
 
+## Ledger-Driven Type Work
+
+`AC.2` owns every type the `AC.0` ledger marked as Claude-backend-only or as a
+Claude seam that must move below the trait line.
+
+These must become internal `atm-storage-claude` concerns rather than shared
+contract types:
+
+- `ClaudeCodeRosterMember`
+- `ClaudeCodeTeamRoster`
+- `InboxSourceFileRecord`
+- `ClaudeCompatibilityDeliveryMode`
+- the `InboxIngress*` wrapper family
+- the `InboxExport*` wrapper family
+- the `delivery_execution::ClaudeInboxWriter` seam
+
+The canonical shared contract must remain above these projections:
+
+- `RosterMember`
+- `RosterSnapshot`
+- `Message`
+- `MessageQuery`
+
+Required scope-reduction rule:
+
+- if a Claude type exists only to project canonical data into `.json` inbox
+  layout, that type must be backend-internal or deleted, not promoted into
+  `atm-storage`
+
 ## Acceptance Criteria
 
 - `atm-core` no longer owns Claude inbox storage internals that belong in the backend crate
 - Claude storage implements the shared contract without widening it to path/file-specific APIs
 - malformed-ingress and file-lock behavior remain below the trait line
+- `ClaudeCodeRosterMember` and `ClaudeCodeTeamRoster` do not survive as shared public contract types
+- the `InboxIngress*` and `InboxExport*` wrapper families are not promoted into `atm-storage`
 
 ## Required Validation
 
@@ -67,6 +98,7 @@ atomic rewrite remain internal implementation details of the Claude backend.
 - `cargo tree -p atm-storage-claude`
 - `cargo test -p agent-team-mail-core`
 - `git diff --check`
+- `rg -n "ClaudeCodeRosterMember|ClaudeCodeTeamRoster|InboxIngress|InboxExport|ClaudeInboxWriter" crates/atm-storage crates/atm-storage-claude crates/atm-core -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage-claude`
 
 ## Required Document Updates

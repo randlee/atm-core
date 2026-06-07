@@ -90,6 +90,51 @@ small shared data model that later backends can implement.
 - Capability traits are explicit and capped. If more than four capability
   traits are needed, the sprint must update the ADR before proceeding.
 
+## Ledger-Driven Type Work
+
+`AC.1` owns the canonical shared contract and the first major type collapse.
+The default expectation is that these current surfaces do **not** survive in
+their present form:
+
+Move into `atm-storage` as canonical shared types or small semantic helpers:
+
+- `MessageKey`
+- `TaskState`
+- `AckTransition`
+- `MessageFingerprint` if still justified after the contract pass
+- canonical replacements for:
+  - `MailStoreMessageRecord` -> `Message`
+  - `MailStoreMailboxMetadataRow` / `MailStoreMailboxMetadataCounts` -> `MessageQuery` helpers
+  - `TaskStoreTaskRecord` + `TaskStoreTaskMetadata` -> `Task`
+  - `RosterMemberRecord` -> `RosterMember`
+  - roster snapshot wrappers -> `RosterSnapshot`
+
+Delete or collapse during `AC.1` rather than carrying them forward:
+
+- all `MailStore*Request` / `MailStore*Response` wrappers
+- all `TaskStore*Request` / `TaskStore*Response` wrappers
+- all `RosterStore*Request` / `RosterStore*Response` wrappers
+- `MailStoreRequest` / `MailStoreResponse`
+- `TaskStoreRequest` / `TaskStoreResponse`
+- `RosterStoreRequest` / `RosterStoreResponse`
+
+Replace old storage traits in this sprint:
+
+- `MailStore` -> `MessageStore`
+- `TaskStore` -> `TaskStore` in `atm-storage`
+- `RosterStore` -> `RosterStore` in `atm-storage`
+
+Must remain outside `atm-storage` even if they still exist elsewhere:
+
+- `AtmProtocol`
+- `ClientTransport`
+- `ServerTransport`
+- `RequestDispatcher`
+- `NotificationSink`
+- `StatusSource`
+- `WatchEventSource`
+- `ReconcileCoordinator`
+
 ## Acceptance Criteria
 
 - `atm-storage` exposes a small audited contract rather than a lifted copy of current boundary DTOs
@@ -98,6 +143,8 @@ small shared data model that later backends can implement.
 - the crate graph remains `atm-core -> atm-storage`, not the reverse
 - `MessageKey` wraps `AtmMessageId` per `ADR-012` rather than introducing a divergent message-identity contract
 - `MailStore` in `atm-core` is deleted in `AC.1` when `MessageStore` lands in `atm-storage`; coexistence beyond `AC.1` is not an accepted outcome
+- no `*Request` / `*Response` storage wrapper families are recreated inside `crates/atm-storage`
+- `RosterMemberRecord`, `ClaudeCodeRosterMember`, and `ClaudeCodeTeamRoster` are not copied into `atm-storage` unchanged
 
 ## Required Validation
 
@@ -106,6 +153,7 @@ small shared data model that later backends can implement.
 - `cargo tree -p atm-storage`
 - `git diff --check`
 - `rg -n "Request|Response" crates/atm-storage -S`
+- `rg -n "MailStore|TaskStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
 ## Required Document Updates

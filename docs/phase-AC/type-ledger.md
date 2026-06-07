@@ -32,6 +32,16 @@ Planning rule:
 - `AC.4` owns core-consumer migration off deleted seams
 - `AC.6` owns final wrapper and leakage deletion verification
 
+Final action shorthand used throughout the ledger:
+
+- `move-to-atm-storage` — becomes part of the shared `atm-storage` contract
+- `merge-and-delete` — merged into a canonical shared type, old concrete type deleted
+- `replace-and-delete` — old trait or seam replaced, old type deleted
+- `internalize-claude` — move below `atm-storage-claude` as backend-only detail
+- `internalize-rusqlite` — move below `atm-storage-rusqlite` as backend-only detail
+- `retain-outside-storage` — remains in the repo but stays outside the storage contract
+- `capability-review` — only survives if later sprint explicitly keeps it as a small capability type
+
 ## Count Summary
 
 Exhaustive entries in this ledger:
@@ -53,33 +63,33 @@ Grouped source counts:
 
 ## `crates/atm-core/src/boundary/mod.rs`
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `MessageKey` | struct | `retain-shared` | `atm-storage::MessageKey` in `AC.1` | Must wrap `AtmMessageId` per `ADR-012`. |
-| `TaskState` | struct | `retain-shared` | task state newtype / enum in `AC.1` | Keep as semantic state, not backend-shaped wrapper. |
-| `AckTransition` | struct | `retain-shared` | shared ack-transition helper in `AC.1` | Shared semantic helper, not backend-specific. |
-| `AtmProtocol` | trait | `out-of-scope-transport` | remains outside `atm-storage` | RPC / protocol boundary, not storage. |
-| `ClientTransport` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Transport boundary only. |
-| `ServerTransport` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Transport boundary only. |
-| `RequestDispatcher` | trait | `out-of-scope-transport` | remains outside `atm-storage` | RPC dispatch, not storage. |
-| `AdvisoryStreamSink` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Advisory stream behavior is not storage CRUD. |
-| `NotificationSink` | trait | `out-of-scope-transport` | compare against `StorageNotifier` in `AC.4` | Must not be silently reused as the storage notifier without review. |
-| `StatusSource` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Runtime status surface, not storage. |
-| `WatchEventSource` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Watch surface, not storage. |
-| `ReconcileCoordinator` | trait | `out-of-scope-transport` | remains outside `atm-storage` | Reconcile workflow, not storage. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `MessageKey` | struct | `retain-shared` | `move-to-atm-storage` | `atm-storage::MessageKey` in `AC.1` | Must wrap `AtmMessageId` per `ADR-012`. |
+| `TaskState` | struct | `retain-shared` | `move-to-atm-storage` | task state newtype / enum in `AC.1` | Keep as semantic state, not backend-shaped wrapper. |
+| `AckTransition` | struct | `retain-shared` | `move-to-atm-storage` | shared ack-transition helper in `AC.1` | Shared semantic helper, not backend-specific. |
+| `AtmProtocol` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | RPC / protocol boundary, not storage. |
+| `ClientTransport` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Transport boundary only. |
+| `ServerTransport` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Transport boundary only. |
+| `RequestDispatcher` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | RPC dispatch, not storage. |
+| `AdvisoryStreamSink` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Advisory stream behavior is not storage CRUD. |
+| `NotificationSink` | trait | `out-of-scope-transport` | `retain-outside-storage` | compare against `StorageNotifier` in `AC.4` | Must not be silently reused as the storage notifier without review. |
+| `StatusSource` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Runtime status surface, not storage. |
+| `WatchEventSource` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Watch surface, not storage. |
+| `ReconcileCoordinator` | trait | `out-of-scope-transport` | `retain-outside-storage` | remains outside `atm-storage` | Reconcile workflow, not storage. |
 
 ## `crates/atm-core/src/boundary/mail.rs`
 
-| Type | Kind | Disposition | Target / Owning Sprint | Notes |
-| --- | --- | --- | --- | --- |
-| `ReplaySource` | struct | `capability-candidate` | replay capability review in `AC.1` / `AC.3` | Replay is not part of the core CRUD contract by default. |
-| `MailStoreMessageRecord` | struct | `merge-into-shared` | canonical `Message` in `AC.1` / `AC.5` | Main storage message record to collapse. |
-| `MailMessageState` | struct | `merge-into-shared` | shared message-state helper in `AC.1` | Must not remain a separate backend-shaped record. |
-| `MessageFingerprint` | struct | `retain-shared` | shared helper / newtype in `AC.1` | Candidate cross-backend helper if still needed. |
-| `MailStoreIngestReplayState` | struct | `capability-candidate` | replay capability in `AC.1` / `AC.3` | Keep out of base CRUD contract unless justified. |
-| `MailStoreHealthSnapshot` | struct | `capability-candidate` | storage health capability in `AC.1` / `AC.3` | Health / doctor surface, not CRUD core. |
-| `MailStoreMailboxMetadataRow` | struct | `merge-into-shared` | `MessageQuery` result helper in `AC.1` / `AC.5` | Metadata must not remain a mail-store-only row type. |
-| `MailStoreQueryMailboxMetadataRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper family collapse. |
+| Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `ReplaySource` | struct | `capability-candidate` | `capability-review` | replay capability review in `AC.1` / `AC.3` | Replay is not part of the core CRUD contract by default. |
+| `MailStoreMessageRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `Message` in `AC.1` / `AC.5` | Main storage message record to collapse. |
+| `MailMessageState` | struct | `merge-into-shared` | `merge-and-delete` | shared message-state helper in `AC.1` | Must not remain a separate backend-shaped record. |
+| `MessageFingerprint` | struct | `retain-shared` | `move-to-atm-storage` | shared helper / newtype in `AC.1` | Candidate cross-backend helper if still needed. |
+| `MailStoreIngestReplayState` | struct | `capability-candidate` | `capability-review` | replay capability in `AC.1` / `AC.3` | Keep out of base CRUD contract unless justified. |
+| `MailStoreHealthSnapshot` | struct | `capability-candidate` | `capability-review` | storage health capability in `AC.1` / `AC.3` | Health / doctor surface, not CRUD core. |
+| `MailStoreMailboxMetadataRow` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` result helper in `AC.1` / `AC.5` | Metadata must not remain a mail-store-only row type. |
+| `MailStoreQueryMailboxMetadataRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` / `AC.6` | Wrapper family collapse. |
 | `MailStoreQueryMailboxMetadataResponse` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper family collapse. |
 | `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | query helper candidate in `AC.1` | Keep only if semantics survive the query redesign. |
 | `MailStoreQueryMailboxMetadataCountsRequest` | struct | `delete-wrapper` | deleted in `AC.1` / `AC.6` | Wrapper family collapse. |
