@@ -4,6 +4,13 @@ This file is the authoritative Phase U removal inventory. File paths and line
 numbers below identify the current develop-branch surfaces that the Phase U
 sprints remove, rename, or restack.
 
+Inventory contract:
+- this file is a historical cross-phase removal ledger, not an active support
+  promise for any listed runtime/schema shape
+- references here may remain after later phases delete the corresponding
+  runtime compatibility path, because the ledger records what Phase U removed
+  rather than what current 1.2 runtime behavior still accepts
+
 ## U.0 — Remove Old `atm-graft` Implementation Line
 
 Status:
@@ -54,6 +61,19 @@ Primary code/doc targets:
   - SQLite persistence of `legacy_message_id`
 - `crates/atm-rusqlite/src/mailbox_metadata.rs:4-12,39-40,106-125`
   - metadata query use of `LegacyMessageId`
+
+AA.11 closure note:
+- `AA.11` is the canonical cross-phase ledger entry for deleting the abandoned
+  pre-production SQLite `legacy_message_id` path from the active 1.2 line.
+- Deleted code locations:
+  - `crates/atm-rusqlite/src/shared_db.rs:21-22,93-94,375-376`
+    - removed `legacy_message_id` durable column and index references
+  - `crates/atm-rusqlite/src/lib.rs:307,323-347`
+    - removed SQLite persistence and migration handling for
+      `legacy_message_id`
+- Any surviving `legacy_message_id` mentions in this file or related ADR/plan
+  docs are historical-only removal-ledger context and are not active runtime
+  support promises.
 
 ## U.3 — Thread / Update / Supersede Hardening
 

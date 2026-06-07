@@ -20,7 +20,7 @@ The accepted `AC.0` baseline is:
 
 The authoritative design reset is:
 
-- `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 
 ## Open Architectural Issues
 
@@ -35,7 +35,7 @@ The authoritative design reset is:
 
 ## Inventory Rules
 
-- `AC.0` is complete when this file and `ADR-017` are accepted as the Phase AC
+- `AC.0` is complete when this file and `ADR-018` are accepted as the Phase AC
   baseline.
 - New Phase `AC` findings must be added here before they are accepted planning
   scope.

@@ -96,7 +96,7 @@ search categories above.
 
 ## Deliverables
 
-- `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
   freezes these rules:
   - storage traits are CRUD-style and semantic
   - RPC uses a generic envelope plus canonical domain bodies
@@ -180,7 +180,7 @@ search categories above.
 - `docs/phase-AC/implementation-ownership-map.md`
 - `docs/phase-AC/atm-storage-contract-candidate.md`
 - `docs/project-plan.md`
-- `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 
 ## Risks And Watchouts
 

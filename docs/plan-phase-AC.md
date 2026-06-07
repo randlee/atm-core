@@ -72,7 +72,7 @@ Phase `AC` must not:
 - prerequisite accepted line:
   - Phase `AA` and its follow-up fixes are either merged or frozen as the baseline
 - authoritative supporting artifacts for this planning line:
-  - `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md`
+  - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
   - `docs/phase-AC/readiness.md`
   - `docs/phase-AC/issues.md`
   - `docs/phase-AC/storage-surface-inventory.md`
@@ -90,7 +90,7 @@ sprints could be sequenced. That prerequisite is now complete in `AC.0`.
 `AC.0` completion means:
 
 - the storage/RPC drift is recorded as an explicit architecture issue
-- the original design reset is frozen in `ADR-017`
+- the original design reset is frozen in `ADR-018`
 - the initial storage trait inventory proves the current surface is oversized
 - the target crate graph is accepted before any extraction begins
 - the collateral planning docs exist so `AC.1+` can execute against concrete

@@ -21,7 +21,7 @@ runtime lock dependence on inbox-file rewrites.
 - normal retained Claude Code compatibility writes now append one JSONL record
   at a time after the durable SQLite/workflow step succeeds
 - non-Claude harnesses still never receive ATM-authored JSONL append output
-- legacy array inboxes are migrated through explicit rebuild/re-export the
+- JSON-array inbox files are migrated through explicit rebuild/re-export the
   first time the retained runtime encounters them
 - SQLite failure now follows the approved degraded outward-delivery contract:
   - Claude Code harnesses append the original message plus an

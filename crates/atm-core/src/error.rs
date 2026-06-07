@@ -33,7 +33,7 @@ pub struct AtmError {
     pub code: AtmErrorCode,
     pub(crate) kind: AtmErrorKind,
     pub message: String,
-    pub recovery: Option<String>,
+    pub recovery: Vec<String>,
     pub source: Option<Box<dyn StdError + Send + Sync>>,
     pub backtrace: Backtrace,
 }
@@ -52,7 +52,7 @@ impl AtmError {
             code,
             kind,
             message: message.into(),
-            recovery: None,
+            recovery: Vec::new(),
             source: None,
             backtrace: Backtrace::capture(),
         }
@@ -139,8 +139,12 @@ impl AtmError {
     }
 
     pub fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
-        self.recovery = Some(recovery.into());
+        self.recovery.push(recovery.into());
         self
+    }
+
+    pub fn primary_recovery(&self) -> Option<&str> {
+        self.recovery.last().map(String::as_str)
     }
 
     pub fn with_source<E>(mut self, source: E) -> Self
@@ -455,7 +459,7 @@ impl AtmError {
 impl fmt::Display for AtmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)?;
-        if let Some(recovery) = &self.recovery {
+        for recovery in &self.recovery {
             write!(f, "\n  Recovery: {recovery}")?;
         }
         Ok(())
@@ -555,7 +559,8 @@ mod tests {
         assert!(
             error
                 .recovery
-                .as_deref()
+                .first()
+                .map(String::as_str)
                 .is_some_and(|value| value.contains("writable"))
         );
     }

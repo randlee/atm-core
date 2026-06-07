@@ -16,7 +16,7 @@ Authoritative supporting inventory:
 
 | Sprint | Status | Branch | Worktree | Closure Gate |
 | --- | --- | --- | --- | --- |
-| `AC.0` | `complete` | `plan/phase-AC` | `../atm-core-worktrees/plan/phase-AC` | ADR-017 and the Phase AC issue inventory freeze the original design reset and the target crate graph before execution sprint planning continues |
+| `AC.0` | `complete` | `plan/phase-AC` | `../atm-core-worktrees/plan/phase-AC` | ADR-018 and the Phase AC issue inventory freeze the original design reset and the target crate graph before execution sprint planning continues |
 | `AC.1` | `planned` | `feature/pAC-s1-atm-storage-contract-and-canonical-types` | `../atm-core-worktrees/feature/pAC-s1-atm-storage-contract-and-canonical-types` | `crates/atm-storage` lands with a small audited contract, canonical domain structs, and separate notification traits |
 | `AC.2` | `planned` | `feature/pAC-s2-atm-storage-claude-extraction` | `../atm-core-worktrees/feature/pAC-s2-atm-storage-claude-extraction` | Claude inbox storage is extracted behind the shared traits without widening the contract to file-format specifics |
 | `AC.3` | `planned` | `feature/pAC-s3-sqlite-backend-convergence` | `../atm-core-worktrees/feature/pAC-s3-sqlite-backend-convergence` | the SQLite backend implements the same core contract, emits notifications only after durable write success, and no longer depends on `atm-core` |
@@ -29,7 +29,7 @@ Authoritative supporting inventory:
 Phase `AC` is not complete until all of the following are true:
 
 - `crates/atm-storage` exists and remains a small audited storage contract crate
-- `docs/adr/ADR-017-storage-contract-reset-and-backend-interchangeability.md` remains the accepted governing reset for Phase `AC`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md` remains the accepted governing reset for Phase `AC`
 - the shared storage surface has no request/response-per-operation DTO families
 - the shared storage contract has `MessageStore`, `RosterStore`, `TaskStore`, and a separate notification trait
 - the shared contract adds no more than four capability traits without a new ADR

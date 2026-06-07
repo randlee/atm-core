@@ -105,6 +105,56 @@ impl PartialEq<&str> for AgentName {
     }
 }
 
+/// Opaque external Claude Code `agentId` value carried across roster/config
+/// boundaries without ATM reinterpreting its internal format.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AgentId(String);
+
+impl AgentId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl From<AgentId> for String {
+    fn from(value: AgentId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for AgentId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for AgentId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for AgentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Canonical ATM team name at a public API boundary.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
@@ -396,7 +446,8 @@ impl fmt::Display for PaneId {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentName, ModelName, PaneId, TaskId, TeamName};
+    use super::{AgentId, AgentName, ModelName, PaneId, TaskId, TeamName};
+    const TEST_AGENT_ID: &str = "test-agent@test-team";
 
     #[test]
     fn task_id_rejects_blank_deserialization() {
@@ -439,6 +490,18 @@ mod tests {
         let error = serde_json::from_str::<PaneId>("\"   \"").expect_err("blank pane");
 
         assert!(error.to_string().contains("pane id must not be blank"));
+    }
+
+    #[test]
+    fn agent_id_round_trips_as_opaque_string() {
+        let agent_id: AgentId =
+            serde_json::from_str(&format!("\"{TEST_AGENT_ID}\"")).expect("agent id");
+
+        assert_eq!(agent_id.as_str(), TEST_AGENT_ID);
+        assert_eq!(
+            serde_json::to_string(&agent_id).expect("encode"),
+            format!("\"{TEST_AGENT_ID}\"")
+        );
     }
 }
 

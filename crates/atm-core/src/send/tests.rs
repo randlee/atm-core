@@ -869,7 +869,7 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
         format!("agent 'recipient' was not found in team '{TEST_TEAM}'")
     );
     assert_eq!(
-        error.recovery.as_deref(),
+        error.primary_recovery(),
         Some(
             "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
         )

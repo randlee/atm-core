@@ -99,7 +99,7 @@ These are permitted only if needed and must stay small:
 - `TransactionalStorage`
 
 If more than these are needed, `AC.1` must justify the expansion against
-`ADR-017`.
+`ADR-018`.
 
 ## AC.1 Review Questions
 

@@ -1,4 +1,4 @@
-# ADR-017: Storage Contract Reset And Backend Interchangeability
+# ADR-018: Storage Contract Reset And Backend Interchangeability
 
 ## Status
 

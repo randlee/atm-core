@@ -882,7 +882,7 @@ mod tests {
             "agent 'recipient' was not found in team 'test-team'"
         );
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
             )
