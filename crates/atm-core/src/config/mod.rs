@@ -872,7 +872,7 @@ post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
         );
         assert!(error.message.contains("post_send_hook_members"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
             )
@@ -900,7 +900,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert!(error.message.contains("retired post-send hook keys"));
         assert!(error.message.contains("[[atm.post_send_hooks]]"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
             )
@@ -979,7 +979,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("config.json"));
         assert!(error.message.contains("EOF while parsing"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -991,7 +991,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("root value must be a JSON object"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -1007,7 +1007,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 .message
                 .contains("field 'members' must be a JSON array")
         );
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -1020,7 +1020,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
         assert!(error.is_missing_document());
         assert!(error.message.contains("team config is missing"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]

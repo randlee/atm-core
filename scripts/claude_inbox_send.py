@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a Claude-compatible team message into an array-backed inbox atomically."""
+"""Write a Claude-compatible team message into a JSON-array inbox atomically."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import Any
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Append a Claude-compatible message to an array-backed inbox."
+        description="Append a Claude-compatible message to a JSON-array inbox."
     )
     parser.add_argument("--team", required=True)
     parser.add_argument("--to", required=True, dest="recipient")

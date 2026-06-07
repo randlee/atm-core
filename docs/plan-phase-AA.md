@@ -355,11 +355,17 @@ Execution worktree:
 
 ### AA.8 Claude Code Inbox Schema Contract Alignment
 
+Status:
+- complete on `feature/pAA-s8-claude-schema-contract`
+- the active schema model now freezes the Claude-native contract plus typed
+  approved additive fields only, while any surviving `metadata.atm`
+  derivatives are isolated to explicit read-compat coverage
+
 Purpose:
 - freeze the current Claude Code inbox JSON schema from real
   `team-lead -> quality-mgr` samples
 - align docs, schema models, and tests to that current contract
-- remove wording that misclassifies the current array-backed Claude inbox file
+- remove wording that misclassifies the current JSON-array Claude inbox file
   shape as legacy
 
 Execution branch:
@@ -373,8 +379,8 @@ Execution worktree:
 Purpose:
 - make the current Claude inbox JSON file shape the supported primary ATM
   compatibility path
-- stop treating the current array-backed Claude mailbox file as degraded
-  legacy-only input
+- stop treating the current Claude JSON-array mailbox file as degraded-only
+  input
 - reserve repair/rebuild for malformed or truly unsupported mailbox content
 
 Depends on:
@@ -387,6 +393,14 @@ Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path`
 
 ### AA.10 Remove Historical ATM JSON Compatibility From 1.2
+
+Status:
+- complete on `feature/pAA-s10-remove-historical-atm-json`
+- legal ATM 1.1 additive derivatives remain read-compatible, but no active
+  doc/model/runtime contract presents them as the primary or forward-write
+  surface
+- `metadata.atm` derivatives are accepted on read and ignored for active
+  machine-state behavior
 
 Purpose:
 - remove primary-contract support promises for historical ATM-owned inbox JSON
@@ -408,6 +422,13 @@ Execution worktree:
 
 ### AA.11 Delete Pre-Production SQLite Compatibility Scaffolding
 
+Status:
+- complete on `feature/pAA-s11-delete-sqlite-legacy-compat`
+- active 1.2 runtime/bootstrap no longer carries `legacy_message_id`
+  compatibility
+- remaining `legacy_message_id` mentions are historical inventory/ADR context
+  only, not runtime support
+
 Purpose:
 - remove abandoned pre-production SQLite compatibility scaffolding such as
   `legacy_message_id`
@@ -421,6 +442,14 @@ Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat`
 
 ### AA.12 Malformed Claude Inbox Recovery Hardening
+
+Status:
+- complete on `feature/pAA-s12-malformed-claude-inbox-recovery`
+- current Claude inbox reads now salvage segmentable valid message objects from
+  malformed arrays and emit explicit degraded warnings for localized bad
+  fragments
+- normal send/ack rewrite paths still fail closed on malformed current Claude
+  arrays; repair/rebuild remains the explicit rewrite seam
 
 Purpose:
 - define the fail-soft malformed-ingress policy for Claude inbox reads

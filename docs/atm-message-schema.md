@@ -16,6 +16,13 @@ Ownership rules:
 - Phase `Y` requires one field-justification ledger for every ATM additive
   field that survives on the shared inbox surface.
 
+Category rule:
+
+- this file documents ATM-owned additive compatibility only
+- it does not redefine the current Claude-owned shared inbox contract
+- historical ATM-owned additive fields described here are not evidence that the
+  current Claude inbox file shape is obsolete
+
 Enforcement model in this repo:
 
 - `tools/schema_models/atm_message_schema.py`
@@ -119,4 +126,7 @@ Rules:
 - ATM must not rely on `metadata.atm` reads for normal mailbox behavior.
 - The active implementation must expose zero surviving `metadata.atm` fields.
 - inbound shared-inbox records that still carry `metadata.atm` for backward
-  compatibility are silently stripped, not rejected
+  compatibility must be tolerated on read, ignored for active machine-state
+  behavior, and must not be promoted back into the forward-write contract
+- malformed `metadata.atm` fragments on an otherwise segmentable shared inbox
+  message must not hide that message from the read surface

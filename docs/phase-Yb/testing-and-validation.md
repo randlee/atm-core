@@ -62,7 +62,7 @@ Required proof:
 - boundary TOML files and docs match the final caller allowlists
 - removal-ledger closure is complete or tracked as an explicit blocker set
 - smoke-handoff docs are updated only after Yb enforcement passes
-- normal Claude append delivery rejects legacy array inboxes and points callers
+- normal Claude append delivery rejects JSON-array inbox files and points callers
   at the explicit repair/rebuild seam
 - full mailbox rewrite remains reachable only through the repair/rebuild path,
   not as a silent runtime append fallback

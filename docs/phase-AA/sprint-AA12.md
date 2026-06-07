@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.12
 worktree: ../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery
 branch: feature/pAA-s12-malformed-claude-inbox-recovery
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

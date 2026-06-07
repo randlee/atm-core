@@ -36,6 +36,28 @@ data. They are not the forward schema contract for newly-authored ATM machine
 state, which now lives in SQLite as documented in
 [`atm-message-schema.md`](./atm-message-schema.md).
 
+## 2.1 Historical `metadata.atm` Derivatives
+
+Historical ATM 1.1 inbox records may also carry an additive `metadata.atm`
+object. That derivative remains accepted on read only.
+
+Observed historical `metadata.atm` members:
+
+- `messageId`
+- `sourceTeam`
+- `pendingAckAt`
+- `acknowledgedAt`
+- `acknowledgesMessageId`
+- `taskId`
+- `alertKind`
+
+Rules:
+
+- this derivative is accepted for compatibility reads only
+- it must not be treated as the current forward-write contract
+- ATM must not reintroduce `metadata.atm` as active machine-state output under
+  the Phase U / Phase AA schema line
+
 ## 3. Read Compatibility Rule
 
 ATM read and related workflows must continue to accept:
@@ -45,6 +67,7 @@ ATM read and related workflows must continue to accept:
   here
 - current ATM-authored compatibility messages documented in
   [`atm-message-schema.md`](./atm-message-schema.md)
+- historical ATM additive derivatives under `metadata.atm`
 
 ## 4. Write Deprecation Rule
 
@@ -52,6 +75,7 @@ This schema is deprecated for write:
 
 - ATM must not introduce new ATM-only top-level fields under this schema
 - existing historical fields remain readable
+- existing historical `metadata.atm` derivatives remain readable
 - forward ATM machine state is documented as SQLite-owned in
   [`atm-message-schema.md`](./atm-message-schema.md)
 - legacy top-level `atmAlertKind` and `missingConfigPath` remain read-compatible

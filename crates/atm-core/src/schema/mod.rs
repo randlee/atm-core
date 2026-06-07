@@ -1,3 +1,5 @@
+//! Shared schema DTOs for Claude inbox compatibility, team config, and roster members.
+
 pub mod agent_member;
 pub mod inbox_message;
 pub mod permissions;
