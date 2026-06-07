@@ -121,6 +121,7 @@ Proof this sprint must leave behind:
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
+- `python3 scripts/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "StorageBackends<|struct StorageBackends" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`
@@ -132,6 +133,9 @@ Proof this sprint must leave behind:
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - core/runtime/daemon architecture docs
+- update `atm-core`, `atm-daemon`, and `atm-runtime` boundary TOMLs for the
+  removed concrete backend dependencies and the approved
+  `StorageBackends<M, R, T>` composition seam
 
 ## Risks And Watchouts
 

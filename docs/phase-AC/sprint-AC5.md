@@ -117,7 +117,7 @@ Proof this sprint must leave behind:
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
-- `rg -n ".*Request|.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
+- `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 - `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember|TaskStoreTaskRecord|TaskStoreTaskMetadata" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 
 ## Required Document Updates

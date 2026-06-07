@@ -221,6 +221,8 @@ Purpose:
 - extract Claude inbox storage into `crates/atm-storage-claude`
 - implement the shared storage traits for Claude storage
 - keep JSON salvage, file locking, source discovery, and rewrite mechanics internal
+- make the Claude backend task-store omission explicit so backend
+  interchangeability claims stay reviewable rather than implied
 
 Execution branch:
 - `feature/pAC-s2-atm-storage-claude-extraction`
