@@ -229,9 +229,12 @@ Status summary:
   Code inbox JSON contract is frozen from real `team-lead -> quality-mgr`
   samples, schema-model fixtures cover those shapes, and docs/models no longer
   classify the current JSON-array inbox shape as legacy.
-- `AA.9` will repair the retained runtime so the current Claude inbox JSON file
-  shape is the working primary compatibility path rather than a degraded
-  legacy-only path.
+- `AA.9` Current Claude Inbox Primary-Path Repair
+  (`feature/pAA-s9-claude-inbox-primary-path`) is complete: the retained
+  runtime now treats the current Claude inbox JSON file shape as the supported
+  primary compatibility path, `.json` inboxes rewrite atomically as current
+  Claude arrays, and the thorough smoke lane no longer expects compatibility
+  degradation for a healthy current Claude inbox.
 - `AA.10` will remove historical ATM-owned inbox JSON from the active primary
   1.2 contract while preserving read compatibility for legal additive
   derivatives such as tolerated top-level ATM fields and `metadata.atm.*`.

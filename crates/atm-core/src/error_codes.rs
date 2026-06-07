@@ -57,6 +57,8 @@ pub enum AtmErrorCode {
     AgentNotFound,
     /// Reading a mailbox failed.
     MailboxReadFailed,
+    /// A recovered Claude compatibility message set exceeded the bounded export contract.
+    MailboxRecoveredMessageSetTooLarge,
     /// Writing a mailbox failed.
     MailboxWriteFailed,
     /// Acquiring or releasing a mailbox lock failed.
@@ -159,6 +161,9 @@ impl AtmErrorCode {
             Self::TeamNotFound => "ATM_TEAM_NOT_FOUND",
             Self::AgentNotFound => "ATM_AGENT_NOT_FOUND",
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
+            Self::MailboxRecoveredMessageSetTooLarge => {
+                "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE"
+            }
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
             Self::MailboxLockReadOnlyFilesystem => "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM",
@@ -230,6 +235,9 @@ impl FromStr for AtmErrorCode {
             "ATM_TEAM_NOT_FOUND" => Ok(Self::TeamNotFound),
             "ATM_AGENT_NOT_FOUND" => Ok(Self::AgentNotFound),
             "ATM_MAILBOX_READ_FAILED" => Ok(Self::MailboxReadFailed),
+            "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE" => {
+                Ok(Self::MailboxRecoveredMessageSetTooLarge)
+            }
             "ATM_MAILBOX_WRITE_FAILED" => Ok(Self::MailboxWriteFailed),
             "ATM_MAILBOX_LOCK_FAILED" => Ok(Self::MailboxLockFailed),
             "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => Ok(Self::MailboxLockReadOnlyFilesystem),

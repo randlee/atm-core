@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.9
 worktree: ../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path
 branch: feature/pAA-s9-claude-inbox-primary-path
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -46,7 +46,7 @@ unsupported inbox state.
 ## Deliverables
 
 - The normal retained append path recognizes the current Claude inbox file
-  shape as supported, not legacy.
+  shape as supported primary behavior instead of degraded-only behavior.
 
 - The current guard in `service_runtime.rs` is replaced with one that
   distinguishes:
@@ -55,7 +55,8 @@ unsupported inbox state.
   - malformed or unsupported mailbox content that really must fail closed
 
 - The repair/rebuild seam remains explicit, but it is no longer the expected
-  path for a healthy current Claude inbox file.
+  path for a healthy current Claude inbox file and is reserved for malformed or
+  unsupported mailbox state.
 
 - Smoke/report wording is corrected so a healthy send to a current Claude inbox
   does not claim success only after a rebuild-only projection warning.
@@ -73,7 +74,7 @@ the current path is fixed, historical JSON removal belongs in `AA.10`.
 - `docs/phase-AA/sprint-AA9.md` exists with the planned branch/worktree
 - `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.9
   closure state
-- `compat_inbox_uses_legacy_array_format(...)` no longer classifies the current
+- `current_claude_inbox_requires_repair(...)` no longer classifies the current
   Claude JSON-array inbox file by its leading `[` alone
 - ATM can append or otherwise write through the normal primary path to the
   current Claude inbox file shape without surfacing a degraded rebuild-only
