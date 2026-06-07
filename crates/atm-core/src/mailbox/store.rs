@@ -201,7 +201,6 @@ mod tests {
     };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::inbox_message::SharedInboxExportPolicy;
     use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_QA, TEST_SENDER};
@@ -213,7 +212,7 @@ mod tests {
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
         let messages = vec![
-            sample_message(ROLE_TEAM_LEAD, "first replacement"),
+            sample_message(TEST_SENDER, "first replacement"),
             sample_message(TEST_QA, "second replacement"),
         ];
 
@@ -249,7 +248,7 @@ mod tests {
         )
         .expect("config");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let mut message = sample_message(TEST_SENDER, "full body retained elsewhere");
         let message_id = message.message_id.expect("message id");
         message.summary = Some("stub summary".to_string());
 
@@ -272,7 +271,7 @@ mod tests {
     fn append_compat_mailbox_message_writes_jsonl_records() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
-        let first = sample_message(ROLE_TEAM_LEAD, "first line");
+        let first = sample_message(TEST_SENDER, "first line");
         let second = sample_message(TEST_QA, "second line");
 
         append_compat_mailbox_message(&path, &first).expect("append first");
@@ -290,7 +289,7 @@ mod tests {
     fn append_compat_mailbox_message_creates_current_claude_json_array_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+        let first = sample_message(TEST_SENDER, "first array entry");
 
         append_compat_mailbox_message(&path, &first).expect("append first");
 
@@ -310,7 +309,7 @@ mod tests {
     fn append_compat_mailbox_message_rewrites_current_claude_json_array_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let first = sample_message(ROLE_TEAM_LEAD, "first array entry");
+        let first = sample_message(TEST_SENDER, "first array entry");
         let second = sample_message(TEST_QA, "second array entry");
 
         write_compat_mailbox_projection(&path, std::slice::from_ref(&first))
@@ -335,7 +334,7 @@ mod tests {
         )
         .expect("config");
         let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
-        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let mut message = sample_message(TEST_SENDER, "full body retained elsewhere");
         let message_id = message.message_id.expect("message id");
         message.summary = Some("stub summary".to_string());
 
@@ -358,7 +357,7 @@ mod tests {
     fn append_compat_mailbox_message_set_appends_existing_messages_atomically() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
-        let existing = sample_message(ROLE_TEAM_LEAD, "existing");
+        let existing = sample_message(TEST_SENDER, "existing");
         let appended = [
             sample_message(TEST_QA, "new first"),
             sample_message(TEST_SENDER, "new second"),
@@ -382,7 +381,7 @@ mod tests {
         let appended = [
             sample_message(TEST_QA, "new first"),
             sample_message(TEST_SENDER, "new second"),
-            sample_message(ROLE_TEAM_LEAD, "new third"),
+            sample_message(TEST_QA, "new third"),
         ];
 
         let error =
@@ -397,10 +396,10 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         let right_path = tempdir.path().join(format!("{TEST_QA}.json"));
-        let left_messages = vec![sample_message(ROLE_TEAM_LEAD, "left message")];
+        let left_messages = vec![sample_message(TEST_SENDER, "left message")];
         let right_messages = vec![
             sample_message(TEST_SENDER, "right first"),
-            sample_message(ROLE_TEAM_LEAD, "right second"),
+            sample_message(TEST_QA, "right second"),
         ];
 
         write_compat_source_projections(&[
@@ -436,7 +435,7 @@ mod tests {
         let error = write_compat_source_projections(&[
             SourceFile {
                 path: first_path.clone(),
-                messages: vec![sample_message(ROLE_TEAM_LEAD, "first")],
+                messages: vec![sample_message(TEST_SENDER, "first")],
             },
             SourceFile {
                 path: invalid_path,

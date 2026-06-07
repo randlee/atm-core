@@ -18,10 +18,11 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
+const DEGRADED_RAW_FRAGMENT_MAX_BYTES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum InboxReadItem {
-    Message(MessageEnvelope),
+    Message(Box<MessageEnvelope>),
     Degraded {
         summary: String,
         warning: String,
@@ -97,7 +98,7 @@ pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<MessageEnv
     Ok(load_compat_mailbox_items(path)?
         .into_iter()
         .filter_map(|item| match item {
-            InboxReadItem::Message(message) => Some(message),
+            InboxReadItem::Message(message) => Some(*message),
             InboxReadItem::Degraded {
                 summary,
                 warning,
@@ -242,7 +243,7 @@ fn parse_mailbox_contents_strict(raw: &str, path: &Path) -> Result<Vec<MessageEn
         Some(_) => Ok(parse_mailbox_jsonl(raw, path)
             .into_iter()
             .filter_map(|item| match item {
-                InboxReadItem::Message(message) => Some(message),
+                InboxReadItem::Message(message) => Some(*message),
                 InboxReadItem::Degraded { .. } => None,
             })
             .collect()),
@@ -277,7 +278,7 @@ fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<MessageEnvel
         .enumerate()
         .filter_map(
             |(index, mut value)| match parse_mailbox_item(&mut value, path, index + 1) {
-                InboxReadItem::Message(message) => Some(message),
+                InboxReadItem::Message(message) => Some(*message),
                 InboxReadItem::Degraded {
                     summary,
                     warning,
@@ -302,7 +303,7 @@ fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<MessageEnvel
 fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<InboxReadItem> {
     raw.lines()
         .enumerate()
-        .map(|(index, line)| {
+        .filter_map(|(index, line)| {
             if line.trim().is_empty() {
                 return None;
             }
@@ -316,11 +317,10 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<InboxReadItem> {
                         index + 1
                     ),
                     warning: error.message,
-                    raw_fragment: Some(line.to_string()),
+                    raw_fragment: Some(truncate_raw_fragment(line)),
                 }),
             }
         })
-        .flatten()
         .collect()
 }
 
@@ -335,11 +335,11 @@ fn parse_mailbox_record(
 }
 
 fn parse_mailbox_item(value: &mut Value, path: &Path, line_number: usize) -> InboxReadItem {
-    let raw_fragment = Some(value.to_string());
+    let raw_fragment = Some(truncate_raw_fragment(&value.to_string()));
     sanitize_message_id(value, path, line_number);
     strip_metadata_atm_namespace(value);
     match serde_json::from_value::<MessageEnvelope>(value.take()) {
-        Ok(message) => InboxReadItem::Message(message),
+        Ok(message) => InboxReadItem::Message(Box::new(message)),
         Err(error) => InboxReadItem::Degraded {
             summary: format!(
                 "malformed mailbox record skipped at {}:{}",
@@ -453,25 +453,25 @@ fn salvage_mailbox_array(
                     continue;
                 }
                 depth -= 1;
-                if depth == 0 {
-                    if let Some(start) = object_start.take() {
-                        object_index += 1;
-                        let fragment = &raw[start..=offset];
-                        let item = match serde_json::from_str::<Value>(fragment) {
-                            Ok(mut value) => parse_mailbox_item(&mut value, path, object_index),
-                            Err(error) => InboxReadItem::Degraded {
-                                summary: format!(
-                                    "malformed mailbox array fragment skipped at {} object {}",
-                                    path.display(),
-                                    object_index
-                                ),
-                                warning: mailbox_record_parse_error(path, object_index, error)
-                                    .message,
-                                raw_fragment: Some(fragment.to_string()),
-                            },
-                        };
-                        items.push(item);
-                    }
+                if depth == 0
+                    && let Some(start) = object_start.take()
+                {
+                    object_index += 1;
+                    let fragment = &raw[start..=offset];
+                    let item = match serde_json::from_str::<Value>(fragment) {
+                        Ok(mut value) => parse_mailbox_item(&mut value, path, object_index),
+                        Err(error) => InboxReadItem::Degraded {
+                            summary: format!(
+                                "malformed mailbox array fragment skipped at {} object {}",
+                                path.display(),
+                                object_index
+                            ),
+                            warning: mailbox_record_parse_error(path, object_index, error).message,
+                            // bounded: one degraded fragment clone is capped independently
+                            raw_fragment: Some(truncate_raw_fragment(fragment)),
+                        },
+                    };
+                    items.push(item);
                 }
             }
             _ => {}
@@ -491,7 +491,7 @@ fn salvage_mailbox_array(
                 path.display(),
                 object_index
             ),
-            raw_fragment: Some(raw[start..].to_string()),
+            raw_fragment: Some(truncate_raw_fragment(&raw[start..])),
         });
     }
 
@@ -523,6 +523,10 @@ fn salvage_mailbox_array(
     Ok(items)
 }
 
+fn truncate_raw_fragment(raw: &str) -> String {
+    raw.chars().take(DEGRADED_RAW_FRAGMENT_MAX_BYTES).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::{self, File};
@@ -533,7 +537,6 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::MessageEnvelope;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -745,7 +748,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("malformed-message-id.jsonl");
         let contents = serde_json::json!({
-            "from": ROLE_TEAM_LEAD,
+            "from": TEST_SENDER,
             "text": "valid body",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -769,7 +772,7 @@ mod tests {
         let path = tempdir.path().join("array-no-message-id.json");
         let contents = serde_json::json!([
             {
-                "from": ROLE_TEAM_LEAD,
+                "from": TEST_SENDER,
                 "text": "from claude array",
                 "timestamp": "2026-03-30T00:00:00Z",
                 "read": false
@@ -855,7 +858,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("top-level-compatibility.json");
         let contents = serde_json::json!({
-            "from": ROLE_TEAM_LEAD,
+            "from": TEST_SENDER,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -883,7 +886,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
         let contents = serde_json::json!({
-            "from": ROLE_TEAM_LEAD,
+            "from": TEST_SENDER,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
