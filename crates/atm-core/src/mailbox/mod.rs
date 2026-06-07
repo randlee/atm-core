@@ -57,7 +57,7 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// acquire the mailbox lock, read the current mailbox contents, or atomically
 /// persist the rewritten file.
 #[cfg(test)]
-pub(crate) fn locked_read_modify_write<F>(
+fn locked_read_modify_write<F>(
     path: &Path,
     timeout: std::time::Duration,
     mutate: F,
