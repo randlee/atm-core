@@ -359,7 +359,7 @@ Purpose:
 - freeze the current Claude Code inbox JSON schema from real
   `team-lead -> quality-mgr` samples
 - align docs, schema models, and tests to that current contract
-- remove wording that misclassifies the current array-backed Claude inbox file
+- remove wording that misclassifies the current JSON-array Claude inbox file
   shape as legacy
 
 Execution branch:
@@ -373,8 +373,8 @@ Execution worktree:
 Purpose:
 - make the current Claude inbox JSON file shape the supported primary ATM
   compatibility path
-- stop treating the current array-backed Claude mailbox file as degraded
-  legacy-only input
+- stop treating the current Claude JSON-array mailbox file as degraded-only
+  input
 - reserve repair/rebuild for malformed or truly unsupported mailbox content
 
 Depends on:
