@@ -19,11 +19,7 @@ class AtmInboxMessage(ClaudeCodeInboxMessage):
 
     model_config = ConfigDict(extra="allow")
 
-    source_team: str | None = None
     message_id: UUID | None = None
-    pendingAckAt: str | None = None
-    acknowledgedAt: str | None = None
-    acknowledgesMessageId: UUID | None = None
     parentMessageId: UUID | None = None
     threadMode: Literal["add-details", "supersede"] | None = None
     taskId: str | None = None

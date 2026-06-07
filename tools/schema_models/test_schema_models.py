@@ -26,6 +26,7 @@ TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
 TEST_QM = "test-qm"
+ROLE_TEAM_LEAD = "team-lead"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
@@ -79,7 +80,7 @@ class SchemaModelTests(unittest.TestCase):
 
         for sample in samples:
             validated = ClaudeCodeInboxMessage.model_validate(sample)
-            self.assertEqual(validated.from_, "team-lead")
+            self.assertEqual(validated.from_, ROLE_TEAM_LEAD)
             self.assertIsInstance(validated.text, str)
             self.assertIsInstance(validated.timestamp, str)
             self.assertIsInstance(validated.read, bool)
@@ -100,12 +101,11 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(payload.type, "idle_notification")
 
     def test_atm_superset_message_validates(self) -> None:
-        """Write-path: validates docs/atm-message-schema.md legacy top-level ATM fields."""
+        """Write-path: validates docs/atm-message-schema.md current ATM additive fields."""
 
         message = AtmInboxMessage.model_validate(
             {
                 "from": TEST_TEAM_LEAD,
-                "source_team": TEST_TEAM,
                 "text": "ping",
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
                 "read": True,
@@ -113,7 +113,6 @@ class SchemaModelTests(unittest.TestCase):
                 "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
             }
         )
-        self.assertEqual(message.source_team, TEST_TEAM)
         self.assertEqual(
             str(message.message_id),
             "81286baa-e783-4f0c-bfea-82d070750fae",
@@ -147,7 +146,6 @@ class SchemaModelTests(unittest.TestCase):
         message = AtmMissingTeamConfigAlertMessage.model_validate(
             {
                 "from": TEST_SENDER,
-                "source_team": TEST_TEAM,
                 "text": "ATM warning: send used existing inbox fallback.",
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
                 "read": False,
@@ -166,7 +164,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(message.atmAlertKind, "missing_team_config")
 
     def test_legacy_atm_top_level_alert_fields_validate(self) -> None:
-        """Write-path: validates docs/legacy-atm-message-schema.md read compatibility."""
+        """Read-compat: validates docs/legacy-atm-message-schema.md legacy top-level fields."""
 
         message = LegacyAtmInboxMessage.model_validate(
             {
@@ -177,6 +175,8 @@ class SchemaModelTests(unittest.TestCase):
                 "summary": "ATM warning",
                 "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
                 "source_team": TEST_TEAM,
+                "pendingAckAt": "2026-04-04T18:49:59.525Z",
+                "acknowledgedAt": "2026-04-04T18:50:59.525Z",
                 "atmAlertKind": "missing_team_config",
                 "missingConfigPath": os.path.join(
                     self._temp_home.name,
@@ -188,6 +188,7 @@ class SchemaModelTests(unittest.TestCase):
             }
         )
         self.assertEqual(message.source_team, TEST_TEAM)
+        self.assertEqual(message.pendingAckAt, "2026-04-04T18:49:59.525Z")
 
     def test_legacy_metadata_atm_fields_validate_on_read(self) -> None:
         """Read-path: historical metadata.atm derivatives remain accepted on read."""
@@ -223,7 +224,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(envelope.metadata.atm.taskId, "TASK-123")
 
     def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
-        """Write-path: guards docs/atm-message-schema.md legacy top-level UUID placement."""
+        """Write-path: current top-level message_id stays typed as the UUID wire form."""
 
         with self.assertRaises(Exception):
             AtmInboxMessage.model_validate(

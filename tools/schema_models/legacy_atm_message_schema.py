@@ -21,6 +21,10 @@ class LegacyAtmInboxMessage(AtmInboxMessage):
 
     model_config = ConfigDict(extra="allow")
 
+    source_team: str | None = None
+    pendingAckAt: str | None = None
+    acknowledgedAt: str | None = None
+    acknowledgesMessageId: UlidString | None = None
     atmAlertKind: str | None = None
     missingConfigPath: str | None = None
 
