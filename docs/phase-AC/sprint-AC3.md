@@ -23,6 +23,13 @@ moves any required shared types into `atm-storage`, freezes post-commit
 notification semantics for the SQL backend, and makes the final backend naming
 explicit.
 
+Primary closure rule:
+- `AC.3` is the primary closure sprint for SQLite-backend internalization and
+  for every `capability-review` storage seam that survives or is deleted
+- `AC.1` may cap the shared contract, but `AC.3` decides whether replay,
+  doctor, health, and lifecycle seams become optional capabilities,
+  backend-internal details, or deletions
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -112,6 +119,8 @@ Proof this sprint must leave behind:
 - the SQLite backend is a backend implementation, not a second copy of `atm-core` storage semantics
 - SQLite-only observability and lifecycle helpers are no longer exposed as if they were shared contract concepts
 - capability traits are explicit and few, not an escape hatch for old surface-area sprawl
+- `SqliteBoundaryAssembly` closure happens here; `AC.4` may only remove
+  remaining consumers of its replacement
 
 ## Acceptance Criteria
 

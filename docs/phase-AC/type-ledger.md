@@ -26,11 +26,11 @@ Disposition labels:
 
 Planning rule:
 
-- `AC.1` and `AC.5` own shared-type convergence decisions
-- `AC.2` owns Claude-backend-only type retention
-- `AC.3` owns SQLite-backend-only type retention
-- `AC.4` owns core-consumer migration off deleted seams
-- `AC.6` owns final wrapper and leakage deletion verification
+- every type family has exactly one primary closure sprint
+- later sprints may perform consumer cutover or verification, but they do not
+  become co-owners of the same type decision
+- `AC.6` is verification and residual deletion closeout, not a shadow owner of
+  work that should have closed in `AC.1` through `AC.5`
 
 Final action shorthand used throughout the ledger:
 
@@ -82,6 +82,64 @@ Planning constraint:
   - a deliberate non-storage seam that remains outside the storage boundary
 - all other public types are presumed deletion or backend-internalization
   candidates unless a later sprint justifies them explicitly
+
+## Single-Closure Ownership Policy
+
+Default primary ownership by final-action family:
+
+- `move-to-atm-storage`
+  - primary closure sprint: `AC.1`
+  - later use: `AC.5` may converge remaining RPC/body consumers onto the
+    canonical shared type, but it does not redefine the type
+- `merge-and-delete`
+  - primary closure sprint: `AC.1` for shared-contract families
+  - later use: `AC.5` may finish transport/body usage convergence; `AC.6`
+    verifies deletion only
+- `internalize-claude`
+  - primary closure sprint: `AC.2`
+  - later use: `AC.4` cuts remaining core consumers over; `AC.6` verifies that
+    no shared/public leakage remains
+- `internalize-rusqlite`
+  - primary closure sprint: `AC.3`
+  - later use: `AC.4` cuts remaining core consumers over when needed; `AC.6`
+    verifies that no shared/public leakage remains
+- `replace-and-delete`
+  - primary closure sprint:
+    - `AC.1` when replacing shared storage traits
+    - `AC.3` when replacing SQLite-owned backend bundles
+    - `AC.4` when replacing core-owned backend seams
+- `capability-review`
+  - primary closure sprint: `AC.3`
+  - `AC.1` may set caps or candidate names, but final keep/delete/internalize
+    decisions close in `AC.3`
+- `retain-outside-storage`
+  - primary closure sprint: `AC.4`
+  - `AC.6` verifies docs/code no longer misclassify those seams as storage
+
+Interpretation rule:
+
+- if a table row still names more than one sprint in its target text, the first
+  sprint is not automatically the owner
+- the family policy in this section controls unless the exceptions table below
+  says otherwise
+
+## Single-Closure Exceptions
+
+These rows need explicit primary ownership because their lifecycle spans more
+than one sprint in a non-default way.
+
+| Type / Family | Primary Closure Sprint | Later Sprint Role | Why |
+| --- | --- | --- | --- |
+| `MailStoreMessageRecord` | `AC.1` | `AC.5` usage convergence only | Canonical `Message` is defined in `AC.1`; transport/body consumers finish migrating in `AC.5`. |
+| `TaskStoreTaskRecord` | `AC.1` | `AC.5` usage convergence only | Canonical `Task` is defined in `AC.1`; transport/body consumers finish migrating in `AC.5`. |
+| `MailStoreMailboxMetadataRow` | `AC.1` | `AC.5` query/body convergence only | The replacement query helper shape is chosen in `AC.1`; usage cleanup lands later. |
+| `ReplaySource` / replay candidate rows | `AC.3` | `AC.1` contract cap only | Whether replay survives as a capability or backend-internal concern closes with the backend convergence sprint. |
+| doctor / health candidate rows | `AC.3` | `AC.1` contract cap only | Capability keep/delete/internalize decision depends on concrete backend convergence, not only naming. |
+| `delivery_execution::ClaudeInboxWriter` | `AC.2` | `AC.4` consumer cutover only | The seam moves below `atm-storage-claude` in `AC.2`; `AC.4` only removes remaining core usage. |
+| `SqliteBoundaryAssembly` | `AC.3` | `AC.4` consumer cutover only | The backend assembly replacement is a SQLite convergence decision before core cleanup consumes it. |
+| `RuntimeBundle` | `AC.4` | `AC.6` verification only | This is a core-owned backend seam; cleanup verification is not primary ownership. |
+| `Config*` retain-outside rows | `AC.4` | `AC.6` verification only | `AC.4` classifies them as non-storage seams; `AC.6` checks docs/code drift only. |
+| `InboxIngress*` / `InboxExport*` rows | `AC.2` | `AC.6` verification only | Claude-backend internalization closes in `AC.2`; later grep/delete is only proof. |
 
 ## `crates/atm-core/src/boundary/mod.rs`
 

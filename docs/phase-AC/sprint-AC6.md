@@ -21,6 +21,12 @@ This sprint is the closeout line for the contract reset. It removes obsolete
 request/response wrappers, deletes backend-shaped leftovers, and records the
 future SQL Server readiness claim explicitly.
 
+Primary closure rule:
+- `AC.6` is primarily a verification, residual-deletion, and readiness-proof
+  sprint
+- it must not become the first place where shared contract ownership, Claude
+  internalization, or SQLite capability decisions are actually made
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -85,6 +91,8 @@ Proof this sprint must leave behind:
 - the old storage/RPC wrapper architecture is materially gone from the repo
 - the remaining shared contract is small enough for direct manual audit
 - SQL Server readiness is a demonstrated property of the simplified contract surface
+- any row still needing a first-time ownership decision in `AC.6` should be
+  treated as a prior-sprint planning defect, not normal scope
 
 ## Acceptance Criteria
 

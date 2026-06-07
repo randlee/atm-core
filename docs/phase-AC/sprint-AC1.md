@@ -21,6 +21,12 @@ This sprint creates the shared contract only. It does not extract Claude or
 SQLite implementations yet. The work is to define a small semantic API and a
 small shared data model that later backends can implement.
 
+Primary closure rule:
+- `AC.1` is the primary closure sprint for the shared `atm-storage` contract,
+  canonical shared types, and the storage wrapper families being replaced
+- later sprints may migrate consumers or verify deletion, but they do not
+  reopen the contract/type decisions made here
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -164,6 +170,8 @@ Proof this sprint must leave behind:
 - `atm-storage` is small enough to audit directly
 - the old boundary traits are no longer the authoritative shared contract
 - no surviving shared public type is backend-shaped or request/response-shaped
+- wrapper-family deletion is committed as an `AC.1` closure obligation; `AC.6`
+  only proves no stragglers survived
 
 ## Acceptance Criteria
 

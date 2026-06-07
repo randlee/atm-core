@@ -21,6 +21,12 @@ This sprint is the RPC/domain reset line. It does not redefine the storage
 contract. It makes the transport layer consume the same canonical structs that
 the storage layer now uses.
 
+Primary closure rule:
+- `AC.5` is the primary closure sprint only for remaining RPC/body usage
+  convergence
+- it must not reopen canonical shared type design that already closed in
+  `AC.1`
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -97,6 +103,8 @@ Proof this sprint must leave behind:
 - one canonical message body shape crosses RPC and storage
 - roster and task bodies follow the same rule
 - the remaining request/response types are transport operations, not cloned domain records
+- any surviving canonical-type ambiguity after `AC.5` is a failure of `AC.1`,
+  not a reason to create another shared model here
 
 ## Acceptance Criteria
 

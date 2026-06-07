@@ -21,6 +21,12 @@ This sprint removes the storage-specific logic that leaked upward because the
 shared contract was missing. It moves orchestration back above the storage
 trait line and keeps backend behavior below it.
 
+Primary closure rule:
+- `AC.4` is the primary closure sprint for core/runtime/daemon consumer cutover
+  and for any seam that is intentionally retained outside `atm-storage`
+- this sprint does not redefine shared storage types or backend-internal
+  policies already closed by `AC.1` through `AC.3`
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -87,6 +93,8 @@ Proof this sprint must leave behind:
 - `atm-core` orchestrates semantic storage behavior only
 - backend crates own backend mechanics
 - daemon/runtime no longer need storage-specific knowledge above composition
+- rows marked `retain-outside-storage` are classified here so `AC.6` only
+  verifies drift did not reappear
 
 ## Acceptance Criteria
 

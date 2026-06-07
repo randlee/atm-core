@@ -21,6 +21,12 @@ This sprint moves Claude inbox file-backed storage behavior out of `atm-core`
 and behind the new traits. JSON salvage, source discovery, file locking, and
 atomic rewrite remain internal implementation details of the Claude backend.
 
+Primary closure rule:
+- `AC.2` is the primary closure sprint for Claude-backend-only projection,
+  import/export, repair, and writer seams
+- later sprints may cut consumers over or verify no public leakage remains,
+  but they do not own the Claude internalization decision
+
 ## Governing Sources
 
 - `docs/plan-phase-AC.md`
@@ -103,6 +109,8 @@ Proof this sprint must leave behind:
 - the Claude backend owns its own projection and repair logic
 - `atm-core` no longer exposes Claude-specific public storage types as if they were shared domain types
 - the shared contract remains clean even if the backend still has rich internal helpers
+- any `InboxIngress*` / `InboxExport*` / `ClaudeInboxWriter` cleanup left for
+  `AC.6` is verification-only, not deferred ownership
 
 ## Acceptance Criteria
 
