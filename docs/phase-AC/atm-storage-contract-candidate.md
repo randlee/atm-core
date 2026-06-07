@@ -60,6 +60,10 @@ Expected supporting newtypes likely reused rather than recreated:
 - `AtmMessageId`
 - timestamps / ack state newtypes already accepted elsewhere
 
+`MessageKey` must remain aligned with `ADR-012` one-message-identity rules.
+`AC.1` must treat `MessageKey` as a wrapper around `AtmMessageId`, not as a
+new parallel identity system.
+
 ## Current Source Mapping
 
 Candidate source mapping from current shapes:
@@ -108,3 +112,5 @@ Before `AC.1` closes, it must answer:
   trait
 - which current roster projection fields are canonical shared fields versus
   Claude-backend-only projection details
+- whether any temporary `MailStore` compatibility seam survives inside the
+  implementation phase at all; the planning default is deletion at `AC.1`

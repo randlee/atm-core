@@ -96,13 +96,17 @@ small shared data model that later backends can implement.
 - the canonical shared structs are suitable for both RPC bodies and storage
 - no core trait name or method is backend-specific
 - the crate graph remains `atm-core -> atm-storage`, not the reverse
+- `MessageKey` wraps `AtmMessageId` per `ADR-012` rather than introducing a divergent message-identity contract
+- `MailStore` in `atm-core` is deleted in `AC.1` when `MessageStore` lands in `atm-storage`; coexistence beyond `AC.1` is not an accepted outcome
 
 ## Required Validation
 
 - `cargo test -p atm-storage`
 - `cargo clippy -p atm-storage -- -D warnings`
+- `cargo tree -p atm-storage`
 - `git diff --check`
 - `rg -n "Request|Response" crates/atm-storage -S`
+- verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
 ## Required Document Updates
 
@@ -111,6 +115,13 @@ small shared data model that later backends can implement.
 - `docs/phase-AC/issues.md`
 - `docs/plan-phase-AC.md`
 - `docs/project-plan.md`
+- create `boundaries/atm-storage/` TOML records for:
+  - `MessageStore`
+  - `RosterStore`
+  - `TaskStore`
+  - `StorageNotifier`
+- update existing `boundaries/atm-core/` store TOMLs to reflect the ownership move into `atm-storage`
+- verify `lint_boundaries.py` accepts the new ownership topology before sprint closure
 
 ## Risks And Watchouts
 

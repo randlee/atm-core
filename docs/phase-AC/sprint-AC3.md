@@ -61,6 +61,7 @@ semantics for the SQL backend.
 - `cargo clippy -p atm-rusqlite -- -D warnings`
 - `cargo tree -p atm-rusqlite`
 - `git diff --check`
+- verify the updated boundary TOMLs and `cargo tree -p atm-rusqlite` both show `atm-storage`, not `atm-core`, as the shared storage dependency
 
 ## Required Document Updates
 
@@ -68,6 +69,11 @@ semantics for the SQL backend.
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - backend architecture docs for SQLite storage ownership
+- update `boundaries/atm-rusqlite/mail-store-sqlite.toml`
+- update `boundaries/atm-rusqlite/task-store-sqlite.toml`
+- update `boundaries/atm-rusqlite/roster-store-sqlite.toml`
+- replace `atm-core` with `atm-storage` in `allowed_dependencies` for the shared storage ownership records
+- pair the dependency-tree check with a boundary-lint consistency check before sprint closure
 
 ## Risks And Watchouts
 
