@@ -21,6 +21,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-014 — Runtime Health Projection And Liveness Signal Ownership](./ADR-014-runtime-health-projection-and-liveness-signal-ownership.md)
 - [ADR-015 — Daemon Runtime Snapshot Publication And Worker Ownership](./ADR-015-daemon-runtime-snapshot-and-worker-ownership.md)
 - [ADR-016 — Claude Config Ingress And Roster Projection Ownership](./ADR-016-claude-config-ingress-and-roster-projection-ownership.md)
+- [ADR-017 — Storage Contract Reset And Backend Interchangeability](./ADR-017-storage-contract-reset-and-backend-interchangeability.md)
 
 ## Extracted Crate-Local ADRs
 
