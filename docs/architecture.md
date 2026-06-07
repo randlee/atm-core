@@ -1366,6 +1366,51 @@ The mailbox layer owns:
 
 The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
 
+### 12.1 Atomic Full-Rewrite Semantics
+
+All inbox modifications use atomic full-rewrite for durability and consistency:
+
+**Atomic write pattern:**
+1. Acquire per-inbox file lock before any read
+2. Read and deserialize the full inbox document (JSON array or JSONL)
+3. Apply modification in memory (append message, update workflow state, replace clear set)
+4. Write to a temporary file with fsync to guarantee data durability
+5. Atomically rename temp file over original (single filesystem operation on POSIX; platform-equivalent on Windows)
+6. Release lock after rename completes
+
+This pattern ensures:
+- crash-safety: partial writes never corrupt the original file
+- consistency: concurrent ATM processes never lose updates due to race conditions
+- idempotency: replay of the same operation twice (e.g., after daemon restart) produces the same state
+
+The lock is held from step 1 through step 5 to prevent concurrent read-modify-write races. Full-rewrite applies to all inbox operations: `append_message`, read-state writeback, ack transition, and clear set replacement.
+
+### 12.2 Repair and Rebuild Seam Scope
+
+**Repair/rebuild is reserved for malformed mailbox state. Normal healthy mailbox operations never trigger repair.**
+
+When an inbox file is encountered:
+
+1. **Normal primary path** - healthy, legal mailbox state
+   - Current Claude inbox: one top-level JSON array of inbox messages
+   - Current ATM JSONL export: one JSON object per line (when ATM owns the export)
+   - Action: parse, validate message structure, apply atomic modification
+   - Repair: not triggered
+
+2. **Malformed or degraded state** - triggers repair/rebuild only when:
+   - JSON parse fails (invalid JSON structure, truncated file from crash)
+   - Required message fields are missing or syntactically invalid
+   - File was partially written or contains mixed/corrupt encodings
+   - Explicitly unsupported mailbox format
+   - Action: emit diagnostic, optionally attempt recovery of salvageable records, rebuild if safe
+
+**Key architectural rule:**
+- The legal current Claude inbox JSON-array shape must always stay on the normal primary path and never require repair/rebuild
+- Repair/rebuild does not apply to healthy, well-formed inbox state that conforms to the documented schema
+- If the current primary path still classifies healthy mailboxes as requiring repair, that is a bug in the path classification logic (see `compat_inbox_uses_legacy_array_format()` and related guards)
+
+Repair guidance for operators is documented separately in [`persisted-data-repair.md`](./persisted-data-repair.md).
+
 ## 13. Identity And File Policy
 
 ### 13.1 Hook Matching
