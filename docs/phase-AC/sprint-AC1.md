@@ -120,6 +120,7 @@ small shared data model that later backends can implement.
   - `RosterStore`
   - `TaskStore`
   - `StorageNotifier`
+- each `boundaries/atm-storage/` TOML record must include `allowed_dependents = ["atm-core", "atm-storage-claude", "atm-rusqlite"]` so `lint_boundaries.py` can enforce the ownership topology
 - update existing `boundaries/atm-core/` store TOMLs to reflect the ownership move into `atm-storage`
 - verify `lint_boundaries.py` accepts the new ownership topology before sprint closure
 

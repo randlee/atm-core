@@ -76,6 +76,7 @@ atomic rewrite remain internal implementation details of the Claude backend.
 - `docs/project-plan.md`
 - storage architecture docs that currently treat Claude inbox logic as `atm-core` internals
 - create `boundaries/atm-storage-claude/` TOML records covering the Claude backend implementation of the shared contracts
+- each `boundaries/atm-storage-claude/` TOML record must include `allowed_dependents = ["atm-runtime", "atm-daemon"]` via composition only; `atm-core` must NOT appear in `allowed_dependents`
 - document the forbidden edge `atm-storage-claude -> atm-core` in those boundary records and the owning boundary notes
 
 ## Risks And Watchouts
