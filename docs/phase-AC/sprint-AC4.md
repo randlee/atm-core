@@ -110,6 +110,9 @@ Proof this sprint must leave behind:
 
 ## Acceptance Criteria
 
+- a generic `StorageBackends<M, R, T>` seam exists at the approved
+  daemon/runtime assembly root and is the sole location where concrete backend
+  storage types are named
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon -S` is clean outside approved composition seams
 - the runtime bundle/orchestration layer depends on semantic storage traits
 - backend-specific branching in core orchestration is removed
@@ -119,6 +122,7 @@ Proof this sprint must leave behind:
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
+- `rg -n "StorageBackends<|struct StorageBackends" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`
 - `rg -n "ClaudeInboxWriter|RuntimeBundle|InboxIngress|InboxExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 

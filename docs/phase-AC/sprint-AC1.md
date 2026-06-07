@@ -69,6 +69,7 @@ Primary closure rule:
       fn save_task(&self, task: &Task) -> Result<(), AtmError>;
       fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
       fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
+      fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
   }
 
   pub trait StorageNotifier {

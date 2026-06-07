@@ -148,6 +148,7 @@ pub trait TaskStore {
     fn save_task(&self, task: &Task) -> Result<(), AtmError>;
     fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
     fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
+    fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
 }
 
 pub trait StorageNotifier {
@@ -318,6 +319,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/phase-AC/crate-graph-migration-map.md`
 - `docs/phase-AC/implementation-ownership-map.md`
 - `docs/phase-AC/atm-storage-contract-candidate.md`
+- `docs/phase-AC/sqlserver-readiness-proof.md` reserved as the AC.7 proof artifact path
 
 ## Phase Exit Criteria
 

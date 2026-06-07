@@ -49,7 +49,8 @@ Primary closure rule:
 
 ## Deliverables
 
-- a written SQL Server readiness proof against the actual final contract
+- `docs/phase-AC/sqlserver-readiness-proof.md` exists as the written SQL
+  Server readiness proof against the actual final contract
 - an explicit statement of which existing traits and canonical shared structs a
   future `atm-storage-sqlserver` backend must implement
 - an explicit statement of which backend-specific concerns remain outside the
@@ -87,7 +88,8 @@ Proof this sprint must leave behind:
 ## Acceptance Criteria
 
 - the repo documents SQL Server readiness as a consequence of the cleaned
-  contract, not as a hypothetical wish
+  contract in `docs/phase-AC/sqlserver-readiness-proof.md`, not as a
+  hypothetical wish
 - no backend crate still depends on `atm-core`
 - the final `atm-storage` surface is small enough to audit directly and to hand
   to a new backend implementation line
@@ -107,6 +109,7 @@ Proof this sprint must leave behind:
 
 ## Required Document Updates
 
+- `docs/phase-AC/sqlserver-readiness-proof.md`
 - `docs/phase-AC/sprint-AC7.md`
 - `docs/phase-AC/readiness.md`
 - `docs/phase-AC/issues.md`

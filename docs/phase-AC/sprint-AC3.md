@@ -153,6 +153,8 @@ Proof this sprint must leave behind:
 - no base trait method is widened purely to fit SQLite-specific power
 - notification semantics are documented as post-commit only
 - the backend crate rename to `atm-storage-rusqlite` lands in this sprint
+- `lint_boundaries.py` accepts the updated `atm-storage-rusqlite` boundary
+  TOMLs before sprint closure
 - `SqliteBoundaryAssembly` does not survive as a required public assembly bundle above the trait line
 - no SQLite-only observability or replay helper is promoted into the base CRUD contract by convenience
 - every `capability-candidate` ledger row owned by `AC.3` is either:
@@ -165,6 +167,7 @@ Proof this sprint must leave behind:
 - `cargo test -p atm-storage-rusqlite`
 - `cargo clippy -p atm-storage-rusqlite -- -D warnings`
 - `cargo tree -p atm-storage-rusqlite`
+- `python3 scripts/lint_boundaries.py`
 - `git diff --check`
 - verify the updated boundary TOMLs and `cargo tree` output both show `atm-storage`, not `atm-core`, as the shared storage dependency
 - `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-storage-rusqlite crates/atm-runtime crates/atm-core -S`
@@ -180,7 +183,7 @@ Proof this sprint must leave behind:
 - update `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
 - update `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`
 - replace `atm-core` with `atm-storage` in `allowed_dependencies` for the shared storage ownership records
-- pair the dependency-tree check with a boundary-lint consistency check before sprint closure
+- pair the dependency-tree check with a boundary-lint consistency check before sprint closure so `lint_boundaries.py` accepts the updated `atm-storage-rusqlite` ownership TOMLs
 
 ## Risks And Watchouts
 
