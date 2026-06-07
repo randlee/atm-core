@@ -26,6 +26,10 @@ TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
 TEST_QM = "test-qm"
+# Claude Code protocol identity — 'team-lead' is the reserved sender identity
+# for the Claude Code native messaging API (SendMessage tool). This is NOT a
+# synthetic test fixture. Do not rename or inline this constant. See:
+# crates/atm-core/src/roles.rs and docs/claude-code-message-schema.md.
 ROLE_TEAM_LEAD = "team-lead"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
