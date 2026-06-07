@@ -34,8 +34,20 @@ pub fn write_messages(
     messages: &[MessageEnvelope],
     export_policy: SharedInboxExportPolicy,
 ) -> Result<(), AtmError> {
-    let mut encoded = Vec::<Value>::with_capacity(messages.len());
-    for message in messages {
+    write_message_iter(path, messages.iter(), export_policy)
+}
+
+pub fn write_message_iter<'a, I>(
+    path: &Path,
+    messages: I,
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError>
+where
+    I: IntoIterator<Item = &'a MessageEnvelope>,
+{
+    let iterator = messages.into_iter();
+    let mut encoded = Vec::<Value>::new();
+    for message in iterator {
         encoded.push(to_shared_inbox_value_with_policy(message, export_policy)?);
     }
     let mut bytes = serde_json::to_vec(&encoded)?;

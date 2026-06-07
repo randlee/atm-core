@@ -138,7 +138,7 @@ impl ReconcileWorkerState {
 struct ReconcileReplyErrorSnapshot {
     code: atm_core::error_codes::AtmErrorCode,
     message: String,
-    recovery: Option<String>,
+    recovery: Vec<String>,
 }
 
 impl From<&AtmError> for ReconcileReplyErrorSnapshot {

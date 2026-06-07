@@ -67,6 +67,12 @@ That invariant no longer holds. Once the boundary widened, daemon code started
 to accumulate concrete adapter knowledge instead of staying a thin router.
 `Phase AA` is not feature expansion; it is architectural damage removal.
 
+The `AA.8` through `AA.10` Claude inbox schema repairs remain inside `Phase AA`
+because `team-lead` explicitly rerouted the smoke-fix closeout into the
+`plan/phase-AA-doctor-hardening` sprint line instead of a separate follow-on
+phase, treating the current Claude inbox contract and append-path drift as part
+of the same daemon/runtime hardening closure.
+
 ## Target Architecture
 
 ### `atm-runtime` becomes the concrete composition root
@@ -261,6 +267,18 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s3-direct-doctor-and-runtime-health-split`
 
+### AA.8 Through AA.10 Claude Inbox Hardening Dependency Chain
+
+The Claude inbox repair line is intentionally sequential:
+
+- `AA.8` freezes the current legal Claude inbox contract from real samples and
+  corrects docs/models/tests.
+- `AA.9` then repairs the retained runtime so that frozen current contract is
+  the supported primary path rather than a degraded fallback.
+- `AA.10` only then removes historical ATM-authored JSON compatibility from the
+  active 1.2 contract, after the current supported path is both documented and
+  working.
+
 ### AA.4 Delete Remaining Daemon SQLite Leaks
 
 Purpose:
@@ -316,6 +334,137 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s6-obs-upgrade`
 
+### AA.7 Rust Boundary Enforcement Crate
+
+Status:
+- complete on `feature/pAA-s7-atm-architecture-crate`
+- `crates/atm-architecture/` is now the visible code-driven boundary guard
+- the superseded Python boundary scripts were removed from the active line
+
+Purpose:
+- make the second architecture-enforcement layer visible in the workspace
+- replace the deleted Python boundary scripts with the Rust crate as the
+  required code-driven guard
+- freeze `cargo test --package atm-architecture` as the merge-gate command
+
+Execution branch:
+- `feature/pAA-s7-atm-architecture-crate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s7-atm-architecture-crate`
+
+### AA.8 Claude Code Inbox Schema Contract Alignment
+
+Status:
+- complete on `feature/pAA-s8-claude-schema-contract`
+- the active schema model now freezes the Claude-native contract plus typed
+  approved additive fields only, while any surviving `metadata.atm`
+  derivatives are isolated to explicit read-compat coverage
+
+Purpose:
+- freeze the current Claude Code inbox JSON schema from real
+  `team-lead -> quality-mgr` samples
+- align docs, schema models, and tests to that current contract
+- remove wording that misclassifies the current JSON-array Claude inbox file
+  shape as legacy
+
+Execution branch:
+- `feature/pAA-s8-claude-schema-contract`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s8-claude-schema-contract`
+
+### AA.9 Current Claude Inbox Primary-Path Repair
+
+Purpose:
+- make the current Claude inbox JSON file shape the supported primary ATM
+  compatibility path
+- stop treating the current Claude JSON-array mailbox file as degraded-only
+  input
+- reserve repair/rebuild for malformed or truly unsupported mailbox content
+
+Depends on:
+- `AA.8` (schema contract must be frozen first)
+
+Execution branch:
+- `feature/pAA-s9-claude-inbox-primary-path`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path`
+
+### AA.10 Remove Historical ATM JSON Compatibility From 1.2
+
+Status:
+- complete on `feature/pAA-s10-remove-historical-atm-json`
+- legal ATM 1.1 additive derivatives remain read-compatible, but no active
+  doc/model/runtime contract presents them as the primary or forward-write
+  surface
+- `metadata.atm` derivatives are accepted on read and ignored for active
+  machine-state behavior
+
+Purpose:
+- remove primary-contract support promises for historical ATM-owned inbox JSON
+  schema variants
+- stop treating top-level ATM machine fields and `metadata.atm.*` as the
+  active or forward-write 1.2 schema
+- preserve read compatibility for legal ATM additive derivatives that extend
+  the current Claude Code envelope
+- leave malformed-ingress salvage policy to `AA.12`
+
+Depends on:
+- `AA.9` (primary path must be proven before compatibility removal)
+
+Execution branch:
+- `feature/pAA-s10-remove-historical-atm-json`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json`
+
+### AA.11 Delete Pre-Production SQLite Compatibility Scaffolding
+
+Status:
+- complete on `feature/pAA-s11-delete-sqlite-legacy-compat`
+- active 1.2 runtime/bootstrap no longer carries `legacy_message_id`
+  compatibility
+- remaining `legacy_message_id` mentions are historical inventory/ADR context
+  only, not runtime support
+
+Purpose:
+- remove abandoned pre-production SQLite compatibility scaffolding such as
+  `legacy_message_id`
+- restate the supported 1.2 SQLite bootstrap/migration baseline cleanly
+- keep unsupported historical database shapes out of the active runtime line
+
+Execution branch:
+- `feature/pAA-s11-delete-sqlite-legacy-compat`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat`
+
+### AA.12 Malformed Claude Inbox Recovery Hardening
+
+Status:
+- complete on `feature/pAA-s12-malformed-claude-inbox-recovery`
+- current Claude inbox reads now salvage segmentable valid message objects from
+  malformed arrays and emit explicit degraded warnings for localized bad
+  fragments
+- normal send/ack rewrite paths still fail closed on malformed current Claude
+  arrays; repair/rebuild remains the explicit rewrite seam
+
+Purpose:
+- define the fail-soft malformed-ingress policy for Claude inbox reads
+- salvage recoverable valid messages even when adjacent fragments are malformed
+- emit explicit degraded warnings/sentinels instead of dropping the whole inbox
+  surface when best-effort recovery is possible
+- add or update an ADR if the recovery contract changes the accepted
+  repository-wide shared-inbox boundary policy
+
+Execution branch:
+- `feature/pAA-s12-malformed-claude-inbox-recovery`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery`
+
 ## Out Of Scope
 
 `Phase AA` does not:
@@ -329,6 +478,11 @@ Execution worktree:
 The scoped `sc-observability` / `sc-observability-types` `1.2.0` dependency
 upgrade in `AA.6` is in scope for this phase as closeout work required to
 finish the daemon/runtime simplification line cleanly.
+
+Smoke QA follow-up note:
+- if `team-lead` routes concrete smoke QA findings that widen the accepted
+  Phase AA scope beyond `AA.11`, add a new numbered sprint rather than
+  overloading the schema/runtime/removal sprints above
 
 ## Exit Criteria
 

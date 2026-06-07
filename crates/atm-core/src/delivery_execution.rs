@@ -134,7 +134,7 @@ pub(crate) fn deliver_notifications(
                     "warning: notification delivery failed for {}@{}: {error}",
                     recipient.agent, recipient.team
                 ),
-                error.recovery.clone(),
+                error.primary_recovery().map(str::to_owned),
             ));
         }
     }

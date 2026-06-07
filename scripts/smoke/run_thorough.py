@@ -262,6 +262,12 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
             )
             status = "failed"
 
+        copied_fixture = runtime.clone_fixture(
+            fixture,
+            prefix="z21c.",
+            clear_logs=True,
+        )
+
         send_no_ack_payload = runtime.parse_json_output(
             runtime.run_atm(
                 runtime.root,
@@ -643,20 +649,6 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
         copied_env = runtime.smoke_env(
             copied_fixture, identity=runtime.operator, root=runtime.root
         )
-        legacy_inbox_path = copied_fixture.team_dir / "inboxes" / f"{runtime.recipient}.json"
-        legacy_inbox_path.write_text(
-            json.dumps(
-                [
-                    {
-                        "from": f"{runtime.operator}@{runtime.team}",
-                        "message": "legacy array mailbox placeholder",
-                    }
-                ],
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
         copied_doctor = runtime.parse_json_output(
             runtime.run_atm(
                 runtime.root, copied_env, copied_fixture.workspace_dir, "doctor", "--json"
@@ -748,15 +740,11 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
 
         warnings = copied_send.get("warnings", [])
         degraded_warning_blob = json.dumps(warnings).lower()
-        degraded_warning_ok = (
-            "compatibility append degraded" in degraded_warning_blob
-            and "post-send-hook fallback remains available for notification degradation"
-            in degraded_warning_blob
-        )
+        degraded_warning_ok = "compatibility append degraded" not in degraded_warning_blob
         if copied_send.get("outcome") == "sent" and degraded_warning_ok:
             runtime.pass_row(
                 rows["Z1-006"],
-                "copied-state durable send succeeded and surfaced the compatibility append degraded warning after the legacy-array inbox projection failed",
+                "copied-state durable send stayed on the primary Claude inbox path without compatibility append degradation",
             )
         else:
             runtime.fail_row(
@@ -764,14 +752,14 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
                 observed=json.dumps(
                     {
                         "send": copied_send,
-                        "legacy_inbox_path": str(legacy_inbox_path),
+                        "warnings": warnings,
                     },
                     indent=2,
                 ),
-                expected="durable send succeeds and returns the compatibility append degraded warning when the legacy inbox projection path fails after persistence",
-                root_cause="the copied-state compatibility append failure did not surface the accepted degraded warning contract after persistence succeeded",
+                expected="durable send succeeds on the current Claude inbox primary path without surfacing a compatibility append degraded warning",
+                root_cause="the retained runtime still treated the healthy Claude inbox path as degraded or rebuild-only behavior",
                 artifact="copied-state send --requires-ack --json",
-                notes="degraded notification after durable send was not observable",
+                notes="primary Claude inbox durable send still emitted degraded compatibility warnings",
             )
             status = "failed"
 

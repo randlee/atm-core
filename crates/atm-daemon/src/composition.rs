@@ -883,6 +883,9 @@ pub(crate) fn compose_runtime(
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
+    // The daemon snapshots the startup cwd once for config discovery and does
+    // not refresh it on SIGHUP; restart atm-daemon to adopt a different
+    // workspace root after changing the launch directory.
     let current_dir = std::env::current_dir().map_err(|source| {
         AtmError::daemon_unavailable(
             "failed to resolve the current working directory for daemon runtime assembly",
@@ -1136,8 +1139,7 @@ mod tests {
         );
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("at least one second"),
             "{error}"
