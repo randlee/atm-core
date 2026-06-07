@@ -58,6 +58,11 @@ Current ATM compatibility note:
   path ATM must support directly
 - repair/rebuild is reserved for malformed or truly unsupported inbox content,
   not for the legal current Claude JSON-array shape
+- ATM must salvage segmentable valid message objects from malformed current
+  Claude `.json` arrays whenever possible and surface explicit degraded
+  warnings for localized bad fragments
+- only malformed root content with no segmentable message objects remains a
+  terminal read failure
 
 ## 2.1 Current Shared Inbox Contract Categories
 

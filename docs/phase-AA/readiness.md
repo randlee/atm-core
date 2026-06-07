@@ -24,7 +24,7 @@ Authoritative supporting inventory:
 | `AA.9` | `complete` | `feature/pAA-s9-claude-inbox-primary-path` | `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path` | the normal retained append path treats the current Claude inbox file shape as supported primary behavior rather than degraded-only behavior, and the smoke lane proves that path without compatibility degradation |
 | `AA.10` | `complete` | `feature/pAA-s10-remove-historical-atm-json` | `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json` | historical ATM-owned JSON schema variants stop being the active 1.2 contract while legal ATM additive derivatives remain accepted on read and ignored for active machine-state behavior |
 | `AA.11` | `complete` | `feature/pAA-s11-delete-sqlite-legacy-compat` | `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat` | pre-production SQLite compatibility scaffolding such as `legacy_message_id` support is removed from the active 1.2 runtime line; any remaining mentions are historical ledger context only |
-| `AA.12` | `planned` | `feature/pAA-s12-malformed-claude-inbox-recovery` | `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery` | malformed Claude inbox content degrades and salvages recoverable messages instead of aborting the entire inbox surface where segmented valid records still exist |
+| `AA.12` | `complete` | `feature/pAA-s12-malformed-claude-inbox-recovery` | `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery` | malformed Claude inbox content degrades and salvages recoverable messages instead of aborting the entire inbox surface where segmented valid records still exist |
 
 ## Phase Exit Criteria
 

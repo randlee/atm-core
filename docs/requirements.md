@@ -482,6 +482,9 @@ Current shared inbox file-container rule:
 - repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
   unsupported mailbox content rather than for the legal current Claude
   JSON-array shape
+- current Claude inbox reads must salvage segmentable valid message objects
+  from malformed `.json` arrays and emit explicit degraded warnings for
+  localized bad fragments instead of failing the whole inbox by default
 
 ### 3.2.1 Message Schema Ownership And Compatibility
 
@@ -648,8 +651,11 @@ Required handling policy:
   deterministic defaults
 - malformed records inside a larger persisted collection should be skipped or
   quarantined individually when the rest of the document remains trustworthy
-- malformed root documents or invalid root structure must fail with structured
-  errors rather than guessed repairs
+- malformed current-Claude root arrays must salvage segmentable valid message
+  objects and emit explicit degraded warnings whenever localized recovery is
+  possible
+- malformed root documents or invalid root structure with no segmentable valid
+  message units must fail with structured errors rather than guessed repairs
 - missing persisted team config is a distinct `missing-document` condition and
   must not be collapsed into generic parse corruption
 - identity and routing semantics must never be fabricated to keep a command

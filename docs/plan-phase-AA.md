@@ -443,6 +443,14 @@ Execution worktree:
 
 ### AA.12 Malformed Claude Inbox Recovery Hardening
 
+Status:
+- complete on `feature/pAA-s12-malformed-claude-inbox-recovery`
+- current Claude inbox reads now salvage segmentable valid message objects from
+  malformed arrays and emit explicit degraded warnings for localized bad
+  fragments
+- normal send/ack rewrite paths still fail closed on malformed current Claude
+  arrays; repair/rebuild remains the explicit rewrite seam
+
 Purpose:
 - define the fail-soft malformed-ingress policy for Claude inbox reads
 - salvage recoverable valid messages even when adjacent fragments are malformed

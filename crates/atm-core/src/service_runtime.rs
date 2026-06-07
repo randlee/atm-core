@@ -506,7 +506,7 @@ fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
         return Ok(false);
     }
 
-    Ok(crate::mailbox::load_compat_mailbox_messages(path).is_err())
+    Ok(crate::mailbox::load_compat_mailbox_messages_strict(path).is_err())
 }
 
 #[cfg(test)]
