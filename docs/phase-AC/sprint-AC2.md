@@ -60,6 +60,23 @@ Primary closure rule:
 
 - Unsupported ATM-only fields may be ignored or degraded by implementation policy, but the shared contract types remain the same.
 
+- The backend-facing implementation shape is explicit and small:
+
+  ```rust
+  pub struct ClaudeStorageBackend {
+      // private backend fields only
+  }
+
+  impl MessageStore for ClaudeStorageBackend { /* ... */ }
+  impl RosterStore for ClaudeStorageBackend { /* ... */ }
+
+  // Additional impls are allowed only when the shared contract requires them.
+  ```
+
+- Claude-specific roster and inbox projection helpers do not become shared
+  public API. If they survive, they survive as private or backend-local types
+  inside `atm-storage-claude`.
+
 ## Ledger-Driven Type Work
 
 `AC.2` owns every type the `AC.0` ledger marked as Claude-backend-only or as a

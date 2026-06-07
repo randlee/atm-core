@@ -101,6 +101,18 @@ traits or remain backend-internal:
 - `RemoteReplayStore`
 - `RuntimeStorageFinalizer`
 
+If any of those surfaces survive publicly, the allowed named capability set is
+small and explicit:
+
+```rust
+pub trait StorageHealth { /* health / doctor read surface only */ }
+pub trait ReplayStore { /* replay ingest / replay state only */ }
+pub trait RuntimeStorageFinalizer { /* finalizer hook only if still justified */ }
+```
+
+No additional capability trait may be invented in `AC.3` without updating the
+Phase AC ADR and the shared contract docs in the same change.
+
 ## Execution Checklist
 
 Implementation order for `AC.3`:

@@ -54,6 +54,18 @@ Primary closure rule:
 - composition roots assemble concrete backends and inject them through the shared traits
 - any remaining backend-specific behaviors above the trait line are either deleted or moved to a backend crate
 
+- The adoption seam is explicit:
+
+  ```rust
+  pub struct StorageBackends<M, R, T> {
+      pub messages: M,
+      pub rosters: R,
+      pub tasks: T,
+  }
+
+  // core/runtime/daemon consume shared traits here, not concrete backend types
+  ```
+
 ## Ledger-Driven Deletion Targets
 
 `AC.4` is where the repo stops depending on the old core-owned backend seams.
