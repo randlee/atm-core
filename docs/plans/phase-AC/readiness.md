@@ -23,7 +23,7 @@ Authoritative supporting inventory:
 | `AC.4` | `complete` | `feature/pAC-s4-atm-core-storage-boundary-adoption` | `../atm-core-worktrees/feature/pAC-s4-atm-core-storage-boundary-adoption` | `atm-core`, runtime, and daemon paths depend on storage traits rather than concrete backend seams; `RuntimeBundle` is removed in favor of `RuntimeDoctorPorts` + `StorageBackends<M,R>` and runtime/daemon no longer own raw SQLite access above `atm-storage-rusqlite` |
 | `AC.5` | `complete` | `feature/pAC-s5-rpc-envelope-and-domain-type-unification` | `../atm-core-worktrees/feature/pAC-s5-rpc-envelope-and-domain-type-unification` | `atm-daemon-client` owns `RpcEnvelope`, same-host clients exchange that generic wrapper, canonical message/roster bodies are encoded through `atm-storage`, and no new transport-local message/roster clones were introduced in the cutover |
 | `AC.6` | `complete` | `feature/pAC-s6-cleanup-and-deletion-closeout` | `../atm-core-worktrees/feature/pAC-s6-cleanup-and-deletion-closeout` | speculative task-store contract surfaces are deleted, stale Claude wrapper families are renamed out of the shared/public seam, stale task-store boundary TOMLs are removed, and SQLite observability remains internal to `atm-storage-rusqlite` |
-| `AC.7` | `planned` | `feature/pAC-s7-sqlserver-readiness-proof` | `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof` | the final contract is explicitly proven suitable for a future SQL Server backend without another storage-architecture reset |
+| `AC.7` | `complete` | `feature/pAC-s7-sqlserver-readiness-proof` | `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof` | the post-`AC.6` contract is explicitly proven backend-neutral, `atm-storage-sqlserver-proof` compiles against `atm-storage` with no `atm-core` dependency, and the remaining SQL Server work is backend implementation scope only |
 
 ## Phase Exit Criteria
 
@@ -45,4 +45,6 @@ Phase `AC` is not complete until all of the following are true:
 - the repo has no remaining message-shaped RPC/storage/domain clone families that contradict the generic RPC envelope model
 - speculative task-store code is not treated as approved Phase `AC`
   compatibility surface
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md` proves future SQL Server
+  work can implement the existing contract without another architecture reset
 - `docs/plans/phase-AC/issues.md` has no open issue whose owning sprint is still incomplete

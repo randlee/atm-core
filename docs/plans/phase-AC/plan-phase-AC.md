@@ -320,12 +320,20 @@ Purpose:
 - prove the resulting contract is small enough to audit and suitable for a
   future SQL Server backend
 - record the exact remaining backend-only work for `atm-storage-sqlserver`
+- land a compile-only `atm-storage-sqlserver-proof` crate that demonstrates the
+  final contract can be implemented without an `atm-core` dependency
 
 Execution branch:
 - `feature/pAC-s7-sqlserver-readiness-proof`
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof`
+
+Completion note:
+- `AC.7` is complete when `docs/plans/phase-AC/sqlserver-readiness-proof.md`
+  is written from the real post-`AC.6` code state and
+  `crates/atm-storage-sqlserver-proof` compiles against `atm-storage` without
+  an `atm-core` edge
 
 ## Immediate Planning Outputs
 
@@ -348,7 +356,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/plans/phase-AC/crate-graph-migration-map.md`
 - `docs/plans/phase-AC/implementation-ownership-map.md`
 - `docs/plans/phase-AC/atm-storage-contract-candidate.md`
-- `docs/plans/phase-AC/sqlserver-readiness-proof.md` reserved as the AC.7 proof artifact path
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md`
 
 ## Phase Exit Criteria
 
@@ -367,6 +375,11 @@ Phase `AC` is not complete until:
 - the resulting storage contract is explicitly documented as suitable for a future `atm-storage-sqlserver` implementation
 - speculative task-store code is not treated as an approved compatibility line
   inside the shared storage contract
+
+Phase `AC` closeout evidence now includes:
+
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md`
 
 ## Phase Execution Guardrails
 
