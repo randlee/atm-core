@@ -8,9 +8,9 @@ use std::sync::{Arc, Mutex};
 )]
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
-    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
+    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, MailStoreMessageRecord,
+    ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
     TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
     TaskStoreDetachMessageLinkResponse, TaskStoreDoctor, TaskStoreDoctorReport,
