@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.2
 worktree: ../atm-core-worktrees/feature/pAC-s2-atm-storage-claude-extraction
 branch: feature/pAC-s2-atm-storage-claude-extraction
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -95,7 +95,7 @@ Merge-forward rule:
 - The backend-facing implementation shape is explicit and small:
 
   ```rust
-  pub struct ClaudeStorageBackend {
+  struct ClaudeStorageBackend {
       // private backend fields only
   }
 
@@ -120,13 +120,13 @@ Claude seam that must move below the trait line.
 These must become internal `atm-storage-claude` concerns rather than shared
 contract types:
 
-- `ClaudeCodeRosterMember`
-- `ClaudeCodeTeamRoster`
-- `InboxSourceFileRecord`
-- `ClaudeCompatibilityDeliveryMode`
-- the `InboxIngress*` wrapper family
-- the `InboxExport*` wrapper family
-- the `delivery_execution::ClaudeInboxWriter` seam
+- `ProjectionRosterMember`
+- `ProjectionRoster`
+- `SourceFileRecord`
+- `ProjectionAppendMode`
+- the `SourceIngress*` wrapper family
+- the `ProjectionExport*` wrapper family
+- the `delivery_execution::ProjectionMailboxWriter` seam
 
 The canonical shared contract must remain above these projections:
 
@@ -149,11 +149,11 @@ Implementation order for `AC.2`:
 2. Move Claude inbox read/write/repair ownership out of `atm-core` module seams.
 3. Rework roster projection so:
    - canonical `RosterMember` / `RosterSnapshot` stay shared
-   - `ClaudeCodeRosterMember` / `ClaudeCodeTeamRoster` become backend-internal translation helpers or disappear entirely
+   - `ProjectionRosterMember` / `ProjectionRoster` become backend-internal translation helpers or disappear entirely
 4. Rework inbox import/export ownership so:
-   - `InboxIngress*` and `InboxExport*` wrappers no longer define the shared contract
+   - `SourceIngress*` and `ProjectionExport*` wrappers no longer define the shared contract
    - Claude-specific compatibility machinery lives behind backend-internal functions or private helper structs
-5. Delete or internalize `delivery_execution::ClaudeInboxWriter`.
+5. Delete or internalize `delivery_execution::ProjectionMailboxWriter`.
 6. Update boundary TOMLs to make `atm-storage-claude -> atm-storage` explicit and `atm-storage-claude -X-> atm-core` explicit.
 
 Proof this sprint must leave behind:
@@ -161,7 +161,7 @@ Proof this sprint must leave behind:
 - the Claude backend owns its own projection and repair logic
 - `atm-core` no longer exposes Claude-specific public storage types as if they were shared domain types
 - the shared contract remains clean even if the backend still has rich internal helpers
-- any `InboxIngress*` / `InboxExport*` / `ClaudeInboxWriter` cleanup left for
+- any `SourceIngress*` / `ProjectionExport*` / `ProjectionMailboxWriter` cleanup left for
   `AC.6` is verification-only, not deferred ownership
 
 ## Acceptance Criteria
@@ -173,17 +173,17 @@ Proof this sprint must leave behind:
   backend contract, and future task work must start from canonical
   Claude-schema behavior plus Pydantic validation
 - malformed-ingress and file-lock behavior remain below the trait line
-- `ClaudeCodeRosterMember` and `ClaudeCodeTeamRoster` do not survive as shared public contract types
-- the `InboxIngress*` and `InboxExport*` wrapper families are not promoted into `atm-storage`
+- `ProjectionRosterMember` and `ProjectionRoster` do not survive as shared public contract types
+- the `SourceIngress*` and `ProjectionExport*` wrapper families are not promoted into `atm-storage`
 
 ## Required Validation
 
 - `cargo test -p atm-storage-claude`
 - `cargo clippy -p atm-storage-claude -- -D warnings`
 - `cargo tree -p atm-storage-claude`
-- `cargo test -p atm-core`
+- `cargo test --manifest-path crates/atm-core/Cargo.toml`
 - `git diff --check`
-- `rg -n "ClaudeCodeRosterMember|ClaudeCodeTeamRoster|InboxIngress|InboxExport|ClaudeInboxWriter" crates/atm-storage crates/atm-storage-claude crates/atm-core -S`
+- `rg -n "ProjectionRosterMember|ProjectionRoster|SourceIngress|ProjectionExport|ProjectionMailboxWriter" crates/atm-storage crates/atm-storage-claude crates/atm-core -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage-claude`
 
 ## Required Document Updates
@@ -198,6 +198,25 @@ Proof this sprint must leave behind:
   records live under `atm-storage-claude` and describe which crates may depend
   on the backend crate
 - document the forbidden edge `atm-storage-claude -> atm-core` in those boundary records and the owning boundary notes
+
+## Closure Note
+
+`AC.2` closed with the concrete Claude backend extracted into
+`crates/atm-storage-claude`, private `ClaudeStorageBackend` implementations for
+`MessageStore` and `RosterStore`, and boundary TOMLs that make the
+`atm-storage-claude -> atm-storage` / `atm-storage-claude -X-> atm-core`
+contract machine-checkable.
+
+This sprint also removed the old Claude-specific seam names from the active
+`atm-core` storage surface:
+
+- `ClaudeCodeRosterMember` -> `ProjectionRosterMember`
+- `ClaudeCodeTeamRoster` -> `ProjectionRoster`
+- `InboxSourceFileRecord` -> `SourceFileRecord`
+- `ClaudeCompatibilityDeliveryMode` -> `ProjectionAppendMode`
+- `InboxIngress*` -> `SourceIngress*`
+- `InboxExport*` -> `ProjectionExport*`
+- `ClaudeInboxWriter` -> `ProjectionMailboxWriter`
 
 ## Risks And Watchouts
 

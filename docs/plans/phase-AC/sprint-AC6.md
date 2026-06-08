@@ -52,7 +52,7 @@ Primary closure rule:
 
 ## Deliverables
 
-- [ ] delete any surviving `InboxIngress*` / `InboxExport*` public wrapper
+- [ ] delete any surviving `SourceIngress*` / `ProjectionExport*` public wrapper
   families from:
   - `crates/`
   - `docs/plans/phase-AC/`
@@ -63,9 +63,9 @@ Primary closure rule:
   - `SqliteBoundaryAssembly`
 - [ ] confirm Claude-only projections remain internal to
   `crates/atm-storage-claude/`, including:
-  - `ClaudeCodeRosterMember`
-  - `ClaudeCodeTeamRoster`
-  - `InboxSourceFileRecord`
+  - `ProjectionRosterMember`
+  - `ProjectionRoster`
+  - `SourceFileRecord`
 - [ ] confirm SQLite-only observability helpers remain internal to
   `crates/atm-storage-rusqlite/`, including:
   - `SqliteObservability`
@@ -137,7 +137,7 @@ Proof this sprint must leave behind:
 - `git diff --check`
 - `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates docs -S`
 - `rg -n "pub trait TaskStore|pub trait TaskStoreDoctor|TaskStoreTaskRecord|TaskStoreTaskMetadata|TaskStoreDoctorReport" crates -S`
-- `rg -n "InboxIngress.*Request|InboxIngress.*Response|InboxExport.*Request|InboxExport.*Response|SqliteBoundaryAssembly|RuntimeBundle" crates docs -S`
+- `rg -n "SourceIngress.*Request|SourceIngress.*Response|ProjectionExport.*Request|ProjectionExport.*Response|SqliteBoundaryAssembly|RuntimeBundle" crates docs -S`
 
 ## Required Document Updates
 

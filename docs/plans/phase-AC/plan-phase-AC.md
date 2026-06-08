@@ -241,6 +241,13 @@ Purpose:
 Execution branch:
 - `feature/pAC-s2-atm-storage-claude-extraction`
 
+Current status:
+- complete
+- `crates/atm-storage-claude` now owns the concrete Claude inbox storage
+  backend behind `atm-storage::MessageStore` and `atm-storage::RosterStore`
+- `atm-core` retains only generic source/projection seam names during the
+  later consumer-cutover window
+
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s2-atm-storage-claude-extraction`
 

@@ -8,7 +8,7 @@ use crate::error::AtmError;
 use crate::mailbox::atomic;
 use crate::mailbox::source::{SourceFile, discover_source_paths, load_source_files};
 use crate::schema::MessageEnvelope;
-use crate::schema::inbox_message::SharedInboxExportPolicy;
+use crate::schema::inbox_message::SharedProjectionExportPolicy;
 use crate::types::{AgentName, TeamName};
 
 const MAX_RECOVERED_MESSAGE_SET_COUNT: usize = 2;
@@ -62,7 +62,7 @@ pub(crate) fn append_compat_mailbox_message(
 /// after loading the existing compatibility inbox projection.
 pub(crate) fn append_compat_mailbox_message_set(
     path: &Path,
-    export_policy: SharedInboxExportPolicy,
+    export_policy: SharedProjectionExportPolicy,
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
     validate_recovered_message_set(messages)?;
@@ -80,14 +80,14 @@ pub(crate) fn append_compat_mailbox_message_set(
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],
-    export_policy: SharedInboxExportPolicy,
+    export_policy: SharedProjectionExportPolicy,
 ) -> Result<(), AtmError> {
     atomic::write_messages(path, messages, export_policy)
 }
 
 /// Write one already-loaded multi-source compatibility inbox projection set.
 pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    let mut export_policy_by_dir = BTreeMap::<PathBuf, SharedInboxExportPolicy>::new();
+    let mut export_policy_by_dir = BTreeMap::<PathBuf, SharedProjectionExportPolicy>::new();
     for source in source_files {
         let config_dir = source
             .path
@@ -106,12 +106,12 @@ pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Re
     Ok(())
 }
 
-pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> {
+pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedProjectionExportPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
         .map(|config| config.claude_jsonl_body_export_max_bytes)
-        .unwrap_or_else(|| SharedInboxExportPolicy::default().atm_authored_body_export_max_bytes);
-    Ok(SharedInboxExportPolicy {
+        .unwrap_or_else(|| SharedProjectionExportPolicy::default().atm_authored_body_export_max_bytes);
+    Ok(SharedProjectionExportPolicy {
         atm_authored_body_export_max_bytes,
     })
 }
@@ -201,7 +201,7 @@ mod tests {
     };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::inbox_message::SharedInboxExportPolicy;
+    use crate::schema::inbox_message::SharedProjectionExportPolicy;
     use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_QA, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp};
@@ -362,7 +362,7 @@ mod tests {
             sample_message(TEST_QA, "new first"),
             sample_message(TEST_SENDER, "new second"),
         ];
-        let export_policy = SharedInboxExportPolicy::default();
+        let export_policy = SharedProjectionExportPolicy::default();
 
         append_compat_mailbox_message(&path, &existing).expect("seed existing");
         append_compat_mailbox_message_set(&path, export_policy, &appended).expect("append set");
@@ -385,7 +385,7 @@ mod tests {
         ];
 
         let error =
-            append_compat_mailbox_message_set(&path, SharedInboxExportPolicy::default(), &appended)
+            append_compat_mailbox_message_set(&path, SharedProjectionExportPolicy::default(), &appended)
                 .expect_err("reject oversized recovered message set");
         assert!(error.is_validation());
         assert!(error.message.contains("exceeded 2 messages"));

@@ -144,7 +144,7 @@ Proof this sprint must leave behind:
 - `git diff --check`
 - `rg -n "StorageBackends<|struct StorageBackends" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`
-- `rg -n "ClaudeInboxWriter|RuntimeBundle|InboxIngress|InboxExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
+- `rg -n "ProjectionMailboxWriter|RuntimeBundle|SourceIngress|ProjectionExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 
 ## Required Document Updates
 

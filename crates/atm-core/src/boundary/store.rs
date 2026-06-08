@@ -86,7 +86,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeCodeRosterMember {
+pub struct ProjectionRosterMember {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -94,17 +94,17 @@ pub struct ClaudeCodeRosterMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeCodeTeamRoster {
+pub struct ProjectionRoster {
     pub team_name: TeamName,
-    pub members: Arc<[ClaudeCodeRosterMember]>,
+    pub members: Arc<[ProjectionRosterMember]>,
 }
 
-impl ClaudeCodeTeamRoster {
+impl ProjectionRoster {
     pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
         let members = records
             .iter()
             .filter(|record| record.harness == RosterHarness::ClaudeCode)
-            .map(|record| ClaudeCodeRosterMember {
+            .map(|record| ProjectionRosterMember {
                 member_name: record.agent_name.clone(),
                 harness: record.harness,
                 inbox_path: None,
@@ -277,14 +277,14 @@ pub struct ConfigDoctorReport {
 
 /// Imported source-file snapshot returned by inbox ingress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxSourceFileRecord {
+pub struct SourceFileRecord {
     pub path: PathBuf,
     pub messages: Vec<MessageEnvelope>,
 }
 
 /// Stub inbox-ingress request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressImportRequest {
+pub struct SourceIngressImportRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
     pub agent: AgentName,
@@ -292,95 +292,95 @@ pub struct InboxIngressImportRequest {
 
 /// Stub inbox-ingress response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressImportResponse {
-    pub source_files: Vec<InboxSourceFileRecord>,
+pub struct SourceIngressImportResponse {
+    pub source_files: Vec<SourceFileRecord>,
 }
 
 /// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressIdentityFingerprintRequest {
+pub struct SourceIngressIdentityFingerprintRequest {
     pub message: MessageEnvelope,
 }
 
 /// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressIdentityFingerprintResponse {
+pub struct SourceIngressIdentityFingerprintResponse {
     pub fingerprint: Option<MessageFingerprint>,
 }
 
 /// Stub inbox-ingress diagnostics request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressDiagnosticsRequest {
-    pub source_files: Vec<InboxSourceFileRecord>,
+pub struct SourceIngressDiagnosticsRequest {
+    pub source_files: Vec<SourceFileRecord>,
 }
 
 /// Stub inbox-ingress diagnostics response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressDiagnosticsResponse {
+pub struct SourceIngressDiagnosticsResponse {
     pub duplicate_message_ids: usize,
     pub messages_without_ids: usize,
 }
 
 /// Canonical Phase R inbox-ingress request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxIngressRequest;
+pub struct SourceIngressRequest;
 
 /// Canonical Phase R inbox-ingress response entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxIngressResponse;
+pub struct SourceIngressResponse;
 
 /// Stub inbox-export request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportRecordRequest {
-    pub source_files: Vec<InboxSourceFileRecord>,
+pub struct ProjectionExportRecordRequest {
+    pub source_files: Vec<SourceFileRecord>,
 }
 
 /// Stub inbox-export response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportRecordResponse {
+pub struct ProjectionExportRecordResponse {
     pub committed_paths: usize,
 }
 
 /// Stub inbox-export re-export request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportReexportMessageRequest {
+pub struct ProjectionExportReexportMessageRequest {
     pub path: PathBuf,
     pub messages: Vec<MessageEnvelope>,
 }
 
 /// Stub inbox-export re-export response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportReexportMessageResponse {
+pub struct ProjectionExportReexportMessageResponse {
     pub wrote_messages: usize,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum ClaudeCompatibilityDeliveryMode {
+pub enum ProjectionAppendMode {
     RecoveredLogicalMessageSet,
 }
 
 /// Explicit inbox-export append-message-set request for recovered Claude delivery.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportAppendMessageSetRequest {
+pub struct ProjectionExportAppendMessageSetRequest {
     pub path: PathBuf,
     pub messages: Vec<MessageEnvelope>,
-    pub mode: ClaudeCompatibilityDeliveryMode,
+    pub mode: ProjectionAppendMode,
 }
 
 /// Explicit inbox-export append-message-set response for recovered Claude delivery.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportAppendMessageSetResponse {
+pub struct ProjectionExportAppendMessageSetResponse {
     pub wrote_messages: usize,
 }
 
 /// Canonical Phase R inbox-export request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxExportRequest;
+pub struct ProjectionExportRequest;
 
 /// Canonical Phase R inbox-export response entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxExportResponse;
+pub struct ProjectionExportResponse;
 
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -524,51 +524,51 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
 }
 
-/// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
-pub trait InboxIngress: sealed::Sealed {
+/// BOUNDARY-SourceIngress — see docs/atm-core/boundaries.md.
+pub trait SourceIngress: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when compatibility inbox material cannot be
     /// imported, fingerprinted, or diagnosed into ATM-owned state.
     fn import_inbox_source(
         &self,
-        request: InboxIngressImportRequest,
-    ) -> Result<InboxIngressImportResponse, AtmError>;
+        request: SourceIngressImportRequest,
+    ) -> Result<SourceIngressImportResponse, AtmError>;
     fn compute_identity_fingerprint(
         &self,
-        request: InboxIngressIdentityFingerprintRequest,
-    ) -> InboxIngressIdentityFingerprintResponse;
+        request: SourceIngressIdentityFingerprintRequest,
+    ) -> SourceIngressIdentityFingerprintResponse;
     fn report_diagnostics(
         &self,
-        request: InboxIngressDiagnosticsRequest,
-    ) -> InboxIngressDiagnosticsResponse;
+        request: SourceIngressDiagnosticsRequest,
+    ) -> SourceIngressDiagnosticsResponse;
 }
 
-/// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
-pub trait InboxExport: sealed::Sealed {
+/// BOUNDARY-ProjectionExport — see docs/atm-core/boundaries.md.
+pub trait ProjectionExport: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when ATM-owned state cannot be projected back to the
     /// compatibility inbox/export surfaces.
     fn export_record(
         &self,
-        request: InboxExportRecordRequest,
-    ) -> Result<InboxExportRecordResponse, AtmError>;
+        request: ProjectionExportRecordRequest,
+    ) -> Result<ProjectionExportRecordResponse, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when the message re-export cannot be materialized.
     fn reexport_message(
         &self,
-        request: InboxExportReexportMessageRequest,
-    ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+        request: ProjectionExportReexportMessageRequest,
+    ) -> Result<ProjectionExportReexportMessageResponse, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when a recovered Claude logical message set cannot
     /// be materialized through one owned export operation.
     fn append_message_set(
         &self,
-        request: InboxExportAppendMessageSetRequest,
-    ) -> Result<InboxExportAppendMessageSetResponse, AtmError>;
+        request: ProjectionExportAppendMessageSetRequest,
+    ) -> Result<ProjectionExportAppendMessageSetResponse, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.

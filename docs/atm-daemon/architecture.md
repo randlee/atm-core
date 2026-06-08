@@ -159,7 +159,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   delivery-policy coordinator plus explicit event-family state machines rather
   than through transport- or command-specific conditional branches
 - Phase `Yb` adds one daemon-owned execution rule:
-  - Claude delivery uses the `InboxExport` adapter only
+  - Claude delivery uses the `ProjectionExport` adapter only
   - non-Claude delivery uses the `NonClaudeOutbound` adapter only
   - notification remains a separate `NotificationSink` side effect
   - the daemon-owned non-Claude adapter is
