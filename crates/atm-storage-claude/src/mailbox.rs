@@ -182,7 +182,7 @@ fn discover_source_paths(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
-    let primary = crate::paths::inbox_path(home_dir, team, agent)?;
+    let primary = crate::paths::inbox_path(home_dir, team, agent);
     let mut paths = Vec::new();
     if primary.exists() {
         paths.push(primary.clone());
@@ -348,7 +348,7 @@ fn all_source_files(home_dir: &Path) -> Result<Vec<SourceProjectionFile>, AtmErr
 }
 
 pub fn save_message(home_dir: &Path, message: &Message) -> Result<(), AtmError> {
-    let path = crate::paths::inbox_path(home_dir, &message.team, &message.agent)?;
+    let path = crate::paths::inbox_path(home_dir, &message.team, &message.agent);
     let mut messages = if path.exists() {
         read_message_file(&path)?
     } else {

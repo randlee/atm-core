@@ -59,7 +59,8 @@ mod tests {
 
     use atm_storage::{
         AgentName, IsoTimestamp, Message, MessageEnvelope, MessageKey, MessageQuery, MessageStore,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, TeamName,
+        ROLE_TEAM_LEAD, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, TeamName,
     };
     use tempfile::tempdir;
 
@@ -68,8 +69,6 @@ mod tests {
     const TEST_TEAM: &str = "test-team";
     const TEST_SENDER: &str = "test-sender";
     const TEST_SENDER_2: &str = "test-sender-2";
-    // Protocol identity: this must stay aligned with the reserved ATM lead role.
-    const ROLE_TEAM_LEAD: &str = "team-lead";
 
     fn sample_message(team: &str, agent: &str, sender: &str, text: &str) -> Message {
         let team = TeamName::from_str(team).expect("team");

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::{DoctorFinding, MessageFingerprint};
+use super::mail::DoctorFinding;
 use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -406,36 +406,10 @@ pub(crate) use atm_storage::compat::{
     ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
     ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
     ProjectionExportReexportMessageResponse, SourceFileRecord, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressImportRequest, SourceIngressImportResponse,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
 };
-
-/// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct SourceIngressIdentityFingerprintRequest {
-    pub message: MessageEnvelope,
-}
-
-/// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct SourceIngressIdentityFingerprintResponse {
-    pub fingerprint: Option<MessageFingerprint>,
-}
-
-/// Canonical Phase R inbox-ingress request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct SourceIngressRequest;
-
-/// Canonical Phase R inbox-ingress response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct SourceIngressResponse;
-
-/// Canonical Phase R inbox-export request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct ProjectionExportRequest;
-
-/// Canonical Phase R inbox-export response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct ProjectionExportResponse;
 
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
