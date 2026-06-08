@@ -22,11 +22,13 @@ fn replay_source_static(label: &'static str) -> ReplaySource {
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
     let roster_store = assembly.roster_store();
-    let team = TEST_TEAM.parse().expect("team");
+    let team = TEST_TEAM
+        .parse::<atm_core::types::TeamName>()
+        .expect("team");
     let members = members
         .iter()
         .map(|name| {
-            atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+            atm_core::boundary::roster_member_record_from_claude_code_member(
                 team.clone(),
                 AgentMember::with_name((*name).parse().expect("member")),
             )

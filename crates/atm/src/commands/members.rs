@@ -109,7 +109,9 @@ mod tests {
             )
             .expect("write config");
             let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
-            let team = TEST_TEAM.parse().expect("team");
+            let team = TEST_TEAM
+                .parse::<atm_core::types::TeamName>()
+                .expect("team");
             let members = vec![
                 RosterMemberRecord {
                     team_name: team.clone(),

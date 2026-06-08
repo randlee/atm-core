@@ -87,6 +87,7 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+#[allow(deprecated)]
 pub use boundary::{
     AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
     ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,

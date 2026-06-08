@@ -1,10 +1,10 @@
 use super::SqliteRosterStore;
 use crate::shared_db::{deserialize_json, serialize_json};
+use atm_storage::AtmError;
 use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::AtmError;
 use rusqlite::params;
 use serde_json::{Map, Value};
 
@@ -206,7 +206,8 @@ fn build_roster_member(
             "Repair the malformed team_roster.agent_name row before retrying the roster query.",
         )
     })?;
-    let metadata_json = deserialize_json::<Map<String, Value>>(&row.metadata_json, "team-roster metadata")?;
+    let metadata_json =
+        deserialize_json::<Map<String, Value>>(&row.metadata_json, "team-roster metadata")?;
     let model = if row.model.is_empty() {
         ModelName::default()
     } else {

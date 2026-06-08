@@ -681,6 +681,7 @@ mod tests {
     impl crate::boundary::sealed::Sealed for TestRosterStore {}
 
     impl boundary::MailStore for UnusedMailStore {
+        #[allow(deprecated)]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,

@@ -514,6 +514,7 @@ mod tests {
     impl boundary::sealed::Sealed for NoopMailStore {}
 
     impl boundary::MailStore for NoopMailStore {
+        #[allow(deprecated)]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,

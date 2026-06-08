@@ -33,11 +33,11 @@ impl DaemonRuntimeSqliteObserver {
 
 impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
     fn emit_sqlite_event(&self, event: RuntimeSqliteEvent) -> Result<(), AtmError> {
-        let action = ActionName::new(event.action).map_err(|source| {
+        let action = ActionName::new(event.action()).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
                 .with_source(source)
         })?;
-        let outcome = OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+        let outcome = OutcomeLabel::new(event.outcome().as_str()).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem outcome")
                 .with_source(source)
         })?;
@@ -45,8 +45,8 @@ impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
             DaemonSubsystem::Composition,
             &action,
             &outcome,
-            &event.message,
-            event.error_code,
+            event.message(),
+            event.error_code(),
         )
     }
 }

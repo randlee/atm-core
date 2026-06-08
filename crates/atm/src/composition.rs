@@ -588,7 +588,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })
-                .collect();
+                .collect::<Vec<_>>();
             roster_store
                 .replace_roster(
                     &team,

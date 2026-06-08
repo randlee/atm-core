@@ -3,11 +3,11 @@ mod stmt_cache;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 
-use crate::shared_db::{
-    SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
-};
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+};
+use crate::shared_db::{
+    SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode};
 use std::panic::{AssertUnwindSafe, catch_unwind};

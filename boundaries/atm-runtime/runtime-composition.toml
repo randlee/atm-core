@@ -24,7 +24,7 @@ io_owns = ["runtime_dependency_assembly", "config_doctor_assembly", "replay_stor
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap"]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-core", "atm-storage-rusqlite"]
 forbidden_edges = [
   "atm -> atm-storage-rusqlite",

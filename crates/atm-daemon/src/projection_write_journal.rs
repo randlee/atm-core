@@ -140,7 +140,7 @@ pub(crate) fn ingest_claude_team_config_from_watch_batch(
         .members
         .into_iter()
         .map(|member| {
-            atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+            atm_core::boundary::roster_member_record_from_claude_code_member(
                 request.team.clone(),
                 member,
             )

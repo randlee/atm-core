@@ -1,8 +1,9 @@
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+#[cfg(test)]
+use crate::NullSqliteObservability;
 use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
+use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -160,10 +161,6 @@ impl Drop for SharedDbConnectionGuard {
 }
 
 impl SharedDb {
-    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::open_with_observability(path, Arc::new(NullSqliteObservability))
-    }
-
     #[cfg(test)]
     pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
         Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
@@ -289,6 +286,14 @@ impl SharedDb {
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
+    }
+
+    pub(crate) fn target_path(&self) -> Option<&PathBuf> {
+        match self.target.as_ref() {
+            SharedDbTarget::Path(path) => Some(path),
+            #[cfg(test)]
+            SharedDbTarget::InMemory { .. } => None,
+        }
     }
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {

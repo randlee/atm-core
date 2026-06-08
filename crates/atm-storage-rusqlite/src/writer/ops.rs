@@ -26,7 +26,9 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::UpsertMessage(request) => execute_upsert_message(request, connection, cache, target),
+        WriteOp::UpsertMessage(request) => {
+            execute_upsert_message(request, connection, cache, target)
+        }
     }
 }
 
