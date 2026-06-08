@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 #[serde(rename_all = "camelCase")]
 struct StoredMember {
     name: AgentName,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "AgentId::is_empty")]
     agent_id: AgentId,
     #[serde(default)]
     agent_type: atm_storage::contract::AgentType,
