@@ -11,9 +11,9 @@ struct ClaudeStorageBackend {
 }
 
 impl ClaudeStorageBackend {
-    #[expect(
+    #[allow(
         dead_code,
-        reason = "Phase AC.2 lands the backend type before later consumer cutover."
+        reason = "Called from tests while still appearing dead in the production compile."
     )]
     fn new(home_dir: PathBuf) -> Self {
         Self { home_dir }

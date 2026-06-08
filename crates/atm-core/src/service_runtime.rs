@@ -46,9 +46,9 @@ pub(crate) trait RetainedServiceRuntime:
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
     fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
-    #[expect(
+    #[allow(
         dead_code,
-        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
+        reason = "Called from tests while still appearing dead in the production compile."
     )]
     fn rebuild_compat_inbox_projection(
         &self,
