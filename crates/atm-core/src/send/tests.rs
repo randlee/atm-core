@@ -12,9 +12,9 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    ProjectionAppendMode, MailMessageState, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageKey, NonClaudeOutboundDeliveryRequest, RosterHarness,
-    RosterMemberKind, RosterMemberRecord,
+    MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
+    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterHarness, RosterMemberKind,
+    RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};

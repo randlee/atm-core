@@ -36,4 +36,3 @@ pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmEr
 
     Ok(())
 }
-

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub use atm_storage::contract::AgentType;
 use crate::types::{AgentId, AgentName, ModelName, PaneId};
+pub use atm_storage::contract::AgentType;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
