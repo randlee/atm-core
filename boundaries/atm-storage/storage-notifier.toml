@@ -19,7 +19,7 @@ io_owns = ["message_received_notifications", "roster_changed_notifications"]
 io_forbidden = ["task_changed_notifications", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-storage-claude", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-core", "atm-runtime", "atm-storage-claude", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core"]
 
@@ -43,4 +43,3 @@ review_gates = ["post_commit_notifications_only"]
 [status]
 state = "concrete_landed"
 notes = ["AC.1 created the shared notification trait in crates/atm-storage", "task notifications are intentionally out of scope for the initial contract"]
-

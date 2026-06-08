@@ -80,8 +80,7 @@ impl boundary::RemoteReplayStore for SqliteRemoteReplayStore {
     }
 
     fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
-        self.backend
-            .purge_expired_remote_replay_states(&now.into_inner().to_rfc3339())
+        self.backend.purge_expired_remote_replay_states(now)
     }
 }
 

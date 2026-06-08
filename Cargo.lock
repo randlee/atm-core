@@ -191,6 +191,7 @@ name = "atm-runtime"
 version = "1.2.1"
 dependencies = [
  "agent-team-mail-core",
+ "atm-storage",
  "atm-storage-rusqlite",
  "serde_json",
 ]
@@ -212,6 +213,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "tracing",
  "ulid",
  "uuid",
 ]

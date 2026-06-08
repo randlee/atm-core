@@ -4,17 +4,15 @@
 //! message and roster contracts.
 
 mod mailbox_metadata;
-pub mod observability;
 mod roster_store;
 mod shared_db;
 mod writer;
 
 use crate::mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
-use crate::observability::{NullSqliteObservability, SqliteObservability};
-use atm_storage::AtmError;
+use atm_storage::{AtmError, IsoTimestamp, NullSqliteObservability, SqliteObservability};
 use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
-use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::types::{AgentName, TeamName};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
@@ -868,7 +866,8 @@ impl SqliteStorageBackend {
         })
     }
 
-    pub fn purge_expired_remote_replay_states(&self, now: &str) -> Result<usize, AtmError> {
+    pub fn purge_expired_remote_replay_states(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
+        let now = now.into_inner().to_rfc3339();
         self.message_store.db.with_transaction(|transaction| {
             transaction
                 .execute(

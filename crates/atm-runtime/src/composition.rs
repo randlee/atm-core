@@ -11,7 +11,7 @@ use atm_core::home::{host_mail_db_path, host_runtime_dir};
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime, load_atm_config,
 };
-use atm_storage_rusqlite::observability::SqliteObservability;
+use atm_storage::SqliteObservability;
 use atm_storage_rusqlite::{
     SqliteIngestReplayStateRecord, SqliteMailHealthSnapshot, SqliteMailboxMetadataCounts,
     SqliteMailboxMetadataRow, SqliteMessageStateRecord, SqliteRosterHealthSnapshot,
