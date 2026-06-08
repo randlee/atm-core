@@ -3,7 +3,6 @@ all-features = false
 no-default-features = false
 
 [advisories]
-vulnerability = "deny"
 yanked = "deny"
 ignore = []
 
@@ -19,7 +18,6 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
 
 [licenses]
-unlicensed = "deny"
 allow = [
   "Apache-2.0",
   "MIT",

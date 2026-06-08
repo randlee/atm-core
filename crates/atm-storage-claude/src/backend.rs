@@ -59,14 +59,14 @@ mod tests {
 
     use atm_storage::{
         AgentName, IsoTimestamp, Message, MessageEnvelope, MessageKey, MessageQuery, MessageStore,
-        ROLE_TEAM_LEAD, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        TeamName,
+        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, TeamName,
     };
     use tempfile::tempdir;
 
     use super::ClaudeStorageBackend;
 
     const TEST_TEAM: &str = "test-team";
+    const TEST_LEAD: &str = "test-lead";
     const TEST_SENDER: &str = "test-sender";
     const TEST_SENDER_2: &str = "test-sender-2";
 
@@ -102,8 +102,8 @@ mod tests {
     fn message_store_round_trips_primary_array_inbox() {
         let tempdir = tempdir().expect("tempdir");
         let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
-        let first = sample_message(TEST_TEAM, ROLE_TEAM_LEAD, TEST_SENDER, "one");
-        let second = sample_message(TEST_TEAM, ROLE_TEAM_LEAD, TEST_SENDER_2, "two");
+        let first = sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER, "one");
+        let second = sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER_2, "two");
 
         backend.save_message(&first).expect("save first");
         backend.save_message(&second).expect("save second");
@@ -111,7 +111,7 @@ mod tests {
         let listed = backend
             .list_messages(&MessageQuery {
                 team: TeamName::from_str(TEST_TEAM).expect("team"),
-                agent: AgentName::from_str(ROLE_TEAM_LEAD).expect("agent"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
                 sender: None,
                 task_id: None,
                 limit: None,
@@ -132,7 +132,7 @@ mod tests {
         let listed = backend
             .list_messages(&MessageQuery {
                 team: TeamName::from_str(TEST_TEAM).expect("team"),
-                agent: AgentName::from_str(ROLE_TEAM_LEAD).expect("agent"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
                 sender: None,
                 task_id: None,
                 limit: None,
@@ -150,7 +150,7 @@ mod tests {
             team_name: TeamName::from_str(TEST_TEAM).expect("team"),
             members: vec![RosterMember {
                 team_name: TeamName::from_str(TEST_TEAM).expect("team"),
-                agent_name: AgentName::from_str(ROLE_TEAM_LEAD).expect("agent"),
+                agent_name: AgentName::from_str(TEST_LEAD).expect("agent"),
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
                 agent_type: atm_storage::contract::AgentType::Lead,
@@ -166,7 +166,7 @@ mod tests {
             .load_roster(&TeamName::from_str(TEST_TEAM).expect("team"))
             .expect("load roster");
         assert_eq!(loaded.members.len(), 1);
-        assert_eq!(loaded.members[0].agent_name.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(loaded.members[0].agent_name.as_str(), TEST_LEAD);
 
         let teams = backend.list_teams().expect("teams");
         assert_eq!(teams, vec![TeamName::from_str(TEST_TEAM).expect("team")]);
@@ -181,12 +181,7 @@ mod tests {
 
         let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
         let error = backend
-            .save_message(&sample_message(
-                TEST_TEAM,
-                ROLE_TEAM_LEAD,
-                TEST_SENDER,
-                "one",
-            ))
+            .save_message(&sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER, "one"))
             .expect_err("save should fail when inboxes path is a file");
         assert!(error.message.contains("failed to create mailbox directory"));
     }
@@ -213,17 +208,13 @@ mod tests {
             .join(TEST_TEAM)
             .join("inboxes");
         fs::create_dir_all(&inbox_dir).expect("inboxes");
-        fs::write(
-            inbox_dir.join(format!("{ROLE_TEAM_LEAD}.json")),
-            "{not-json",
-        )
-        .expect("inbox");
+        fs::write(inbox_dir.join(format!("{TEST_LEAD}.json")), "{not-json").expect("inbox");
 
         let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
         let error = backend
             .list_messages(&MessageQuery {
                 team: TeamName::from_str(TEST_TEAM).expect("team"),
-                agent: AgentName::from_str(ROLE_TEAM_LEAD).expect("agent"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
                 sender: None,
                 task_id: None,
                 limit: None,
