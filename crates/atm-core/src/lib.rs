@@ -87,36 +87,24 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
-#[allow(
-    deprecated,
-    reason = "AC.4 preserves the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-)]
 pub use boundary::{
-    AckTransition, AtmProtocol, ProjectionExport,
-    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
-    ProjectionExportRequest, ProjectionExportResponse, ProjectionRoster, ProjectionRosterMember,
+    AckTransition, AtmProtocol, ProjectionAppendMessageSetRequest,
+    ProjectionAppendMessageSetResponse, ProjectionExport, ProjectionRecordRequest,
+    ProjectionRecordResponse, ProjectionReexportMessageRequest,
+    ProjectionReexportMessageResponse, ProjectionRoster, ProjectionRosterMember,
     ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
     ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
-    MailStoreBootstrapResponse, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
+    MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
     MailStoreMessageRecord, MessageFingerprint, MessageKey, NotificationEvent, NotificationSink,
     ReconcileCoordinator, ReconcileRequest, ReconcileResult, RemoteReplayStateRecord,
     RemoteReplayStore, RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord,
     RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
     RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceFileRecord,
-    SourceIngress, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
-    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
-    SourceIngressImportRequest, SourceIngressImportResponse, SourceIngressRequest,
-    SourceIngressResponse, StatusSource, TaskState, TaskStore,
-    TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
-    TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
-    TaskStoreDetachMessageLinkResponse, TaskStoreDoctor, TaskStoreDoctorReport,
-    TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse, TaskStoreQueryTaskMetadataRequest,
-    TaskStoreQueryTaskMetadataResponse, TaskStoreRecordAckTransitionRequest,
-    TaskStoreRecordAckTransitionResponse, TaskStoreRequest, TaskStoreResponse,
-    TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
-    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
+    SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse, SourceIngress,
+    StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;

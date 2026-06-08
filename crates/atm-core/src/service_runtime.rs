@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::boundary::{
-    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportReexportMessageRequest, MessageKey,
+    MessageKey, ProjectionAppendMessageSetRequest, ProjectionAppendMode,
+    ProjectionReexportMessageRequest,
 };
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -112,7 +112,6 @@ pub(crate) trait RetainedServiceRuntime:
 #[derive(Clone)]
 pub struct LocalServiceRuntime {
     pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
-    pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
@@ -123,14 +122,12 @@ pub struct LocalServiceRuntime {
 impl LocalServiceRuntime {
     pub fn new_with_delivery_boundaries(
         mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
-        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
         notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
             mail_store,
-            task_store,
             roster_store,
             non_claude_outbound,
             notification_sink,
@@ -142,7 +139,6 @@ impl fmt::Debug for LocalServiceRuntime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalServiceRuntime")
             .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
-            .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "non_claude_outbound",
@@ -343,7 +339,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     ) -> Result<(), AtmError> {
         let messages = load_store_backed_mailbox_projection(self, team, agent)?;
 
-        crate::direct_boundaries::reexport_messages(ProjectionExportReexportMessageRequest {
+        crate::direct_boundaries::reexport_messages(ProjectionReexportMessageRequest {
             path: inbox_path.to_path_buf(),
             messages,
         })
@@ -377,7 +373,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
-        crate::direct_boundaries::append_message_set(ProjectionExportAppendMessageSetRequest {
+        crate::direct_boundaries::append_message_set(ProjectionAppendMessageSetRequest {
             path: inbox_path.to_path_buf(),
             messages: messages.to_vec(),
             mode,
@@ -514,17 +510,6 @@ mod tests {
     impl boundary::sealed::Sealed for NoopMailStore {}
 
     impl boundary::MailStore for NoopMailStore {
-        #[allow(
-            deprecated,
-            reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-        )]
-        fn bootstrap(
-            &self,
-            _request: boundary::MailStoreBootstrapRequest,
-        ) -> Result<boundary::MailStoreBootstrapResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
         fn upsert_message(
             &self,
             _record: boundary::MailStoreMessageRecord,
@@ -596,63 +581,6 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
         ) -> Result<boundary::MailStoreHealthSnapshot, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopTaskStore;
-
-    impl boundary::sealed::Sealed for NoopTaskStore {}
-
-    impl boundary::TaskStore for NoopTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }
@@ -744,7 +672,6 @@ mod tests {
 
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -771,7 +698,6 @@ mod tests {
 
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -798,7 +724,6 @@ mod tests {
         let inbox_path = tempdir.path().join("recipient.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -825,7 +750,6 @@ mod tests {
         let notification_path = tempdir.path().join("notifications.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(

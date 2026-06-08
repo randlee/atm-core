@@ -10,7 +10,7 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::{atm_home, host_runtime_dir_from_home},
 };
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver, assemble_sqlite_runtime};
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 use atm_storage_rusqlite::SqliteWriterLockGuard;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
@@ -64,15 +64,6 @@ impl Drop for SqliteRuntimeGuard {
     }
 }
 
-#[derive(Debug, Default)]
-struct NullRuntimeSqliteObserver;
-
-impl RuntimeSqliteObserver for NullRuntimeSqliteObserver {
-    fn emit_sqlite_event(&self, _event: RuntimeSqliteEvent) -> Result<(), AtmError> {
-        Ok(())
-    }
-}
-
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
     let sqlite_db_path = path.as_ref().to_path_buf();
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
@@ -83,7 +74,6 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
                 .unwrap_or_else(|| Path::new("."))
                 .to_path_buf()
         }),
-        sqlite_observer: std::sync::Arc::new(NullRuntimeSqliteObserver),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
             sqlite_db_path.with_extension("notifications.jsonl"),
@@ -116,7 +106,6 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let assembly = open_sqlite_boundary(&path)?;
     let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
-        assembly.task_store_arc(),
         assembly.roster_store_arc(),
         std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         std::sync::Arc::new(LocalFileNotificationSink::at_path(

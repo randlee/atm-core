@@ -6,9 +6,7 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::boundary::{
-    ConfigDoctor, MailStoreDoctor, RosterMemberRecord, RosterStoreDoctor, TaskStoreDoctor,
-};
+use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterMemberRecord, RosterStoreDoctor};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -37,7 +35,6 @@ pub struct DoctorQuery {
 pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
-    pub task_store_doctor: Arc<dyn TaskStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
 }
 
@@ -46,7 +43,6 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
         f.debug_struct("RuntimeDoctorPorts")
             .field("config_doctor", &"dyn ConfigDoctor")
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
-            .field("task_store_doctor", &"dyn TaskStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .finish()
     }
@@ -116,7 +112,6 @@ pub fn run_doctor_with_runtime(
         observability: observability_health,
         config: crate::boundary::ConfigDoctorReport::default(),
         mail_store: crate::boundary::MailStoreDoctorReport::default(),
-        task_store: crate::boundary::TaskStoreDoctorReport::default(),
         roster_store: crate::boundary::RosterStoreDoctorReport::default(),
         daemon_runtime: None,
         drift_findings: Vec::new(),
@@ -175,7 +170,6 @@ pub fn run_doctor_with_runtime_ports(
         observability: observability_health,
         config: reports.config,
         mail_store: reports.mail_store,
-        task_store: reports.task_store,
         roster_store: reports.roster_store,
         daemon_runtime,
         drift_findings,
@@ -187,7 +181,6 @@ pub fn run_doctor_with_runtime_ports(
 struct DoctorSectionReports {
     config: crate::boundary::ConfigDoctorReport,
     mail_store: crate::boundary::MailStoreDoctorReport,
-    task_store: crate::boundary::TaskStoreDoctorReport,
     roster_store: crate::boundary::RosterStoreDoctorReport,
 }
 
@@ -199,10 +192,6 @@ fn inspect_runtime_doctor_sections(
         config: inspect_doctor_section(runtime_doctors.config_doctor.inspect_config(), findings),
         mail_store: inspect_doctor_section(
             runtime_doctors.mail_store_doctor.inspect_mail_store(),
-            findings,
-        ),
-        task_store: inspect_doctor_section(
-            runtime_doctors.task_store_doctor.inspect_task_store(),
             findings,
         ),
         roster_store: inspect_doctor_section(
@@ -239,7 +228,6 @@ fn collect_doctor_findings(
     let mut findings = Vec::new();
     findings.extend(reports.config.findings.iter().cloned());
     findings.extend(reports.mail_store.findings.iter().cloned());
-    findings.extend(reports.task_store.findings.iter().cloned());
     findings.extend(reports.roster_store.findings.iter().cloned());
     findings.extend(drift_findings.iter().cloned());
     findings.extend(general_findings.iter().cloned());
@@ -692,27 +680,14 @@ mod tests {
     }
 
     struct UnusedMailStore;
-    struct UnusedTaskStore;
     struct TestRosterStore {
         members: Vec<boundary::RosterMemberRecord>,
     }
 
     impl crate::boundary::sealed::Sealed for UnusedMailStore {}
-    impl crate::boundary::sealed::Sealed for UnusedTaskStore {}
     impl crate::boundary::sealed::Sealed for TestRosterStore {}
 
     impl boundary::MailStore for UnusedMailStore {
-        #[allow(
-            deprecated,
-            reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-        )]
-        fn bootstrap(
-            &self,
-            _request: boundary::MailStoreBootstrapRequest,
-        ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
         fn upsert_message(
             &self,
             _record: boundary::MailStoreMessageRecord,
@@ -788,57 +763,6 @@ mod tests {
         }
     }
 
-    impl boundary::TaskStore for UnusedTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-    }
-
     impl boundary::RosterStore for TestRosterStore {
         fn replace_roster(
             &self,
@@ -900,7 +824,6 @@ mod tests {
     ) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(UnusedTaskStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
             Arc::new(crate::LocalFileNotificationSink::at_path(

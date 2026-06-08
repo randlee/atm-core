@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.6
 worktree: ../atm-core-worktrees/feature/pAC-s6-cleanup-and-deletion-closeout
 branch: feature/pAC-s6-cleanup-and-deletion-closeout
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -52,35 +52,35 @@ Primary closure rule:
 
 ## Deliverables
 
-- [ ] delete any surviving `SourceIngress*` / `ProjectionExport*` public wrapper
+- [x] delete any surviving `SourceIngress*` / `ProjectionExport*` public wrapper
   families from:
   - `crates/`
   - `docs/plans/phase-AC/`
   - boundary TOMLs
-- [ ] delete any surviving public backend bundle helpers the ledger marks
+- [x] delete any surviving public backend bundle helpers the ledger marks
   `delete-bundle`, including:
   - `RuntimeBundle`
   - `SqliteBoundaryAssembly`
-- [ ] confirm Claude-only projections remain internal to
+- [x] confirm Claude-only projections remain internal to
   `crates/atm-storage-claude/`, including:
   - `ProjectionRosterMember`
   - `ProjectionRoster`
   - `SourceFileRecord`
-- [ ] confirm SQLite-only observability helpers remain internal to
+- [x] confirm SQLite-only observability helpers remain internal to
   `crates/atm-storage-rusqlite/`, including:
   - `SqliteObservability`
   - `SqliteObservabilityEvent`
   - `SqliteObservabilityOutcome`
   - `NullSqliteObservability`
-- [ ] delete speculative task-store surfaces by default so they no longer
+- [x] delete speculative task-store surfaces by default so they no longer
   appear as approved Phase `AC` contract; quarantine is allowed only if
   immediate deletion is blocked by unrelated stabilization work:
   - `TaskStore*Request` / `TaskStore*Response`
   - `TaskStore` / `TaskStoreDoctor` public contract assumptions
   - SQLite task-store ownership and related boundary claims
-- [ ] update `docs/plans/phase-AC/type-ledger.md` with final closure notes for
+- [x] update `docs/plans/phase-AC/type-ledger.md` with final closure notes for
   each deletion family touched in this sprint
-- [ ] keep `AC.7` as the sole owner of SQL Server readiness proof language
+- [x] keep `AC.7` as the sole owner of SQL Server readiness proof language
 
 ## Ledger-Driven Deletion Sweep
 
@@ -133,11 +133,11 @@ Proof this sprint must leave behind:
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
-- `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates docs -S`
+- `rg -n "MailStoreQueryMailboxMetadataRequest|MailStoreQueryMailboxMetadataResponse|MailStoreQueryMailboxMetadataCountsRequest|MailStoreQueryMailboxMetadataCountsResponse|MailStoreBootstrapRequest|MailStoreBootstrapResponse|MailStoreTransactionRequest|MailStoreTransactionResponse|MailStoreUpsertMessageRequest|MailStoreUpsertMessageResponse|MailStoreLoadMessageRequest|MailStoreLoadMessageResponse|MailStoreLoadStoredMessageRequest|MailStoreLoadStoredMessageResponse|MailStoreRecordIngestReplayStateRequest|MailStoreRecordIngestReplayStateResponse|MailStoreLoadIngestReplayStateRequest|MailStoreLoadIngestReplayStateResponse|MailStoreHealthSnapshotRequest|MailStoreHealthSnapshotResponse|MailStoreRequest|MailStoreResponse|RosterStoreReplaceRosterRequest|RosterStoreReplaceRosterResponse|RosterStoreLoadRosterRequest|RosterStoreLoadRosterResponse|RosterStoreQueryMembershipRequest|RosterStoreQueryMembershipResponse|RosterStoreHealthSnapshotRequest|RosterStoreHealthSnapshotResponse|RosterStoreListTeamsRequest|RosterStoreListTeamsResponse|RosterStoreRequest|RosterStoreResponse" crates docs/atm-core docs/atm-runtime docs/requirements.md docs/project-plan.md -S`
 - `rg -n "pub trait TaskStore|pub trait TaskStoreDoctor|TaskStoreTaskRecord|TaskStoreTaskMetadata|TaskStoreDoctorReport" crates -S`
-- `rg -n "SourceIngress.*Request|SourceIngress.*Response|ProjectionExport.*Request|ProjectionExport.*Response|SqliteBoundaryAssembly|RuntimeBundle" crates docs -S`
+- `rg -n "SourceIngressImportRequest|SourceIngressImportResponse|SourceIngressIdentityFingerprintRequest|SourceIngressIdentityFingerprintResponse|SourceIngressDiagnosticsRequest|SourceIngressDiagnosticsResponse|SourceIngressRequest|SourceIngressResponse|ProjectionExportRecordRequest|ProjectionExportRecordResponse|ProjectionExportReexportMessageRequest|ProjectionExportReexportMessageResponse|ProjectionExportAppendMessageSetRequest|ProjectionExportAppendMessageSetResponse|ProjectionExportRequest|ProjectionExportResponse|SqliteBoundaryAssembly|RuntimeBundle" crates docs/atm-core docs/atm-runtime docs/requirements.md docs/project-plan.md -S`
 
 ## Required Document Updates
 

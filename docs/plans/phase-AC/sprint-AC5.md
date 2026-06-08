@@ -123,7 +123,7 @@ Proof this sprint must leave behind:
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `rg -n "MailStore.*Request|MailStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 - `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ProjectionRosterMember" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 

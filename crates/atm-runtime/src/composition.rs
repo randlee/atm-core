@@ -16,16 +16,14 @@ use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRoste
 use atm_storage_rusqlite::SqliteStorageBackend;
 
 use crate::legacy_storage_adapters::{
-    StorageBackends, legacy_mail_store, legacy_roster_store, noop_task_store, runtime_doctor_ports,
+    StorageBackends, legacy_mail_store, legacy_roster_store, runtime_doctor_ports,
 };
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
-use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
     pub sqlite_db_path: PathBuf,
     pub config_current_dir: PathBuf,
-    pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     pub notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 }
@@ -35,7 +33,6 @@ impl fmt::Debug for RuntimeAssemblyInputs {
         f.debug_struct("RuntimeAssemblyInputs")
             .field("sqlite_db_path", &self.sqlite_db_path)
             .field("config_current_dir", &self.config_current_dir)
-            .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
             .field("notification_sink", &"dyn NotificationSink")
             .finish()
@@ -49,7 +46,6 @@ pub struct RuntimeAssembly {
         StorageBackends<Arc<dyn SharedMessageStore + Send + Sync>, Arc<dyn SharedRosterStore + Send + Sync>>,
     pub mail_store: Arc<dyn boundary::MailStore + Send + Sync>,
     pub roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
-    pub task_store: Arc<dyn boundary::TaskStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
@@ -62,7 +58,6 @@ impl fmt::Debug for RuntimeAssembly {
             .field("storage_backends", &self.storage_backends)
             .field("mail_store", &"dyn MailStore")
             .field("roster_store", &"dyn RosterStore")
-            .field("task_store", &"dyn TaskStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
@@ -90,7 +85,6 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
     assemble_sqlite_runtime_at_path(
         &inputs.sqlite_db_path,
         inputs.config_current_dir.clone(),
-        Arc::clone(&inputs.sqlite_observer),
         Arc::clone(&inputs.non_claude_outbound),
         Arc::clone(&inputs.notification_sink),
     )
@@ -99,11 +93,9 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
 fn assemble_sqlite_runtime_at_path(
     sqlite_db_path: &Path,
     config_current_dir: PathBuf,
-    _sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    let _sqlite_observability = Arc::new(RuntimeSqliteObservability::new(_sqlite_observer));
     let sqlite_backend = Arc::new(SqliteStorageBackend::new(sqlite_db_path)?);
     let shared_messages = sqlite_backend.message_store();
     let shared_rosters = sqlite_backend.roster_store();
@@ -113,10 +105,8 @@ fn assemble_sqlite_runtime_at_path(
     };
     let mail_store = legacy_mail_store(shared_messages);
     let roster_store = legacy_roster_store(shared_rosters);
-    let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         mail_store.clone(),
-        task_store.clone(),
         roster_store.clone(),
         non_claude_outbound,
         notification_sink,
@@ -133,7 +123,6 @@ fn assemble_sqlite_runtime_at_path(
         storage_backends,
         mail_store,
         roster_store,
-        task_store,
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -170,10 +159,8 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     };
     let mail_store = legacy_mail_store(shared_messages);
     let roster_store = legacy_roster_store(shared_rosters);
-    let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         mail_store.clone(),
-        task_store.clone(),
         roster_store.clone(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
@@ -190,7 +177,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         storage_backends,
         mail_store,
         roster_store,
-        task_store,
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -200,10 +186,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 impl RuntimeAssembly {
     pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
         self.mail_store.clone()
-    }
-
-    pub fn task_store_arc(&self) -> Arc<dyn boundary::TaskStore + Send + Sync> {
-        self.task_store.clone()
     }
 
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {

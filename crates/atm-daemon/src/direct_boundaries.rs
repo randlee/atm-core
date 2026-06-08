@@ -1,12 +1,10 @@
 use atm_core::{
     boundary::{
-        ConfigLoadRequest, ConfigLoadResponse, ProjectionExportAppendMessageSetRequest,
-        ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
-        ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-        ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
-        SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-        SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
-        SourceIngressImportResponse,
+        ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMessageSetRequest,
+        ProjectionAppendMessageSetResponse, ProjectionRecordRequest, ProjectionRecordResponse,
+        ProjectionReexportMessageRequest, ProjectionReexportMessageResponse,
+        SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
+        SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
     },
     error::AtmError,
 };
@@ -18,37 +16,37 @@ pub(crate) fn load_workspace_config(
 }
 
 pub(crate) fn import_inbox_source(
-    request: SourceIngressImportRequest,
-) -> Result<SourceIngressImportResponse, AtmError> {
+    request: SourceImportRequest,
+) -> Result<SourceImportResponse, AtmError> {
     atm_core::direct_boundaries::import_inbox_source(request)
 }
 
 pub(crate) fn compute_identity_fingerprint(
-    request: SourceIngressIdentityFingerprintRequest,
-) -> SourceIngressIdentityFingerprintResponse {
+    request: SourceIdentityFingerprintRequest,
+) -> SourceIdentityFingerprintResponse {
     atm_core::direct_boundaries::compute_identity_fingerprint(request)
 }
 
 pub(crate) fn report_inbox_diagnostics(
-    request: SourceIngressDiagnosticsRequest,
-) -> SourceIngressDiagnosticsResponse {
+    request: SourceDiagnosticsRequest,
+) -> SourceDiagnosticsResponse {
     atm_core::direct_boundaries::report_inbox_diagnostics(request)
 }
 
 pub(crate) fn export_source_files(
-    request: ProjectionExportRecordRequest,
-) -> Result<ProjectionExportRecordResponse, AtmError> {
+    request: ProjectionRecordRequest,
+) -> Result<ProjectionRecordResponse, AtmError> {
     atm_core::direct_boundaries::export_source_files(request)
 }
 
 pub(crate) fn reexport_messages(
-    request: ProjectionExportReexportMessageRequest,
-) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
+    request: ProjectionReexportMessageRequest,
+) -> Result<ProjectionReexportMessageResponse, AtmError> {
     atm_core::direct_boundaries::reexport_messages(request)
 }
 
 pub(crate) fn append_message_set(
-    request: ProjectionExportAppendMessageSetRequest,
-) -> Result<ProjectionExportAppendMessageSetResponse, AtmError> {
+    request: ProjectionAppendMessageSetRequest,
+) -> Result<ProjectionAppendMessageSetResponse, AtmError> {
     atm_core::direct_boundaries::append_message_set(request)
 }

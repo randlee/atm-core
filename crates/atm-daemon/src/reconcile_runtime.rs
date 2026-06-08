@@ -212,7 +212,7 @@ impl ReconcileRuntime {
                     &projection_write_journal_for_executor,
                 )?;
                 let import = inbox_ingress.import_inbox_source(
-                    atm_core::boundary::SourceIngressImportRequest {
+                    atm_core::boundary::SourceImportRequest {
                         home_dir: request.home_dir.clone(),
                         team: request.team.clone(),
                         agent: request.agent.clone(),
@@ -672,7 +672,7 @@ impl ReconcileRuntimeInner {
 }
 
 fn compute_reconcile_notification_fingerprints(
-    import: &atm_core::boundary::SourceIngressImportResponse,
+    import: &atm_core::boundary::SourceImportResponse,
     inbox_ingress: &dyn SourceIngress,
 ) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
@@ -680,7 +680,7 @@ fn compute_reconcile_notification_fingerprints(
         for message in &source.messages {
             let fingerprint = inbox_ingress
                 .compute_identity_fingerprint(
-                    atm_core::boundary::SourceIngressIdentityFingerprintRequest {
+                    atm_core::boundary::SourceIdentityFingerprintRequest {
                         message: message.clone(),
                     },
                 )

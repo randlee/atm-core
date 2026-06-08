@@ -10,9 +10,6 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
-use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
-use crate::test_observability::TestDaemonObservability;
-
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
@@ -83,7 +80,6 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                 },
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
-                task_store: atm_core::boundary::TaskStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
                 daemon_runtime: None,
                 drift_findings: Vec::new(),
@@ -110,17 +106,9 @@ pub(crate) fn sqlite_runtime_assembly_for_test(db_path: &std::path::Path) -> Run
             .unwrap_or_else(|| std::path::Path::new("."))
             .to_path_buf()
     });
-    let log_dir = db_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."))
-        .join("observability");
-    let observability = std::sync::Arc::new(
-        TestDaemonObservability::new(log_dir).expect("sqlite runtime test observability"),
-    );
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: db_path.to_path_buf(),
         config_current_dir,
-        sqlite_observer: std::sync::Arc::new(DaemonRuntimeSqliteObserver::new(observability)),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
             db_path.with_extension("notifications.jsonl"),

@@ -145,7 +145,7 @@ than one sprint in a non-default way.
 | Type / Family | Primary Closure Sprint | Later Sprint Role | Why |
 | --- | --- | --- | --- |
 | `MailStoreMessageRecord` | `AC.1` | `AC.5` usage convergence only | Canonical `Message` is defined in `AC.1`; transport/body consumers finish migrating in `AC.5`. |
-| `TaskStoreTaskRecord` | `AC.6` | no later AC owner | Speculative task-store surface is removed or quarantined in cleanup rather than converged into the initial shared contract. |
+| `TaskStoreTaskRecord` | `AC.6` | no later AC owner | Speculative task-store surface is deleted in cleanup rather than converged into the initial shared contract. |
 | `MailStoreMailboxMetadataRow` | `AC.1` | `AC.5` query/body convergence only | The replacement query helper shape is chosen in `AC.1`; usage cleanup lands later. |
 | `ReplaySource` / replay candidate rows | `AC.3` | `AC.1` contract cap only | Whether replay survives as a capability or backend-internal concern closes with the backend convergence sprint. |
 | doctor / health candidate rows | `AC.3` | `AC.1` contract cap only | Capability keep/delete/internalize decision depends on concrete backend convergence, not only naming. |
@@ -188,8 +188,8 @@ than one sprint in a non-default way.
 | `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` count helper in `AC.1` | Keep only if semantics survive the query redesign. |
 | `MailStoreQueryMailboxMetadataCountsRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreQueryMailboxMetadataCountsResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
-| `MailStoreBootstrapRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.4` | Backend bootstrap must not survive as shared storage DTO; `AC.6` only verifies no stragglers survived. |
-| `MailStoreBootstrapResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.4` | Backend bootstrap must not survive as shared storage DTO; `AC.6` only verifies no stragglers survived. |
+| `MailStoreBootstrapRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.6` | Backend bootstrap did not survive the closeout sweep and is no longer part of the shared storage DTO surface. |
+| `MailStoreBootstrapResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.6` | Backend bootstrap did not survive the closeout sweep and is no longer part of the shared storage DTO surface. |
 | `MailStoreTransactionRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted or replaced by capability in `AC.1` | No RPC-style transaction wrapper in base storage contract; `AC.6` only verifies no stragglers survived. |
 | `MailStoreTransactionResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted or replaced by capability in `AC.1` | No RPC-style transaction wrapper in base storage contract; `AC.6` only verifies no stragglers survived. |
 | `MailStoreUpsertMessageRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | `save_message` absorbs this operation; `AC.6` only verifies no stragglers survived. |
@@ -218,31 +218,31 @@ than one sprint in a non-default way.
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `TaskStoreTaskMetadata` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of the approved initial storage contract; future task storage must start from canonical Claude schema instead. |
-| `TaskStoreTaskRecord` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of the approved initial storage contract; future task storage must start from canonical Claude schema instead. |
+| `TaskStoreTaskMetadata` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` instead of being preserved as a speculative compatibility surface. |
+| `TaskStoreTaskRecord` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` instead of being preserved as a speculative compatibility surface. |
 | `RosterStoreHealthSnapshot` | struct | `capability-candidate` | `capability-review` | storage health capability in `AC.3` | Not part of CRUD core; `AC.1` only caps the shared contract surface. |
 | `RosterMemberKind` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster member property. |
 | `RosterHarness` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster harness property. |
 | `RosterMemberRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `RosterMember` in `AC.1` | Main roster member record to collapse. |
 | `ProjectionRosterMember` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
 | `ProjectionRoster` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
-| `TaskStoreCreateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreCreateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreLoadTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreLoadTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreUpdateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreUpdateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreAttachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreAttachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreDetachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreDetachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreRecordAckTransitionRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreRecordAckTransitionResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
-| `TaskStoreQueryTaskMetadataRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative query wrapper; future task storage must not inherit it as canonical shape. |
-| `TaskStoreQueryTaskMetadataResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative query wrapper; future task storage must not inherit it as canonical shape. |
-| `TaskStoreRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative envelope wrapper family. |
-| `TaskStoreResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative envelope wrapper family. |
-| `TaskStoreDoctorReport` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Doctor shape is not approved Phase `AC` shared-contract scope for task storage. |
+| `TaskStoreCreateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreCreateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreLoadTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreLoadTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreUpdateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreUpdateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreAttachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreAttachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreDetachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreDetachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreRecordAckTransitionRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreRecordAckTransitionResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted from `atm-core` with the rest of the speculative task wrapper family. |
+| `TaskStoreQueryTaskMetadataRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted instead of serving as a seed shape for future task storage. |
+| `TaskStoreQueryTaskMetadataResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted instead of serving as a seed shape for future task storage. |
+| `TaskStoreRequest` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted with the speculative task envelope family. |
+| `TaskStoreResponse` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted with the speculative task envelope family. |
+| `TaskStoreDoctorReport` | struct | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted with the speculative task doctor surface. |
 | `RosterStoreReplaceRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
 | `RosterStoreReplaceRosterResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
 | `RosterStoreLoadRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
@@ -260,27 +260,27 @@ than one sprint in a non-default way.
 | `ConfigLoadResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config ingress is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `ConfigDoctorReport` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config doctor is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `SourceFileRecord` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude inbox file discovery detail. |
-| `SourceIngressImportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressImportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressIdentityFingerprintRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressIdentityFingerprintResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressDiagnosticsRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressDiagnosticsResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `SourceIngressResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportRecordRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportRecordResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportReexportMessageRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportReexportMessageResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceImportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Request` wrapper family. |
+| `SourceImportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Response` wrapper family. |
+| `SourceIdentityFingerprintRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Request` wrapper family. |
+| `SourceIdentityFingerprintResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Response` wrapper family. |
+| `SourceDiagnosticsRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Request` wrapper family. |
+| `SourceDiagnosticsResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `SourceIngress*Response` wrapper family. |
+| `SourceIngressRequest` | struct | `delete-wrapper` | `delete-and-rename` | deleted in `AC.6` | Unused envelope wrapper deleted during cleanup. |
+| `SourceIngressResponse` | struct | `delete-wrapper` | `delete-and-rename` | deleted in `AC.6` | Unused envelope wrapper deleted during cleanup. |
+| `ProjectionRecordRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Request` wrapper family. |
+| `ProjectionRecordResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Response` wrapper family. |
+| `ProjectionReexportMessageRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Request` wrapper family. |
+| `ProjectionReexportMessageResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Response` wrapper family. |
 | `ProjectionAppendMode` | enum | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Compatibility delivery policy is Claude-backend-only. |
-| `ProjectionExportAppendMessageSetRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportAppendMessageSetResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `ProjectionExportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionAppendMessageSetRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Request` wrapper family. |
+| `ProjectionAppendMessageSetResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2`; naming closeout in `AC.6` | Shared contract no longer exposes the old `ProjectionExport*Response` wrapper family. |
+| `ProjectionExportRequest` | struct | `delete-wrapper` | `delete-and-rename` | deleted in `AC.6` | Unused envelope wrapper deleted during cleanup. |
+| `ProjectionExportResponse` | struct | `delete-wrapper` | `delete-and-rename` | deleted in `AC.6` | Unused envelope wrapper deleted during cleanup. |
 | `NonClaudeOutboundDeliveryRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `NonClaudeOutboundDeliveryResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
-| `TaskStore` | trait | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Phase `AC` does not replace this with `atm-storage::TaskStore`; future task storage starts from canonical Claude schema instead. |
-| `TaskStoreDoctor` | trait | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of approved Phase `AC` shared-contract scope. |
+| `TaskStore` | trait | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted instead of being normalized into `atm-storage`; future task storage starts from canonical Claude schema instead. |
+| `TaskStoreDoctor` | trait | `speculative-task` | `delete-speculative` | deleted in `AC.6` | Deleted with the speculative task-store contract surface. |
 | `RosterStore` | trait | `replace-trait` | `replace-and-delete` | `atm-storage::RosterStore` in `AC.1` | Old trait deleted when shared contract lands. |
 | `RosterStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.3` | Must not survive unchanged into `atm-storage`; `AC.1` only caps the shared contract surface. |
 | `ConfigIngress` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config seam remains outside shared storage contract; `AC.6` only verifies docs/code did not drift. |
@@ -310,10 +310,10 @@ than one sprint in a non-default way.
 | --- | --- | --- | --- | --- | --- |
 | `SqliteWriterLockGuard` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite implementation detail, not shared contract. |
 | `SqliteBoundaryAssembly` | struct | `delete-bundle` | `replace-and-delete` | deleted or replaced in `AC.3` | Backend-shaped assembly helper must not survive above trait line; `AC.4` only removes remaining consumers. |
-| `SqliteObservabilityOutcome` | enum | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `SqliteObservabilityEvent` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `SqliteObservability` | trait | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
-| `NullSqliteObservability` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite observability detail. |
+| `SqliteObservabilityOutcome` | enum | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
+| `SqliteObservabilityEvent` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
+| `SqliteObservability` | trait | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
+| `NullSqliteObservability` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
 
 ## Supporting Canonical Seed Types Already Present
 

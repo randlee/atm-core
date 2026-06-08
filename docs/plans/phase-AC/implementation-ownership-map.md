@@ -16,8 +16,8 @@ Current concrete trait implementers found during `AC.0`:
 | --- | --- | --- | --- |
 | `MailStore` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
 | `MailStoreDoctor` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
-| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
+| `TaskStore` | deleted speculative surface | former `crates/atm-core/src/boundary/store.rs` and runtime compile bridge | `AC.6` closed by deletion |
+| `TaskStoreDoctor` | deleted speculative surface | former `crates/atm-core/src/boundary/store.rs` and doctor bridge | `AC.6` closed by deletion |
 | `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
 | `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
 | `RemoteReplayStore` capability/internalization | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |

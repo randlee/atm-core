@@ -17,11 +17,6 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
-pub use observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
-};
-
 #[derive(Debug)]
 pub struct SqliteWriterLockGuard {
     connection: Connection,

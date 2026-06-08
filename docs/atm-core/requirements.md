@@ -137,11 +137,11 @@ Initial crate requirement IDs:
   evaluation. Satisfies the diagnostic evaluation aspects of:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
   Phase-AA note:
-  - `MailStore`, `TaskStore`, and `RosterStore` remain the primary
-    storage-neutral capability surfaces
-  - `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
-    `ConfigDoctor` are the subsystem-owned doctor traits that freeze the
-    aggregate-only daemon doctor model
+  - `MailStore` and `RosterStore` remain the primary storage-neutral
+    capability surfaces in the historical Phase-AA line
+  - `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the
+    subsystem-owned doctor traits that freeze the aggregate-only daemon doctor
+    model
 - `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
@@ -304,12 +304,10 @@ Requirement IDs:
 Required `atm-core` crate rules:
 - `atm-core` owns the service-layer API for:
   - message persistence
-  - ack/task persistence
   - read/clear visibility persistence
   - team roster persistence
 - `atm-core` owns the trait boundaries for:
   - `MailStore`
-  - `TaskStore`
   - `RosterStore`
   - inbox ingress
   - inbox export

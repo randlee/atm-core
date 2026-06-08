@@ -394,7 +394,6 @@ fn production_runtime_installs_daemon_notification_sink() {
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
         assembly.mail_store_arc(),
-        assembly.task_store_arc(),
         assembly.roster_store_arc(),
         Arc::new(DaemonNonClaudeOutbound::new()),
         Arc::new(sink.clone()),

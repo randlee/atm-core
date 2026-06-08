@@ -154,9 +154,8 @@ Task-storage rule:
 - task storage is explicitly out of scope for the initial Phase `AC` contract
 - current `TaskStore` code is treated as speculative, not as an approved
   baseline the shared contract must preserve
-- speculative task-store code should be deleted by default during `AC.6`;
-  quarantine is only a fallback if immediate removal is blocked by unrelated
-  stabilization work
+- speculative task-store code was deleted during `AC.6` rather than preserved
+  as compatibility scaffolding
 - if task storage is approved later, the first canonical implementation starts
   from Claude-code task schema plus Pydantic validation, with SQLite sync only
   afterward if still needed

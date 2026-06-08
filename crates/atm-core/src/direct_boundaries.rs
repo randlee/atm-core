@@ -1,10 +1,9 @@
 use crate::boundary::{
-    ConfigLoadRequest, ConfigLoadResponse, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest, ProjectionExportRecordResponse,
-    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
-    SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
-    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
-    SourceIngressImportRequest, SourceIngressImportResponse,
+    ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMessageSetRequest,
+    ProjectionAppendMessageSetResponse, ProjectionRecordRequest, ProjectionRecordResponse,
+    ProjectionReexportMessageRequest, ProjectionReexportMessageResponse,
+    SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
+    SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
 };
 use crate::error::AtmError;
 
@@ -13,32 +12,32 @@ pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadRes
 }
 
 pub fn import_inbox_source(
-    request: SourceIngressImportRequest,
-) -> Result<SourceIngressImportResponse, AtmError> {
+    request: SourceImportRequest,
+) -> Result<SourceImportResponse, AtmError> {
     crate::boundary_support::import_inbox_source(request)
 }
 
 pub fn compute_identity_fingerprint(
-    request: SourceIngressIdentityFingerprintRequest,
-) -> SourceIngressIdentityFingerprintResponse {
+    request: SourceIdentityFingerprintRequest,
+) -> SourceIdentityFingerprintResponse {
     crate::boundary_support::compute_identity_fingerprint(request)
 }
 
 pub fn report_inbox_diagnostics(
-    request: SourceIngressDiagnosticsRequest,
-) -> SourceIngressDiagnosticsResponse {
+    request: SourceDiagnosticsRequest,
+) -> SourceDiagnosticsResponse {
     crate::boundary_support::report_inbox_diagnostics(request)
 }
 
 pub fn export_source_files(
-    request: ProjectionExportRecordRequest,
-) -> Result<ProjectionExportRecordResponse, AtmError> {
+    request: ProjectionRecordRequest,
+) -> Result<ProjectionRecordResponse, AtmError> {
     crate::boundary_support::export_source_files(request)
 }
 
 pub fn reexport_messages(
-    request: ProjectionExportReexportMessageRequest,
-) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
+    request: ProjectionReexportMessageRequest,
+) -> Result<ProjectionReexportMessageResponse, AtmError> {
     // Yb Y.10 constrains full mailbox re-export to explicit repair/rebuild
     // seams. Normal runtime delivery must use append-only Claude execution or
     // the typed non-Claude outbound boundary instead.
@@ -46,7 +45,7 @@ pub fn reexport_messages(
 }
 
 pub fn append_message_set(
-    request: ProjectionExportAppendMessageSetRequest,
-) -> Result<ProjectionExportAppendMessageSetResponse, AtmError> {
+    request: ProjectionAppendMessageSetRequest,
+) -> Result<ProjectionAppendMessageSetResponse, AtmError> {
     crate::boundary_support::append_message_set(request)
 }

@@ -1,10 +1,9 @@
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, TeamConfig, ThreadMode};
+use crate::schema::{AtmMessageId, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::contract::{Message as CanonicalMessage, MessageKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::path::PathBuf;
 
 use super::sealed;
 
@@ -161,25 +160,6 @@ pub struct MailStoreMailboxMetadataCounts {
     pub pending_ack_messages: u64,
 }
 
-/// Stub mail-store request for the Phase R skeleton.
-#[deprecated(note = "temporary compile bridge; remove by AC.4")]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreBootstrapRequest {
-    pub team_dir: PathBuf,
-    pub team: TeamName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub team_config: Option<TeamConfig>,
-}
-
-/// Stub mail-store response for the Phase R skeleton.
-#[deprecated(note = "temporary compile bridge; remove by AC.4")]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreBootstrapResponse {
-    pub team: TeamName,
-    pub bootstrapped: bool,
-    pub opened: bool,
-}
-
 /// Stub mail-store upsert-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UpsertMailMessageStateRequest {
@@ -220,19 +200,6 @@ pub struct MailStoreDoctorReport {
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
 pub trait MailStore: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when durable mailbox persistence, transaction
-    /// boundaries, or replay-state access cannot satisfy the contract.
-    #[allow(
-        deprecated,
-        reason = "AC.4 preserves the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-    )]
-    fn bootstrap(
-        &self,
-        request: MailStoreBootstrapRequest,
-    ) -> Result<MailStoreBootstrapResponse, AtmError>;
-
     /// # Errors
     ///
     /// Returns `AtmError` when the mailbox transaction cannot be started,

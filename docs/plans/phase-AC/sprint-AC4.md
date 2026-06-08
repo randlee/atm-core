@@ -140,7 +140,7 @@ Proof this sprint must leave behind:
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "StorageBackends<|struct StorageBackends" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`

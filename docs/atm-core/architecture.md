@@ -84,7 +84,6 @@ tags:
   - protocol
 related_boundaries:
   - BOUNDARY-AtmProtocol
-  - BOUNDARY-TaskStore
 code_references:
   - docs/atm-core/boundaries.md
   - docs/requirements.md
@@ -121,7 +120,6 @@ Alternatives considered:
 - Preserve a first-class top-level `ack` protocol method family.
 
 Follow-up work:
-- Keep task-state ownership explicit in `TaskStore`.
 - Align thin-client docs with the `send` / `receive` shape.
 - Align successor-chain and ephemeral-retention rules with the retained
   product requirements before the SQLite sprint closes.
@@ -173,8 +171,6 @@ Required subsystem boundaries:
 - `RequestDispatcher` boundary
 - `MailStore` boundary
 - `MailStoreDoctor` boundary
-- `TaskStore` boundary
-- `TaskStoreDoctor` boundary
 - `RosterStore` boundary
 - `RosterStoreDoctor` boundary
 - inbox-ingress boundary
@@ -211,8 +207,6 @@ Required architectural rules:
 Sealing posture per boundary:
 - `MailStore`: sealed by default
 - `MailStoreDoctor`: sealed by default
-- `TaskStore`: sealed by default
-- `TaskStoreDoctor`: sealed by default
 - `RosterStore`: sealed by default
 - `RosterStoreDoctor`: sealed by default
 - `SourceIngress`: sealed by default
@@ -252,7 +246,6 @@ Phase R redesign notes:
 - `atm-core` owns the shared subsystem doctor DTO family:
   - `DoctorFinding`
   - `MailStoreDoctorReport`
-  - `TaskStoreDoctorReport`
   - `RosterStoreDoctorReport`
   - `ConfigDoctorReport`
   - `DaemonRuntimeDoctorReport`
@@ -355,8 +348,10 @@ Architectural rule:
 
 Store-family rule:
 - `MailStore` owns message lifecycle state
-- `TaskStore` owns task-domain state and task metadata
 - `RosterStore` owns durable team/member roster state only
+- task storage is currently out of scope; any future task storage line starts
+  from canonical Claude-code schema rather than from preserved transition
+  scaffolding
 - daemon-owned live `pid` state and other session-transient runtime data stay
   outside `RosterStore`
 - `TeamConfig` / `config.json` stays a config-ingress document, not the durable
