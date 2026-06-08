@@ -1,8 +1,6 @@
-use super::{
-    ATM_FRAME_FLAGS_V1, FramePayload, MessageKind, RequestEnvelope, RequestId, ResponseEnvelope,
-    next_request_id, request_from_frame_payload, request_to_frame_payload,
-    response_from_frame_payload, response_to_frame_payload,
-};
+use crate::wire::{ATM_FRAME_FLAGS_V1, FramePayload, MessageKind, RequestId};
+#[cfg(test)]
+use crate::wire::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::AtmError;
 use bytes::Bytes;
 use serde::Serialize;
@@ -114,38 +112,47 @@ impl RpcEnvelope {
     }
 
     /// Wrap a request envelope into the generic RPC transport surface.
+    #[cfg(test)]
     pub fn encode_request(request: RequestEnvelope) -> Result<Self, AtmError> {
+        use crate::wire::{next_request_id, request_to_frame_payload};
         let frame = request_to_frame_payload(next_request_id(), request)?;
         Ok(Self::from_frame_payload(frame))
     }
 
     /// Decode a generic RPC envelope into the request id plus request payload.
+    #[cfg(test)]
     pub fn decode_request(self) -> Result<(RequestId, RequestEnvelope), AtmError> {
+        use crate::wire::request_from_frame_payload;
         request_from_frame_payload(self.into_frame_payload())
     }
 
     /// Wrap a response envelope into the generic RPC transport surface.
+    #[cfg(test)]
     pub fn encode_response(
         request_id: RequestId,
         response: ResponseEnvelope,
     ) -> Result<Self, AtmError> {
+        use crate::wire::response_to_frame_payload;
         let frame = response_to_frame_payload(request_id, response)?;
         Ok(Self::from_frame_payload(frame))
     }
 
     /// Decode a generic RPC envelope into the response id plus response
     /// payload.
+    #[cfg(test)]
     pub fn decode_response(self) -> Result<(RequestId, ResponseEnvelope), AtmError> {
+        use crate::wire::response_from_frame_payload;
         response_from_frame_payload(self.into_frame_payload())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MessageKind, RequestEnvelope, ResponseEnvelope, RpcEnvelope, RpcHeader, next_request_id,
+    use super::{MessageKind, RpcEnvelope, RpcHeader};
+    use crate::wire::{
+        RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+        next_request_id,
     };
-    use crate::{SendRequestEnvelope, SendResponseEnvelope};
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_core::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};

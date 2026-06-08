@@ -6,36 +6,73 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
-use atm_core::doctor::{
-    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport,
-};
-use atm_core::error::AtmError;
-use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::types::{AgentName, TeamName};
+use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
-pub(crate) use atm_core::protocol::{
-    ATM_FRAME_FLAGS_V1, FramePayload, MessageKind, RequestEnvelope, RequestId, ResponseEnvelope,
-    next_request_id, request_from_frame_payload, request_to_frame_payload,
-    response_from_frame_payload, response_to_frame_payload,
-};
-#[cfg(test)]
-pub(crate) use atm_core::protocol::{SendRequestEnvelope, SendResponseEnvelope};
-
 mod rpc;
+mod wire;
 
 #[doc(inline)]
 pub use rpc::{RpcEnvelope, RpcHeader};
+pub use wire::{FramePayload, MessageKind, RequestId};
 
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 #[cfg(windows)]
 const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapConnectOutcome {
+    Connected,
+    NotFound,
+    Timeout,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapLaunchGateOutcome {
+    Launched,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapAutoStartOutcome {
+    AutoStarted,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct BootstrapTraceReport {
+    pub daemon_connect: BootstrapConnectOutcome,
+    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
+    pub daemon_auto_start: BootstrapAutoStartOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_gate_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootstrapCommandEvent {
+    pub command: &'static str,
+    pub action: &'static str,
+    pub outcome: &'static str,
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub error_code: Option<AtmErrorCode>,
+    pub error_message: Option<String>,
+}
 
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,24 +164,24 @@ pub struct DaemonSupervisor {
 
 pub struct BootstrapTraceability<'a> {
     command: &'static str,
-    observability: &'a (dyn ObservabilityPort + Send + Sync),
+    emit_event: &'a (dyn Fn(BootstrapCommandEvent) -> Result<(), AtmError> + Send + Sync),
     team: TeamName,
     agent: AgentName,
-    // Mutex required: BootstrapTraceability must be Sync (holds
-    // &'a dyn ObservabilityPort + Send + Sync); RefCell would be unsound.
+    // Mutex required: BootstrapTraceability must be Sync; RefCell would be
+    // unsound once callers share the helper across bootstrap retries.
     state: Mutex<BootstrapTraceState>,
 }
 
 impl<'a> BootstrapTraceability<'a> {
     pub fn new(
         command: &'static str,
-        observability: &'a (dyn ObservabilityPort + Send + Sync),
+        emit_event: &'a (dyn Fn(BootstrapCommandEvent) -> Result<(), AtmError> + Send + Sync),
         team: TeamName,
         agent: AgentName,
     ) -> Self {
         Self {
             command,
-            observability,
+            emit_event,
             team,
             agent,
             state: Mutex::new(BootstrapTraceState::default()),
@@ -153,21 +190,16 @@ impl<'a> BootstrapTraceability<'a> {
 
     fn emit(&self, action: &'static str, outcome: &'static str, error: Option<&AtmError>) {
         self.record(action, outcome, error);
-        let event = CommandEvent {
+        let event = BootstrapCommandEvent {
             command: self.command,
-            action: action_name(action),
-            outcome: outcome_label(outcome),
+            action,
+            outcome,
             team: self.team.clone(),
             agent: self.agent.clone(),
-            sender: self.agent.clone(),
-            message_id: None,
-            requires_ack: false,
-            dry_run: false,
-            task_id: None,
             error_code: error.map(|error| error.code),
             error_message: error.map(ToString::to_string),
         };
-        if let Err(emit_error) = self.observability.emit(event) {
+        if let Err(emit_error) = (self.emit_event)(event) {
             tracing::warn!(
                 command = self.command,
                 action,
@@ -291,8 +323,26 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
     }
 }
 
+fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(resolve_user_home()?
+        .join(".atm")
+        .join("daemon")
+        .join(file_name))
+}
+
+fn resolve_user_home() -> Result<PathBuf, AtmError> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable("failed to resolve user home directory").with_recovery(
+                "Set HOME or USERPROFILE before invoking the same-host ATM daemon client.",
+            )
+        })
+}
+
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
+    let ipc_name = wire::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("daemon-local-ipc-connect".to_string())
@@ -336,19 +386,6 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStrea
 
 /// This function performs blocking IPC I/O. Callers in async contexts must
 /// wrap this in `tokio::task::spawn_blocking`.
-pub fn exchange(
-    endpoint: &DaemonLocalIpcEndpoint,
-    request: RequestEnvelope,
-    request_deadline: Duration,
-) -> Result<ResponseEnvelope, AtmError> {
-    let envelope = RpcEnvelope::encode_request(request)?;
-    let response = exchange_envelope(endpoint, envelope, request_deadline)?;
-    let (_, response) = response.decode_response()?;
-    Ok(response)
-}
-
-/// This function performs blocking IPC I/O. Callers in async contexts must
-/// wrap this in `tokio::task::spawn_blocking`.
 pub fn exchange_envelope(
     endpoint: &DaemonLocalIpcEndpoint,
     request: RpcEnvelope,
@@ -365,30 +402,31 @@ pub fn exchange_envelope(
     )?;
     let request_id = request.header.request_id();
     let frame = request.into_frame_payload();
-    atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
+    wire::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
     })?;
     let response_frame =
         read_response_frame_with_deadline(stream, request_deadline, recv_deadline_support)?;
-    let (response_id, response) = atm_core::protocol::response_from_frame_payload(response_frame)?;
-    if response_id != request_id {
+    let response = RpcEnvelope::from_frame_payload(response_frame);
+    if response.header.request_id() != request_id {
         return Err(AtmError::daemon_unavailable(format!(
             "daemon response request_id {} did not match request_id {}",
-            response_id, request_id
+            response.header.request_id(),
+            request_id
         ))
         .with_recovery(
             "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
         ));
     }
-    RpcEnvelope::encode_response(response_id, response)
+    Ok(response)
 }
 
 fn read_response_frame_with_deadline(
     mut stream: LocalSocketStream,
     _request_deadline: Duration,
     _recv_deadline_support: LocalIpcDeadlineSupport,
-) -> Result<atm_core::protocol::FramePayload, AtmError> {
+) -> Result<FramePayload, AtmError> {
     #[cfg(windows)]
     if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
         return read_response_frame_with_helper(stream, _request_deadline);
@@ -401,7 +439,7 @@ fn read_response_frame_with_deadline(
 fn read_response_frame_with_helper(
     mut stream: LocalSocketStream,
     request_deadline: Duration,
-) -> Result<atm_core::protocol::FramePayload, AtmError> {
+) -> Result<FramePayload, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("local-ipc-response-read-helper".to_string())
@@ -448,10 +486,8 @@ fn read_response_frame_with_helper(
     }
 }
 
-fn read_response_frame(
-    stream: &mut LocalSocketStream,
-) -> Result<atm_core::protocol::FramePayload, AtmError> {
-    atm_core::protocol::read_frame(
+fn read_response_frame(stream: &mut LocalSocketStream) -> Result<FramePayload, AtmError> {
+    wire::read_frame(
         stream,
         "failed to read daemon response frame",
         "daemon response frame exceeded the maximum supported size",
@@ -480,7 +516,7 @@ fn apply_local_ipc_deadline(
     }
 }
 
-pub fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
+pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
@@ -574,7 +610,7 @@ impl DaemonSupervisor {
             try_connect,
             publish_timeout,
             poll_interval,
-            atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
             traceability,
         )
     }
@@ -903,58 +939,29 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use atm_core::doctor::{
-        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport,
-    };
-    use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::observability::{
-        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort,
-    };
+    use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
     use super::{
-        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
+        BootstrapAutoStartOutcome, BootstrapCommandEvent, BootstrapConnectOutcome,
+        BootstrapLaunchGateOutcome, BootstrapTraceReport, BootstrapTraceability, DaemonBinaryPath,
+        DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        apply_local_ipc_deadline,
     };
 
     #[derive(Debug, Default)]
-    struct RecordingObservability {
-        events: Mutex<Vec<CommandEvent>>,
+    struct RecordingEvents {
+        events: Mutex<Vec<BootstrapCommandEvent>>,
     }
 
-    impl RecordingObservability {
-        fn events(&self) -> Vec<CommandEvent> {
-            self.events.lock().expect("events lock").clone()
-        }
-    }
-
-    impl atm_core::boundary::sealed::Sealed for RecordingObservability {}
-
-    impl ObservabilityPort for RecordingObservability {
-        fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
+    impl RecordingEvents {
+        fn emit(&self, event: BootstrapCommandEvent) -> Result<(), AtmError> {
             self.events.lock().expect("events lock").push(event);
             Ok(())
         }
 
-        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-            Ok(AtmLogSnapshot::default())
-        }
-
-        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-            Ok(LogTailSession::empty())
-        }
-
-        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-            Ok(AtmObservabilityHealth {
-                active_log_path: None,
-                logging_state: AtmObservabilityHealthState::Healthy,
-                query_state: Some(AtmObservabilityHealthState::Healthy),
-                maintenance: None,
-                diagnostic: None,
-                detail: None,
-            })
+        fn events(&self) -> Vec<BootstrapCommandEvent> {
+            self.events.lock().expect("events lock").clone()
         }
     }
 
@@ -971,10 +978,11 @@ mod tests {
 
     #[test]
     fn bootstrap_traceability_preserves_explicit_identity() {
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "send",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -987,12 +995,13 @@ mod tests {
     fn traceability_emits_pending_and_connected_for_retry_success() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
         let attempts = Arc::new(AtomicUsize::new(0));
         let try_connect_attempts = Arc::clone(&attempts);
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "send",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -1013,17 +1022,17 @@ mod tests {
             )
             .expect("daemon available");
 
-        let events = observability.events();
-        assert_eq!(events.len(), 3);
-        assert_eq!(events[0].command, "send");
-        assert_eq!(events[0].action.as_str(), "daemon_connect");
-        assert_eq!(events[0].outcome.as_str(), "initial_miss");
-        assert_eq!(events[1].action.as_str(), "daemon_connect");
-        assert_eq!(events[1].outcome.as_str(), "retry_attempt");
-        assert_eq!(events[2].action.as_str(), "daemon_connect");
-        assert_eq!(events[2].outcome.as_str(), "connected");
-        assert_eq!(events[2].team.as_str(), "trace-team");
-        assert_eq!(events[2].agent.as_str(), "trace-agent");
+        let recorded = events.events();
+        assert_eq!(recorded.len(), 3);
+        assert_eq!(recorded[0].command, "send");
+        assert_eq!(recorded[0].action, "daemon_connect");
+        assert_eq!(recorded[0].outcome, "initial_miss");
+        assert_eq!(recorded[1].action, "daemon_connect");
+        assert_eq!(recorded[1].outcome, "retry_attempt");
+        assert_eq!(recorded[2].action, "daemon_connect");
+        assert_eq!(recorded[2].outcome, "connected");
+        assert_eq!(recorded[2].team.as_str(), "trace-team");
+        assert_eq!(recorded[2].agent.as_str(), "trace-agent");
         assert_eq!(
             traceability.snapshot(),
             BootstrapTraceReport {
@@ -1041,10 +1050,11 @@ mod tests {
     fn traceability_emits_spawn_failure_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "doctor",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -1060,16 +1070,13 @@ mod tests {
             .expect_err("spawn failure");
 
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        let events = observability.events();
-        assert!(events.iter().any(|event| {
-            event.action.as_str() == "daemon_auto_start"
-                && event.outcome.as_str() == "spawn_requested"
+        let recorded = events.events();
+        assert!(recorded.iter().any(|event| {
+            event.action == "daemon_auto_start" && event.outcome == "spawn_requested"
         }));
-        let error_event = events
+        let error_event = recorded
             .iter()
-            .find(|event| {
-                event.action.as_str() == "daemon_auto_start" && event.outcome.as_str() == "error"
-            })
+            .find(|event| event.action == "daemon_auto_start" && event.outcome == "error")
             .expect("error event");
         assert_eq!(error_event.command, "doctor");
         assert_eq!(
