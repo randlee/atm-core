@@ -1,14 +1,19 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 preserves these crate-private Claude compatibility helpers until later internal consumers are removed."
+)]
+
 //! Hidden daemon-side ingress/export helper layer used by concrete boundary
 //! adapters.
 
 use crate::boundary::{
-    ProjectionAppendMode, ConfigLoadRequest, ConfigLoadResponse,
+    ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMode,
     ProjectionExportAppendMessageSetRequest, ProjectionExportAppendMessageSetResponse,
-    ProjectionExportRecordRequest, ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest, SourceIngressImportResponse,
-    SourceFileRecord,
+    ProjectionExportRecordRequest, ProjectionExportRecordResponse,
+    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
+    SourceFileRecord, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
+    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
+    SourceIngressImportRequest, SourceIngressImportResponse,
 };
 use crate::config;
 use crate::error::AtmError;

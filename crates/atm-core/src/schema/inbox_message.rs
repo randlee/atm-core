@@ -9,11 +9,11 @@ use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
 use crate::error::AtmError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SharedProjectionExportPolicy {
+pub(crate) struct SharedAppendPolicy {
     pub(crate) atm_authored_body_export_max_bytes: ByteCount,
 }
 
-impl Default for SharedProjectionExportPolicy {
+impl Default for SharedAppendPolicy {
     fn default() -> Self {
         Self {
             atm_authored_body_export_max_bytes: ByteCount::new(
@@ -25,7 +25,7 @@ impl Default for SharedProjectionExportPolicy {
 
 #[cfg(test)]
 pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
-    to_shared_inbox_value_with_policy(message, SharedProjectionExportPolicy::default())
+    to_shared_inbox_value_with_policy(message, SharedAppendPolicy::default())
 }
 
 fn strip_metadata_atm_namespace(object: &mut Map<String, Value>) {
@@ -52,7 +52,7 @@ fn strip_removed_compatibility_fields(object: &mut Map<String, Value>) {
 
 pub(crate) fn to_shared_inbox_value_with_policy(
     message: &MessageEnvelope,
-    policy: SharedProjectionExportPolicy,
+    policy: SharedAppendPolicy,
 ) -> Result<Value, AtmError> {
     let mut value = serde_json::to_value(message).map_err(|error| {
         AtmError::mailbox_write(format!(
@@ -91,7 +91,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
 
 fn should_export_retrieval_stub(
     message: &MessageEnvelope,
-    policy: SharedProjectionExportPolicy,
+    policy: SharedAppendPolicy,
 ) -> Result<bool, AtmError> {
     let export_cap = policy
         .atm_authored_body_export_max_bytes
@@ -122,8 +122,8 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, MessageEnvelope, PendingAck, SharedProjectionExportPolicy,
-        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        AlertKind, AtmMessageId, MessageEnvelope, PendingAck, SharedAppendPolicy, ThreadMode,
+        to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -468,7 +468,7 @@ mod tests {
 
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
-            SharedProjectionExportPolicy {
+            SharedAppendPolicy {
                 atm_authored_body_export_max_bytes: ByteCount::new(8),
             },
         )
@@ -513,7 +513,7 @@ mod tests {
 
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
-            SharedProjectionExportPolicy {
+            SharedAppendPolicy {
                 atm_authored_body_export_max_bytes: ByteCount::new(text.len() as u64),
             },
         )
@@ -550,7 +550,7 @@ mod tests {
 
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
-            SharedProjectionExportPolicy {
+            SharedAppendPolicy {
                 atm_authored_body_export_max_bytes: ByteCount::new(31),
             },
         )
@@ -588,7 +588,7 @@ mod tests {
 
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
-            SharedProjectionExportPolicy {
+            SharedAppendPolicy {
                 atm_authored_body_export_max_bytes: ByteCount::new(8),
             },
         )

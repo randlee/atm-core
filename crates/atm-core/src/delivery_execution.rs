@@ -60,7 +60,7 @@ struct DeliveryNotificationDetail<'a> {
     recipient_pane_id: Option<&'a str>,
 }
 
-pub(crate) trait ProjectionMailboxWriter: crate::boundary::sealed::Sealed {
+pub(crate) trait ClaudeCompatibilityMailboxWriter: crate::boundary::sealed::Sealed {
     fn append_claude_inbox_message(
         &self,
         inbox_path: &Path,
@@ -76,7 +76,7 @@ pub(crate) trait ProjectionMailboxWriter: crate::boundary::sealed::Sealed {
     ) -> Result<(), AtmError>;
 }
 
-impl<T> ProjectionMailboxWriter for T
+impl<T> ClaudeCompatibilityMailboxWriter for T
 where
     T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
 {
@@ -177,7 +177,9 @@ pub(crate) fn execute_delivery_plan<R>(
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ProjectionMailboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     execute_messages(
         runtime,
@@ -210,7 +212,9 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ProjectionMailboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -359,7 +363,7 @@ fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
     }
 }
 
-fn execute_claude_delivery<R: ProjectionMailboxWriter + ?Sized>(
+fn execute_claude_delivery<R: ClaudeCompatibilityMailboxWriter + ?Sized>(
     runtime: &R,
     disposition: DeliveryPlanDisposition,
     inbox_path: &Path,
@@ -379,7 +383,7 @@ fn execute_claude_delivery<R: ProjectionMailboxWriter + ?Sized>(
     }
 }
 
-fn execute_persisted_claude_delivery<R: ProjectionMailboxWriter + ?Sized>(
+fn execute_persisted_claude_delivery<R: ClaudeCompatibilityMailboxWriter + ?Sized>(
     runtime: &R,
     inbox_path: &Path,
     recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -449,7 +453,7 @@ mod tests {
     use serde_json::{Map, Value};
 
     use super::{
-        ProjectionMailboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
+        ClaudeCompatibilityMailboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
         NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::delivery_plan::{
@@ -474,7 +478,7 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for NoopRuntime {}
 
-    impl ProjectionMailboxWriter for NoopRuntime {
+    impl ClaudeCompatibilityMailboxWriter for NoopRuntime {
         fn append_claude_inbox_message(
             &self,
             _inbox_path: &Path,
@@ -618,7 +622,7 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for RecordingRuntime {}
 
-    impl ProjectionMailboxWriter for RecordingRuntime {
+    impl ClaudeCompatibilityMailboxWriter for RecordingRuntime {
         fn append_claude_inbox_message(
             &self,
             _inbox_path: &Path,

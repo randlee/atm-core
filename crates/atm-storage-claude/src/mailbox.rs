@@ -1,7 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use atm_storage::{AgentName, AtmError, Message, MessageEnvelope, MessageKey, MessageQuery, TeamName};
+use atm_storage::{
+    AgentName, AtmError, Message, MessageEnvelope, MessageKey, MessageQuery, TeamName,
+};
+
+use crate::compat::{ProjectionAppendMode, SourceFileRecord};
 
 #[derive(Debug, Clone)]
 struct SourceProjectionFile {
@@ -13,8 +17,11 @@ struct SourceProjectionFile {
 
 fn read_message_file(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     let raw = fs::read_to_string(path).map_err(|error| {
-        AtmError::mailbox_read(format!("failed to read mailbox {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::mailbox_read(format!(
+            "failed to read mailbox {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })?;
     if raw.trim().is_empty() {
         return Ok(Vec::new());
@@ -39,8 +46,11 @@ fn read_message_file(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
             .collect();
     }
     serde_json::from_str::<Vec<MessageEnvelope>>(&raw).map_err(|error| {
-        AtmError::mailbox_read(format!("failed to parse mailbox {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::mailbox_read(format!(
+            "failed to parse mailbox {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })
 }
 
@@ -69,8 +79,11 @@ fn write_message_file(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
             encoded.push('\n');
         }
         return fs::write(path, encoded).map_err(|error| {
-            AtmError::mailbox_write(format!("failed to write mailbox {}: {error}", path.display()))
-                .with_source(error)
+            AtmError::mailbox_write(format!(
+                "failed to write mailbox {}: {error}",
+                path.display()
+            ))
+            .with_source(error)
         });
     }
     let mut encoded = serde_json::to_vec(messages).map_err(|error| {
@@ -78,23 +91,25 @@ fn write_message_file(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
     })?;
     encoded.push(b'\n');
     fs::write(path, encoded).map_err(|error| {
-        AtmError::mailbox_write(format!("failed to write mailbox {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::mailbox_write(format!(
+            "failed to write mailbox {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })
 }
 
 fn key_for_message(message: &MessageEnvelope) -> MessageKey {
-    message
-        .message_id
-        .map(MessageKey::from)
-        .unwrap_or_else(|| {
-            MessageKey::new(format!(
-                "{}:{}",
-                message.from,
-                message.timestamp.into_inner().to_rfc3339()
-            ))
-            .expect("derived message key is not blank")
-        })
+    message.message_id.map(MessageKey::from).unwrap_or_else(|| {
+        // PANIC: the derived fallback key always contains a sender plus an
+        // RFC3339 timestamp, so it cannot be blank.
+        MessageKey::new(format!(
+            "{}:{}",
+            message.from,
+            message.timestamp.into_inner().to_rfc3339()
+        ))
+        .expect("derived message key is not blank")
+    })
 }
 
 fn discover_source_paths(
@@ -150,7 +165,8 @@ fn source_files_for_query(
     agent: &AgentName,
 ) -> Result<Vec<SourceProjectionFile>, AtmError> {
     let paths = discover_source_paths(home_dir, team, agent)?;
-    paths.into_iter()
+    paths
+        .into_iter()
         .map(|path| {
             let messages = read_message_file(&path)?;
             Ok(SourceProjectionFile {
@@ -161,6 +177,22 @@ fn source_files_for_query(
             })
         })
         .collect()
+}
+
+pub(crate) fn import_source_projections(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<SourceFileRecord>, AtmError> {
+    source_files_for_query(home_dir, team, agent).map(|files| {
+        files
+            .into_iter()
+            .map(|file| SourceFileRecord {
+                path: file.path,
+                messages: file.messages,
+            })
+            .collect()
+    })
 }
 
 fn matches_query(message: &MessageEnvelope, query: &MessageQuery) -> bool {
@@ -226,7 +258,10 @@ fn all_source_files(home_dir: &Path) -> Result<Vec<SourceProjectionFile>, AtmErr
             let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
                 continue;
             };
-            let Some(prefix) = file_name.strip_suffix(".json").or_else(|| file_name.strip_suffix(".jsonl")) else {
+            let Some(prefix) = file_name
+                .strip_suffix(".json")
+                .or_else(|| file_name.strip_suffix(".jsonl"))
+            else {
                 continue;
             };
             let Some(agent_prefix) = prefix.split('.').next() else {
@@ -309,4 +344,33 @@ pub fn delete_message(home_dir: &Path, key: &MessageKey) -> Result<(), AtmError>
         }
     }
     Ok(())
+}
+
+pub(crate) fn export_source_projections(source_files: &[SourceFileRecord]) -> Result<(), AtmError> {
+    for source in source_files {
+        write_message_file(&source.path, &source.messages)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn reexport_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+    write_message_file(path, messages)
+}
+
+pub(crate) fn append_message_set(
+    path: &Path,
+    mode: ProjectionAppendMode,
+    messages: &[MessageEnvelope],
+) -> Result<(), AtmError> {
+    match mode {
+        ProjectionAppendMode::RecoveredLogicalMessageSet => {
+            let mut existing = if path.exists() {
+                read_message_file(path)?
+            } else {
+                Vec::new()
+            };
+            existing.extend(messages.iter().cloned());
+            write_message_file(path, &existing)
+        }
+    }
 }

@@ -141,6 +141,7 @@ dependencies = [
  "arc-swap",
  "atm-runtime",
  "atm-runtime-test-support",
+ "atm-storage-claude",
  "chrono",
  "fs2",
  "interprocess",
