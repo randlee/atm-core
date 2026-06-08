@@ -17,8 +17,7 @@ use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRoste
 use atm_storage_rusqlite::SqliteStorageBackend;
 
 use crate::legacy_storage_adapters::{
-    StorageBackends, boundary_mail_store_view, boundary_roster_store_view, noop_task_store,
-    runtime_doctor_ports,
+    StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
 use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
@@ -51,7 +50,6 @@ pub struct RuntimeAssembly {
         Arc<dyn SharedMessageStore + Send + Sync>,
         Arc<dyn SharedRosterStore + Send + Sync>,
     >,
-    pub task_store: Arc<dyn boundary::TaskStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
@@ -62,7 +60,6 @@ impl fmt::Debug for RuntimeAssembly {
         f.debug_struct("RuntimeAssembly")
             .field("service_runtime", &self.service_runtime)
             .field("storage_backends", &self.storage_backends)
-            .field("task_store", &"dyn TaskStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
@@ -114,10 +111,8 @@ fn assemble_sqlite_runtime_at_path(
         messages: shared_messages.clone(),
         rosters: shared_rosters.clone(),
     };
-    let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
-        task_store.clone(),
         storage_backends.rosters.clone(),
         non_claude_outbound,
         notification_sink,
@@ -131,7 +126,6 @@ fn assemble_sqlite_runtime_at_path(
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        task_store,
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -169,10 +163,8 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         messages: shared_messages.clone(),
         rosters: shared_rosters.clone(),
     };
-    let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
-        task_store.clone(),
         storage_backends.rosters.clone(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
@@ -186,7 +178,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        task_store,
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -200,10 +191,6 @@ impl RuntimeAssembly {
 
     pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
         boundary_mail_store_view(self.storage_backends.messages.clone())
-    }
-
-    pub fn task_store_arc(&self) -> Arc<dyn boundary::TaskStore + Send + Sync> {
-        self.task_store.clone()
     }
 
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {

@@ -1,4 +1,4 @@
-use crate::{AtmError, AtmErrorCode};
+use atm_storage::{AtmError, AtmErrorCode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteObservabilityOutcome {
@@ -15,7 +15,6 @@ impl SqliteObservabilityOutcome {
     }
 }
 
-/// Structured SQLite subsystem event emitted through the observability port.
 #[derive(Debug, Clone)]
 pub struct SqliteObservabilityEvent {
     pub action: &'static str,
@@ -40,13 +39,6 @@ impl SqliteObservabilityEvent {
     }
 }
 
-/// Bottom-of-stack SQLite observability port.
-///
-/// This trait may capture SQLite subsystem events, but it must not depend on
-/// daemon subsystem types or reconstruct daemon-specific semantics. Callers
-/// provide already-shaped SQLite event content and the implementation decides
-/// only how to emit or project that event. This trait is intentionally open
-/// for extension by downstream observability backends.
 pub trait SqliteObservability: Send + Sync {
     fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError>;
 
@@ -64,8 +56,6 @@ pub trait SqliteObservability: Send + Sync {
     }
 }
 
-/// No-op SQLite observability sink used by callers that intentionally do not
-/// retain or project SQLite subsystem events.
 #[derive(Debug, Default)]
 pub struct NullSqliteObservability;
 

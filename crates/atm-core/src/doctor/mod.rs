@@ -627,7 +627,6 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    use crate::boundary;
     use crate::doctor::{
         DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
     };
@@ -680,12 +679,9 @@ mod tests {
     }
 
     struct UnusedMailStore;
-    struct UnusedTaskStore;
     struct TestRosterStore {
         members: Vec<atm_storage::RosterMember>,
     }
-
-    impl crate::boundary::sealed::Sealed for UnusedTaskStore {}
 
     impl atm_storage::MessageStore for UnusedMailStore {
         fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
@@ -708,57 +704,6 @@ mod tests {
 
         fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
-        }
-    }
-
-    impl boundary::TaskStore for UnusedTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
         }
     }
 
@@ -804,7 +749,6 @@ mod tests {
     ) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(UnusedTaskStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
             Arc::new(crate::LocalFileNotificationSink::at_path(

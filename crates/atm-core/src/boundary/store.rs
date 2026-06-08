@@ -6,40 +6,15 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, InboxMessage};
-use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
-use atm_storage::contract::{AckTransition, MessageKey, TaskState};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::mail::DoctorFinding;
 use super::{ReplaySource, sealed};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct TaskStoreTaskMetadata {
-    #[serde(default)]
-    pub fields: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreTaskRecord {
-    pub team: TeamName,
-    pub task_id: TaskId,
-    pub state: TaskState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner: Option<AgentName>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub linked_message_keys: Vec<MessageKey>,
-    #[serde(default)]
-    pub metadata: TaskStoreTaskMetadata,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<IsoTimestamp>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreHealthSnapshot {
@@ -127,137 +102,6 @@ impl ProjectionRoster {
     }
 }
 
-/// Stub task-store request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreCreateTaskRequest {
-    pub team: TeamName,
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreCreateTaskResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store load-task request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreLoadTaskRequest {
-    pub team: TeamName,
-    pub task_id: TaskId,
-}
-
-/// Stub task-store load-task response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreLoadTaskResponse {
-    #[serde(default)]
-    pub record: Option<TaskStoreTaskRecord>,
-}
-
-/// Stub task-store update-task request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreUpdateTaskRequest {
-    pub team: TeamName,
-    pub task_id: TaskId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner: Option<AgentName>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<TaskState>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<TaskStoreTaskMetadata>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub append_message_keys: Vec<MessageKey>,
-}
-
-/// Stub task-store update-task response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreUpdateTaskResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store attach-message-link request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreAttachMessageLinkRequest {
-    pub team: TeamName,
-    pub task_id: TaskId,
-    pub message_key: MessageKey,
-}
-
-/// Stub task-store attach-message-link response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreAttachMessageLinkResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store detach-message-link request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreDetachMessageLinkRequest {
-    pub team: TeamName,
-    pub task_id: TaskId,
-    pub message_key: MessageKey,
-}
-
-/// Stub task-store detach-message-link response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreDetachMessageLinkResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store record-ack-transition request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreRecordAckTransitionRequest {
-    pub team: TeamName,
-    pub task_id: TaskId,
-    pub message_key: MessageKey,
-    pub actor: AgentName,
-    pub transitioned_at: IsoTimestamp,
-    pub transition: AckTransition,
-}
-
-/// Stub task-store record-ack-transition response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreRecordAckTransitionResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Stub task-store query-task-metadata request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreQueryTaskMetadataRequest {
-    pub team: TeamName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message_key: Option<MessageKey>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<TaskState>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
-}
-
-/// Stub task-store query-task-metadata response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreQueryTaskMetadataResponse {
-    pub records: Vec<TaskStoreTaskRecord>,
-}
-
-/// Canonical Phase R task-store request entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreRequest {
-    pub team: TeamName,
-    pub record: TaskStoreTaskRecord,
-}
-
-/// Canonical Phase R task-store response entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskStoreResponse {
-    pub record: TaskStoreTaskRecord,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct TaskStoreDoctorReport {
-    pub findings: Vec<DoctorFinding>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct RosterStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,
@@ -302,69 +146,6 @@ pub struct NonClaudeOutboundDeliveryRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NonClaudeOutboundDeliveryResponse {
     pub delivered_messages: usize,
-}
-
-/// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
-pub trait TaskStore: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when task-state persistence or task-link mutation
-    /// cannot satisfy the durable task-store contract.
-    fn create_task(
-        &self,
-        request: TaskStoreCreateTaskRequest,
-    ) -> Result<TaskStoreCreateTaskResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one task record cannot be loaded.
-    fn load_task(
-        &self,
-        request: TaskStoreLoadTaskRequest,
-    ) -> Result<TaskStoreLoadTaskResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one task record cannot be updated safely.
-    fn update_task(
-        &self,
-        request: TaskStoreUpdateTaskRequest,
-    ) -> Result<TaskStoreUpdateTaskResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one task/message link cannot be recorded.
-    fn attach_message_link(
-        &self,
-        request: TaskStoreAttachMessageLinkRequest,
-    ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one task/message link cannot be removed.
-    fn detach_message_link(
-        &self,
-        request: TaskStoreDetachMessageLinkRequest,
-    ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one ack transition cannot be persisted.
-    fn record_ack_transition(
-        &self,
-        request: TaskStoreRecordAckTransitionRequest,
-    ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when task metadata cannot be queried.
-    fn query_task_metadata(
-        &self,
-        request: TaskStoreQueryTaskMetadataRequest,
-    ) -> Result<TaskStoreQueryTaskMetadataResponse, AtmError>;
-}
-
-/// BOUNDARY-TaskStoreDoctor — see docs/atm-core/boundaries.md.
-pub trait TaskStoreDoctor: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when durable task-store diagnostics cannot be
-    /// collected or summarized into the shared doctor report shape.
-    fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError>;
 }
 
 /// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
@@ -444,19 +225,11 @@ pub trait NonClaudeOutbound: sealed::Sealed {
 mod tests {
     use super::*;
 
-    struct WitnessTaskStoreDoctor;
     struct WitnessRosterStoreDoctor;
     struct WitnessConfigDoctor;
 
-    impl sealed::Sealed for WitnessTaskStoreDoctor {}
     impl sealed::Sealed for WitnessRosterStoreDoctor {}
     impl sealed::Sealed for WitnessConfigDoctor {}
-
-    impl TaskStoreDoctor for WitnessTaskStoreDoctor {
-        fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError> {
-            Ok(TaskStoreDoctorReport::default())
-        }
-    }
 
     impl RosterStoreDoctor for WitnessRosterStoreDoctor {
         fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError> {
@@ -468,14 +241,6 @@ mod tests {
         fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
             Ok(ConfigDoctorReport::default())
         }
-    }
-
-    #[test]
-    fn task_store_doctor_trait_is_object_safe_and_compiles() {
-        fn assert_object_safe(_doctor: &dyn TaskStoreDoctor) {}
-
-        let witness = WitnessTaskStoreDoctor;
-        assert_object_safe(&witness);
     }
 
     #[test]

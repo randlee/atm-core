@@ -15,6 +15,15 @@ estimated_scope: large
 Delete the obsolete storage/RPC scaffolding and close the residual wrapper and
 backend-leakage surface against the final ledger.
 
+Closure outcome for the landed AC.6 branch:
+- the speculative `TaskStore` family is deleted from `atm-core` and the last
+  runtime/daemon compile bridge usage is removed rather than quarantined
+- the old Claude `SourceIngress*` / `ProjectionExport*` shared wrapper and
+  trait surface is gone; daemon consumers now use the direct
+  `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
+- SQLite observability no longer leaks through `atm-storage`; it lives under
+  `atm-storage-rusqlite` and runtime imports it from there
+
 ## Scope Summary
 
 This sprint is the closeout line for contract-surface deletion. It removes

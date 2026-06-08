@@ -7,10 +7,7 @@ use crate::worker_support::{
     retained_join_helper_count_for_test,
 };
 use atm_core::boundary::{
-    self, NotificationEvent, NotificationSink, ReconcileRequest, RosterStore,
-    RosterStoreHealthSnapshot, SourceDiagnosticsRequest, SourceDiagnosticsResponse,
-    SourceFileRecord, SourceIdentityFingerprintRequest, SourceIdentityFingerprintResponse,
-    SourceImportRequest, SourceImportResponse, SourceIngress, WatchEventBatch, WatchEventSource,
+    self, NotificationEvent, NotificationSink, ReconcileRequest, WatchEventBatch, WatchEventSource,
     WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
@@ -18,6 +15,8 @@ use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, InboxMessage};
 use atm_core::types::IsoTimestamp;
+use atm_storage::{RosterMember, RosterSnapshot, RosterStore};
+use atm_storage_claude::compat::SourceFileRecord;
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -509,6 +508,11 @@ struct FakeInboxIngress {
     imports: Arc<Mutex<Vec<SourceImportResponse>>>,
 }
 
+#[derive(Clone)]
+struct SourceImportResponse {
+    source_files: Vec<SourceFileRecord>,
+}
+
 impl FakeInboxIngress {
     fn new(imports: Vec<SourceImportResponse>) -> Self {
         Self {
@@ -519,36 +523,27 @@ impl FakeInboxIngress {
 
 impl boundary::sealed::Sealed for FakeInboxIngress {}
 
-impl SourceIngress for FakeInboxIngress {
+impl super::InboxIngressPort for FakeInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: SourceImportRequest,
-    ) -> Result<SourceImportResponse, atm_core::error::AtmError> {
+        _home_dir: &Path,
+        _team: &atm_core::types::TeamName,
+        _agent: &atm_core::types::AgentName,
+    ) -> Result<Vec<SourceFileRecord>, atm_core::error::AtmError> {
         let mut imports = self.imports.lock().expect("imports");
         if imports.is_empty() {
-            return Ok(SourceImportResponse {
-                source_files: Vec::new(),
-            });
+            return Ok(Vec::new());
         }
-        Ok(imports.remove(0))
+        Ok(imports.remove(0).source_files)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        request: SourceIdentityFingerprintRequest,
-    ) -> SourceIdentityFingerprintResponse {
-        SourceIdentityFingerprintResponse {
-            fingerprint: request.message.message_id.map(|message_id| {
-                atm_core::boundary::MessageFingerprint::from(message_id.to_string())
-            }),
-        }
-    }
-
-    fn report_diagnostics(&self, _request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse {
-        SourceDiagnosticsResponse {
-            duplicate_message_ids: 0,
-            messages_without_ids: 0,
-        }
+        message: &atm_storage::MessageEnvelope,
+    ) -> Option<atm_core::boundary::MessageFingerprint> {
+        message
+            .message_id
+            .map(|message_id| atm_core::boundary::MessageFingerprint::from(message_id.to_string()))
     }
 }
 
@@ -573,7 +568,7 @@ struct RecordingRosterStore {
 
 #[derive(Default)]
 struct RecordingRosterState {
-    rosters: HashMap<atm_core::types::TeamName, Vec<boundary::RosterMemberRecord>>,
+    rosters: HashMap<atm_core::types::TeamName, Vec<RosterMember>>,
     replace_count: u64,
 }
 
@@ -582,7 +577,7 @@ impl RecordingRosterStore {
         self.state.lock().expect("roster state").replace_count
     }
 
-    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<boundary::RosterMemberRecord> {
+    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<RosterMember> {
         self.state
             .lock()
             .expect("roster state")
@@ -596,35 +591,21 @@ impl RecordingRosterStore {
 impl boundary::sealed::Sealed for RecordingRosterStore {}
 
 impl RosterStore for RecordingRosterStore {
-    fn replace_roster(
-        &self,
-        team: &atm_core::types::TeamName,
-        members: &[boundary::RosterMemberRecord],
-        _source: Option<&boundary::ReplaySource>,
-    ) -> Result<(), AtmError> {
+    fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError> {
         let mut state = self.state.lock().expect("roster state");
-        state.rosters.insert(team.clone(), members.to_vec());
+        state
+            .rosters
+            .insert(roster.team_name.clone(), roster.members.clone());
         state.replace_count += 1;
         Ok(())
     }
 
-    fn load_roster(
-        &self,
-        team: &atm_core::types::TeamName,
-    ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
-        Ok(self.members_for(team))
-    }
-
-    fn query_membership(
-        &self,
-        team: &atm_core::types::TeamName,
-        member: &atm_core::types::AgentName,
-    ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
-        let member = self
-            .members_for(team)
-            .into_iter()
-            .find(|record| record.agent_name == *member);
-        Ok(member)
+    fn load_roster(&self, team: &atm_core::types::TeamName) -> Result<RosterSnapshot, AtmError> {
+        Ok(RosterSnapshot {
+            team_name: team.clone(),
+            members: self.members_for(team),
+            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+        })
     }
 
     fn list_teams(&self) -> Result<Vec<atm_core::types::TeamName>, AtmError> {
@@ -636,18 +617,6 @@ impl RosterStore for RecordingRosterStore {
             .keys()
             .cloned()
             .collect())
-    }
-
-    fn health_snapshot(
-        &self,
-        team: &atm_core::types::TeamName,
-    ) -> Result<RosterStoreHealthSnapshot, AtmError> {
-        Ok(RosterStoreHealthSnapshot {
-            team: team.clone(),
-            member_count: self.members_for(team).len() as u64,
-            stale: false,
-            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
-        })
     }
 }
 

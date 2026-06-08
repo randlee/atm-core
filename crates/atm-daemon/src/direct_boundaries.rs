@@ -1,16 +1,12 @@
 use atm_core::{
+    boundary::MessageFingerprint,
     boundary::{ConfigLoadRequest, ConfigLoadResponse},
     error::AtmError,
     load_atm_config,
 };
-use atm_storage_claude::compat::{
-    ProjectionExportAppendMessageSetRequest, ProjectionExportAppendMessageSetResponse,
-    ProjectionExportRecordRequest, ProjectionExportRecordResponse,
-    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
-    SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
-    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
-    SourceIngressImportRequest, SourceIngressImportResponse,
-};
+use atm_storage::{AgentName, MessageEnvelope, TeamName};
+use atm_storage_claude::compat::SourceFileRecord;
+use std::path::Path;
 
 pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
@@ -21,37 +17,15 @@ pub(crate) fn load_workspace_config(
 }
 
 pub(crate) fn import_inbox_source(
-    request: SourceIngressImportRequest,
-) -> Result<SourceIngressImportResponse, AtmError> {
-    atm_storage_claude::compat::import_inbox_source(request)
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<SourceFileRecord>, AtmError> {
+    atm_storage_claude::compat::import_inbox_source(home_dir, team, agent)
 }
 
 pub(crate) fn compute_identity_fingerprint(
-    request: SourceIngressIdentityFingerprintRequest,
-) -> SourceIngressIdentityFingerprintResponse {
-    atm_storage_claude::compat::compute_identity_fingerprint(request)
-}
-
-pub(crate) fn report_inbox_diagnostics(
-    request: SourceIngressDiagnosticsRequest,
-) -> SourceIngressDiagnosticsResponse {
-    atm_storage_claude::compat::report_inbox_diagnostics(request)
-}
-
-pub(crate) fn export_source_files(
-    request: ProjectionExportRecordRequest,
-) -> Result<ProjectionExportRecordResponse, AtmError> {
-    atm_storage_claude::compat::export_source_files(request)
-}
-
-pub(crate) fn reexport_messages(
-    request: ProjectionExportReexportMessageRequest,
-) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
-    atm_storage_claude::compat::reexport_messages(request)
-}
-
-pub(crate) fn append_message_set(
-    request: ProjectionExportAppendMessageSetRequest,
-) -> Result<ProjectionExportAppendMessageSetResponse, AtmError> {
-    atm_storage_claude::compat::append_message_set(request)
+    message: &MessageEnvelope,
+) -> Option<MessageFingerprint> {
+    atm_storage_claude::compat::compute_identity_fingerprint(message).map(MessageFingerprint::from)
 }

@@ -155,6 +155,20 @@ than one sprint in a non-default way.
 | `Config*` retain-outside rows | `AC.4` | `AC.6` verification only | `AC.4` classifies them as non-storage seams; `AC.6` checks docs/code drift only. |
 | `SourceIngress*` / `ProjectionExport*` rows | `AC.2` | `AC.6` verification only | Claude-backend internalization closes in `AC.2`; later grep/delete is only proof. |
 
+## AC.6 Closure Notes
+
+The AC.6 branch closes the remaining cleanup families this way:
+
+- speculative `TaskStore*` types and `TaskStore` / `TaskStoreDoctor` are
+  deleted from `atm-core`, and the last runtime/daemon compile-bridge usage is
+  removed instead of quarantined
+- the old Claude `SourceIngress*` / `ProjectionExport*` public wrapper and
+  trait families are deleted from the shared seam; daemon consumers use direct
+  `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
+- `SqliteObservability*` leaves `atm-storage` entirely and is owned by
+  `atm-storage-rusqlite`
+- no `quarantine-reason` rows were needed for AC.6
+
 ## `crates/atm-core/src/boundary/mod.rs`
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
