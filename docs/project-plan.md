@@ -336,6 +336,16 @@ Completion note:
   and closes the final backend-interchangeability issue without another storage
   reset.
 
+AC.6 closeout:
+- deleted the speculative `TaskStore` family from `atm-core` and removed the
+  last runtime/daemon compile bridge assumptions instead of preserving them as
+  compatibility surface
+- removed the old Claude `SourceIngress*` / `ProjectionExport*` shared wrapper
+  surface and cut daemon consumers over to direct
+  `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
+- removed `SqliteObservability*` from `atm-storage` and left that surface owned
+  by `atm-storage-rusqlite`
+
 Acceptance:
 - Phase AC exit criteria are satisfied only through
   `docs/plans/phase-AC/readiness.md`

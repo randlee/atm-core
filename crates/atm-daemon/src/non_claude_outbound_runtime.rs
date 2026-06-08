@@ -141,7 +141,7 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
 mod tests {
     use super::DaemonNonClaudeOutbound;
     use atm_core::boundary::{NonClaudeOutbound, NonClaudeOutboundDeliveryRequest};
-    use atm_core::schema::{AtmMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, InboxMessage};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::types::IsoTimestamp;
     use serde_json::Map;
@@ -152,7 +152,7 @@ mod tests {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
-            messages: vec![MessageEnvelope {
+            messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
                 text: "hello".to_string(),
                 timestamp: IsoTimestamp::now(),
@@ -202,7 +202,7 @@ mod tests {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
-            messages: vec![MessageEnvelope {
+            messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
                 text: "x".repeat(1024 * 1024),
                 timestamp: IsoTimestamp::now(),

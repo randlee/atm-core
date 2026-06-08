@@ -27,7 +27,6 @@ pub struct RosterStoreHealthSnapshot {
 }
 
 pub type RosterEntry = atm_storage::contract::RosterMember;
-pub type RosterMemberRecord = RosterEntry;
 
 pub fn roster_member_record_from_claude_code_member(
     team_name: TeamName,

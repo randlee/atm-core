@@ -12,7 +12,7 @@ use crate::config;
 use crate::error::AtmError;
 use crate::mailbox::atomic;
 use crate::mailbox::source::{SourceFile, discover_source_paths, load_source_files};
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::schema::inbox_message::SharedAppendPolicy;
 use crate::types::{AgentName, TeamName};
 
@@ -36,7 +36,7 @@ pub(crate) enum InboxFileFormat {
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
-    messages: &[MessageEnvelope],
+    messages: &[InboxMessage],
 ) -> Result<(), AtmError> {
     let export_policy = export_policy_for_path(path)?;
     write_compat_mailbox_projection_with_policy(path, messages, export_policy)
@@ -44,7 +44,7 @@ pub(crate) fn write_compat_mailbox_projection(
 
 pub(crate) fn append_compat_mailbox_message(
     path: &Path,
-    message: &MessageEnvelope,
+    message: &InboxMessage,
 ) -> Result<(), AtmError> {
     let export_policy = export_policy_for_path(path)?;
     if inbox_file_format(path) == InboxFileFormat::ClaudeJsonArray {
@@ -68,7 +68,7 @@ pub(crate) fn append_compat_mailbox_message(
 pub(crate) fn append_compat_mailbox_message_set(
     path: &Path,
     export_policy: SharedAppendPolicy,
-    messages: &[MessageEnvelope],
+    messages: &[InboxMessage],
 ) -> Result<(), AtmError> {
     validate_recovered_message_set(messages)?;
     validate_compat_mailbox_file_size(path)?;
@@ -84,7 +84,7 @@ pub(crate) fn append_compat_mailbox_message_set(
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
-    messages: &[MessageEnvelope],
+    messages: &[InboxMessage],
     export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
     atomic::write_messages(path, messages, export_policy)
@@ -136,7 +136,7 @@ pub(crate) fn inbox_file_format(path: &Path) -> InboxFileFormat {
         .unwrap_or(InboxFileFormat::Other)
 }
 
-fn validate_recovered_message_set(messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+fn validate_recovered_message_set(messages: &[InboxMessage]) -> Result<(), AtmError> {
     if messages.len() > MAX_RECOVERED_MESSAGE_SET_COUNT {
         return Err(AtmError::new_with_code(
             crate::error_codes::AtmErrorCode::MailboxRecoveredMessageSetTooLarge,
@@ -207,7 +207,7 @@ mod tests {
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
     use crate::schema::inbox_message::SharedAppendPolicy;
-    use crate::schema::{AtmMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::test_support::{TEST_QA, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp};
 
@@ -463,10 +463,10 @@ mod tests {
         assert!(!later_path.exists());
     }
 
-    fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+    fn sample_message(from: &str, text: &str) -> InboxMessage {
         let message_id = AtmMessageId::new();
 
-        MessageEnvelope {
+        InboxMessage {
             from: from.parse::<AgentName>().expect("agent name"),
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),

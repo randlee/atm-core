@@ -216,7 +216,7 @@ class LintBoundariesTests(unittest.TestCase):
         repo_root: Path,
         *,
         atm_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
-        atm_rusqlite_dependencies: str = 'rusqlite = "0.37"\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
+        atm_storage_rusqlite_dependencies: str = 'rusqlite = "0.37"\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
         atm_daemon_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
     ) -> None:
         (repo_root / "crates/atm-core/Cargo.toml").write_text(
@@ -255,7 +255,7 @@ homepage.workspace = true
 name = "atm_storage_rusqlite"
 
 [dependencies]
-{atm_rusqlite_dependencies}""",
+{atm_storage_rusqlite_dependencies}""",
             encoding="utf-8",
         )
         (repo_root / "crates/atm/Cargo.toml").write_text(

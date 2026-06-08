@@ -14,7 +14,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::WarningEntry;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
@@ -65,7 +65,7 @@ pub(crate) trait ClaudeCompatibilityMailboxWriter: crate::boundary::sealed::Seal
         &self,
         inbox_path: &Path,
         recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError>;
     fn append_claude_message_set(
         &self,
@@ -84,7 +84,7 @@ where
         &self,
         inbox_path: &Path,
         _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError> {
         self.append_compat_inbox_message(inbox_path, message)
     }
@@ -469,7 +469,7 @@ mod tests {
         CommandEvent, LogTailSession, ObservabilityPort,
     };
     use crate::protocol::{NotificationEvent, NotificationKind};
-    use crate::schema::{AtmMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -483,7 +483,7 @@ mod tests {
             &self,
             _inbox_path: &Path,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _message: &MessageEnvelope,
+            _message: &InboxMessage,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -556,7 +556,7 @@ mod tests {
 
     fn logical_message_with_text(text: &str) -> LogicalMessage {
         LogicalMessage::new(
-            MessageEnvelope {
+            InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
@@ -627,7 +627,7 @@ mod tests {
             &self,
             _inbox_path: &Path,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            message: &MessageEnvelope,
+            message: &InboxMessage,
         ) -> Result<(), AtmError> {
             let mut call_count = self.single_append_calls.lock().expect("call count");
             let current_index = *call_count;

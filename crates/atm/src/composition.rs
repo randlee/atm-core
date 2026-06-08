@@ -15,7 +15,7 @@ use atm_core::graft::{
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+    self, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -27,7 +27,8 @@ use atm_daemon_bootstrap::{
 #[cfg(test)]
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
-    BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, RpcEnvelope,
+    BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
+    FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
     unexpected_response,
 };
@@ -97,11 +98,10 @@ impl LocalIpcClientTransportAdapter {
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let envelope = RpcEnvelope::encode_request(request)?;
+        let envelope = encode_request_envelope(request)?;
         let response =
             daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?;
-        let (_, response) = response.decode_response()?;
-        Ok(response)
+        decode_response_envelope(response)
     }
 }
 
@@ -385,9 +385,25 @@ impl<'a> CliComposition<'a> {
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        let emit_bootstrap_event = |event: BootstrapCommandEvent| {
+            observability.emit(CommandEvent {
+                command: event.command,
+                action: action_name(event.action),
+                outcome: outcome_label(event.outcome),
+                team: event.team,
+                agent: event.agent.clone(),
+                sender: event.agent,
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: event.error_code,
+                error_message: event.error_message,
+            })
+        };
         let traceability = BootstrapTraceability::new(
             command,
-            observability,
+            &emit_bootstrap_event,
             parse_bootstrap_team()?,
             parse_bootstrap_agent()?,
         );
@@ -395,8 +411,69 @@ impl<'a> CliComposition<'a> {
             transport.probe_connection().map(|_| ())
         })?;
         let mut composition = Self::from_transport(transport, observability);
-        composition.bootstrap_trace = Some(traceability.snapshot());
+        composition.bootstrap_trace = Some(bootstrap_trace_to_core(traceability.snapshot()));
         Ok(composition)
+    }
+}
+
+fn encode_request_envelope(request: RequestEnvelope) -> Result<RpcEnvelope, AtmError> {
+    let request_id = protocol::next_request_id();
+    let frame = protocol::request_to_frame_payload(request_id, request)?;
+    Ok(RpcEnvelope::from_frame_payload(encode_daemon_frame(frame)?))
+}
+
+fn decode_response_envelope(envelope: RpcEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    let frame = decode_daemon_frame(envelope.into_frame_payload())?;
+    let (_, response) = protocol::response_from_frame_payload(frame)?;
+    Ok(response)
+}
+
+fn encode_daemon_frame(frame: protocol::FramePayload) -> Result<FramePayload, AtmError> {
+    Ok(FramePayload {
+        request_id: DaemonRequestId::new(frame.request_id.into_inner())?,
+        message_kind: MessageKind::try_from(frame.message_kind.code())?,
+        flags: frame.flags,
+        bytes: frame.bytes,
+    })
+}
+
+fn decode_daemon_frame(frame: FramePayload) -> Result<protocol::FramePayload, AtmError> {
+    Ok(protocol::FramePayload {
+        request_id: protocol::RequestId::new(frame.request_id.into_inner())?,
+        message_kind: protocol::MessageKind::try_from(frame.message_kind.code())?,
+        flags: frame.flags,
+        bytes: frame.bytes,
+    })
+}
+
+fn bootstrap_trace_to_core(
+    report: atm_daemon_client::BootstrapTraceReport,
+) -> BootstrapTraceReport {
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome as CoreAutoStart, BootstrapConnectOutcome as CoreConnect,
+        BootstrapLaunchGateOutcome as CoreLaunch,
+    };
+
+    BootstrapTraceReport {
+        daemon_connect: match report.daemon_connect {
+            atm_daemon_client::BootstrapConnectOutcome::Connected => CoreConnect::Connected,
+            atm_daemon_client::BootstrapConnectOutcome::NotFound => CoreConnect::NotFound,
+            atm_daemon_client::BootstrapConnectOutcome::Timeout => CoreConnect::Timeout,
+            atm_daemon_client::BootstrapConnectOutcome::Failed => CoreConnect::Failed,
+        },
+        daemon_launch_gate: match report.daemon_launch_gate {
+            atm_daemon_client::BootstrapLaunchGateOutcome::Launched => CoreLaunch::Launched,
+            atm_daemon_client::BootstrapLaunchGateOutcome::Failed => CoreLaunch::Failed,
+            atm_daemon_client::BootstrapLaunchGateOutcome::Skipped => CoreLaunch::Skipped,
+        },
+        daemon_auto_start: match report.daemon_auto_start {
+            atm_daemon_client::BootstrapAutoStartOutcome::AutoStarted => CoreAutoStart::AutoStarted,
+            atm_daemon_client::BootstrapAutoStartOutcome::Failed => CoreAutoStart::Failed,
+            atm_daemon_client::BootstrapAutoStartOutcome::Skipped => CoreAutoStart::Skipped,
+        },
+        connect_detail: report.connect_detail,
+        launch_gate_detail: report.launch_gate_detail,
+        auto_start_detail: report.auto_start_detail,
     }
 }
 
@@ -482,7 +559,7 @@ mod tests {
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
     use atm_core::read::ReadQuery;
-    use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
+    use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
@@ -583,7 +660,7 @@ mod tests {
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
-                .map(|agent| boundary::RosterMemberRecord {
+                .map(|agent| boundary::RosterEntry {
                     team_name: team.clone(),
                     agent_name: agent.parse().expect("agent"),
                     member_kind: boundary::RosterMemberKind::Permanent,
@@ -616,13 +693,13 @@ mod tests {
             let messages = values
                 .iter()
                 .cloned()
-                .map(serde_json::from_value::<MessageEnvelope>)
+                .map(serde_json::from_value::<InboxMessage>)
                 .collect::<Result<Vec<_>, _>>()
                 .expect("message envelopes");
             self.seed_sqlite_mailbox(agent, &messages);
         }
 
-        fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
+        fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
             if raw.trim_start().starts_with('[') {
                 let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
@@ -633,11 +710,11 @@ mod tests {
             }
             raw.lines()
                 .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str::<MessageEnvelope>(line).expect("json line"))
+                .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
                 .collect()
         }
 
-        fn write_inbox_messages(&self, agent: &str, messages: &[MessageEnvelope]) {
+        fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
             let values = messages
                 .iter()
                 .map(|message| serde_json::to_value(message).expect("message value"))
@@ -646,7 +723,7 @@ mod tests {
             self.seed_sqlite_mailbox(agent, messages);
         }
 
-        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
+        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
             let mail_store = assembly.mail_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
@@ -659,7 +736,7 @@ mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::MailStoreMessageRecord {
+                    .upsert_message(boundary::Message {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),
@@ -778,8 +855,8 @@ mod tests {
             }
         }
 
-        fn message(&self, text: &str, read: bool) -> MessageEnvelope {
-            MessageEnvelope {
+        fn message(&self, text: &str, read: bool) -> InboxMessage {
+            InboxMessage {
                 from: TEST_LEAD.parse().expect("lead"),
                 text: text.to_string(),
                 timestamp: Utc::now().into(),
@@ -798,7 +875,7 @@ mod tests {
             }
         }
 
-        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, MessageEnvelope) {
+        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, InboxMessage) {
             let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);

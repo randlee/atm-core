@@ -225,7 +225,7 @@ mod tests {
     use atm_core::schema::{AtmMessageId, InboxMessage};
     use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
-    use atm_storage_claude::compat::{self, ProjectionExportReexportMessageRequest};
+    use atm_storage_claude::compat;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -277,16 +277,10 @@ mod tests {
         let message = sample_message(TEST_LEAD, "full body that should project to a stub");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(ProjectionExportReexportMessageRequest {
-            path: inbox_path.clone(),
-            messages: vec![message.clone()],
-        })
-        .expect("first reexport");
-        compat::reexport_messages(ProjectionExportReexportMessageRequest {
-            path: inbox_path.clone(),
-            messages: vec![message.clone()],
-        })
-        .expect("second reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("first reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("second reexport");
 
         let import = ingress
             .import_inbox_source(
@@ -331,16 +325,10 @@ mod tests {
         let message = sample_message(TEST_LEAD, "small body stays fully exported");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(ProjectionExportReexportMessageRequest {
-            path: inbox_path.clone(),
-            messages: vec![message.clone()],
-        })
-        .expect("first reexport");
-        compat::reexport_messages(ProjectionExportReexportMessageRequest {
-            path: inbox_path.clone(),
-            messages: vec![message.clone()],
-        })
-        .expect("second reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("first reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("second reexport");
 
         let import = ingress
             .import_inbox_source(

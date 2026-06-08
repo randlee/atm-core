@@ -17,5 +17,5 @@ pub use contract::{
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;
-pub use schema::{AlertKind, AtmMessageId, MessageEnvelope, PendingAck, ThreadMode};
+pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use types::{AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};

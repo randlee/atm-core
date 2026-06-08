@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::types::{
     AckState, DisplayBucket, IsoTimestamp, MessageClass, NoAckState, PendingAckState,
     ReadReadState, ReadState, UnreadReadState,
@@ -8,13 +8,13 @@ use crate::types::{
 
 #[derive(Debug, Clone)]
 pub struct StoredMessage<R, A> {
-    pub envelope: MessageEnvelope,
+    pub envelope: InboxMessage,
     _read: PhantomData<R>, // covariant in R; the typestate marker is never mutably borrowed.
     _ack: PhantomData<A>,  // covariant in A; the typestate marker is never mutably borrowed.
 }
 
 impl StoredMessage<UnreadReadState, NoAckState> {
-    pub(crate) fn unread_no_ack(envelope: MessageEnvelope) -> Self {
+    pub(crate) fn unread_no_ack(envelope: InboxMessage) -> Self {
         Self {
             envelope,
             _read: PhantomData,
@@ -42,7 +42,7 @@ impl StoredMessage<UnreadReadState, NoAckState> {
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub(crate) fn unread_pending_ack(envelope: MessageEnvelope) -> Self {
+    pub(crate) fn unread_pending_ack(envelope: InboxMessage) -> Self {
         Self {
             envelope,
             _read: PhantomData,
@@ -57,7 +57,7 @@ impl StoredMessage<UnreadReadState, PendingAckState> {
 }
 
 impl StoredMessage<ReadReadState, NoAckState> {
-    pub(crate) fn read_no_ack(envelope: MessageEnvelope) -> Self {
+    pub(crate) fn read_no_ack(envelope: InboxMessage) -> Self {
         Self {
             envelope,
             _read: PhantomData,
@@ -67,7 +67,7 @@ impl StoredMessage<ReadReadState, NoAckState> {
 }
 
 impl StoredMessage<ReadReadState, PendingAckState> {
-    pub(crate) fn read_pending_ack(envelope: MessageEnvelope) -> Self {
+    pub(crate) fn read_pending_ack(envelope: InboxMessage) -> Self {
         Self {
             envelope,
             _read: PhantomData,
@@ -80,11 +80,11 @@ impl StoredMessage<ReadReadState, PendingAckState> {
 pub enum TransitionedMessage {
     ReadNoAck(StoredMessage<ReadReadState, NoAckState>),
     ReadPendingAck(StoredMessage<ReadReadState, PendingAckState>),
-    Unchanged(MessageEnvelope),
+    Unchanged(InboxMessage),
 }
 
 impl TransitionedMessage {
-    pub fn into_envelope(self) -> MessageEnvelope {
+    pub fn into_envelope(self) -> InboxMessage {
         match self {
             Self::ReadNoAck(message) => message.envelope,
             Self::ReadPendingAck(message) => message.envelope,
@@ -93,7 +93,7 @@ impl TransitionedMessage {
     }
 }
 
-pub fn derive_read_state(message: &MessageEnvelope) -> ReadState {
+pub fn derive_read_state(message: &InboxMessage) -> ReadState {
     if message.read {
         ReadState::Read
     } else {
@@ -101,7 +101,7 @@ pub fn derive_read_state(message: &MessageEnvelope) -> ReadState {
     }
 }
 
-pub fn derive_ack_state(message: &MessageEnvelope) -> AckState {
+pub fn derive_ack_state(message: &InboxMessage) -> AckState {
     if message.acknowledged_at.is_some() {
         AckState::Acknowledged
     } else if message.pending_ack_at.is_some() {
@@ -111,7 +111,7 @@ pub fn derive_ack_state(message: &MessageEnvelope) -> AckState {
     }
 }
 
-pub fn classify_message(message: &MessageEnvelope) -> MessageClass {
+pub fn classify_message(message: &InboxMessage) -> MessageClass {
     let read_state = derive_read_state(message);
     let ack_state = derive_ack_state(message);
 

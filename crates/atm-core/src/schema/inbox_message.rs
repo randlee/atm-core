@@ -1,7 +1,7 @@
 //! Shared inbox compatibility helpers layered on top of the canonical
 //! `atm-storage` message envelope types.
 
-pub use atm_storage::schema::{AlertKind, AtmMessageId, MessageEnvelope, PendingAck, ThreadMode};
+pub use atm_storage::schema::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 
 pub type InboxMessage = MessageEnvelope;
 
@@ -26,7 +26,7 @@ impl Default for SharedAppendPolicy {
 }
 
 #[cfg(test)]
-pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
+pub(crate) fn to_shared_inbox_value(message: &InboxMessage) -> Result<Value, AtmError> {
     to_shared_inbox_value_with_policy(message, SharedAppendPolicy::default())
 }
 
@@ -53,7 +53,7 @@ fn strip_removed_compatibility_fields(object: &mut Map<String, Value>) {
 }
 
 pub(crate) fn to_shared_inbox_value_with_policy(
-    message: &MessageEnvelope,
+    message: &InboxMessage,
     policy: SharedAppendPolicy,
 ) -> Result<Value, AtmError> {
     let mut value = serde_json::to_value(message).map_err(|error| {
@@ -92,7 +92,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
 }
 
 fn should_export_retrieval_stub(
-    message: &MessageEnvelope,
+    message: &InboxMessage,
     policy: SharedAppendPolicy,
 ) -> Result<bool, AtmError> {
     let export_cap = policy
@@ -124,7 +124,7 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, MessageEnvelope, PendingAck, SharedAppendPolicy, ThreadMode,
+        AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy, ThreadMode,
         to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
@@ -156,7 +156,7 @@ mod tests {
         // Validates the current ATM superset storage shape, not the
         // Claude-native schema. Ownership is documented in
         // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
@@ -183,7 +183,7 @@ mod tests {
         };
 
         let encoded = serde_json::to_string(&envelope).expect("encode");
-        let decoded: MessageEnvelope = serde_json::from_str(&encoded).expect("decode");
+        let decoded: InboxMessage = serde_json::from_str(&encoded).expect("decode");
 
         assert_eq!(decoded, envelope);
     }
@@ -201,7 +201,7 @@ mod tests {
             "futureField": {"nested": true}
         });
 
-        let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
         assert_eq!(decoded.extra["futureField"], json!({"nested": true}));
 
         let reencoded = serde_json::to_value(&decoded).expect("encode");
@@ -217,7 +217,7 @@ mod tests {
             "read": false
         });
 
-        let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
         assert!(decoded.message_id.is_none());
         assert!(decoded.task_id.is_none());
     }
@@ -232,7 +232,7 @@ mod tests {
             "taskId": "   "
         });
 
-        let error = serde_json::from_value::<MessageEnvelope>(json).expect_err("blank task id");
+        let error = serde_json::from_value::<InboxMessage>(json).expect_err("blank task id");
 
         assert!(error.to_string().contains("task id must not be blank"));
     }
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn shared_inbox_write_keeps_only_approved_immutable_fields() {
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
@@ -336,7 +336,7 @@ mod tests {
     fn shared_inbox_write_keeps_parent_message_id_and_thread_mode_when_set() {
         // parentMessageId and threadMode are approved immutable fields and must
         // survive to_shared_inbox_value when they carry non-None values.
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "threaded message".into(),
             timestamp: IsoTimestamp::from_datetime(
@@ -374,7 +374,7 @@ mod tests {
     fn shared_inbox_write_strips_expires_at() {
         // expiresAt is a removed compatibility field and must not appear in the
         // shared inbox export even when the envelope carries a non-None value.
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "expiring message".into(),
             timestamp: IsoTimestamp::from_datetime(
@@ -415,7 +415,7 @@ mod tests {
                 .single()
                 .expect("timestamp"),
         );
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "ack reply".into(),
             timestamp: IsoTimestamp::from_datetime(
@@ -446,7 +446,7 @@ mod tests {
     #[test]
     fn shared_inbox_write_stubs_oversized_atm_authored_messages() {
         let message_id = AtmMessageId::new();
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
@@ -491,7 +491,7 @@ mod tests {
     fn shared_inbox_write_exports_full_body_at_exact_cap() {
         let message_id = AtmMessageId::new();
         let text = "x".repeat(32);
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: text.clone(),
             timestamp: IsoTimestamp::from_datetime(
@@ -528,7 +528,7 @@ mod tests {
     fn shared_inbox_write_exports_stub_above_cap() {
         let message_id = AtmMessageId::new();
         let text = "x".repeat(32);
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text,
             timestamp: IsoTimestamp::from_datetime(
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn shared_inbox_write_keeps_full_body_for_claude_native_messages() {
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
@@ -609,7 +609,7 @@ mod tests {
                 "foreign": { "keep": true }
             }),
         );
-        let envelope = MessageEnvelope {
+        let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(

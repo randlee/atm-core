@@ -5,9 +5,7 @@ use atm_core::{
     load_atm_config,
 };
 use atm_storage::{AgentName, MessageEnvelope, TeamName};
-use atm_storage_claude::compat::{
-    SourceFileRecord, SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
-};
+use atm_storage_claude::compat::SourceFileRecord;
 use std::path::Path;
 
 pub(crate) fn load_workspace_config(
@@ -23,22 +21,11 @@ pub(crate) fn import_inbox_source(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFileRecord>, AtmError> {
-    atm_storage_claude::compat::import_inbox_source(SourceIngressImportRequest {
-        home_dir: home_dir.to_path_buf(),
-        team: team.clone(),
-        agent: agent.clone(),
-    })
-    .map(|response| response.source_files)
+    atm_storage_claude::compat::import_inbox_source(home_dir, team, agent)
 }
 
 pub(crate) fn compute_identity_fingerprint(
     message: &MessageEnvelope,
 ) -> Option<MessageFingerprint> {
-    atm_storage_claude::compat::compute_identity_fingerprint(
-        SourceIngressIdentityFingerprintRequest {
-            message: message.clone(),
-        },
-    )
-    .fingerprint
-    .map(MessageFingerprint::from)
+    atm_storage_claude::compat::compute_identity_fingerprint(message).map(MessageFingerprint::from)
 }
