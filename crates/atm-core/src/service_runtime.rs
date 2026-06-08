@@ -2,10 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, InboxExportAppendMessageSetRequest,
-    InboxExportReexportMessageRequest, MessageKey,
-};
+use crate::boundary::{MessageKey, ProjectionAppendMode};
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -51,7 +48,7 @@ pub(crate) trait RetainedServiceRuntime:
     fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
     #[allow(
         dead_code,
-        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
+        reason = "Called from tests while still appearing dead in the production compile."
     )]
     fn rebuild_compat_inbox_projection(
         &self,
@@ -67,7 +64,7 @@ pub(crate) trait RetainedServiceRuntime:
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
+        mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
@@ -87,9 +84,9 @@ pub(crate) trait RetainedServiceRuntime:
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
         let records = self.load_team_roster(team)?;
-        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
             team.clone(),
             &records,
         ))
@@ -342,12 +339,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<(), AtmError> {
         let messages = load_store_backed_mailbox_projection(self, team, agent)?;
-
-        crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
-            path: inbox_path.to_path_buf(),
-            messages,
-        })
-        .map(|_| ())
+        crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
     fn append_compat_inbox_message(
@@ -374,15 +366,19 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
+        mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
-        crate::direct_boundaries::append_message_set(InboxExportAppendMessageSetRequest {
-            path: inbox_path.to_path_buf(),
-            messages: messages.to_vec(),
-            mode,
-        })
-        .map(|_| ())
+        match mode {
+            ProjectionAppendMode::RecoveredLogicalMessageSet => {
+                let export_policy = crate::mailbox::store::export_policy_for_path(inbox_path)?;
+                crate::mailbox::store::append_compat_mailbox_message_set(
+                    inbox_path,
+                    export_policy,
+                    messages,
+                )
+            }
+        }
     }
 
     fn load_roster_member(

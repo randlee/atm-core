@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-ClaudeRosterStore"
+owner_package = "atm-storage-claude"
+owner_crate_path = "atm_storage_claude"
+name = "RosterStoreImplementation"
+
+[public]
+trait = "RosterStore"
+notes = "Claude config.json backend implementation of the shared roster-store contract"
+
+[implementation]
+type = "ClaudeStorageBackend"
+module = "atm_storage_claude"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_claude::ClaudeStorageBackend::new"]
+
+[ownership]
+io_owns = ["claude_team_config_storage", "team_roster_projection"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime", "atm-daemon"]
+allowed_dependencies = ["atm-storage"]
+forbidden_edges = ["atm-storage-claude -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["RosterSnapshot", "TeamName"]
+response_types = ["RosterSnapshot", "Vec<TeamName>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CLAUDE-ROSTERSTORE-DEPENDENCY"]
+review_gates = ["no_atm_core_dependency"]
+
+[status]
+state = "concrete_landed"
+notes = ["AC.2 created the Claude config.json backend implementation behind atm-storage::RosterStore"]

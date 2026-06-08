@@ -667,7 +667,7 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: crate::boundary::ClaudeCompatibilityDeliveryMode,
+            _mode: crate::boundary::ProjectionAppendMode,
             _messages: &[crate::schema::MessageEnvelope],
         ) -> Result<(), AtmError> {
             Ok(())

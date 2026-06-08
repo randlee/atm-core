@@ -68,7 +68,7 @@ rg -n "pub trait|pub struct|pub enum" \
   crates/atm-core/src/boundary \
   crates/atm-core/src/delivery_execution.rs -S
 
-rg -n "Request|Response|ClaudeInboxWriter|InboxIngress|MailStore|TaskStore|RosterStore" \
+rg -n "Request|Response|ProjectionMailboxWriter|SourceIngress|MailStore|TaskStore|RosterStore" \
   crates/atm-core/src/boundary \
   crates/atm-core/src/mailbox \
   crates/atm-core/src/delivery_execution.rs -S
@@ -170,7 +170,7 @@ search categories above.
 - `git diff --check`
 - `rg -n "Phase AC|atm-storage|atm-storage-claude" docs -S`
 - `rg -n "pub trait|pub struct|pub enum" crates/atm-core/src/boundary crates/atm-core/src/delivery_execution.rs -S`
-- `rg -n "Request|Response|ClaudeInboxWriter|InboxIngress|MailStore|TaskStore|RosterStore" crates/atm-core/src/boundary crates/atm-core/src/mailbox crates/atm-core/src/delivery_execution.rs -S`
+- `rg -n "Request|Response|ProjectionMailboxWriter|SourceIngress|MailStore|TaskStore|RosterStore" crates/atm-core/src/boundary crates/atm-core/src/mailbox crates/atm-core/src/delivery_execution.rs -S`
 - `rg -n "atm-rusqlite|rusqlite|sqlite" crates/atm-core crates/atm-daemon crates/atm-runtime crates/atm-rusqlite -S`
 
 ## Required Document Updates

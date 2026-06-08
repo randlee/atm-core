@@ -323,7 +323,7 @@ Deliverables:
 Sprint line:
 - `AC.0` `plan/phase-AC` `complete`
 - `AC.1` `feature/pAC-s1-atm-storage-contract-and-canonical-types` `complete`
-- `AC.2` `feature/pAC-s2-atm-storage-claude-extraction`
+- `AC.2` `feature/pAC-s2-atm-storage-claude-extraction` `complete`
 - `AC.3` `feature/pAC-s3-sqlite-backend-convergence`
 - `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption`
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification`

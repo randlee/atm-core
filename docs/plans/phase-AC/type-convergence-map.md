@@ -42,8 +42,8 @@ Planning direction:
 Current roster-shaped duplication appears across:
 
 - `RosterMemberRecord`
-- `ClaudeCodeRosterMember`
-- `ClaudeCodeTeamRoster`
+- `ProjectionRosterMember`
+- `ProjectionRoster`
 - `RosterStore*Request` / `RosterStore*Response`
 - config ingress / doctor / projection surfaces
 

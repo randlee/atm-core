@@ -13,8 +13,8 @@ use super::{
 };
 use crate::boundary::NonClaudeOutboundDeliveryRequest;
 use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, MailMessageState, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageKey, RosterHarness, RosterMemberKind, RosterMemberRecord,
+    MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
+    ProjectionAppendMode, RosterHarness, RosterMemberKind, RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -202,7 +202,7 @@ impl RetainedServiceRuntime for TestRuntime {
     fn append_compat_inbox_message_set(
         &self,
         _inbox_path: &Path,
-        _mode: ClaudeCompatibilityDeliveryMode,
+        _mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
         if let Some(message) = self.append_error_message {
@@ -280,7 +280,7 @@ impl RetainedServiceRuntime for TestRuntime {
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
         let records = self
             .claude_roster_members
             .iter()
@@ -296,7 +296,7 @@ impl RetainedServiceRuntime for TestRuntime {
                 metadata_json: Map::new(),
             })
             .collect::<Vec<_>>();
-        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
             team.clone(),
             &records,
         ))

@@ -140,6 +140,7 @@ dependencies = [
  "arc-swap",
  "atm-runtime",
  "atm-runtime-test-support",
+ "atm-storage-claude",
  "chrono",
  "fs2",
  "interprocess",
@@ -226,6 +227,17 @@ dependencies = [
  "toml",
  "ulid",
  "uuid",
+]
+
+[[package]]
+name = "atm-storage-claude"
+version = "1.2.1"
+dependencies = [
+ "atm-storage",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

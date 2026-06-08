@@ -1,8 +1,13 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
+)]
+
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
-use atm_storage::contract::{AckTransition, MessageFingerprint, MessageKey, TaskState};
+use atm_storage::contract::{AckTransition, MessageKey, TaskState};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -86,7 +91,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeCodeRosterMember {
+pub(crate) struct ProjectionRosterMember {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -94,17 +99,17 @@ pub struct ClaudeCodeRosterMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeCodeTeamRoster {
+pub(crate) struct ProjectionRoster {
     pub team_name: TeamName,
-    pub members: Arc<[ClaudeCodeRosterMember]>,
+    pub members: Arc<[ProjectionRosterMember]>,
 }
 
-impl ClaudeCodeTeamRoster {
+impl ProjectionRoster {
     pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
         let members = records
             .iter()
             .filter(|record| record.harness == RosterHarness::ClaudeCode)
-            .map(|record| ClaudeCodeRosterMember {
+            .map(|record| ProjectionRosterMember {
                 member_name: record.agent_name.clone(),
                 harness: record.harness,
                 inbox_path: None,
@@ -275,112 +280,11 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-/// Imported source-file snapshot returned by inbox ingress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxSourceFileRecord {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-ingress request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressImportRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Stub inbox-ingress response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressImportResponse {
-    pub source_files: Vec<InboxSourceFileRecord>,
-}
-
-/// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressIdentityFingerprintRequest {
-    pub message: MessageEnvelope,
-}
-
-/// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressIdentityFingerprintResponse {
-    pub fingerprint: Option<MessageFingerprint>,
-}
-
-/// Stub inbox-ingress diagnostics request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxIngressDiagnosticsRequest {
-    pub source_files: Vec<InboxSourceFileRecord>,
-}
-
-/// Stub inbox-ingress diagnostics response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxIngressDiagnosticsResponse {
-    pub duplicate_message_ids: usize,
-    pub messages_without_ids: usize,
-}
-
-/// Canonical Phase R inbox-ingress request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxIngressRequest;
-
-/// Canonical Phase R inbox-ingress response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxIngressResponse;
-
-/// Stub inbox-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportRecordRequest {
-    pub source_files: Vec<InboxSourceFileRecord>,
-}
-
-/// Stub inbox-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportRecordResponse {
-    pub committed_paths: usize,
-}
-
-/// Stub inbox-export re-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportReexportMessageRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-export re-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportReexportMessageResponse {
-    pub wrote_messages: usize,
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum ClaudeCompatibilityDeliveryMode {
+pub enum ProjectionAppendMode {
     RecoveredLogicalMessageSet,
 }
-
-/// Explicit inbox-export append-message-set request for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct InboxExportAppendMessageSetRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-    pub mode: ClaudeCompatibilityDeliveryMode,
-}
-
-/// Explicit inbox-export append-message-set response for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InboxExportAppendMessageSetResponse {
-    pub wrote_messages: usize,
-}
-
-/// Canonical Phase R inbox-export request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxExportRequest;
-
-/// Canonical Phase R inbox-export response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct InboxExportResponse;
 
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -522,53 +426,6 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
     /// Returns `AtmError` when config diagnostics cannot be collected or
     /// summarized into the shared doctor report shape.
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
-}
-
-/// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
-pub trait InboxIngress: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when compatibility inbox material cannot be
-    /// imported, fingerprinted, or diagnosed into ATM-owned state.
-    fn import_inbox_source(
-        &self,
-        request: InboxIngressImportRequest,
-    ) -> Result<InboxIngressImportResponse, AtmError>;
-    fn compute_identity_fingerprint(
-        &self,
-        request: InboxIngressIdentityFingerprintRequest,
-    ) -> InboxIngressIdentityFingerprintResponse;
-    fn report_diagnostics(
-        &self,
-        request: InboxIngressDiagnosticsRequest,
-    ) -> InboxIngressDiagnosticsResponse;
-}
-
-/// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
-pub trait InboxExport: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when ATM-owned state cannot be projected back to the
-    /// compatibility inbox/export surfaces.
-    fn export_record(
-        &self,
-        request: InboxExportRecordRequest,
-    ) -> Result<InboxExportRecordResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the message re-export cannot be materialized.
-    fn reexport_message(
-        &self,
-        request: InboxExportReexportMessageRequest,
-    ) -> Result<InboxExportReexportMessageResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a recovered Claude logical message set cannot
-    /// be materialized through one owned export operation.
-    fn append_message_set(
-        &self,
-        request: InboxExportAppendMessageSetRequest,
-    ) -> Result<InboxExportAppendMessageSetResponse, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.

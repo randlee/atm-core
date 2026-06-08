@@ -630,7 +630,7 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, MessageKey};
+    use crate::boundary::{self, MessageKey, ProjectionAppendMode};
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -768,7 +768,7 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: ClaudeCompatibilityDeliveryMode,
+            _mode: ProjectionAppendMode,
             _messages: &[MessageEnvelope],
         ) -> Result<(), crate::error::AtmError> {
             panic!("ack writer-path test should use the single-message Claude inbox writer path")
@@ -898,7 +898,7 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: ClaudeCompatibilityDeliveryMode,
+            _mode: ProjectionAppendMode,
             _messages: &[MessageEnvelope],
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack roster-gate tests do not append compatibility inbox message sets")
