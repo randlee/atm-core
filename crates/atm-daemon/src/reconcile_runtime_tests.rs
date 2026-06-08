@@ -989,9 +989,7 @@ impl WatchEventSource for CountingWatchSource {
     }
 }
 
-fn inbox_source_with_message(
-    message: MessageEnvelope,
-) -> SourceFileRecord {
+fn inbox_source_with_message(message: MessageEnvelope) -> SourceFileRecord {
     SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],

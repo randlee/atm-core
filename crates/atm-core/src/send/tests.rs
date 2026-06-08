@@ -13,8 +13,8 @@ use super::{
 };
 use crate::boundary::NonClaudeOutboundDeliveryRequest;
 use crate::boundary::{
-    ProjectionAppendMode, MailMessageState, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageKey, RosterHarness, RosterMemberKind, RosterMemberRecord,
+    MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
+    ProjectionAppendMode, RosterHarness, RosterMemberKind, RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};

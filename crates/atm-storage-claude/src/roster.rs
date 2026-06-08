@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use atm_storage::{
-    AgentId, AgentName, AtmError, ModelName, PaneId, RosterHarness, RosterMember,
-    RosterMemberKind, RosterSnapshot, TeamName,
+    AgentId, AgentName, AtmError, ModelName, PaneId, RosterHarness, RosterMember, RosterMemberKind,
+    RosterSnapshot, TeamName,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -38,8 +38,11 @@ struct StoredTeamConfig {
 
 fn parse_team_config(path: &Path, raw: &str) -> Result<StoredTeamConfig, AtmError> {
     let root: Value = serde_json::from_str(raw).map_err(|error| {
-        AtmError::config(format!("failed to parse team config at {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::config(format!(
+            "failed to parse team config at {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })?;
     let object = root.as_object().ok_or_else(|| {
         AtmError::config(format!(
@@ -132,8 +135,11 @@ pub fn load_roster(home_dir: &Path, team: &TeamName) -> Result<RosterSnapshot, A
         });
     }
     let raw = fs::read_to_string(&path).map_err(|error| {
-        AtmError::mailbox_read(format!("failed to read team config {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::mailbox_read(format!(
+            "failed to read team config {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })?;
     parse_team_config(&path, &raw).map(|config| to_snapshot(team, config))
 }
@@ -154,8 +160,11 @@ pub fn save_roster(home_dir: &Path, roster: &RosterSnapshot) -> Result<(), AtmEr
         AtmError::mailbox_write("failed to encode team config").with_source(error)
     })?;
     fs::write(&path, encoded).map_err(|error| {
-        AtmError::mailbox_write(format!("failed to write team config {}: {error}", path.display()))
-            .with_source(error)
+        AtmError::mailbox_write(format!(
+            "failed to write team config {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
     })
 }
 

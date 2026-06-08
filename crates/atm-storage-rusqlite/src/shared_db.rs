@@ -1,8 +1,8 @@
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
+use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;

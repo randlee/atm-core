@@ -68,17 +68,17 @@ impl boundary::RemoteReplayStore for SqliteRemoteReplayStore {
         agent: &AgentName,
         message_key: &MessageKey,
     ) -> Result<(), AtmError> {
-        self.backend.delete_remote_replay_state(
-            team.as_str(),
-            agent.as_str(),
-            message_key.as_ref(),
-        )
+        self.backend
+            .delete_remote_replay_state(team.as_str(), agent.as_str(), message_key.as_ref())
     }
 
     fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
         let records = self.load_all()?;
         let mut purged = 0usize;
-        for record in records.into_iter().filter(|record| record.expires_at <= now) {
+        for record in records
+            .into_iter()
+            .filter(|record| record.expires_at <= now)
+        {
             self.delete(&record.team, &record.agent, &record.message_key)?;
             purged += 1;
         }

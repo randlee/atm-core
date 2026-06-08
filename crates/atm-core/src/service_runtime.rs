@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::boundary::{
-    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportReexportMessageRequest, MessageKey,
+    MessageKey, ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportReexportMessageRequest,
 };
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;

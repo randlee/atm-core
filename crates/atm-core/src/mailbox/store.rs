@@ -106,11 +106,15 @@ pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Re
     Ok(())
 }
 
-pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedProjectionExportPolicy, AtmError> {
+pub(crate) fn export_policy_for_path(
+    path: &Path,
+) -> Result<SharedProjectionExportPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
         .map(|config| config.claude_jsonl_body_export_max_bytes)
-        .unwrap_or_else(|| SharedProjectionExportPolicy::default().atm_authored_body_export_max_bytes);
+        .unwrap_or_else(|| {
+            SharedProjectionExportPolicy::default().atm_authored_body_export_max_bytes
+        });
     Ok(SharedProjectionExportPolicy {
         atm_authored_body_export_max_bytes,
     })
@@ -384,9 +388,12 @@ mod tests {
             sample_message(TEST_QA, "new third"),
         ];
 
-        let error =
-            append_compat_mailbox_message_set(&path, SharedProjectionExportPolicy::default(), &appended)
-                .expect_err("reject oversized recovered message set");
+        let error = append_compat_mailbox_message_set(
+            &path,
+            SharedProjectionExportPolicy::default(),
+            &appended,
+        )
+        .expect_err("reject oversized recovered message set");
         assert!(error.is_validation());
         assert!(error.message.contains("exceeded 2 messages"));
     }

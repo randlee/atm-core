@@ -177,7 +177,9 @@ pub(crate) fn execute_delivery_plan<R>(
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ProjectionMailboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ProjectionMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     execute_messages(
         runtime,
@@ -210,7 +212,9 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ProjectionMailboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ProjectionMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -449,8 +453,8 @@ mod tests {
     use serde_json::{Map, Value};
 
     use super::{
-        ProjectionMailboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
-        NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions, execute_delivery_plan,
+        DeliveryExecutionDisposition, DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter,
+        ProjectionMailboxWriter, emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::delivery_plan::{
         DeliveryPlan, DeliveryPlanDisposition, DeliveryPlanKind, DeliveryTarget, LogicalMessage,

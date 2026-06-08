@@ -12,12 +12,19 @@ use atm_core::doctor::{
 };
 use atm_core::error::AtmError;
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::types::{AgentName, TeamName};
 use fs2::FileExt;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
+
+pub(crate) use atm_core::protocol::{
+    ATM_FRAME_FLAGS_V1, FramePayload, MessageKind, RequestEnvelope, RequestId, ResponseEnvelope,
+    next_request_id, request_from_frame_payload, request_to_frame_payload,
+    response_from_frame_payload, response_to_frame_payload,
+};
+#[cfg(test)]
+pub(crate) use atm_core::protocol::{SendRequestEnvelope, SendResponseEnvelope};
 
 mod rpc;
 

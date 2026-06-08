@@ -76,7 +76,10 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("service_runtime", &self.service_runtime)
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
-            .field("remote_replay_store_present", &self.remote_replay_store.is_some())
+            .field(
+                "remote_replay_store_present",
+                &self.remote_replay_store.is_some(),
+            )
             .field(
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
@@ -803,10 +806,7 @@ impl DaemonRequestDispatcher {
             observability.clone();
         let runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
-        match build_runtime_status_cache_state(
-            None,
-            runtime_assembly.roster_store.as_ref(),
-        ) {
+        match build_runtime_status_cache_state(None, runtime_assembly.roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(

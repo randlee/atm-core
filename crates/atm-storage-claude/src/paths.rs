@@ -39,7 +39,11 @@ pub fn team_dir(home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
     Ok(home_dir.join(".claude").join("teams").join(team.as_str()))
 }
 
-pub fn inbox_path(home_dir: &Path, team: &TeamName, agent: &AgentName) -> Result<PathBuf, AtmError> {
+pub fn inbox_path(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<PathBuf, AtmError> {
     validate_segment(agent.as_str(), "agent")?;
     Ok(team_dir(home_dir, team)?
         .join("inboxes")

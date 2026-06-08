@@ -11,7 +11,10 @@ struct ClaudeStorageBackend {
 }
 
 impl ClaudeStorageBackend {
-    #[allow(dead_code, reason = "Phase AC.2 lands the backend type before later consumer cutover.")]
+    #[allow(
+        dead_code,
+        reason = "Phase AC.2 lands the backend type before later consumer cutover."
+    )]
     fn new(home_dir: PathBuf) -> Self {
         Self { home_dir }
     }

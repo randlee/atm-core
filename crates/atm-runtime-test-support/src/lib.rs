@@ -10,7 +10,10 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::{atm_home, host_runtime_dir_from_home},
 };
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver, assemble_sqlite_runtime};
+use atm_runtime::{
+    RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
+    assemble_sqlite_runtime,
+};
 use atm_storage_rusqlite::SqliteWriterLockGuard;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();

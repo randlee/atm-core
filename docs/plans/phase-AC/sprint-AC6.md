@@ -133,7 +133,7 @@ Proof this sprint must leave behind:
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates docs -S`
 - `rg -n "pub trait TaskStore|pub trait TaskStoreDoctor|TaskStoreTaskRecord|TaskStoreTaskMetadata|TaskStoreDoctorReport" crates -S`

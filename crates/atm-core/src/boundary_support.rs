@@ -2,13 +2,13 @@
 //! adapters.
 
 use crate::boundary::{
-    ProjectionAppendMode, ConfigLoadRequest, ConfigLoadResponse,
+    ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMode,
     ProjectionExportAppendMessageSetRequest, ProjectionExportAppendMessageSetResponse,
-    ProjectionExportRecordRequest, ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest, SourceIngressImportResponse,
-    SourceFileRecord,
+    ProjectionExportRecordRequest, ProjectionExportRecordResponse,
+    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
+    SourceFileRecord, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
+    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
+    SourceIngressImportRequest, SourceIngressImportResponse,
 };
 use crate::config;
 use crate::error::AtmError;

@@ -7,7 +7,9 @@ use serde_json::Value;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::schema::MessageEnvelope;
-use crate::schema::inbox_message::{SharedProjectionExportPolicy, to_shared_inbox_value_with_policy};
+use crate::schema::inbox_message::{
+    SharedProjectionExportPolicy, to_shared_inbox_value_with_policy,
+};
 
 /// Atomically replace one shared inbox file from fully serialized records.
 ///

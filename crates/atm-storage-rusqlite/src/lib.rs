@@ -8,10 +8,10 @@ mod roster_store;
 mod shared_db;
 mod writer;
 
+use atm_storage::AtmError;
 use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
-use atm_storage::AtmError;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
@@ -287,7 +287,10 @@ impl MessageStore for SqliteMessageStore {
                     "DELETE FROM mail_message_states WHERE message_key = ?1;",
                     params![key.as_ref()],
                 )
-                .map_err(|error| self.db.error("failed to delete sqlite message state", error))?;
+                .map_err(|error| {
+                    self.db
+                        .error("failed to delete sqlite message state", error)
+                })?;
             transaction
                 .execute(
                     "DELETE FROM mail_messages WHERE message_key = ?1;",
