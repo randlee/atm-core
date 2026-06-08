@@ -16,7 +16,7 @@ use atm_core::boundary::{
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
-use atm_core::schema::{AtmMessageId, MessageEnvelope};
+use atm_core::schema::{AtmMessageId, InboxMessage};
 use atm_core::types::IsoTimestamp;
 use chrono::Utc;
 use serde_json::{Map, json};
@@ -986,17 +986,17 @@ impl WatchEventSource for CountingWatchSource {
     }
 }
 
-fn inbox_source_with_message(message: MessageEnvelope) -> SourceFileRecord {
+fn inbox_source_with_message(message: InboxMessage) -> SourceFileRecord {
     SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],
     }
 }
 
-fn sample_message(text: &str) -> MessageEnvelope {
+fn sample_message(text: &str) -> InboxMessage {
     let message_id = AtmMessageId::new();
 
-    MessageEnvelope {
+    InboxMessage {
         from: ROLE_TEAM_LEAD.parse().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),

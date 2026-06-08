@@ -1,14 +1,19 @@
 use atm_core::{
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, NotificationEvent,
-        ProjectionAppendMessageSetRequest, ProjectionAppendMessageSetResponse, ProjectionExport,
-        ProjectionRecordRequest, ProjectionRecordResponse, ProjectionReexportMessageRequest,
-        ProjectionReexportMessageResponse, ReconcileRequest, ReconcileResult,
-        SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
-        SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
-        SourceIngress, WatchEventBatch, WatchSubscriptionRequest,
+        ReconcileRequest, ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
+};
+use atm_storage::RosterStore;
+use atm_storage_claude::compat::{
+    ProjectionExport, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
+    ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, SourceIngress, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
 };
 use std::sync::Arc;
 
@@ -126,7 +131,7 @@ impl DaemonReconcileCoordinator {
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,
-        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: DaemonNotificationSink,
         observability: SubsystemObservability,
     ) -> Self {
@@ -184,24 +189,25 @@ impl DaemonInboxIngress {
     }
 }
 
-impl boundary::sealed::Sealed for DaemonInboxIngress {}
-
 impl SourceIngress for DaemonInboxIngress {
     fn import_inbox_source(
         &self,
-        request: SourceImportRequest,
-    ) -> Result<SourceImportResponse, AtmError> {
+        request: SourceIngressImportRequest,
+    ) -> Result<SourceIngressImportResponse, AtmError> {
         direct_boundaries::import_inbox_source(request)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        request: SourceIdentityFingerprintRequest,
-    ) -> SourceIdentityFingerprintResponse {
+        request: SourceIngressIdentityFingerprintRequest,
+    ) -> SourceIngressIdentityFingerprintResponse {
         direct_boundaries::compute_identity_fingerprint(request)
     }
 
-    fn report_diagnostics(&self, request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse {
+    fn report_diagnostics(
+        &self,
+        request: SourceIngressDiagnosticsRequest,
+    ) -> SourceIngressDiagnosticsResponse {
         direct_boundaries::report_inbox_diagnostics(request)
     }
 }
@@ -215,27 +221,25 @@ impl DaemonInboxExport {
     }
 }
 
-impl boundary::sealed::Sealed for DaemonInboxExport {}
-
 impl ProjectionExport for DaemonInboxExport {
     fn export_record(
         &self,
-        request: ProjectionRecordRequest,
-    ) -> Result<ProjectionRecordResponse, AtmError> {
+        request: ProjectionExportRecordRequest,
+    ) -> Result<ProjectionExportRecordResponse, AtmError> {
         direct_boundaries::export_source_files(request)
     }
 
     fn reexport_message(
         &self,
-        request: ProjectionReexportMessageRequest,
-    ) -> Result<ProjectionReexportMessageResponse, AtmError> {
+        request: ProjectionExportReexportMessageRequest,
+    ) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
         direct_boundaries::reexport_messages(request)
     }
 
     fn append_message_set(
         &self,
-        request: ProjectionAppendMessageSetRequest,
-    ) -> Result<ProjectionAppendMessageSetResponse, AtmError> {
+        request: ProjectionExportAppendMessageSetRequest,
+    ) -> Result<ProjectionExportAppendMessageSetResponse, AtmError> {
         direct_boundaries::append_message_set(request)
     }
 }
@@ -243,18 +247,17 @@ impl ProjectionExport for DaemonInboxExport {
 #[cfg(test)]
 mod tests {
     use super::{DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink};
-    use atm_core::boundary::{
-        NotificationSink, ProjectionExport, ProjectionReexportMessageRequest,
-        SourceIdentityFingerprintRequest, SourceImportRequest, SourceIngress,
-    };
+    use atm_core::boundary::NotificationSink;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
-    use atm_core::schema::{AtmMessageId, MessageEnvelope};
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::schema::{AtmMessageId, InboxMessage};
+    use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
+    use atm_storage_claude::compat::{
+        ProjectionExport, ProjectionExportReexportMessageRequest, SourceIngress,
+        SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
+    };
     use std::sync::Arc;
     use tempfile::TempDir;
-
-    const TEST_LEAD: &str = "test-lead";
 
     #[test]
     fn notifier_delivery_stays_behind_boundary_trait() {
@@ -304,26 +307,26 @@ mod tests {
         let ingress = DaemonInboxIngress::new();
         let message = sample_message(TEST_LEAD, "full body that should project to a stub");
         let original_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest {
+            .compute_identity_fingerprint(SourceIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
             .fingerprint;
 
         export
-            .reexport_message(ProjectionReexportMessageRequest {
+            .reexport_message(ProjectionExportReexportMessageRequest {
                 path: inbox_path.clone(),
                 messages: vec![message.clone()],
             })
             .expect("first reexport");
         export
-            .reexport_message(ProjectionReexportMessageRequest {
+            .reexport_message(ProjectionExportReexportMessageRequest {
                 path: inbox_path.clone(),
                 messages: vec![message.clone()],
             })
             .expect("second reexport");
 
         let import = ingress
-            .import_inbox_source(SourceImportRequest {
+            .import_inbox_source(SourceIngressImportRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_SENDER.parse().expect("agent"),
@@ -342,7 +345,9 @@ mod tests {
         );
 
         let imported_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest { message: imported })
+            .compute_identity_fingerprint(SourceIngressIdentityFingerprintRequest {
+                message: imported,
+            })
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
@@ -367,26 +372,26 @@ mod tests {
         let ingress = DaemonInboxIngress::new();
         let message = sample_message(TEST_LEAD, "small body stays fully exported");
         let original_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest {
+            .compute_identity_fingerprint(SourceIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
             .fingerprint;
 
         export
-            .reexport_message(ProjectionReexportMessageRequest {
+            .reexport_message(ProjectionExportReexportMessageRequest {
                 path: inbox_path.clone(),
                 messages: vec![message.clone()],
             })
             .expect("first reexport");
         export
-            .reexport_message(ProjectionReexportMessageRequest {
+            .reexport_message(ProjectionExportReexportMessageRequest {
                 path: inbox_path.clone(),
                 messages: vec![message.clone()],
             })
             .expect("second reexport");
 
         let import = ingress
-            .import_inbox_source(SourceImportRequest {
+            .import_inbox_source(SourceIngressImportRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_SENDER.parse().expect("agent"),
@@ -399,15 +404,17 @@ mod tests {
         assert_eq!(imported.text, message.text);
 
         let imported_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest { message: imported })
+            .compute_identity_fingerprint(SourceIngressIdentityFingerprintRequest {
+                message: imported,
+            })
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
 
-    fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+    fn sample_message(from: &str, text: &str) -> InboxMessage {
         let message_id = AtmMessageId::new();
 
-        MessageEnvelope {
+        InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),

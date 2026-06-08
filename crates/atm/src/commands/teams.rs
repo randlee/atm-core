@@ -156,7 +156,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use atm_core::boundary::{ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord};
+    use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
@@ -231,7 +231,7 @@ mod tests {
                 .parse::<atm_core::types::TeamName>()
                 .expect("team");
             let members = vec![
-                RosterMemberRecord {
+                RosterEntry {
                     team_name: team.clone(),
                     agent_name: ROLE_TEAM_LEAD.parse().expect("lead"),
                     member_kind: RosterMemberKind::Permanent,
@@ -241,7 +241,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 },
-                RosterMemberRecord {
+                RosterEntry {
                     team_name: team.clone(),
                     agent_name: TEST_SENDER.parse().expect("sender"),
                     member_kind: RosterMemberKind::Permanent,

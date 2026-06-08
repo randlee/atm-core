@@ -87,23 +87,25 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+#[allow(deprecated)]
 pub use boundary::{
     AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
     ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, MailStoreMessageRecord,
-    MessageFingerprint, MessageKey, NotificationEvent, NotificationSink,
-    ProjectionAppendMessageSetRequest, ProjectionAppendMessageSetResponse, ProjectionExport,
-    ProjectionRecordRequest, ProjectionRecordResponse, ProjectionReexportMessageRequest,
-    ProjectionReexportMessageResponse, ProjectionRoster, ProjectionRosterMember,
-    ReconcileCoordinator, ReconcileRequest, ReconcileResult, RemoteReplayStateRecord,
-    RemoteReplayStore, RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceDiagnosticsRequest,
-    SourceDiagnosticsResponse, SourceFileRecord, SourceIdentityFingerprintRequest,
-    SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse, SourceIngress,
-    StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
+    MessageKey, NotificationEvent, NotificationSink, ReconcileCoordinator, ReconcileRequest,
+    ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
+    RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
+    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
+    StatusSource, TaskState, TaskStore, TaskStoreAttachMessageLinkRequest,
+    TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
+    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
+    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
+    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
+    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreRequest,
+    TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
+    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;

@@ -16,7 +16,7 @@ use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::ThreadIndex;
@@ -185,7 +185,7 @@ pub struct ClassifiedMessage {
     pub bucket: DisplayBucket,
     pub class: MessageClass,
     #[serde(flatten)]
-    pub envelope: MessageEnvelope,
+    pub envelope: InboxMessage,
 }
 
 /// Result of one mailbox read/query command.
@@ -594,8 +594,8 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
     agent: &AgentName,
     row_by_id: &HashMap<AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
     selected_message: &ClassifiedMessage,
-    terminal_envelope: MessageEnvelope,
-) -> Result<MessageEnvelope, AtmError> {
+    terminal_envelope: InboxMessage,
+) -> Result<InboxMessage, AtmError> {
     let Some(mut current_id) = terminal_envelope.message_id else {
         return Ok(terminal_envelope);
     };
@@ -758,7 +758,7 @@ mod tests {
     use crate::mailbox::surface::dedupe_message_id_surface;
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
@@ -909,15 +909,15 @@ mod tests {
         latest_idle_for_sender
     }
 
-    fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
+    fn is_unread_idle_notification(message: &InboxMessage) -> bool {
         !message.read && idle_notification_sender(message).is_some()
     }
 
-    fn idle_sender(message: &MessageEnvelope) -> Option<AgentName> {
+    fn idle_sender(message: &InboxMessage) -> Option<AgentName> {
         idle_notification_sender(message)
     }
 
-    fn idle_notification_sender(message: &MessageEnvelope) -> Option<AgentName> {
+    fn idle_notification_sender(message: &InboxMessage) -> Option<AgentName> {
         let value = match serde_json::from_str::<Value>(&message.text) {
             Ok(value) => value,
             Err(error) => {
@@ -1007,8 +1007,8 @@ mod tests {
         thread_mode: Option<ThreadMode>,
         read: bool,
         timestamp: IsoTimestamp,
-    ) -> MessageEnvelope {
-        MessageEnvelope {
+    ) -> InboxMessage {
+        InboxMessage {
             from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp,
@@ -1033,7 +1033,7 @@ mod tests {
         parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
         read: bool,
-    ) -> MessageEnvelope {
+    ) -> InboxMessage {
         message_at(
             text,
             message_id,
@@ -1129,7 +1129,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            _message: &MessageEnvelope,
+            _message: &InboxMessage,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not append compat inbox messages")
         }
@@ -1138,7 +1138,7 @@ mod tests {
             &self,
             _inbox_path: &Path,
             _mode: ProjectionAppendMode,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not append compat inbox message sets")
         }
@@ -1146,7 +1146,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not route outbound payloads")
         }
@@ -1155,8 +1155,8 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
-            Ok(self.roster_present.then(|| boundary::RosterMemberRecord {
+        ) -> Result<Option<boundary::RosterEntry>, crate::error::AtmError> {
+            Ok(self.roster_present.then(|| boundary::RosterEntry {
                 team_name: team.clone(),
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
@@ -1171,7 +1171,7 @@ mod tests {
         fn load_team_roster(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
         }
 
@@ -1209,13 +1209,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &boundary::MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             unreachable!("read roster-truth tests do not load message records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::MailStoreMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not persist message records")
         }
@@ -1606,7 +1606,7 @@ mod tests {
         let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() + chrono::Duration::minutes(30));
         let messages = vec![SourcedMessage {
-            envelope: MessageEnvelope {
+            envelope: InboxMessage {
                 expires_at: Some(expires_at),
                 ..message("ephemeral", message_id, None, None, true)
             },
@@ -1649,7 +1649,7 @@ mod tests {
         let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::minutes(1));
         let messages = vec![SourcedMessage {
-            envelope: MessageEnvelope {
+            envelope: InboxMessage {
                 expires_at: Some(expires_at),
                 ..message("expired ephemeral", message_id, None, None, false)
             },
@@ -1694,11 +1694,11 @@ mod tests {
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![
-                MessageEnvelope {
+                InboxMessage {
                     task_id: Some(task_id.clone()),
                     ..message_at("root", root_id, None, None, false, root_at)
                 },
-                MessageEnvelope {
+                InboxMessage {
                     task_id: Some(task_id.clone()),
                     ..message_at(
                         "terminal",

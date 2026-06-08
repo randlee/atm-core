@@ -6,7 +6,7 @@ use serde_json::Map;
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -19,7 +19,7 @@ pub(crate) fn persist_message_and_seed_workflow(
     home_dir: &Path,
     recipient: &DeliveryRecipientSnapshot,
     inbox_path: &Path,
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
     require_existing_inbox: bool,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
@@ -58,7 +58,7 @@ fn recover_after_sqlite_failure(
     _runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     recipient: &DeliveryRecipientSnapshot,
     _inbox_path: &Path,
-    original_message: &MessageEnvelope,
+    original_message: &InboxMessage,
     sqlite_error: &AtmError,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let companion = build_sqlite_failure_companion_message(
@@ -86,14 +86,14 @@ fn recover_after_sqlite_failure(
 fn build_sqlite_failure_companion_message(
     team: &TeamName,
     agent: &AgentName,
-    original_message: &MessageEnvelope,
+    original_message: &InboxMessage,
     sqlite_error: &AtmError,
-) -> MessageEnvelope {
+) -> InboxMessage {
     let original_message_id = original_message
         .message_id
         .map(|message_id| message_id.to_string())
         .unwrap_or_else(|| "unknown-message-id".to_string());
-    MessageEnvelope {
+    InboxMessage {
         from: AgentName::from_validated("atm-system"),
         text: format!(
             "ATM error: SQLite persistence failed while delivering message {} to {}@{}: {}. The original message was emitted through the degraded outward path only and the retained SQLite state must be repaired immediately.",
@@ -123,7 +123,7 @@ fn load_store_backed_mailbox_projection(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
+) -> Result<Vec<InboxMessage>, AtmError> {
     let mut metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
     metadata_rows.sort_by(|left, right| {
         left.message_at
@@ -150,13 +150,13 @@ fn mirror_message_to_store(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
     team: &TeamName,
     agent: &AgentName,
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
 ) -> Result<(), AtmError> {
     let Some(message_id) = envelope.message_id else {
         return Ok(());
     };
     let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
-    runtime.persist_message_record(boundary::MailStoreMessageRecord {
+    runtime.persist_message_record(boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
         message_key: message_key.clone(),
