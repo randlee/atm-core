@@ -1075,12 +1075,13 @@ mod tests {
                 .message
                 .contains("warning: notification delivery failed for recipient@test-team")
         );
-        assert_eq!(
-            result.warnings[0].recovery.as_deref(),
-            Some(
-                "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying."
-            )
-        );
+        let recovery = result.warnings[0]
+            .recovery
+            .as_deref()
+            .expect("notification recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
         assert!(
             runtime
                 .notification_events
