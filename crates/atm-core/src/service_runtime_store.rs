@@ -111,7 +111,12 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
                 task_id: None,
                 limit,
             })
-            .map(|messages| messages.into_iter().map(shared_message_to_metadata_row).collect())
+            .map(|messages| {
+                messages
+                    .into_iter()
+                    .map(shared_message_to_metadata_row)
+                    .collect()
+            })
     }
 
     fn load_message_record(
@@ -156,8 +161,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
                     state.agent.as_str(),
                     state.team.as_str(),
                 ))
-            })
-            ?;
+            })?;
         message.envelope.read = state.read;
         message.envelope.pending_ack_at = state.pending_ack_at;
         message.envelope.acknowledged_at = state.acknowledged_at;

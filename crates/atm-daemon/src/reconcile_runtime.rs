@@ -2,11 +2,11 @@ mod notification_fingerprints;
 
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    NotificationSink, ReconcileRequest, ReconcileResult, RosterStore, WatchEventSource,
-    WatchSubscriptionRequest,
+    NotificationSink, ReconcileRequest, ReconcileResult, WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
+use atm_storage::RosterStore;
 use atm_storage_claude::compat::{
     SourceIngress, SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
     SourceIngressImportResponse,

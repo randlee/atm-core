@@ -15,11 +15,10 @@ use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     peer_transport::PeerTransportConfig,
 };
-use atm_core::boundary::{
-    ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher, RosterStore,
-};
+use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_storage::RosterStore as SharedRosterStore;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -231,7 +230,7 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let peer_transport_config =
             load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
-        let reconcile_roster_store = runtime_assembly.roster_store.clone();
+        let reconcile_roster_store = runtime_assembly.shared_roster_store_arc();
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
@@ -635,7 +634,7 @@ fn build_host_ownership_adapter(
 fn build_reconcile_coordinator(
     watch_event_source: &FileWatchEventSource,
     inbox_ingress: &DaemonInboxIngress,
-    reconcile_roster_store: Arc<dyn RosterStore + Send + Sync>,
+    reconcile_roster_store: Arc<dyn SharedRosterStore + Send + Sync>,
     notification_sink: DaemonNotificationSink,
     observability: &Arc<dyn DaemonRuntimeObservability>,
 ) -> DaemonReconcileCoordinator {

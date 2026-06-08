@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 #[allow(
@@ -15,29 +16,32 @@ use atm_core::boundary::{
     TaskStoreDetachMessageLinkResponse, TaskStoreDoctor, TaskStoreDoctorReport,
     TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse, TaskStoreQueryTaskMetadataRequest,
     TaskStoreQueryTaskMetadataResponse, TaskStoreRecordAckTransitionRequest,
-    TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord,
-    TaskStoreUpdateTaskRequest, TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
+    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_storage::contract::{
-    Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore,
-    RosterSnapshot, RosterStore as SharedRosterStore,
+    Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore, RosterSnapshot,
+    RosterStore as SharedRosterStore,
 };
 use atm_storage::{AgentName, TeamName};
 
-#[allow(
-    dead_code,
-    reason = "AC.4 exposes the generic StorageBackends<M, R> composition seam even before every runtime consumer reads both handles directly."
-)]
 #[derive(Clone)]
-pub(crate) struct StorageBackends<M, R> {
+pub(crate) struct StorageBackends<M, R>
+where
+    M: Deref<Target = dyn SharedMessageStore + Send + Sync>,
+    R: Deref<Target = dyn SharedRosterStore + Send + Sync>,
+{
     pub(crate) messages: M,
     pub(crate) rosters: R,
 }
 
-impl<M, R> std::fmt::Debug for StorageBackends<M, R> {
+impl<M, R> std::fmt::Debug for StorageBackends<M, R>
+where
+    M: Deref<Target = dyn SharedMessageStore + Send + Sync>,
+    R: Deref<Target = dyn SharedRosterStore + Send + Sync>,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StorageBackends")
             .field("messages", &std::any::type_name::<M>())
@@ -66,18 +70,18 @@ struct InMemoryIngestReplayState {
 }
 
 #[derive(Clone)]
-pub(crate) struct LegacyMailStoreAdapter {
+struct BoundaryMailStoreView {
     store: Arc<dyn SharedMessageStore + Send + Sync>,
     replay_state: InMemoryIngestReplayState,
 }
 
 #[derive(Clone)]
-pub(crate) struct LegacyRosterStoreAdapter {
+struct BoundaryRosterStoreView {
     store: Arc<dyn SharedRosterStore + Send + Sync>,
 }
 
-impl LegacyMailStoreAdapter {
-    pub(crate) fn new(store: Arc<dyn SharedMessageStore + Send + Sync>) -> Self {
+impl BoundaryMailStoreView {
+    fn new(store: Arc<dyn SharedMessageStore + Send + Sync>) -> Self {
         Self {
             store,
             replay_state: InMemoryIngestReplayState::default(),
@@ -122,8 +126,8 @@ impl LegacyMailStoreAdapter {
     }
 }
 
-impl LegacyRosterStoreAdapter {
-    pub(crate) fn new(store: Arc<dyn SharedRosterStore + Send + Sync>) -> Self {
+impl BoundaryRosterStoreView {
+    fn new(store: Arc<dyn SharedRosterStore + Send + Sync>) -> Self {
         Self { store }
     }
 }
@@ -138,14 +142,14 @@ pub(crate) fn runtime_doctor_ports(
         roster_store_doctor: Arc::new(DefaultRosterStoreDoctor),
     }
 }
-impl boundary::sealed::Sealed for LegacyMailStoreAdapter {}
-impl boundary::sealed::Sealed for LegacyRosterStoreAdapter {}
+impl boundary::sealed::Sealed for BoundaryMailStoreView {}
+impl boundary::sealed::Sealed for BoundaryRosterStoreView {}
 impl boundary::sealed::Sealed for NoopTaskStore {}
 impl boundary::sealed::Sealed for DefaultMailStoreDoctor {}
 impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
 impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
-impl MailStore for LegacyMailStoreAdapter {
+impl MailStore for BoundaryMailStoreView {
     fn upsert_message(&self, record: MailStoreMessageRecord) -> Result<(), AtmError> {
         self.store.save_message(&SharedMessage {
             team: record.team,
@@ -305,7 +309,7 @@ impl MailStore for LegacyMailStoreAdapter {
     }
 }
 
-impl boundary::RosterStore for LegacyRosterStoreAdapter {
+impl boundary::RosterStore for BoundaryRosterStoreView {
     fn replace_roster(
         &self,
         team: &TeamName,
@@ -320,7 +324,9 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
     }
 
     fn load_roster(&self, team: &TeamName) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
-        self.store.load_roster(team).map(|snapshot| snapshot.members)
+        self.store
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
     }
 
     fn query_membership(
@@ -439,14 +445,14 @@ pub(crate) fn noop_task_store() -> Arc<dyn TaskStore + Send + Sync> {
     Arc::new(NoopTaskStore)
 }
 
-pub(crate) fn legacy_mail_store(
+pub(crate) fn boundary_mail_store_view(
     store: Arc<dyn SharedMessageStore + Send + Sync>,
 ) -> Arc<dyn MailStore + Send + Sync> {
-    Arc::new(LegacyMailStoreAdapter::new(store))
+    Arc::new(BoundaryMailStoreView::new(store))
 }
 
-pub(crate) fn legacy_roster_store(
+pub(crate) fn boundary_roster_store_view(
     store: Arc<dyn SharedRosterStore + Send + Sync>,
 ) -> Arc<dyn boundary::RosterStore + Send + Sync> {
-    Arc::new(LegacyRosterStoreAdapter::new(store))
+    Arc::new(BoundaryRosterStoreView::new(store))
 }

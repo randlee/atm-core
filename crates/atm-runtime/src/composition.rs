@@ -17,7 +17,8 @@ use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRoste
 use atm_storage_rusqlite::SqliteStorageBackend;
 
 use crate::legacy_storage_adapters::{
-    StorageBackends, legacy_mail_store, legacy_roster_store, noop_task_store, runtime_doctor_ports,
+    StorageBackends, boundary_mail_store_view, boundary_roster_store_view, noop_task_store,
+    runtime_doctor_ports,
 };
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
 use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
@@ -46,10 +47,10 @@ impl fmt::Debug for RuntimeAssemblyInputs {
 #[derive(Clone)]
 pub struct RuntimeAssembly {
     pub service_runtime: LocalServiceRuntime,
-    pub(crate) storage_backends:
-        StorageBackends<Arc<dyn SharedMessageStore + Send + Sync>, Arc<dyn SharedRosterStore + Send + Sync>>,
-    pub mail_store: Arc<dyn boundary::MailStore + Send + Sync>,
-    pub roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
+    pub(crate) storage_backends: StorageBackends<
+        Arc<dyn SharedMessageStore + Send + Sync>,
+        Arc<dyn SharedRosterStore + Send + Sync>,
+    >,
     pub task_store: Arc<dyn boundary::TaskStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
@@ -61,8 +62,6 @@ impl fmt::Debug for RuntimeAssembly {
         f.debug_struct("RuntimeAssembly")
             .field("service_runtime", &self.service_runtime)
             .field("storage_backends", &self.storage_backends)
-            .field("mail_store", &"dyn MailStore")
-            .field("roster_store", &"dyn RosterStore")
             .field("task_store", &"dyn TaskStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("remote_replay_store", &"dyn RemoteReplayStore")
@@ -115,8 +114,6 @@ fn assemble_sqlite_runtime_at_path(
         messages: shared_messages.clone(),
         rosters: shared_rosters.clone(),
     };
-    let mail_store = legacy_mail_store(shared_messages);
-    let roster_store = legacy_roster_store(shared_rosters);
     let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
@@ -125,18 +122,15 @@ fn assemble_sqlite_runtime_at_path(
         non_claude_outbound,
         notification_sink,
     );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
-        config_current_dir,
-    }));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
         Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        mail_store,
-        roster_store,
         task_store,
         doctor_ports,
         remote_replay_store,
@@ -175,8 +169,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         messages: shared_messages.clone(),
         rosters: shared_rosters.clone(),
     };
-    let mail_store = legacy_mail_store(shared_messages);
-    let roster_store = legacy_roster_store(shared_rosters);
     let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
@@ -185,18 +177,15 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
-        config_current_dir,
-    }));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
         Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        mail_store,
-        roster_store,
         task_store,
         doctor_ports,
         remote_replay_store,
@@ -210,7 +199,7 @@ impl RuntimeAssembly {
     }
 
     pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
-        self.mail_store.clone()
+        boundary_mail_store_view(self.storage_backends.messages.clone())
     }
 
     pub fn task_store_arc(&self) -> Arc<dyn boundary::TaskStore + Send + Sync> {
@@ -218,7 +207,7 @@ impl RuntimeAssembly {
     }
 
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
-        self.roster_store.clone()
+        boundary_roster_store_view(self.storage_backends.rosters.clone())
     }
 
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
@@ -234,7 +223,8 @@ pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     let assembly = assemble_default_runtime()?;
-    let result = f(assembly.roster_store.as_ref());
+    let roster_store = assembly.roster_store_arc();
+    let result = f(roster_store.as_ref());
     let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
     match (result, finalize_result) {
         (Ok(value), Ok(())) => Ok(value),

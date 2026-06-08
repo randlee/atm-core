@@ -5,8 +5,8 @@ use std::time::Duration;
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
 use crate::boundary::{
-    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportReexportMessageRequest, MessageKey,
+    MessageKey, ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportReexportMessageRequest,
 };
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -143,7 +143,10 @@ impl LocalServiceRuntime {
 impl fmt::Debug for LocalServiceRuntime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalServiceRuntime")
-            .field("message_store", &std::sync::Arc::as_ptr(&self.message_store))
+            .field(
+                "message_store",
+                &std::sync::Arc::as_ptr(&self.message_store),
+            )
             .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
@@ -404,7 +407,9 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
-        self.roster_store.load_roster(team).map(|snapshot| snapshot.members)
+        self.roster_store
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
     }
 
     fn deliver_non_claude_payloads(
@@ -450,7 +455,11 @@ fn load_store_backed_mailbox_projection(
 ) -> Result<Vec<MessageEnvelope>, AtmError> {
     let mut metadata_rows =
         crate::service_runtime_store::RetainedMailboxRuntime::query_mailbox_metadata_rows(
-            runtime, Path::new(""), team, agent, None,
+            runtime,
+            Path::new(""),
+            team,
+            agent,
+            None,
         )?;
     metadata_rows.sort_by(|left, right| {
         left.message_at
@@ -481,16 +490,16 @@ fn load_projection_message(
         agent,
         message_key,
     )?
-        .map(|record| record.envelope)
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-                message_key
-            ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-            )
-        })
+    .map(|record| record.envelope)
+    .ok_or_else(|| {
+        AtmError::validation(format!(
+            "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
+            message_key
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
+        )
+    })
 }
 
 fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
@@ -526,7 +535,10 @@ mod tests {
     struct NoopMessageStore;
 
     impl atm_storage::MessageStore for NoopMessageStore {
-        fn save_message(&self, _message: &atm_storage::Message) -> Result<(), crate::error::AtmError> {
+        fn save_message(
+            &self,
+            _message: &atm_storage::Message,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
