@@ -10,7 +10,10 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::{atm_home, host_runtime_dir_from_home},
 };
-use atm_runtime::SqliteBoundaryAdapters;
+use atm_runtime::{
+    RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
+    assemble_sqlite_runtime,
+};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 // Mutex required because sqlite retained runtimes are cached across concurrent
@@ -20,6 +23,15 @@ static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
 pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
+
+#[derive(Debug, Default)]
+struct NoopRuntimeSqliteObserver;
+
+impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
+    fn emit_sqlite_event(&self, _event: RuntimeSqliteEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
 
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -63,8 +75,24 @@ impl Drop for SqliteRuntimeGuard {
     }
 }
 
-pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAdapters, AtmError> {
-    SqliteBoundaryAdapters::new(path.as_ref())
+pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    let config_current_dir = std::env::current_dir().map_err(|source| {
+        AtmError::config("failed to resolve current directory for sqlite test runtime assembly")
+            .with_recovery(
+                "Run sqlite runtime tests from a readable ATM workspace so retained runtime composition can resolve config.",
+            )
+            .with_source(source)
+    })?;
+    let notification_path = host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl");
+    assemble_sqlite_runtime(RuntimeAssemblyInputs {
+        sqlite_db_path: path.as_ref().to_path_buf(),
+        config_current_dir,
+        sqlite_observer: std::sync::Arc::new(NoopRuntimeSqliteObserver),
+        non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
+        notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
+            notification_path,
+        )),
+    })
 }
 
 pub struct SqliteWriterLockGuard {
@@ -94,16 +122,8 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
         return Ok(runtime.clone());
     }
 
-    let assembly = SqliteBoundaryAdapters::new(&path)?;
-    let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-        std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
-        std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl"),
-        )),
-    );
+    let assembly = open_sqlite_boundary(&path)?;
+    let runtime = assembly.service_runtime.clone();
     if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {
         runtime_cache.clear();
     }

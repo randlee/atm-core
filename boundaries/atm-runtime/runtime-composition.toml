@@ -38,7 +38,7 @@ forbidden = []
 
 [contracts]
 request_types = ["RuntimeAssemblyInputs"]
-response_types = ["RuntimeAssembly", "RuntimeBundle", "RuntimeStorageFinalizer"]
+response_types = ["RuntimeAssembly", "RuntimeDoctorPorts", "RuntimeStorageFinalizer"]
 error_types = ["AtmError"]
 
 [testing]
@@ -53,6 +53,6 @@ review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
 state = "concrete_landed"
 notes = [
   "implemented by AA.2 as the concrete runtime/store composition root for atm and atm-daemon",
-  "daemon startup remains fail-closed on any RuntimeBundle assembly failure",
+  "daemon startup remains fail-closed on any RuntimeAssembly failure",
   "the sqlite boundary TOMLs and runtime composition record agree on the forbidden atm-daemon -> atm-storage-rusqlite edge",
 ]

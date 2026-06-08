@@ -3,6 +3,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
+use atm_storage::{Message as SharedMessage, MessageQuery};
+
 use crate::boundary;
 use crate::error::AtmError;
 use crate::service_runtime::LocalServiceRuntime;
@@ -101,7 +103,20 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         agent: &AgentName,
         limit: Option<usize>,
     ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-        self.mail_store.query_mailbox_metadata(team, agent, limit)
+        self.message_store
+            .list_messages(&MessageQuery {
+                team: team.clone(),
+                agent: agent.clone(),
+                sender: None,
+                task_id: None,
+                limit,
+            })
+            .map(|messages| {
+                messages
+                    .into_iter()
+                    .map(shared_message_to_metadata_row)
+                    .collect()
+            })
     }
 
     fn load_message_record(
@@ -111,17 +126,72 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
-        self.mail_store.load_message(team, agent, message_key)
+        Ok(self
+            .message_store
+            .load_message(message_key)?
+            .filter(|message| &message.team == team && &message.agent == agent)
+            .map(shared_message_to_record))
     }
 
     fn persist_message_record(
         &self,
         record: boundary::MailStoreMessageRecord,
     ) -> Result<(), AtmError> {
-        self.mail_store.upsert_message(record)
+        self.message_store.save_message(&SharedMessage {
+            team: record.team,
+            agent: record.agent,
+            message_key: record.message_key,
+            envelope: record.envelope,
+        })
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
-        self.mail_store.upsert_message_state(state)
+        if state.deleted_at.is_some() {
+            return self.message_store.delete_message(&state.message_key);
+        }
+
+        let mut message = self
+            .message_store
+            .load_message(&state.message_key)?
+            .filter(|message| message.team == state.team && message.agent == state.agent)
+            .ok_or_else(|| {
+                AtmError::mailbox_read(format!(
+                    "message {} was not found for {}@{} while updating mailbox state",
+                    state.message_key.as_ref(),
+                    state.agent.as_str(),
+                    state.team.as_str(),
+                ))
+            })?;
+        message.envelope.read = state.read;
+        message.envelope.pending_ack_at = state.pending_ack_at;
+        message.envelope.acknowledged_at = state.acknowledged_at;
+        message.envelope.expires_at = state.expires_at;
+        self.message_store.save_message(&message)
+    }
+}
+
+fn shared_message_to_record(message: SharedMessage) -> boundary::MailStoreMessageRecord {
+    boundary::MailStoreMessageRecord {
+        team: message.team,
+        agent: message.agent,
+        message_key: message.message_key,
+        envelope: message.envelope,
+    }
+}
+
+fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStoreMailboxMetadataRow {
+    boundary::MailStoreMailboxMetadataRow {
+        message_key: message.message_key.clone(),
+        message_id: message.envelope.message_id,
+        parent_message_id: message.envelope.parent_message_id,
+        thread_mode: message.envelope.thread_mode,
+        from_agent: message.envelope.from,
+        summary: message.envelope.summary,
+        message_at: message.envelope.timestamp,
+        read: message.envelope.read,
+        pending_ack: message.envelope.pending_ack_at.is_some(),
+        acknowledged_at: message.envelope.acknowledged_at,
+        expires_at: message.envelope.expires_at,
+        task_id: message.envelope.task_id,
     }
 }

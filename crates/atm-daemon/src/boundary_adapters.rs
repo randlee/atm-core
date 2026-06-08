@@ -5,6 +5,7 @@ use atm_core::{
     },
     error::AtmError,
 };
+use atm_storage::RosterStore;
 use atm_storage_claude::compat::{
     ProjectionExport, ProjectionExportAppendMessageSetRequest,
     ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
@@ -130,7 +131,7 @@ impl DaemonReconcileCoordinator {
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,
-        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: DaemonNotificationSink,
         observability: SubsystemObservability,
     ) -> Self {

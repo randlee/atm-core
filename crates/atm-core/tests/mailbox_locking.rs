@@ -1147,7 +1147,7 @@ impl Fixture {
 
     fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-        let mail_store = assembly.mail_store();
+        let mail_store = assembly.mail_store_arc();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -1168,17 +1168,22 @@ impl Fixture {
                 })
                 .expect("seed sqlite message");
             mail_store
-                .upsert_message_state(atm_core::boundary::MailMessageState {
+                .upsert_message_state(atm_core::boundary::UpsertMailMessageStateRequest {
                     team: team.clone(),
                     agent: agent_name.clone(),
                     actor: agent_name.clone(),
-                    message_key,
-                    read: message.read,
-                    pending_ack_at: message.pending_ack_at,
-                    acknowledged_at: message.acknowledged_at,
-                    expires_at: message.expires_at,
-                    deleted_at: None,
-                    updated_at: Some(message.timestamp),
+                    state: atm_core::boundary::MailMessageState {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        actor: agent_name.clone(),
+                        message_key,
+                        read: message.read,
+                        pending_ack_at: message.pending_ack_at,
+                        acknowledged_at: message.acknowledged_at,
+                        expires_at: message.expires_at,
+                        deleted_at: None,
+                        updated_at: Some(message.timestamp),
+                    },
                 })
                 .expect("seed sqlite message state");
         }
@@ -1210,7 +1215,7 @@ fn create_team_with_config(
 
 fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
     let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
-    let roster_store = assembly.roster_store();
+    let roster_store = assembly.roster_store_arc();
     let team = team.parse::<TeamName>().expect("team");
     let members = members
         .iter()

@@ -325,7 +325,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         })
         .collect::<Vec<_>>();
     assembly
-        .roster_store()
+        .roster_store_arc()
         .replace_roster(
             test_team(),
             &roster,
@@ -393,9 +393,7 @@ fn production_runtime_installs_daemon_notification_sink() {
     sink.start().expect("start notification sink");
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
+        &assembly,
         Arc::new(DaemonNonClaudeOutbound::new()),
         Arc::new(sink.clone()),
     );

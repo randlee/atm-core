@@ -19,7 +19,7 @@ io_owns = ["durable_roster_state", "canonical_roster_records"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-runtime", "atm-storage-claude", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-core", "atm-runtime", "atm-daemon", "atm-storage-claude", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core"]
 

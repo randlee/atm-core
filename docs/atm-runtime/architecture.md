@@ -6,7 +6,7 @@
 
 It sits between:
 - storage-neutral interfaces in `atm-core`
-- backend implementation crates such as `atm-rusqlite`
+- backend implementation crates such as `atm-storage-rusqlite`
 - top-level callers such as the CLI and `atm-daemon`
 
 ## Ownership
@@ -20,54 +20,51 @@ It sits between:
   assembly
 - installation of the active `RemoteReplayStore`
 - SQLite-specific observability injection into SQLite-owned code
+- the temporary legacy compile bridge from `atm-storage::{MessageStore,RosterStore}`
+  into `atm_core::boundary::{MailStore,RosterStore}` during AC.4 cutover
 
 `atm-runtime` does not own:
 - daemon request routing
 - daemon lifecycle control
 - CLI command rendering
-- backend-specific store logic that belongs inside `atm-rusqlite`
+- backend-specific store logic that belongs inside `atm-storage-rusqlite`
 
 ## Required Seam
 
-The minimum Phase AA seam is a storage-neutral runtime bundle:
+The minimum landed Phase AC seam is a composition-root assembly with explicit
+shared-storage handles and doctor ports:
 
 ```rust
-pub struct RuntimeBundle {
-    pub mail_store: Arc<dyn MailStore>,
-    pub task_store: Arc<dyn TaskStore>,
-    pub roster_store: Arc<dyn RosterStore>,
-    pub mail_store_doctor: Arc<dyn MailStoreDoctor>,
-    pub task_store_doctor: Arc<dyn TaskStoreDoctor>,
-    pub roster_store_doctor: Arc<dyn RosterStoreDoctor>,
-    pub config_doctor: Arc<dyn ConfigDoctor>,
-    pub remote_replay_store: Arc<dyn RemoteReplayStore>,
+pub struct StorageBackends<M: MessageStore, R: RosterStore> {
+    pub messages: M,
+    pub rosters: R,
 }
-```
-
-`atm-daemon` must consume only this kind of injected storage-neutral bundle and
-must not construct `SqliteBoundaryAssembly` directly.
-
-The retained replay contract intentionally uses the richer runtime-owned shape
-rather than the original planning stub. The installed `RemoteReplayStateRecord`
-keeps `(team, agent, message_key)`, peer endpoint, request envelope, expiry,
-attempt counters, and `last_error: Option<AtmErrorCode>` so replay resume can
-retry, deduplicate, and age out retained requests without reconstructing those
-fields from opaque payload bytes.
-
-The concrete public assembly surface exported by `atm-runtime` is the
-`RuntimeAssembly` family:
-
-```rust
 pub struct RuntimeAssembly {
     pub service_runtime: LocalServiceRuntime,
-    pub runtime_bundle: RuntimeBundle,
+    pub storage_backends: StorageBackends<Arc<dyn MessageStore>, Arc<dyn RosterStore>>,
+    pub mail_store: Arc<dyn MailStore>,
+    pub roster_store: Arc<dyn RosterStore>,
+    pub task_store: Arc<dyn TaskStore>,
+    pub doctor_ports: RuntimeDoctorPorts,
+    pub remote_replay_store: Arc<dyn RemoteReplayStore>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer>,
 }
 ```
 
-The direct CLI doctor path is allowed to depend on `atm-runtime` for runtime
-bundle and doctor assembly. `atm doctor` now assembles its local config/store
-doctor path here and must not depend directly on `atm-rusqlite`.
+`atm-daemon` must consume only this injected storage-neutral assembly and must
+not construct backend storage objects directly.
+
+The retained replay contract intentionally keeps the richer runtime-owned
+shape. `RemoteReplayStateRecord` still carries `(team, agent, message_key)`,
+peer endpoint, request envelope, expiry, attempt counters, and
+`last_error: Option<AtmErrorCode>` so replay resume can retry, deduplicate,
+and age out retained requests without reconstructing those fields from opaque
+payload bytes.
+
+The direct CLI doctor path is allowed to depend on `atm-runtime` for
+`RuntimeDoctorPorts` and local runtime assembly. `atm doctor` now assembles
+its local config/store doctor path here and must not depend directly on
+`atm-storage-rusqlite`.
 
 ## Boundary Rule
 
@@ -76,7 +73,7 @@ That authorization does not extend to `atm-daemon`.
 
 ## Startup Rule
 
-Any `RuntimeBundle` assembly failure is fail-closed. The daemon must not enter
+Any `RuntimeAssembly` failure is fail-closed. The daemon must not enter
 serving state if any required runtime component, including replay-store
 construction, fails.
 

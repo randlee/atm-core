@@ -574,7 +574,7 @@ mod tests {
 
         fn seed_sqlite_roster(&self, recipient: &str) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let roster_store = assembly.roster_store();
+            let roster_store = assembly.roster_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
@@ -643,7 +643,7 @@ mod tests {
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let mail_store = assembly.mail_store();
+            let mail_store = assembly.mail_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -662,17 +662,22 @@ mod tests {
                     })
                     .expect("seed sqlite message");
                 mail_store
-                    .upsert_message_state(boundary::MailMessageState {
+                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         actor: agent_name.clone(),
-                        message_key,
-                        read: message.read,
-                        pending_ack_at: message.pending_ack_at,
-                        acknowledged_at: message.acknowledged_at,
-                        expires_at: message.expires_at,
-                        deleted_at: None,
-                        updated_at: Some(message.timestamp),
+                        state: boundary::MailMessageState {
+                            team: team.clone(),
+                            agent: agent_name.clone(),
+                            actor: agent_name.clone(),
+                            message_key,
+                            read: message.read,
+                            pending_ack_at: message.pending_ack_at,
+                            acknowledged_at: message.acknowledged_at,
+                            expires_at: message.expires_at,
+                            deleted_at: None,
+                            updated_at: Some(message.timestamp),
+                        },
                     })
                     .expect("seed sqlite message state");
             }

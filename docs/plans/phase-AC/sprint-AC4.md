@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.4
 worktree: ../atm-core-worktrees/feature/pAC-s4-atm-core-storage-boundary-adoption
 branch: feature/pAC-s4-atm-core-storage-boundary-adoption
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -149,6 +149,7 @@ Proof this sprint must leave behind:
 ## Required Document Updates
 
 - `docs/plans/phase-AC/sprint-AC4.md`
+- `docs/plans/phase-AC/notif-sink-vs-storage-notifier.md`
 - `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - core/runtime/daemon architecture docs

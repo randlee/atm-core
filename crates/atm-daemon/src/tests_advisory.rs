@@ -21,7 +21,7 @@ fn replay_source_static(label: &'static str) -> ReplaySource {
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
-    let roster_store = assembly.roster_store();
+    let roster_store = assembly.roster_store_arc();
     let team = TEST_TEAM
         .parse::<atm_core::types::TeamName>()
         .expect("team");

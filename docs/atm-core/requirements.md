@@ -374,7 +374,7 @@ Required `atm-core` crate rules:
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
   explicit-transaction policy through the owning store boundary
 - `atm-core` defines the store contracts; the first concrete SQLite
-  implementation lives in `atm-rusqlite`
+  implementation now lives in `atm-storage-rusqlite`
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line

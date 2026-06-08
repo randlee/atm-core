@@ -1,5 +1,6 @@
-use atm_core::boundary::{ReconcileRequest, ReplaySource, RosterStore, WatchEventBatch};
+use atm_core::boundary::{ReconcileRequest, WatchEventBatch};
 use atm_core::error::AtmError;
+use atm_storage::{RosterSnapshot, RosterStore};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -153,11 +154,11 @@ pub(crate) fn ingest_claude_team_config_from_watch_batch(
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(
-            &request.team,
-            &members,
-            Some(&replay_source_static("watcher-config-ingress")),
-        )
+        .save_roster(&RosterSnapshot {
+            team_name: request.team.clone(),
+            members,
+            refreshed_at: None,
+        })
         .map_err(|error| {
             AtmError::daemon_unavailable(format!(
                 "reconcile runtime could not replace canonical ATM roster state from {}",
@@ -184,10 +185,6 @@ fn evict_oldest_entry_if_full(state: &mut ProjectionWriteJournalState) {
             return;
         }
     }
-}
-
-fn replay_source_static(label: &'static str) -> ReplaySource {
-    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
 }
 
 fn stable_projection_digest(bytes: &[u8]) -> u64 {

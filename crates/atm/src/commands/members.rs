@@ -135,7 +135,7 @@ mod tests {
                 },
             ];
             assembly
-                .roster_store()
+                .roster_store_arc()
                 .replace_roster(
                     &team,
                     &members,
