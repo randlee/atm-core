@@ -1077,7 +1077,9 @@ mod tests {
         );
         assert_eq!(
             result.warnings[0].recovery.as_deref(),
-            Some("Restore the notification boundary before retrying retained-runtime delivery.")
+            Some(
+                "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying."
+            )
         );
         assert!(
             runtime

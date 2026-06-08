@@ -5,6 +5,17 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownAtmErrorCode(pub String);
+
+impl fmt::Display for UnknownAtmErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown ATM error code: {}", self.0)
+    }
+}
+
+impl std::error::Error for UnknownAtmErrorCode {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AtmErrorCode {
     ConfigHomeUnavailable,
@@ -141,7 +152,7 @@ impl AtmErrorCode {
 }
 
 impl FromStr for AtmErrorCode {
-    type Err = &'static str;
+    type Err = UnknownAtmErrorCode;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
@@ -216,7 +227,7 @@ impl FromStr for AtmErrorCode {
                 Ok(Self::TestFakeTransportInjectionFailed)
             }
             "ATM_HELP_TOPIC_NOT_FOUND" => Ok(Self::HelpTopicNotFound),
-            _ => Err("unknown ATM error code"),
+            _ => Err(UnknownAtmErrorCode(value.to_owned())),
         }
     }
 }

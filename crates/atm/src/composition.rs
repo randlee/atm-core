@@ -824,7 +824,9 @@ mod tests {
         assert!(error.to_string().contains("synthetic daemon failure"));
         assert_eq!(
             error.primary_recovery(),
-            Some("retry after the daemon is reachable")
+            Some(
+                "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying."
+            )
         );
     }
 

@@ -783,11 +783,11 @@ mod tests {
             .append_compat_inbox_message(&inbox_path, &message())
             .expect_err("malformed Claude array path must fail closed");
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(
-            error
-                .primary_recovery()
-                .unwrap_or_default()
-                .contains("explicit repair/rebuild inbox projection path"),
+        assert_eq!(
+            error.primary_recovery(),
+            Some(
+                "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument."
+            ),
             "unexpected recovery: {error:?}"
         );
     }
@@ -902,7 +902,7 @@ mod tests {
         assert_eq!(
             error.primary_recovery(),
             Some(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
+                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
             )
         );
         assert!(!output_path.exists());

@@ -125,7 +125,7 @@ impl AtmError {
     }
 
     pub fn primary_recovery(&self) -> Option<&str> {
-        self.recovery.last().map(String::as_str)
+        self.recovery.first().map(String::as_str)
     }
 
     pub fn with_source<E>(mut self, source: E) -> Self

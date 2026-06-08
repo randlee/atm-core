@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::error::AtmError;
@@ -89,6 +90,14 @@ impl AsRef<str> for TaskState {
     }
 }
 
+impl Deref for TaskState {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl fmt::Display for TaskState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_ref())
@@ -129,6 +138,14 @@ impl AckTransition {
 
 impl AsRef<str> for AckTransition {
     fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for AckTransition {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -378,6 +395,8 @@ mod tests {
     use chrono::Utc;
     use serde_json::Map;
 
+    const TEST_TEAM: &str = "test-team";
+
     #[derive(Default)]
     struct DummyStore;
 
@@ -434,7 +453,7 @@ mod tests {
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
 
-        let team: TeamName = "atm-dev".parse().expect("team");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
         let agent: AgentName = "worker".parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
 
