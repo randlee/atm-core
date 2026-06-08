@@ -42,14 +42,33 @@ Phase-AA simplification direction:
 - each subsystem owns its own diagnostic trait and backend-specific diagnosis
 - top-level doctor code aggregates subsystem findings and daemon-owned runtime
   state, but must not reimplement backend-specific diagnosis logic
-- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
-  storage-neutral capability traits during this simplification line
-- `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
-  `ConfigDoctor` are the explicit subsystem doctor traits used by that
-  aggregate-only health model
+- `MailStore` and `RosterStore` remain the primary storage-neutral capability
+  traits during this simplification line
+- existing `TaskStore` code remains only as speculative transition surface and
+  is not part of the approved long-term storage baseline
+- `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the explicit
+  subsystem doctor traits used by that aggregate-only health model; any
+  current `TaskStoreDoctor` surface is likewise speculative rather than
+  approved baseline
 - later SQLite-backed and Claude-JSON-backed implementations may satisfy that
   same behavior-named trait family rather than forcing backend-shaped parallel
   trait trees
+
+Phase-AC supersession note:
+- the Phase `AA` simplification-line store traits above are transitional only
+- Phase `AC` replaces `MailStore` with canonical `MessageStore`, converges the
+  roster seam into `RosterStore`, and leaves task storage out of scope for the
+  initial shared `atm-storage` contract
+- current `TaskStore` code is treated as speculative transition surface rather
+  than as an approved long-term storage boundary
+- speculative task-store code is expected to be deleted by default during
+  Phase `AC` cleanup rather than preserved as a compatibility line
+- if task storage is approved later, the first canonical implementation starts
+  from Claude-code task schema plus Pydantic validation; SQLite may only sync
+  to that canonical model afterward
+- after Phase `AC`, `MailStore` / `RosterStore` are historical transition
+  names; speculative `TaskStore` code is expected to be gone unless a later
+  approved task-storage phase reintroduces a fresh canonical design
 
 The retained product surface is:
 - `atm send`

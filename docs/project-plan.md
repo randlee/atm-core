@@ -285,6 +285,55 @@ Acceptance:
 - Phase AA exit criteria are satisfied only through
   `docs/plans/phase-AA/readiness.md`
 
+### Phase AC: Storage Contract Reset And Backend Interchangeability [PLANNED]
+
+Status summary:
+- Phase AC is the planning line that restores the original storage and RPC
+  design after the repo drifted into backend-shaped seams and per-operation
+  request/response storage DTOs.
+- Planning Branch: `plan/phase-AC`
+- Integration Branch: `integrate/phase-AC`
+- `AC.0` planning prerequisite is complete at `ce02b9ff`.
+- latest accepted planning tip is the current `plan/phase-AC` branch head,
+  which carries the full plan-hardening sequence, the
+  [exhaustive AC.0 type ledger](./plans/phase-AC/type-ledger.md), and the final
+  cross-document consistency corrections for the AC sprint set.
+- `AC0-DOCS-MIGRATE-1` (`chore/ac-docs-migrate`) is complete: after merging
+  `origin/develop`, the full Phase AC plan set now lives under
+  `docs/plans/phase-AC/`; the legacy pre-restructure Phase AC locations are
+  gone, and all in-repo references were updated to the new layout.
+- The authoritative plan lives in [`docs/plans/phase-AC/`](./plans/phase-AC/).
+- The authoritative closure checklist is
+  [`docs/plans/phase-AC/readiness.md`](./plans/phase-AC/readiness.md).
+
+Goal:
+- create a small audited `atm-storage` contract
+- extract Claude inbox storage as a first-class backend
+- converge the SQLite backend on that same contract
+- collapse RPC/storage/domain type duplication back to canonical shared structs
+- restore future SQL Server viability
+
+Deliverables:
+- `crates/atm-storage`
+- `crates/atm-storage-claude`
+- converged SQLite backend against the same core traits
+- generic RPC envelope plus canonical shared domain bodies
+- deletion of obsolete storage/RPC wrapper families
+
+Sprint line:
+- `AC.0` `plan/phase-AC` `complete`
+- `AC.1` `feature/pAC-s1-atm-storage-contract-and-canonical-types`
+- `AC.2` `feature/pAC-s2-atm-storage-claude-extraction`
+- `AC.3` `feature/pAC-s3-sqlite-backend-convergence`
+- `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption`
+- `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification`
+- `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout`
+- `AC.7` `feature/pAC-s7-sqlserver-readiness-proof`
+
+Acceptance:
+- Phase AC exit criteria are satisfied only through
+  `docs/plans/phase-AC/readiness.md`
+
 ### Phase 0: Document Lock [COMPLETE]
 
 - **Phase 0: Document Lock [COMPLETE]** — Locked requirements, architecture, and read-behavior documentation, and moved the migration plan to `docs/archive/`. (Completed before the current PR sequence; no dedicated PR.)

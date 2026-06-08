@@ -26,6 +26,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-015 — Daemon Runtime Snapshot Publication And Worker Ownership](./ADR-015-daemon-runtime-snapshot-and-worker-ownership.md)
 - [ADR-016 — Claude Config Ingress And Roster Projection Ownership](./ADR-016-claude-config-ingress-and-roster-projection-ownership.md)
 - [ADR-017 — Claude Inbox Fail-Soft Read Policy](./ADR-017-claude-inbox-fail-soft-read-policy.md)
+- [ADR-018 — Storage Contract Reset And Backend Interchangeability](./ADR-018-storage-contract-reset-and-backend-interchangeability.md)
 
 ## Extracted Crate-Local ADRs
 

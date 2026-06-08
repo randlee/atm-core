@@ -100,10 +100,12 @@ Phase-AA simplification note:
   instead of daemon-local backend-aware helpers
 - top-level doctor code may aggregate subsystem reports and daemon-owned
   runtime state, but must not reimplement backend-specific diagnosis logic
-- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
-  storage-neutral capability traits
+- `MailStore` and `RosterStore` remain the primary storage-neutral capability
+  traits in the simplification line described here
+- current `TaskStore` code exists only as speculative transition surface and
+  is not part of the approved long-term storage baseline
 - backend-specific implementations such as SQLite-backed and Claude-JSON-backed
-  adapters are allowed to satisfy that same behavior-named trait family
+  adapters are allowed to satisfy the approved behavior-named trait family
 - `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
   SQLite boundary records, adds `crates/atm-architecture/` as the primary
   code-driven merge gate as the sole second enforcement layer, and treats
@@ -113,6 +115,13 @@ Phase-AA simplification note:
   `message_id` durable schema; abandoned pre-production compatibility shapes
   such as `legacy_message_id` remain historical documentation only and are not
   part of normal bootstrap/migration behavior
+- Phase `AC` later supersedes this simplification line for storage contracts:
+  `MessageStore` and `RosterStore` become the approved shared contract, while
+  task storage is explicitly deferred until a later line starts from canonical
+  Claude-code task schema plus Pydantic validation instead of inheriting
+  speculative `TaskStore` behavior; speculative task-store code is expected to
+  be deleted during Phase `AC` cleanup rather than preserved as a compatibility
+  line
 
 ## 2. Crate Boundaries
 
@@ -1188,6 +1197,11 @@ Public entrypoint:
   - `TaskStoreDoctor`
   - `RosterStoreDoctor`
   - `ConfigDoctor`
+
+Current-state caveat:
+- the `TaskStoreDoctor` mention above is descriptive of the current
+  transitional code surface, not an approved future storage-contract
+  commitment
 
 `DoctorFinding` contains:
 - severity
@@ -2735,7 +2749,14 @@ Scope rule:
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
 
-#### TaskStore
+#### TaskStore (Historical / Speculative Transition Surface)
+
+Phase `AC` supersession note:
+- this section documents the current transitional task-store surface only
+- it does not define the approved future shared storage contract
+- future task storage, if approved, must start from canonical Claude-code task
+  schema plus Pydantic validation rather than from this speculative boundary
+  shape
 
 Dispatch model:
 - synchronous request/response from service or task-handling code
