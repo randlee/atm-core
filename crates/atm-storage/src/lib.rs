@@ -9,6 +9,8 @@ pub mod schema;
 pub mod types;
 mod validation;
 
+// Protocol role identity for worker agents used in shared storage fixtures.
+pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
     AckTransition, AgentType, MailMessageState, Message, MessageFingerprint, MessageKey,
     MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent, RosterHarness,

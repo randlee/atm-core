@@ -389,14 +389,12 @@ mod tests {
         RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
         StorageNotifier,
     };
+    use crate::ROLE_WORKER;
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
-
-    const TEST_TEAM: &str = "test-team";
-    const TEST_WORKER: &str = "worker";
 
     #[derive(Default)]
     struct DummyStore;
@@ -454,8 +452,8 @@ mod tests {
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
 
-        let team: TeamName = TEST_TEAM.parse().expect("team");
-        let agent: AgentName = TEST_WORKER.parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
 
         let message = Message {
