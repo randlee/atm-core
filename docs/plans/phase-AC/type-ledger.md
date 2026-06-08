@@ -149,11 +149,11 @@ than one sprint in a non-default way.
 | `MailStoreMailboxMetadataRow` | `AC.1` | `AC.5` query/body convergence only | The replacement query helper shape is chosen in `AC.1`; usage cleanup lands later. |
 | `ReplaySource` / replay candidate rows | `AC.3` | `AC.1` contract cap only | Whether replay survives as a capability or backend-internal concern closes with the backend convergence sprint. |
 | doctor / health candidate rows | `AC.3` | `AC.1` contract cap only | Capability keep/delete/internalize decision depends on concrete backend convergence, not only naming. |
-| `delivery_execution::ClaudeInboxWriter` | `AC.2` | `AC.4` consumer cutover only | The seam moves below `atm-storage-claude` in `AC.2`; `AC.4` only removes remaining core usage. |
+| `delivery_execution::ProjectionMailboxWriter` | `AC.2` | `AC.4` consumer cutover only | The seam moves below `atm-storage-claude` in `AC.2`; `AC.4` only removes remaining core usage. |
 | `SqliteBoundaryAssembly` | `AC.3` | `AC.4` consumer cutover only | The backend assembly replacement is a SQLite convergence decision before core cleanup consumes it. |
 | `RuntimeBundle` | `AC.4` | `AC.6` verification only | This is a core-owned backend seam; cleanup verification is not primary ownership. |
 | `Config*` retain-outside rows | `AC.4` | `AC.6` verification only | `AC.4` classifies them as non-storage seams; `AC.6` checks docs/code drift only. |
-| `InboxIngress*` / `InboxExport*` rows | `AC.2` | `AC.6` verification only | Claude-backend internalization closes in `AC.2`; later grep/delete is only proof. |
+| `SourceIngress*` / `ProjectionExport*` rows | `AC.2` | `AC.6` verification only | Claude-backend internalization closes in `AC.2`; later grep/delete is only proof. |
 
 ## `crates/atm-core/src/boundary/mod.rs`
 
@@ -224,8 +224,8 @@ than one sprint in a non-default way.
 | `RosterMemberKind` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster member property. |
 | `RosterHarness` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster harness property. |
 | `RosterMemberRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `RosterMember` in `AC.1` | Main roster member record to collapse. |
-| `ClaudeCodeRosterMember` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
-| `ClaudeCodeTeamRoster` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
+| `ProjectionRosterMember` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
+| `ProjectionRoster` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
 | `TaskStoreCreateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
 | `TaskStoreCreateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
 | `TaskStoreLoadTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
@@ -259,24 +259,24 @@ than one sprint in a non-default way.
 | `ConfigLoadRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config ingress is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `ConfigLoadResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config ingress is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `ConfigDoctorReport` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config doctor is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
-| `InboxSourceFileRecord` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude inbox file discovery detail. |
-| `InboxIngressImportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressImportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressIdentityFingerprintRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressIdentityFingerprintResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressDiagnosticsRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressDiagnosticsResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxIngressResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportRecordRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportRecordResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportReexportMessageRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportReexportMessageResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `ClaudeCompatibilityDeliveryMode` | enum | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Compatibility delivery policy is Claude-backend-only. |
-| `InboxExportAppendMessageSetRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportAppendMessageSetResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceFileRecord` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude inbox file discovery detail. |
+| `SourceIngressImportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressImportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressIdentityFingerprintRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressIdentityFingerprintResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressDiagnosticsRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressDiagnosticsResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose inbox import wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngressResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportRecordRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportRecordResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportReexportMessageRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportReexportMessageResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionAppendMode` | enum | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Compatibility delivery policy is Claude-backend-only. |
+| `ProjectionExportAppendMessageSetRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportAppendMessageSetResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Shared contract must not expose export wrappers; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportRequest` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
 | `NonClaudeOutboundDeliveryRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `NonClaudeOutboundDeliveryResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `TaskStore` | trait | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Phase `AC` does not replace this with `atm-storage::TaskStore`; future task storage starts from canonical Claude schema instead. |
@@ -285,8 +285,8 @@ than one sprint in a non-default way.
 | `RosterStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.3` | Must not survive unchanged into `atm-storage`; `AC.1` only caps the shared contract surface. |
 | `ConfigIngress` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config seam remains outside shared storage contract; `AC.6` only verifies docs/code did not drift. |
 | `ConfigDoctor` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config seam remains outside shared storage contract; `AC.6` only verifies docs/code did not drift. |
-| `InboxIngress` | trait | `replace-trait` | `internalize-claude` | internalize in `AC.2` | Must not survive as a shared storage trait; `AC.6` only verifies no shared/public leakage remains. |
-| `InboxExport` | trait | `replace-trait` | `internalize-claude` | internalize in `AC.2` | Must not survive as a shared storage trait; `AC.6` only verifies no shared/public leakage remains. |
+| `SourceIngress` | trait | `replace-trait` | `internalize-claude` | internalize in `AC.2` | Must not survive as a shared storage trait; `AC.6` only verifies no shared/public leakage remains. |
+| `ProjectionExport` | trait | `replace-trait` | `internalize-claude` | internalize in `AC.2` | Must not survive as a shared storage trait; `AC.6` only verifies no shared/public leakage remains. |
 | `NonClaudeOutbound` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam remains outside shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 
 ## `crates/atm-core/src/boundary/runtime.rs`
@@ -302,7 +302,7 @@ than one sprint in a non-default way.
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `delivery_execution::ClaudeInboxWriter` | `pub(crate)` trait | `replace-trait` | `internalize-claude` | move below `atm-storage-claude` in `AC.2` | Key proof that Claude storage is still an ad hoc `atm-core` seam instead of a backend crate; `AC.4` only removes remaining consumers. |
+| `delivery_execution::ProjectionMailboxWriter` | `pub(crate)` trait | `replace-trait` | `internalize-claude` | move below `atm-storage-claude` in `AC.2` | Key proof that Claude storage is still an ad hoc `atm-core` seam instead of a backend crate; `AC.4` only removes remaining consumers. |
 
 ## Public `atm-rusqlite` Support Types
 

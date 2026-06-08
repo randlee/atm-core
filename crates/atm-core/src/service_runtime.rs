@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, InboxExportAppendMessageSetRequest,
-    InboxExportReexportMessageRequest, MessageKey,
+    MessageKey, ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportReexportMessageRequest,
 };
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -67,7 +67,7 @@ pub(crate) trait RetainedServiceRuntime:
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
+        mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
@@ -87,9 +87,9 @@ pub(crate) trait RetainedServiceRuntime:
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
         let records = self.load_team_roster(team)?;
-        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
             team.clone(),
             &records,
         ))
@@ -343,7 +343,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     ) -> Result<(), AtmError> {
         let messages = load_store_backed_mailbox_projection(self, team, agent)?;
 
-        crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
+        crate::direct_boundaries::reexport_messages(ProjectionExportReexportMessageRequest {
             path: inbox_path.to_path_buf(),
             messages,
         })
@@ -374,10 +374,10 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
+        mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
-        crate::direct_boundaries::append_message_set(InboxExportAppendMessageSetRequest {
+        crate::direct_boundaries::append_message_set(ProjectionExportAppendMessageSetRequest {
             path: inbox_path.to_path_buf(),
             messages: messages.to_vec(),
             mode,

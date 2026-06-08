@@ -322,6 +322,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use crate::{ROLE_WORKER, TEAM_ATM_DEV};
     use chrono::Utc;
     use serde_json::Map;
 
@@ -381,8 +382,8 @@ mod tests {
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
 
-        let team: TeamName = "atm-dev".parse().expect("team");
-        let agent: AgentName = "worker".parse().expect("agent");
+        let team: TeamName = TEAM_ATM_DEV.parse().expect("team");
+        let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
 
         let message = Message {

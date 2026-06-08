@@ -264,7 +264,7 @@ mod tests {
     use super::{
         ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages,
     };
-    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::read::ClassifiedMessage;
@@ -435,7 +435,7 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: ClaudeCompatibilityDeliveryMode,
+            _mode: ProjectionAppendMode,
             _messages: &[MessageEnvelope],
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not append compat inbox message sets")

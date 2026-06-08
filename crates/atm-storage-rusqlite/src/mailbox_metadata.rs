@@ -101,6 +101,18 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
     .transpose()
 }
 
+fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
+    u64::try_from(value).map_err(|error| {
+        AtmError::validation(format!(
+            "sqlite mailbox metadata {field_name} must not be negative: {value}"
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox metadata counts row before retrying the query.",
+        )
+        .with_source(error)
+    })
+}
+
 fn decode_mailbox_metadata_row(
     row: MetadataQueryRow,
 ) -> Result<SqliteMailboxMetadataRow, AtmError> {
@@ -257,13 +269,28 @@ pub(crate) fn query_mailbox_metadata_counts(
                    );",
                 params![team.as_str(), agent.as_str()],
                 |row| {
-                    Ok(SqliteMailboxMetadataCounts {
-                        total_messages: row.get::<_, i64>(0)? as u64,
-                        unread_message_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64,
-                        pending_ack_messages: row.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
-                    })
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                        row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                    ))
                 },
             )
             .map_err(|error| db.error("failed to query sqlite mailbox metadata counts", error))
+            .and_then(
+                |(total_messages, unread_message_count, pending_ack_messages)| {
+                    Ok(SqliteMailboxMetadataCounts {
+                        total_messages: decode_count(total_messages, "total_messages")?,
+                        unread_message_count: decode_count(
+                            unread_message_count,
+                            "unread_message_count",
+                        )?,
+                        pending_ack_messages: decode_count(
+                            pending_ack_messages,
+                            "pending_ack_messages",
+                        )?,
+                    })
+                },
+            )
     })
 }

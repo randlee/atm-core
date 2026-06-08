@@ -11,7 +11,6 @@ use atm_core::{
     home::{atm_home, host_runtime_dir_from_home},
 };
 use atm_runtime::SqliteBoundaryAdapters;
-use atm_storage_rusqlite::SqliteWriterLockGuard;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 // Mutex required because sqlite retained runtimes are cached across concurrent
@@ -68,8 +67,13 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAdap
     SqliteBoundaryAdapters::new(path.as_ref())
 }
 
+pub struct SqliteWriterLockGuard {
+    _inner: atm_storage_rusqlite::TestOnlySqliteWriterLockGuard,
+}
+
 pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
-    atm_storage_rusqlite::hold_sqlite_writer_lock(path)
+    atm_storage_rusqlite::hold_sqlite_writer_lock_for_test(path)
+        .map(|inner| SqliteWriterLockGuard { _inner: inner })
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {

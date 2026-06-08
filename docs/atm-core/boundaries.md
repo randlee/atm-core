@@ -233,10 +233,10 @@ Purpose:
 Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
 - canonical ATM roster truth does not live here; normal retained runtime
-  membership checks must use `RosterStore` / `ClaudeCodeTeamRoster` instead
+  membership checks must use `RosterStore` / `ProjectionRoster` instead
 - the `Z.6` send warning path is allowed to mention the underlying
   `config.json` mismatch in returned warning text, but it must obtain member
-  truth from `ClaudeCodeTeamRoster` rather than from `ConfigIngress`
+  truth from `ProjectionRoster` rather than from `ConfigIngress`
 - approved surviving callers after the `Phase Z` follow-on line are:
   - watcher / reconcile ingest
   - `doctor` comparison
@@ -275,7 +275,7 @@ Purpose:
 - Own config-specific diagnosis so daemon/CLI callers aggregate typed config
   findings instead of embedding backend-specific config investigation logic.
 
-## InboxIngress
+## SourceIngress
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-ingress.toml](../../boundaries/atm-core/inbox-ingress.toml)
@@ -290,7 +290,7 @@ Notes:
   implementation seam that may still touch compatibility inbox source files for
   this boundary family.
 
-## InboxExport
+## ProjectionExport
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-export.toml](../../boundaries/atm-core/inbox-export.toml)
@@ -300,7 +300,7 @@ Purpose:
 - Owns projection of ATM-owned state back to compatibility/shared inbox surfaces.
 
 Notes:
-- This is the write-facing sibling of InboxIngress, not a general store boundary.
+- This is the write-facing sibling of SourceIngress, not a general store boundary.
 - Retained command/runtime code must reach compatibility inbox export only
   through the daemon-owned ingress/export seam; it must not treat export-file
   reads as a second source of mailbox truth.
@@ -334,7 +334,7 @@ Notes:
 - `Phase Yc` adds one final recovered-Claude seam requirement:
   - `Y.12` introduces one explicit recovered logical-message-set export seam
     for `DeliveryPlanDisposition::SqliteFailedRecovered` through
-    `InboxExport::append_message_set(...)`
+    `ProjectionExport::append_message_set(...)`
   - the recovered Claude path must not loop one message at a time through the
     normal append helper while degrading to warnings after partial success
   - persisted single-message Claude append remains on the existing append-only

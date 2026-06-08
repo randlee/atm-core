@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_storage_rusqlite::{
+use atm_storage_rusqlite::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };

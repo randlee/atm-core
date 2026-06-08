@@ -294,7 +294,7 @@ fn roster_harness_value(harness: RosterHarness) -> &'static str {
 mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
-    use atm_storage::IsoTimestamp;
+    use atm_storage::{IsoTimestamp, ROLE_WORKER};
 
     #[test]
     fn save_roster_rejects_mismatched_team_names() {
@@ -303,7 +303,7 @@ mod tests {
             .roster_store;
         let team: TeamName = "team-a".parse().expect("team");
         let other_team: TeamName = "team-b".parse().expect("team");
-        let agent: AgentName = "worker".parse().expect("agent");
+        let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let roster = RosterSnapshot {
             team_name: team,
             members: vec![RosterMember {

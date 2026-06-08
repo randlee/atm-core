@@ -215,8 +215,8 @@ Sealing posture per boundary:
 - `TaskStoreDoctor`: sealed by default
 - `RosterStore`: sealed by default
 - `RosterStoreDoctor`: sealed by default
-- `InboxIngress`: sealed by default
-- `InboxExport`: sealed by default
+- `SourceIngress`: sealed by default
+- `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
 - `ConfigDoctor`: sealed by default
 - watcher/reconcile adapters: sealed by default
@@ -247,7 +247,7 @@ Phase R redesign notes:
 - `atm-core` owns the ATM frame schema used by both same-host local IPC and
   cross-host daemon transport
 - `atm-core` owns the immutable public runtime roster projection
-  `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
+  `ProjectionRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
 - `atm-core` owns the shared subsystem doctor DTO family:
   - `DoctorFinding`
@@ -258,11 +258,18 @@ Phase R redesign notes:
   - `DaemonRuntimeDoctorReport`
 - the daemon may aggregate those subsystem reports and compare them for drift,
   but it must not reimplement backend-specific diagnosis logic
+
+Phase AC supersession note:
+- `AC.2` moved the concrete Claude inbox storage backend into
+  `crates/atm-storage-claude`
+- `atm-core` still owns generic source/projection boundary traits and helper
+  request/response shapes during the cutover window, but it no longer owns the
+  concrete Claude file-backed backend implementation
 - `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
   and member truth; retained Claude `config.json` remains projection/output
   state plus explicit `doctor` comparison input, not a second team-admin
   authority
-- the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
+- the `Z.6` Claude send warning path must build `ProjectionRoster` from
   store-backed ATM roster rows after the durable write succeeds; it must not
   reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
@@ -294,7 +301,7 @@ Config-ingress ownership rules:
 - `ConfigIngress` must not remain a generic retained-command/runtime roster
   lookup surface
 - normal retained runtime membership decisions belong to ATM roster truth and
-  `ClaudeCodeTeamRoster`
+  `ProjectionRoster`
 - the only approved retained send-path file-state exception before `Z.8`
   watcher ownership is the post-write missing-config existing-inbox fallback
   warning; that exception does not restore generic file-backed membership

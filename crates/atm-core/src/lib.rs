@@ -89,15 +89,8 @@ pub(crate) mod workflow;
 
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
-    ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
-    DoctorFinding, InboxExport, InboxExportAppendMessageSetRequest,
-    InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
-    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
-    InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
-    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
-    InboxIngressRequest, InboxIngressResponse, InboxSourceFileRecord, LoadMailMessageStateRequest,
+    AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
+    ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
     MailStoreBootstrapResponse, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,

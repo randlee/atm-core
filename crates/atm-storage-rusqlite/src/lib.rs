@@ -4,16 +4,13 @@
 //! message and roster contracts.
 
 mod mailbox_metadata;
-mod observability;
+pub mod observability;
 mod roster_store;
 mod shared_db;
 mod writer;
 
 use crate::mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
-pub use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
-};
+use crate::observability::{NullSqliteObservability, SqliteObservability};
 use atm_storage::AtmError;
 use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
@@ -23,8 +20,20 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
+fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
+    u64::try_from(value).map_err(|error| {
+        AtmError::validation(format!(
+            "sqlite count {field_name} must not be negative: {value}"
+        ))
+        .with_recovery(
+            "Repair the malformed sqlite count row before retrying the health or metadata query.",
+        )
+        .with_source(error)
+    })
+}
+
 #[derive(Debug)]
-pub struct SqliteWriterLockGuard {
+pub(crate) struct SqliteWriterLockGuard {
     connection: Connection,
 }
 
@@ -34,22 +43,36 @@ impl Drop for SqliteWriterLockGuard {
     }
 }
 
-pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
+#[doc(hidden)]
+pub struct TestOnlySqliteWriterLockGuard {
+    _guard: SqliteWriterLockGuard,
+}
+
+pub(crate) fn hold_sqlite_writer_lock(
+    path: impl AsRef<Path>,
+) -> Result<SqliteWriterLockGuard, AtmError> {
     let connection = Connection::open(path.as_ref()).map_err(|error| {
         AtmError::daemon_unavailable("failed to open sqlite writer lock connection")
             .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
             )
             .with_source(error)
     })?;
     connection.execute_batch("BEGIN IMMEDIATE;").map_err(|error| {
         AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
             .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
             )
             .with_source(error)
     })?;
     Ok(SqliteWriterLockGuard { connection })
+}
+
+#[doc(hidden)]
+pub fn hold_sqlite_writer_lock_for_test(
+    path: impl AsRef<Path>,
+) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
+    hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -696,9 +719,9 @@ impl SqliteStorageBackend {
                         params![team.as_str(), agent.as_str()],
                         |row| {
                             Ok((
-                                row.get::<_, i64>(0)? as u64,
-                                row.get::<_, i64>(1)? as u64,
-                                row.get::<_, i64>(2)? as u64,
+                                row.get::<_, i64>(0)?,
+                                row.get::<_, i64>(1)?,
+                                row.get::<_, i64>(2)?,
                                 row.get::<_, Option<String>>(3)?,
                             ))
                         },
@@ -713,9 +736,12 @@ impl SqliteStorageBackend {
         Ok(SqliteMailHealthSnapshot {
             team: team.clone(),
             agent: agent.clone(),
-            total_messages,
-            pending_ack_messages,
-            read_message_count,
+            total_messages: decode_sqlite_count(total_messages, "total_messages")?,
+            pending_ack_messages: decode_sqlite_count(
+                pending_ack_messages,
+                "pending_ack_messages",
+            )?,
+            read_message_count: decode_sqlite_count(read_message_count, "read_message_count")?,
             latest_message_timestamp: SqliteMessageStore::parse_optional_timestamp(
                 latest_message_timestamp,
                 "health latest_message",
@@ -738,7 +764,6 @@ impl SqliteStorageBackend {
                     params![team.as_str()],
                     |row| row.get::<_, i64>(0),
                 )
-                .map(|value| value as u64)
                 .map_err(|error| {
                     self.roster_store
                         .db
@@ -748,7 +773,7 @@ impl SqliteStorageBackend {
 
         Ok(SqliteRosterHealthSnapshot {
             team: team.clone(),
-            member_count,
+            member_count: decode_sqlite_count(member_count, "roster_member_count")?,
             stale: false,
             refreshed_at: None,
         })

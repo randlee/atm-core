@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::NullSqliteObservability;
+use crate::observability::NullSqliteObservability;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
