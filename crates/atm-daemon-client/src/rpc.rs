@@ -107,18 +107,10 @@ mod tests {
     };
     use std::path::PathBuf;
 
-    // rule-008: allow-next-line -- centralized production-team test literal for
-    // canonical RPC/body round-trip coverage on the ATM dev path.
-    const RPC_TEST_TEAM: &str = "atm-dev";
-    // rule-008: allow-next-line -- centralized production-agent test literal
-    // for canonical RPC/body round-trip coverage.
+    const RPC_TEST_TEAM: &str = "test-team";
     const RPC_TEST_QUALITY_MGR: &str = "quality-mgr";
-    // rule-008: allow-next-line -- centralized production-agent test literal
-    // for canonical RPC/body round-trip coverage.
     const RPC_TEST_ARCH_CTM: &str = "arch-ctm";
-    // rule-008: allow-next-line -- centralized production-address test literal
-    // for canonical RPC/body round-trip coverage.
-    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "quality-mgr@atm-dev";
+    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "quality-mgr@test-team";
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
