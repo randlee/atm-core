@@ -277,8 +277,10 @@ mod tests {
         let message = sample_message(TEST_LEAD, "full body that should project to a stub");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(&inbox_path, &[message.clone()]).expect("first reexport");
-        compat::reexport_messages(&inbox_path, &[message.clone()]).expect("second reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("first reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("second reexport");
 
         let import = ingress
             .import_inbox_source(
@@ -323,8 +325,10 @@ mod tests {
         let message = sample_message(TEST_LEAD, "small body stays fully exported");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(&inbox_path, &[message.clone()]).expect("first reexport");
-        compat::reexport_messages(&inbox_path, &[message.clone()]).expect("second reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("first reexport");
+        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+            .expect("second reexport");
 
         let import = ingress
             .import_inbox_source(
