@@ -1,90 +1,10 @@
-use std::fmt;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use tracing::warn;
 
+pub use atm_storage::contract::AgentType;
 use crate::types::{AgentId, AgentName, ModelName, PaneId};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AgentType {
-    GeneralPurpose,
-    Plan,
-    Lead,
-    Qa,
-    Worker,
-    Unknown(String),
-}
-
-impl Default for AgentType {
-    fn default() -> Self {
-        Self::Unknown(String::new())
-    }
-}
-
-impl From<String> for AgentType {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "general-purpose" => Self::GeneralPurpose,
-            "plan" => Self::Plan,
-            "lead" => Self::Lead,
-            "qa" => Self::Qa,
-            "worker" => Self::Worker,
-            _ if value.trim().is_empty() => Self::Unknown(value),
-            _ => {
-                warn!(
-                    raw_agent_type = %value,
-                    "unknown agent_type preserved as opaque compatibility value"
-                );
-                Self::Unknown(value)
-            }
-        }
-    }
-}
-
-impl AgentType {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::GeneralPurpose => "general-purpose",
-            Self::Plan => "plan",
-            Self::Lead => "lead",
-            Self::Qa => "qa",
-            Self::Worker => "worker",
-            Self::Unknown(value) => value,
-        }
-    }
-}
-
-impl From<AgentType> for String {
-    fn from(value: AgentType) -> Self {
-        value.as_str().to_string()
-    }
-}
-
-impl Serialize for AgentType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for AgentType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(Self::from(String::deserialize(deserializer)?))
-    }
-}
-
-impl fmt::Display for AgentType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

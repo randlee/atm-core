@@ -3,6 +3,7 @@ use crate::error::AtmError;
 use crate::schema::AgentType;
 use crate::schema::{AgentMember, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use atm_storage::contract::{AckTransition, MessageKey, TaskState};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -10,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::mail::{DoctorFinding, MessageFingerprint};
-use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
+use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {

@@ -1,11 +1,12 @@
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::contract::MessageKey;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
 
-use super::{MessageKey, sealed};
+use super::sealed;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]

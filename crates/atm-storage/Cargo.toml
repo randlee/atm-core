@@ -1,0 +1,19 @@
+[package]
+name = "atm-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared audited storage contract and canonical domain types for ATM."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"
+ulid = { version = "1.2.1", features = ["serde"] }
+uuid.workspace = true
+

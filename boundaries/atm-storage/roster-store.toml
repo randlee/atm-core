@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-RosterStore-Shared"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "RosterStore"
+
+[public]
+trait = "RosterStore"
+notes = "canonical audited shared roster-storage contract introduced in AC.1"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["durable_roster_state", "canonical_roster_records"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-storage-claude", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TeamName", "RosterSnapshot"]
+response_types = ["RosterSnapshot", "Vec<TeamName>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-SHARED-REFERENCES"]
+review_gates = ["no_backend_specific_roster_contract"]
+
+[status]
+state = "concrete_landed"
+notes = ["AC.1 created the shared audited roster-storage trait in crates/atm-storage", "atm-core legacy RosterStore remains compile-bridge surface only until AC.4 consumer cutover closes"]
+
