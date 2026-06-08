@@ -1,9 +1,9 @@
 use crate::boundary::{
     ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMessageSetRequest,
     ProjectionAppendMessageSetResponse, ProjectionRecordRequest, ProjectionRecordResponse,
-    ProjectionReexportMessageRequest, ProjectionReexportMessageResponse,
-    SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
-    SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
+    ProjectionReexportMessageRequest, ProjectionReexportMessageResponse, SourceDiagnosticsRequest,
+    SourceDiagnosticsResponse, SourceIdentityFingerprintRequest, SourceIdentityFingerprintResponse,
+    SourceImportRequest, SourceImportResponse,
 };
 use crate::error::AtmError;
 
@@ -11,9 +11,7 @@ pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadRes
     crate::boundary_support::load_workspace_config(request)
 }
 
-pub fn import_inbox_source(
-    request: SourceImportRequest,
-) -> Result<SourceImportResponse, AtmError> {
+pub fn import_inbox_source(request: SourceImportRequest) -> Result<SourceImportResponse, AtmError> {
     crate::boundary_support::import_inbox_source(request)
 }
 
@@ -23,9 +21,7 @@ pub fn compute_identity_fingerprint(
     crate::boundary_support::compute_identity_fingerprint(request)
 }
 
-pub fn report_inbox_diagnostics(
-    request: SourceDiagnosticsRequest,
-) -> SourceDiagnosticsResponse {
+pub fn report_inbox_diagnostics(request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse {
     crate::boundary_support::report_inbox_diagnostics(request)
 }
 

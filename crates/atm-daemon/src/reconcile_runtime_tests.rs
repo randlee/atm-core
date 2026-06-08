@@ -544,10 +544,7 @@ impl SourceIngress for FakeInboxIngress {
         }
     }
 
-    fn report_diagnostics(
-        &self,
-        _request: SourceDiagnosticsRequest,
-    ) -> SourceDiagnosticsResponse {
+    fn report_diagnostics(&self, _request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse {
         SourceDiagnosticsResponse {
             duplicate_message_ids: 0,
             messages_without_ids: 0,
@@ -989,9 +986,7 @@ impl WatchEventSource for CountingWatchSource {
     }
 }
 
-fn inbox_source_with_message(
-    message: MessageEnvelope,
-) -> SourceFileRecord {
+fn inbox_source_with_message(message: MessageEnvelope) -> SourceFileRecord {
     SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],

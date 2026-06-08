@@ -42,8 +42,10 @@ impl fmt::Debug for RuntimeAssemblyInputs {
 #[derive(Clone)]
 pub struct RuntimeAssembly {
     pub service_runtime: LocalServiceRuntime,
-    pub(crate) storage_backends:
-        StorageBackends<Arc<dyn SharedMessageStore + Send + Sync>, Arc<dyn SharedRosterStore + Send + Sync>>,
+    pub(crate) storage_backends: StorageBackends<
+        Arc<dyn SharedMessageStore + Send + Sync>,
+        Arc<dyn SharedRosterStore + Send + Sync>,
+    >,
     pub mail_store: Arc<dyn boundary::MailStore + Send + Sync>,
     pub roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
@@ -111,13 +113,12 @@ fn assemble_sqlite_runtime_at_path(
         non_claude_outbound,
         notification_sink,
     );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
-        config_current_dir,
-    }));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
         Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
@@ -150,7 +151,9 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             .with_source(source)
         })?;
     }
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new(atm_core::home::host_mail_db_path()?)?);
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new(
+        atm_core::home::host_mail_db_path()?,
+    )?);
     let shared_messages = sqlite_backend.message_store();
     let shared_rosters = sqlite_backend.roster_store();
     let storage_backends = StorageBackends {
@@ -165,13 +168,12 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
-        config_current_dir,
-    }));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
         Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,

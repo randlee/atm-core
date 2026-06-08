@@ -4,9 +4,9 @@ use atm_core::{
         ProjectionAppendMessageSetRequest, ProjectionAppendMessageSetResponse, ProjectionExport,
         ProjectionRecordRequest, ProjectionRecordResponse, ProjectionReexportMessageRequest,
         ProjectionReexportMessageResponse, ReconcileRequest, ReconcileResult,
-        SourceDiagnosticsRequest, SourceDiagnosticsResponse,
-        SourceIdentityFingerprintRequest, SourceIdentityFingerprintResponse, SourceImportRequest,
-        SourceImportResponse, SourceIngress, WatchEventBatch, WatchSubscriptionRequest,
+        SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
+        SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
+        SourceIngress, WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
 };
@@ -201,10 +201,7 @@ impl SourceIngress for DaemonInboxIngress {
         direct_boundaries::compute_identity_fingerprint(request)
     }
 
-    fn report_diagnostics(
-        &self,
-        request: SourceDiagnosticsRequest,
-    ) -> SourceDiagnosticsResponse {
+    fn report_diagnostics(&self, request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse {
         direct_boundaries::report_inbox_diagnostics(request)
     }
 }
@@ -247,8 +244,8 @@ impl ProjectionExport for DaemonInboxExport {
 mod tests {
     use super::{DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink};
     use atm_core::boundary::{
-        NotificationSink, ProjectionExport, ProjectionReexportMessageRequest, SourceIdentityFingerprintRequest,
-        SourceImportRequest, SourceIngress,
+        NotificationSink, ProjectionExport, ProjectionReexportMessageRequest,
+        SourceIdentityFingerprintRequest, SourceImportRequest, SourceIngress,
     };
     use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
@@ -345,9 +342,7 @@ mod tests {
         );
 
         let imported_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest {
-                message: imported,
-            })
+            .compute_identity_fingerprint(SourceIdentityFingerprintRequest { message: imported })
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
@@ -404,9 +399,7 @@ mod tests {
         assert_eq!(imported.text, message.text);
 
         let imported_fingerprint = ingress
-            .compute_identity_fingerprint(SourceIdentityFingerprintRequest {
-                message: imported,
-            })
+            .compute_identity_fingerprint(SourceIdentityFingerprintRequest { message: imported })
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }

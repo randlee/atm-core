@@ -303,10 +303,7 @@ pub trait SourceIngress: sealed::Sealed {
         &self,
         request: SourceIdentityFingerprintRequest,
     ) -> SourceIdentityFingerprintResponse;
-    fn report_diagnostics(
-        &self,
-        request: SourceDiagnosticsRequest,
-    ) -> SourceDiagnosticsResponse;
+    fn report_diagnostics(&self, request: SourceDiagnosticsRequest) -> SourceDiagnosticsResponse;
 }
 
 /// BOUNDARY-ProjectionExport — see docs/atm-core/boundaries.md.

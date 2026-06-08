@@ -211,13 +211,12 @@ impl ReconcileRuntime {
                     roster_store.as_ref(),
                     &projection_write_journal_for_executor,
                 )?;
-                let import = inbox_ingress.import_inbox_source(
-                    atm_core::boundary::SourceImportRequest {
+                let import =
+                    inbox_ingress.import_inbox_source(atm_core::boundary::SourceImportRequest {
                         home_dir: request.home_dir.clone(),
                         team: request.team.clone(),
                         agent: request.agent.clone(),
-                    },
-                )?;
+                    })?;
                 Ok(ReconcileExecution {
                     result: ReconcileResult {
                         observed_paths: batch.paths.len(),

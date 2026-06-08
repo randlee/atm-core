@@ -3,16 +3,16 @@ use std::sync::{Arc, Mutex};
 
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
-    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport,
-    MailStoreHealthSnapshot, MailStoreIngestReplayState, MailStoreMailboxMetadataCounts,
-    MailStoreMailboxMetadataRow, MailStoreMessageRecord, ReplaySource, RosterStoreDoctor,
-    RosterStoreDoctorReport, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
+    MailStoreMessageRecord, ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport,
+    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_storage::contract::{
-    Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore,
-    RosterSnapshot, RosterStore as SharedRosterStore,
+    Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore, RosterSnapshot,
+    RosterStore as SharedRosterStore,
 };
 use atm_storage::{AgentName, TeamName};
 
@@ -300,7 +300,9 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
     }
 
     fn load_roster(&self, team: &TeamName) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
-        self.store.load_roster(team).map(|snapshot| snapshot.members)
+        self.store
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
     }
 
     fn query_membership(
