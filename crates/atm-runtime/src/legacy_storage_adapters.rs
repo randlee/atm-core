@@ -274,7 +274,11 @@ impl MailStore for BoundaryMailStoreView {
         self.replay_state
             .states
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("ingest replay state lock poisoned"))?
+            .map_err(|_| {
+                AtmError::daemon_unavailable("ingest replay state lock poisoned").with_recovery(
+                    "If the lock is poisoned restart the daemon process to reset the in-process state.",
+                )
+            })?
             .insert(key, state.clone());
         Ok(())
     }
@@ -294,7 +298,11 @@ impl MailStore for BoundaryMailStoreView {
             .replay_state
             .states
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("ingest replay state lock poisoned"))?
+            .map_err(|_| {
+                AtmError::daemon_unavailable("ingest replay state lock poisoned").with_recovery(
+                    "If the lock is poisoned restart the daemon process to reset the in-process state.",
+                )
+            })?
             .get(&key)
             .cloned())
     }
