@@ -155,30 +155,30 @@ mod tests {
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
-    use atm_core::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use atm_storage::{
         AtmMessageId, InboxMessage, IsoTimestamp, Message, MessageKey, ModelName, RosterHarness,
         RosterMember, RosterMemberKind,
     };
     use tempfile::tempdir;
 
-    const TEAM_NAME: &str = TEST_TEAM;
-    const ROLE_ARCH_CTM: &str = TEST_SENDER;
-    const ROLE_QUALITY_MGR: &str = TEST_QA;
+    const RPC_TEST_TEAM: &str = "test-team";
+    const RPC_TEST_QUALITY_MGR: &str = "test-agent";
+    const RPC_TEST_ARCH_CTM: &str = "test-sender";
+    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "test-agent@test-team";
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
         let header = RpcHeader::new(next_request_id(), MessageKind::SendComposeRequest);
         let message = Message {
-            team: TEAM_NAME.parse().expect("team"),
-            agent: ROLE_QUALITY_MGR.parse().expect("agent"),
+            team: RPC_TEST_TEAM.parse().expect("team"),
+            agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
             message_key: MessageKey::from(AtmMessageId::new()),
             envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("from"),
                 text: "body".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
-                source_team: Some(TEAM_NAME.parse().expect("source team")),
+                source_team: Some(RPC_TEST_TEAM.parse().expect("source team")),
                 summary: Some("body".to_string()),
                 message_id: None,
                 pending_ack_at: None,
@@ -202,8 +202,8 @@ mod tests {
     fn rpc_envelope_round_trips_canonical_roster_member_body() {
         let header = RpcHeader::new(next_request_id(), MessageKind::HeartbeatRequest);
         let roster = RosterMember {
-            team_name: TEAM_NAME.parse().expect("team"),
-            agent_name: ROLE_ARCH_CTM.parse().expect("agent"),
+            team_name: RPC_TEST_TEAM.parse().expect("team"),
+            agent_name: RPC_TEST_ARCH_CTM.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::ClaudeCode,
             agent_type: atm_storage::contract::AgentType::Worker,
@@ -226,11 +226,9 @@ mod tests {
         let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
             home_dir: home_dir.clone(),
             current_dir: current_dir.clone(),
-            sender_override: Some(ROLE_ARCH_CTM.parse().expect("sender")),
-            to: format!("{ROLE_QUALITY_MGR}@{TEAM_NAME}")
-                .parse()
-                .expect("address"),
-            team_override: Some(TEAM_NAME.parse().expect("team")),
+            sender_override: Some(RPC_TEST_ARCH_CTM.parse().expect("sender")),
+            to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
+            team_override: Some(RPC_TEST_TEAM.parse().expect("team")),
             message_source: SendMessageSource::Inline("body".to_string()),
             summary_override: Some("body".to_string()),
             requires_ack: false,
@@ -249,10 +247,7 @@ mod tests {
                 assert_eq!(decoded.home_dir, home_dir);
                 assert_eq!(decoded.current_dir, current_dir);
                 assert_eq!(decoded.summary_override.as_deref(), Some("body"));
-                assert_eq!(
-                    decoded.to.to_string(),
-                    format!("{ROLE_QUALITY_MGR}@{TEAM_NAME}")
-                );
+                assert_eq!(decoded.to.to_string(), RPC_TEST_QUALITY_MGR_ADDRESS);
             }
             other => panic!("unexpected request envelope: {other:?}"),
         }
@@ -262,8 +257,8 @@ mod tests {
     fn rpc_envelope_round_trips_response_envelopes() {
         let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
             action: atm_core::types::CommandAction::Send,
-            team: TEAM_NAME.parse().expect("team"),
-            agent: ROLE_QUALITY_MGR.parse().expect("agent"),
+            team: RPC_TEST_TEAM.parse().expect("team"),
+            agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
             sender: ROLE_TEAM_LEAD.parse().expect("sender"),
             outcome: SendCommandOutcome::Sent,
             message_id: AtmMessageId::new(),
@@ -282,8 +277,8 @@ mod tests {
         assert_eq!(decoded_request_id, request_id);
         match decoded {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(decoded)) => {
-                assert_eq!(decoded.team.to_string(), TEAM_NAME);
-                assert_eq!(decoded.agent.to_string(), ROLE_QUALITY_MGR);
+                assert_eq!(decoded.team.to_string(), RPC_TEST_TEAM);
+                assert_eq!(decoded.agent.to_string(), RPC_TEST_QUALITY_MGR);
                 assert_eq!(decoded.sender.to_string(), ROLE_TEAM_LEAD);
                 assert_eq!(decoded.summary.as_deref(), Some("body"));
                 assert_eq!(decoded.message.as_deref(), Some("body"));

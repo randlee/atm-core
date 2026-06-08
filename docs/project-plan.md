@@ -328,7 +328,13 @@ Sprint line:
 - `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption` `complete`
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification` `complete`
 - `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout` `complete`
-- `AC.7` `feature/pAC-s7-sqlserver-readiness-proof`
+- `AC.7` `feature/pAC-s7-sqlserver-readiness-proof` `complete`
+
+Completion note:
+- `AC.7` proves SQL Server readiness from the real post-`AC.6` contract,
+  lands `crates/atm-storage-sqlserver-proof` as a compile-only backend proof,
+  and closes the final backend-interchangeability issue without another storage
+  reset.
 
 AC.6 closeout:
 - deleted the speculative `TaskStore` family from `atm-core` and removed the

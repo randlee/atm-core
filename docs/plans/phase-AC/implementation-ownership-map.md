@@ -131,3 +131,6 @@ Owns:
 Owns:
 
 - SQL Server readiness proof against the final post-cleanup contract
+- compile-only `atm-storage-sqlserver-proof` backend skeleton that proves the
+  existing `MessageStore` and `RosterStore` traits are implementable without an
+  `atm-core` dependency

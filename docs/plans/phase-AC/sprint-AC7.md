@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.7
 worktree: ../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof
 branch: feature/pAC-s7-sqlserver-readiness-proof
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -55,6 +55,9 @@ Primary closure rule:
 
 ## Deliverables
 
+- `crates/atm-storage-sqlserver-proof/` exists as a compile-only backend proof
+  crate with `SqlServerMessageStore` and `SqlServerRosterStore` implementing
+  the shared `atm-storage` traits without an `atm-core` dependency
 - `docs/plans/phase-AC/sqlserver-readiness-proof.md` exists as the written SQL
   Server readiness proof against the actual final contract
 - an explicit statement of which existing traits and canonical shared structs a
@@ -93,6 +96,8 @@ Proof this sprint must leave behind:
 
 ## Acceptance Criteria
 
+- `cargo check -p atm-storage-sqlserver-proof` passes
+- `cargo tree -p atm-storage-sqlserver-proof` shows no `atm-core`
 - the repo documents SQL Server readiness as a consequence of the cleaned
   contract in `docs/plans/phase-AC/sqlserver-readiness-proof.md`, not as a
   hypothetical wish
@@ -104,11 +109,13 @@ Proof this sprint must leave behind:
 
 ## Required Validation
 
+- `cargo check -p atm-storage-sqlserver-proof`
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `cargo tree -p atm-storage`
 - `cargo tree -p atm-storage-claude`
 - `cargo tree -p atm-storage-rusqlite`
+- `cargo tree -p atm-storage-sqlserver-proof`
 - `git diff --check`
 - `python3 .just/lint_boundaries.py`
 - `rg -n "Request|Response" crates/atm-storage crates/atm-storage-claude crates/atm-storage-rusqlite -S`
@@ -131,3 +138,12 @@ Proof this sprint must leave behind:
   readiness claim will be weak
 - if backend-specific helper types are still visible in shared docs or public
   APIs, future SQL Server work will inherit the same drift under a new name
+
+## Closure Notes
+
+- AC7 execution uses the real post-`AC.6` code state from
+  `feature/pAC-s6-cleanup-and-deletion-closeout @ 4e5ffcc2`
+- the packet named `integrate/phase-AC` as the branch target, but that branch
+  did not yet contain the required `AC.6` baseline at sprint start
+- this sprint therefore proves SQL Server readiness from the actual post-`AC.6`
+  worktree state, which is the authoritative baseline the proof scope claimed

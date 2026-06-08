@@ -31,7 +31,7 @@ The authoritative design reset is:
 | `AC-ISSUE-003` | `closed` | Claude inbox storage is not currently treated as a first-class storage backend even though ATM 1.0 used it as effective storage. | `AC.2` |
 | `AC-ISSUE-004` | `closed` | the concrete SQLite backend had become the implicit home of business logic, causing backend-specific seams and logic leakage upward; `AC.6` completed the cleanup by removing the last `atm-storage`-level SQLite observability leakage and leaving that surface owned by `atm-storage-rusqlite`. | `AC.3`, `AC.4`, and `AC.6` |
 | `AC-ISSUE-005` | `closed` | notifications are not frozen as a separate post-commit trait, which leaves write and event semantics underspecified across backends. | `AC.1` and `AC.3` |
-| `AC-ISSUE-006` | `open` | the current crate graph does not keep future SQL Server support easy because backend crates still orbit `atm-core` too closely. | `AC.3` and `AC.7` |
+| `AC-ISSUE-006` | `closed` | the current crate graph did not keep future SQL Server support easy because backend crates orbited `atm-core` too closely; Phase `AC` now proves peer backends can target `atm-storage` directly, including the compile-only SQL Server proof crate with no `atm-core` edge. | `AC.3` and `AC.7` |
 
 ## Inventory Rules
 

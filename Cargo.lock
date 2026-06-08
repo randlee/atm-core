@@ -246,6 +246,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-storage-sqlserver-proof"
+version = "1.2.1"
+dependencies = [
+ "atm-storage",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
