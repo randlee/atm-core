@@ -157,7 +157,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_core::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use atm_storage::{
-        AtmMessageId, IsoTimestamp, Message, InboxMessage, MessageKey, ModelName, RosterHarness,
+        AtmMessageId, InboxMessage, IsoTimestamp, Message, MessageKey, ModelName, RosterHarness,
         RosterMember, RosterMemberKind,
     };
     use tempfile::tempdir;

@@ -1,4 +1,4 @@
-use crate::boundary::{RosterHarness, RosterEntry};
+use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;

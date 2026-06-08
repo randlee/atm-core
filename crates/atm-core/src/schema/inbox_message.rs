@@ -1,9 +1,7 @@
 //! Shared inbox compatibility helpers layered on top of the canonical
 //! `atm-storage` message envelope types.
 
-pub use atm_storage::schema::{
-    AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode,
-};
+pub use atm_storage::schema::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 
 use serde_json::{Map, Value};
 

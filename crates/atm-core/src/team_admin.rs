@@ -8,7 +8,7 @@ use tracing::warn;
 
 use crate::address::validate_path_segment;
 use crate::boundary::{
-    ConfigLoadRequest, RosterHarness, RosterMemberKind, RosterEntry, RosterStore,
+    ConfigLoadRequest, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
 };
 use crate::config::{load_claude_team_config_document, resolve_team};
 use crate::error::{AtmError, AtmErrorKind};
@@ -358,9 +358,7 @@ fn ensure_member_absent(
     Ok(())
 }
 
-fn build_member_add_roster_record(
-    request: &AddMemberRequest,
-) -> Result<RosterEntry, AtmError> {
+fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEntry, AtmError> {
     let normalized_tmux_pane_id = request.tmux_pane_id.clone();
     let mut extra = serde_json::Map::new();
     if normalized_tmux_pane_id.is_some() {
@@ -838,7 +836,7 @@ mod tests {
         list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterHarness, RosterMemberKind, RosterEntry, RosterStore,
+        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
         RosterStoreHealthSnapshot,
     };
     use crate::error_codes::AtmErrorCode;
@@ -877,10 +875,7 @@ mod tests {
             Ok(())
         }
 
-        fn load_roster(
-            &self,
-            team: &TeamName,
-        ) -> Result<Vec<RosterEntry>, crate::error::AtmError> {
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, crate::error::AtmError> {
             Ok(self
                 .teams
                 .lock()

@@ -635,7 +635,7 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterHarness, RosterMemberKind, RosterEntry, RosterStore,
+        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
         RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
