@@ -62,10 +62,18 @@ struct DefaultMailStoreDoctor;
 #[derive(Clone, Default)]
 struct DefaultRosterStoreDoctor;
 
-type ReplayStateKey = (String, String, String);
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ReplayStateKey {
+    team: String,
+    agent: String,
+    source: String,
+}
 
 #[derive(Clone, Default)]
 struct InMemoryIngestReplayState {
+    // Cloned boundary views must observe and mutate the same replay-state map so
+    // a read path and a write path in the same runtime composition do not fork
+    // in-memory replay cursors while AC.4 keeps this temporary compile bridge.
     states: Arc<Mutex<HashMap<ReplayStateKey, MailStoreIngestReplayState>>>,
 }
 
@@ -258,11 +266,11 @@ impl MailStore for BoundaryMailStoreView {
         source: &ReplaySource,
         state: &MailStoreIngestReplayState,
     ) -> Result<(), AtmError> {
-        let key = (
-            team.as_str().to_string(),
-            agent.as_str().to_string(),
-            source.as_str().to_string(),
-        );
+        let key = ReplayStateKey {
+            team: team.as_str().to_string(),
+            agent: agent.as_str().to_string(),
+            source: source.as_str().to_string(),
+        };
         self.replay_state
             .states
             .lock()
@@ -277,11 +285,11 @@ impl MailStore for BoundaryMailStoreView {
         agent: &AgentName,
         source: &ReplaySource,
     ) -> Result<Option<MailStoreIngestReplayState>, AtmError> {
-        let key = (
-            team.as_str().to_string(),
-            agent.as_str().to_string(),
-            source.as_str().to_string(),
-        );
+        let key = ReplayStateKey {
+            team: team.as_str().to_string(),
+            agent: agent.as_str().to_string(),
+            source: source.as_str().to_string(),
+        };
         Ok(self
             .replay_state
             .states
@@ -366,6 +374,9 @@ impl TaskStore for NoopTaskStore {
     ) -> Result<TaskStoreCreateTaskResponse, AtmError> {
         Err(AtmError::validation(
             "task storage is out of scope for the current runtime assembly",
+        )
+        .with_recovery(
+            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
         ))
     }
 
@@ -383,6 +394,9 @@ impl TaskStore for NoopTaskStore {
     ) -> Result<TaskStoreUpdateTaskResponse, AtmError> {
         Err(AtmError::validation(
             "task storage is out of scope for the current runtime assembly",
+        )
+        .with_recovery(
+            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
         ))
     }
 
@@ -392,6 +406,9 @@ impl TaskStore for NoopTaskStore {
     ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError> {
         Err(AtmError::validation(
             "task storage is out of scope for the current runtime assembly",
+        )
+        .with_recovery(
+            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
         ))
     }
 
@@ -401,6 +418,9 @@ impl TaskStore for NoopTaskStore {
     ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError> {
         Err(AtmError::validation(
             "task storage is out of scope for the current runtime assembly",
+        )
+        .with_recovery(
+            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
         ))
     }
 
@@ -410,6 +430,9 @@ impl TaskStore for NoopTaskStore {
     ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError> {
         Err(AtmError::validation(
             "task storage is out of scope for the current runtime assembly",
+        )
+        .with_recovery(
+            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
         ))
     }
 
@@ -425,18 +448,24 @@ impl TaskStore for NoopTaskStore {
 
 impl MailStoreDoctor for DefaultMailStoreDoctor {
     fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError> {
+        // This bridge doctor has no backend-owned failure mode; it only reports
+        // the absence of extra diagnostics while AC.4 keeps the compile bridge.
         Ok(MailStoreDoctorReport::default())
     }
 }
 
 impl RosterStoreDoctor for DefaultRosterStoreDoctor {
     fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError> {
+        // This bridge doctor has no backend-owned failure mode; it only reports
+        // the absence of extra diagnostics while AC.4 keeps the compile bridge.
         Ok(RosterStoreDoctorReport::default())
     }
 }
 
 impl TaskStoreDoctor for NoopTaskStoreDoctor {
     fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError> {
+        // Task storage is intentionally absent on this runtime assembly, so the
+        // doctor stays infallible and reports an empty diagnostic surface.
         Ok(TaskStoreDoctorReport::default())
     }
 }
