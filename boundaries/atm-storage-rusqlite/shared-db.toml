@@ -8,7 +8,7 @@ facade = "SharedDbStateRoot"
 
 [implementation]
 type = "SharedDb"
-module = "atm_rusqlite"
+module = "atm_storage_rusqlite"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 

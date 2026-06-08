@@ -8,7 +8,7 @@ trait = "RosterStore"
 
 [implementation]
 type = "SqliteRosterStore"
-module = "atm_rusqlite"
+module = "atm_storage_rusqlite"
 visibility = "private"
 constructor = "private"
 

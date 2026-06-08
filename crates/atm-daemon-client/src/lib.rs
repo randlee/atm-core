@@ -1085,7 +1085,7 @@ mod tests {
                 .auto_start_detail
                 .as_deref()
                 .expect("auto-start detail")
-                .contains("Build or install atm-daemon")
+                .contains("atm-daemon binary is installed")
         );
     }
 

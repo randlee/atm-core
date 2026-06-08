@@ -7,7 +7,7 @@ use atm_core::graft::{
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::ROLE_TEAM_LEAD;
-use atm_core::types::{IsoTimestamp, TeamName};
+use atm_core::types::IsoTimestamp;
 use atm_runtime_test_support::open_sqlite_boundary;
 use tempfile::TempDir;
 
@@ -22,7 +22,9 @@ fn replay_source_static(label: &'static str) -> ReplaySource {
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
     let roster_store = assembly.roster_store_arc();
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = TEST_TEAM
+        .parse::<atm_core::types::TeamName>()
+        .expect("team");
     let members = members
         .iter()
         .map(|name| {

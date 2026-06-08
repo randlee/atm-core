@@ -79,7 +79,10 @@ fn daemon_boundary_tomls_must_not_allow_atm_storage_rusqlite() {
 fn synthetic_daemon_boundary_relaxation_fixture_is_detected() {
     let fixture = BoundaryToml {
         dependencies: BoundaryDependencies {
-            allowed_dependencies: vec!["atm-storage".to_string(), "atm-storage-rusqlite".to_string()],
+            allowed_dependencies: vec![
+                "atm-storage".to_string(),
+                "atm-storage-rusqlite".to_string(),
+            ],
             ..BoundaryDependencies::default()
         },
     };

@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 preserves crate-private source-discovery helpers until all Claude compatibility callers move into atm-storage-claude."
+)]
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

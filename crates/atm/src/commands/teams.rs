@@ -160,7 +160,6 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_core::types::TeamName;
     use atm_runtime_test_support::open_sqlite_boundary;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -228,7 +227,9 @@ mod tests {
             )
             .expect("write inbox");
             let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
-            let team: TeamName = TEST_TEAM.parse().expect("team");
+            let team = TEST_TEAM
+                .parse::<atm_core::types::TeamName>()
+                .expect("team");
             let members = vec![
                 RosterMemberRecord {
                     team_name: team.clone(),

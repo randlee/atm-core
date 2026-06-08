@@ -1,5 +1,10 @@
 //! Mailbox read/write helpers, compatibility parsing, and lock-scoped mutation.
 
+#![allow(
+    dead_code,
+    reason = "AC.2 retains internal compatibility readers and salvage helpers while Claude storage ownership finishes moving below the trait line."
+)]
+
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;

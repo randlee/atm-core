@@ -54,9 +54,9 @@ source_message = "only crates/atm-storage-rusqlite source may import rusqlite di
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
-dependency_package = "atm-rusqlite"
+dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dev-dependencies"]
-message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+message = "atm-core may reference atm-storage-rusqlite only in dev-dependencies"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm/Cargo.toml"
