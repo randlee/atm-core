@@ -95,7 +95,6 @@ Required core traits:
 
 - `MessageStore`
 - `RosterStore`
-- `TaskStore`
 
 Required separate trait:
 
@@ -132,13 +131,34 @@ Examples include:
 - `Message`
 - `RosterMember`
 - `RosterSnapshot`
-- `Task`
 
 Backend-specific omissions are implementation behavior, not a reason to create
 parallel struct families. Claude storage may ignore ATM-only fields it cannot
 persist, but it still consumes the same shared semantic record types.
 
-### 6. Claude Storage Is A First-Class Backend
+### 6. Task Storage Is Deferred, Not Part Of The Initial AC Contract
+
+Task storage is explicitly out of scope for the initial Phase `AC` storage
+reset.
+
+Existing `TaskStore` code and SQLite task persistence are not treated as an
+approved architectural baseline for this phase. They are speculative legacy
+surface, not a contract the new storage model must preserve.
+
+If task storage is approved later, the required starting point is:
+
+- canonical Claude-code task storage behavior
+- validation against the Claude schema and its Pydantic models
+- only then any SQLite synchronization or secondary persistence work
+
+Phase `AC` must therefore not:
+
+- include `TaskStore` in the initial shared `atm-storage` contract
+- treat SQLite task persistence as a source of truth
+- preserve speculative task-store code as if it were a required compatibility
+  line
+
+### 7. Claude Storage Is A First-Class Backend
 
 Claude inbox JSON storage is not a legacy or compatibility-only path. It is a
 first-class storage backend and must implement the same shared semantic
@@ -147,7 +167,7 @@ contract as SQLite.
 Claude-specific repair, malformed JSON salvage, locking, source discovery, and
 rewrite mechanics remain backend internals below the trait line.
 
-### 7. SQLite Is One Backend, Not The Architecture
+### 8. SQLite Is One Backend, Not The Architecture
 
 SQLite remains a backend implementation of the shared storage contract. It is
 not the natural home of ATM business logic.
@@ -177,6 +197,8 @@ Costs:
 - significant refactoring across `atm-core`, Claude storage paths, and SQLite
   backend seams
 - deletion of existing request/response storage DTO families
+- deletion or quarantine of speculative task-store code from the shared
+  storage reset line
 - migration work to converge shared types before backend extraction completes
 - new crate-boundary reviews and test movement
 
@@ -203,6 +225,6 @@ This ADR is implemented by Phase `AC`:
 - `AC.2` `atm-storage-claude`
 - `AC.3` SQLite backend convergence
 - `AC.4` `atm-core` storage-boundary adoption
-- `AC.5` RPC envelope and domain type unification
+- `AC.5` RPC envelope and domain type unification for message/roster bodies
 - `AC.6` cleanup and deletion closeout
 - `AC.7` SQL Server readiness proof

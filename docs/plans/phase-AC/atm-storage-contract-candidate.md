@@ -25,13 +25,6 @@ pub trait RosterStore {
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
-pub trait TaskStore {
-    fn save_task(&self, task: &Task) -> Result<(), AtmError>;
-    fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
-    fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
-    fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
-}
-
 pub trait StorageNotifier {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
@@ -52,9 +45,6 @@ Minimal first-pass shared types:
 - `MessageQuery`
 - `RosterMember`
 - `RosterSnapshot`
-- `Task`
-- `TaskKey`
-- `TaskQuery`
 - `MessageReceivedEvent`
 - `RosterChangedEvent`
 
@@ -81,9 +71,6 @@ Candidate source mapping from current shapes:
 | `MessageQuery` | mailbox metadata query wrappers, read/list/clear selection inputs |
 | `RosterMember` | `boundary::RosterMemberRecord`, `boundary::ClaudeCodeRosterMember` |
 | `RosterSnapshot` | `boundary::ClaudeCodeTeamRoster`, roster load/replace wrapper payloads |
-| `Task` | `boundary::TaskStoreTaskRecord`, `boundary::TaskStoreTaskMetadata` |
-| `TaskKey` | current task id / task-key lookup inputs |
-| `TaskQuery` | task metadata query wrappers |
 
 ## Explicit Non-Goals For AC.1
 
@@ -94,6 +81,21 @@ Candidate source mapping from current shapes:
 - JSON repair / salvage helper types
 - SQLite transaction helper types
 - daemon/runtime composition bundles
+- speculative task-store traits, records, and SQLite task persistence shapes
+
+## Deferred Task-Storage Rule
+
+Task storage is not part of the initial `atm-storage` contract.
+
+Current `TaskStore` code is treated as speculative pre-design surface rather
+than as approved baseline. Phase `AC` must not preserve it by forcing a
+premature shared `TaskStore` contract.
+
+If task storage is approved later, the required starting point is:
+
+- canonical Claude-code task storage behavior
+- validation against the Claude schema and its Pydantic models
+- only then any SQLite synchronization against that canonical model
 
 ## Candidate Capability Traits
 
@@ -111,7 +113,7 @@ If more than these are needed, `AC.1` must justify the expansion against
 
 Before `AC.1` closes, it must answer:
 
-- which current query wrappers collapse into `MessageQuery` / `TaskQuery`
+- which current query wrappers collapse into `MessageQuery`
 - whether replay state belongs in the core contract or only in a capability
   trait
 - which current roster projection fields are canonical shared fields versus
@@ -121,7 +123,7 @@ Before `AC.1` closes, it must answer:
 
 Resolved during planning hardening:
 
-- `delete_message` and `delete_task` are both part of the initial core CRUD
-  contract and are no longer open review questions
+- `delete_message` is part of the initial core CRUD contract
 - `StorageNotifier` remains message/roster-only in the initial contract; task
   mutations are intentionally notification-free unless a later ADR changes that
+- task storage itself is deferred out of the initial `atm-storage` contract

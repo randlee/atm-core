@@ -77,12 +77,11 @@ Merge-forward rule:
 
 - `crates/atm-storage-claude` exists as a concrete backend crate
 - the Claude backend implements the shared storage traits it can satisfy
-- the Claude backend task-store policy is explicit:
+- deferred task-storage policy is explicit:
   - `ClaudeStorageBackend` implements `MessageStore` and `RosterStore`
-  - `ClaudeStorageBackend` does **not** implement `TaskStore`
-  - any needed task-store placeholder must be a clearly named external
-    composition adapter, not an implicit partial-CRUD claim by the Claude
-    backend itself
+  - task storage is not part of the approved Phase `AC` backend contract
+  - future task storage must start from canonical Claude-code schema plus
+    Pydantic validation rather than from speculative partial-CRUD placeholders
 - backend-specific behavior remains internal:
   - JSON parsing and fail-soft salvage
   - file locking
@@ -104,10 +103,10 @@ Merge-forward rule:
   impl RosterStore for ClaudeStorageBackend { /* ... */ }
   ```
 
-- `TaskStore` is intentionally not implemented by `ClaudeStorageBackend`.
-  The backend may participate in compositions that supply a null/degraded task
-  adapter elsewhere, but the Claude backend must not silently claim task
-  persistence support it does not actually provide.
+- `TaskStore` is not part of the approved Phase `AC` Claude backend scope.
+  The backend must not silently claim task persistence support, and Phase `AC`
+  does not introduce a null/degraded placeholder that would fossilize a
+  speculative task-storage contract.
 
 - Claude-specific roster and inbox projection helpers do not become shared
   public API. If they survive, they survive as private or backend-local types
@@ -169,9 +168,10 @@ Proof this sprint must leave behind:
 
 - `atm-core` no longer owns Claude inbox storage internals that belong in the backend crate
 - Claude storage implements the shared contract without widening it to path/file-specific APIs
-- Claude task storage policy is explicit and reviewable:
-  `ClaudeStorageBackend` does not implement `TaskStore`, and that omission is
-  documented as accepted degraded capability rather than left ambiguous
+- deferred task-storage policy is explicit and reviewable:
+  Phase `AC` does not treat Claude task persistence as part of the approved
+  backend contract, and future task work must start from canonical
+  Claude-schema behavior plus Pydantic validation
 - malformed-ingress and file-lock behavior remain below the trait line
 - `ClaudeCodeRosterMember` and `ClaudeCodeTeamRoster` do not survive as shared public contract types
 - the `InboxIngress*` and `InboxExport*` wrapper families are not promoted into `atm-storage`
@@ -193,8 +193,6 @@ Proof this sprint must leave behind:
 - `docs/project-plan.md`
 - storage architecture docs that currently treat Claude inbox logic as `atm-core` internals
 - create `boundaries/atm-storage-claude/` TOML records covering the Claude backend implementation of the shared contracts
-- annotate the Claude backend boundary notes/TOMLs so the `TaskStore`
-  omission is explicit and reviewable rather than implied by absence
 - each `boundaries/atm-storage-claude/` TOML record must include `allowed_dependents = ["atm-runtime", "atm-daemon"]` via composition only; `atm-core` must NOT appear in `allowed_dependents`
 - that `allowed_dependents` direction is intentional here because the boundary
   records live under `atm-storage-claude` and describe which crates may depend

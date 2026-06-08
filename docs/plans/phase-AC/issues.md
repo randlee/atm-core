@@ -27,7 +27,7 @@ The authoritative design reset is:
 | ID | Status | Summary | Planned Closure |
 | --- | --- | --- | --- |
 | `AC-ISSUE-001` | `open` | the current storage surface is over-modeled with request/response-per-operation wrappers instead of a small semantic contract. | `AC.1` |
-| `AC-ISSUE-002` | `open` | message, roster, and task records are duplicated across RPC, storage, and internal boundaries instead of using canonical shared structs. | `AC.1` and `AC.5` |
+| `AC-ISSUE-002` | `open` | message and roster records are duplicated across RPC, storage, and internal boundaries instead of using canonical shared structs; speculative task-store records also exist and must not be promoted into the approved shared contract. | `AC.1`, `AC.5`, and `AC.6` |
 | `AC-ISSUE-003` | `open` | Claude inbox storage is not currently treated as a first-class storage backend even though ATM 1.0 used it as effective storage. | `AC.2` |
 | `AC-ISSUE-004` | `open` | the concrete SQLite backend has become the implicit home of business logic, causing backend-specific seams and logic leakage upward. | `AC.3` and `AC.4` |
 | `AC-ISSUE-005` | `open` | notifications are not frozen as a separate post-commit trait, which leaves write and event semantics underspecified across backends. | `AC.1` and `AC.3` |

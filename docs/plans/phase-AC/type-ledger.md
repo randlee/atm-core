@@ -52,6 +52,9 @@ Final action shorthand used throughout the ledger:
 - `capability-review` — only survives if later sprint explicitly keeps it as a small capability type
 - `capability-review` rows default to delete-or-internalize; promotion to a
   named capability requires an explicit sprint-level keep decision
+- `delete-speculative` — speculative surface removed by default; temporary
+  quarantine is allowed only when the owning sprint records a concrete blocker
+  that prevents immediate deletion
 
 ## Count Summary
 
@@ -142,7 +145,7 @@ than one sprint in a non-default way.
 | Type / Family | Primary Closure Sprint | Later Sprint Role | Why |
 | --- | --- | --- | --- |
 | `MailStoreMessageRecord` | `AC.1` | `AC.5` usage convergence only | Canonical `Message` is defined in `AC.1`; transport/body consumers finish migrating in `AC.5`. |
-| `TaskStoreTaskRecord` | `AC.1` | `AC.5` usage convergence only | Canonical `Task` is defined in `AC.1`; transport/body consumers finish migrating in `AC.5`. |
+| `TaskStoreTaskRecord` | `AC.6` | no later AC owner | Speculative task-store surface is removed or quarantined in cleanup rather than converged into the initial shared contract. |
 | `MailStoreMailboxMetadataRow` | `AC.1` | `AC.5` query/body convergence only | The replacement query helper shape is chosen in `AC.1`; usage cleanup lands later. |
 | `ReplaySource` / replay candidate rows | `AC.3` | `AC.1` contract cap only | Whether replay survives as a capability or backend-internal concern closes with the backend convergence sprint. |
 | doctor / health candidate rows | `AC.3` | `AC.1` contract cap only | Capability keep/delete/internalize decision depends on concrete backend convergence, not only naming. |
@@ -215,31 +218,31 @@ than one sprint in a non-default way.
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `TaskStoreTaskMetadata` | struct | `merge-into-shared` | `merge-and-delete` | canonical `Task` in `AC.1` | Merge into one task model unless narrowly justified. |
-| `TaskStoreTaskRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `Task` in `AC.1` | Main task storage record to collapse; `AC.5` only migrates remaining RPC/body consumers. |
+| `TaskStoreTaskMetadata` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of the approved initial storage contract; future task storage must start from canonical Claude schema instead. |
+| `TaskStoreTaskRecord` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of the approved initial storage contract; future task storage must start from canonical Claude schema instead. |
 | `RosterStoreHealthSnapshot` | struct | `capability-candidate` | `capability-review` | storage health capability in `AC.3` | Not part of CRUD core; `AC.1` only caps the shared contract surface. |
 | `RosterMemberKind` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster member property. |
 | `RosterHarness` | enum | `retain-shared` | `move-to-atm-storage` | shared enum in `AC.1` | Semantic roster harness property. |
 | `RosterMemberRecord` | struct | `merge-into-shared` | `merge-and-delete` | canonical `RosterMember` in `AC.1` | Main roster member record to collapse. |
 | `ClaudeCodeRosterMember` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
 | `ClaudeCodeTeamRoster` | struct | `backend-only` | `internalize-claude` | `atm-storage-claude` in `AC.2` | Claude projection type, not shared contract. |
-| `TaskStoreCreateTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreCreateTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreLoadTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreLoadTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreUpdateTaskRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreUpdateTaskResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreAttachMessageLinkRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreAttachMessageLinkResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreDetachMessageLinkRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreDetachMessageLinkResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreRecordAckTransitionRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreRecordAckTransitionResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreQueryTaskMetadataRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Query semantics must collapse into `TaskQuery`; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreQueryTaskMetadataResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Query semantics must collapse into `TaskQuery`; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Envelope wrapper family must disappear; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Envelope wrapper family must disappear; `AC.6` only verifies no stragglers survived. |
-| `TaskStoreDoctorReport` | struct | `capability-candidate` | `capability-review` | storage health / doctor capability in `AC.3` | Keep only if doctor remains separate; `AC.1` only caps the shared contract surface. |
+| `TaskStoreCreateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreCreateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreLoadTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreLoadTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreUpdateTaskRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreUpdateTaskResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreAttachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreAttachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreDetachMessageLinkRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreDetachMessageLinkResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreRecordAckTransitionRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreRecordAckTransitionResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative wrapper family; not part of the approved initial storage contract. |
+| `TaskStoreQueryTaskMetadataRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative query wrapper; future task storage must not inherit it as canonical shape. |
+| `TaskStoreQueryTaskMetadataResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative query wrapper; future task storage must not inherit it as canonical shape. |
+| `TaskStoreRequest` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative envelope wrapper family. |
+| `TaskStoreResponse` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Speculative envelope wrapper family. |
+| `TaskStoreDoctorReport` | struct | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Doctor shape is not approved Phase `AC` shared-contract scope for task storage. |
 | `RosterStoreReplaceRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
 | `RosterStoreReplaceRosterResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
 | `RosterStoreLoadRosterRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper collapse; `AC.6` only verifies no stragglers survived. |
@@ -276,8 +279,8 @@ than one sprint in a non-default way.
 | `InboxExportResponse` | struct | `delete-wrapper` | `internalize-claude` | internalize in `AC.2` | Envelope wrapper family must disappear from shared/public seams; `AC.6` only verifies no shared/public leakage remains. |
 | `NonClaudeOutboundDeliveryRequest` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
 | `NonClaudeOutboundDeliveryResponse` | struct | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Outbound delivery seam is not part of the shared storage CRUD contract; `AC.6` only verifies docs/code did not drift. |
-| `TaskStore` | trait | `replace-trait` | `replace-and-delete` | `atm-storage::TaskStore` in `AC.1` | Old trait deleted when shared contract lands. |
-| `TaskStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.3` | Must not survive unchanged into `atm-storage`; `AC.1` only caps the shared contract surface. |
+| `TaskStore` | trait | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Phase `AC` does not replace this with `atm-storage::TaskStore`; future task storage starts from canonical Claude schema instead. |
+| `TaskStoreDoctor` | trait | `speculative-task` | `delete-speculative` | deleted or quarantined in `AC.6` | Not part of approved Phase `AC` shared-contract scope. |
 | `RosterStore` | trait | `replace-trait` | `replace-and-delete` | `atm-storage::RosterStore` in `AC.1` | Old trait deleted when shared contract lands. |
 | `RosterStoreDoctor` | trait | `replace-trait` | `capability-review` | health / doctor capability in `AC.3` | Must not survive unchanged into `atm-storage`; `AC.1` only caps the shared contract surface. |
 | `ConfigIngress` | trait | `out-of-scope-transport` | `retain-outside-storage` | review in `AC.4` | Config seam remains outside shared storage contract; `AC.6` only verifies docs/code did not drift. |

@@ -16,7 +16,6 @@ tags:
   - batching
 related_boundaries:
   - BOUNDARY-MailStore-Sqlite
-  - BOUNDARY-TaskStore-Sqlite
   - BOUNDARY-RosterStore-Sqlite
 code_references:
   - crates/atm-rusqlite/src/shared_db.rs
@@ -48,6 +47,11 @@ already pays SQLite's single-writer serialization cost; the change is to make
 that ownership explicit, bounded, and locally optimizable without widening
 public store contracts. Batching is part of the crate's internal write policy,
 not a new cross-crate abstraction.
+
+This ADR does not approve SQLite task persistence as a product source of
+truth. Any current `TaskStore` code in `atm-rusqlite` is outside the approved
+storage-architecture baseline and is not normative for later storage-contract
+work.
 
 ## Consequences
 

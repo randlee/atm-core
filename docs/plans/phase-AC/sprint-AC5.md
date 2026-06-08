@@ -62,7 +62,8 @@ Primary closure rule:
   }
   ```
 
-- message, roster, and task bodies decode into the canonical shared domain structs from `atm-storage`
+- message and roster bodies decode into the canonical shared domain structs
+  from `atm-storage`
 - per-message transport clones are deleted unless a real semantic difference remains
 - the same canonical `Message` struct is passed over RPC and into storage
 
@@ -82,11 +83,6 @@ Roster-family convergence targets:
 - `RosterMemberRecord` usage sites -> canonical `RosterMember`
 - do not let `ClaudeCodeRosterMember` reappear above backend-internal projection code
 
-Task-family convergence targets:
-
-- `TaskStoreTaskRecord` / `TaskStoreTaskMetadata` usage sites -> canonical `Task`
-- task query wrapper bodies -> `TaskQuery`
-
 Must remain outside this sprint’s storage contract work:
 
 - transport traits from `boundary/mod.rs`
@@ -101,7 +97,6 @@ Implementation order for `AC.5`:
 2. Identify every RPC body that is a semantic duplicate of:
    - `Message`
    - `RosterMember` / `RosterSnapshot`
-   - `Task`
 3. Convert those operations to decode directly into the canonical shared structs.
 4. Leave transport-only context in headers or operation wrappers, not in cloned body structs.
 5. Delete transport clones after each family is migrated rather than keeping parallel bodies to the end.
@@ -109,7 +104,7 @@ Implementation order for `AC.5`:
 Proof this sprint must leave behind:
 
 - one canonical message body shape crosses RPC and storage
-- roster and task bodies follow the same rule
+- roster bodies follow the same rule
 - the remaining request/response types are transport operations, not cloned domain records
 - any surviving canonical-type ambiguity after `AC.5` is a failure of `AC.1`,
   not a reason to create another shared model here
@@ -129,8 +124,8 @@ Proof this sprint must leave behind:
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
 - `python3 scripts/lint_boundaries.py`
-- `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
-- `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember|TaskStoreTaskRecord|TaskStoreTaskMetadata" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
+- `rg -n "MailStore.*Request|MailStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
+- `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 
 ## Required Document Updates
 

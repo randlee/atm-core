@@ -117,10 +117,9 @@ The first contract pass must stay small enough to audit directly.
 
 Target contract shape:
 
-- `3` core CRUD traits:
+- `2` core CRUD traits:
   - `MessageStore`
   - `RosterStore`
-  - `TaskStore`
 - `1` required notification trait:
   - `StorageNotifier`
 - no more than `4` optional capability traits without an ADR:
@@ -144,18 +143,23 @@ pub trait RosterStore {
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
-pub trait TaskStore {
-    fn save_task(&self, task: &Task) -> Result<(), AtmError>;
-    fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
-    fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
-    fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
-}
-
 pub trait StorageNotifier {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
 ```
+
+Task-storage rule:
+
+- task storage is explicitly out of scope for the initial Phase `AC` contract
+- current `TaskStore` code is treated as speculative, not as an approved
+  baseline the shared contract must preserve
+- speculative task-store code should be deleted by default during `AC.6`;
+  quarantine is only a fallback if immediate removal is blocked by unrelated
+  stabilization work
+- if task storage is approved later, the first canonical implementation starts
+  from Claude-code task schema plus Pydantic validation, with SQLite sync only
+  afterward if still needed
 
 ## RPC Rule
 
@@ -224,8 +228,8 @@ Purpose:
 - extract Claude inbox storage into `crates/atm-storage-claude`
 - implement the shared storage traits for Claude storage
 - keep JSON salvage, file locking, source discovery, and rewrite mechanics internal
-- make the Claude backend task-store omission explicit so backend
-  interchangeability claims stay reviewable rather than implied
+- make deferred task-storage policy explicit so backend interchangeability
+  claims stay reviewable rather than implied
 
 Execution branch:
 - `feature/pAC-s2-atm-storage-claude-extraction`
@@ -240,6 +244,7 @@ Purpose:
 - adapt the SQLite backend to the same `atm-storage` traits
 - ensure the concrete SQLite backend does not depend on `atm-core`
 - ensure post-commit notifications happen only after durable write success
+- do not preserve speculative SQLite task persistence as approved backend scope
 
 Execution branch:
 - `feature/pAC-s3-sqlite-backend-convergence`
@@ -273,7 +278,7 @@ Purpose:
 
 - replace per-message transport structs with the generic RPC envelope
 - make RPC bodies and storage share the same canonical domain structs
-- delete redundant message/task/roster DTO layers
+- delete redundant message/roster DTO layers
 
 Execution branch:
 - `feature/pAC-s5-rpc-envelope-and-domain-type-unification`
@@ -338,13 +343,17 @@ Phase `AC` is not complete until:
 
 - `crates/atm-storage` exists and contains only the small audited storage contract
 - the shared storage contract does not use per-operation request/response wrappers
-- canonical shared `Message`, `Roster*`, and `Task*` structs are used at both RPC-body and storage boundaries
-- `atm-storage-claude` and the SQLite backend implement the same core storage traits
+- canonical shared `Message` and `Roster*` structs are used at both RPC-body
+  and storage boundaries
+- `atm-storage-claude` and the SQLite backend implement the same approved core
+  storage traits
 - the concrete SQLite backend does not depend on `atm-core`
 - notifications are modeled through a separate trait with post-commit semantics
 - `atm-core`, daemon, and runtime composition paths no longer contain direct concrete storage logic above the approved composition seam
 - the repo has no remaining message-shaped RPC/storage/domain struct proliferation that contradicts the generic envelope model
 - the resulting storage contract is explicitly documented as suitable for a future `atm-storage-sqlserver` implementation
+- speculative task-store code is not treated as an approved compatibility line
+  inside the shared storage contract
 
 ## Phase Execution Guardrails
 

@@ -81,11 +81,14 @@ Merge-forward rule:
 ## Deliverables
 
 - the concrete SQLite backend implements the shared core traits from `atm-storage`
+- the concrete SQLite backend implements the approved shared `MessageStore` and
+  `RosterStore` traits from `atm-storage`
 - the backend naming is explicit: the current `atm-rusqlite` implementation
   moves on disk and in Cargo package identity to the target backend crate
   `atm-storage-rusqlite` in this sprint
 - the SQLite backend no longer depends on `atm-core`
 - SQLite-specific power stays in capability traits rather than the base CRUD traits
+- speculative SQLite task persistence is not treated as approved backend scope
 - notifications are explicitly post-commit:
   - write succeeds
   - transaction commits
@@ -124,7 +127,6 @@ traits or remain backend-internal:
 - `MailStoreHealthSnapshot`
 - `RosterStoreHealthSnapshot`
 - `MailStoreDoctorReport`
-- `TaskStoreDoctorReport`
 - `RosterStoreDoctorReport`
 - `RemoteReplayStateRecord`
 - `RemoteReplayStore`
@@ -148,7 +150,8 @@ Implementation order for `AC.3`:
 
 1. Point the SQLite backend at `atm-storage` first; do not start by copying `atm-core` helpers.
 2. Re-home any truly shared helper into `atm-storage`; keep SQLite-only helpers in the backend crate.
-3. Convert the main storage implementation to the canonical shared types selected in `AC.1`.
+3. Convert the approved mail/roster storage implementation to the canonical
+   shared types selected in `AC.1`.
 4. Make the rename/convergence intent explicit in docs and boundaries:
    - current source crate: `atm-rusqlite`
    - target backend identity: `atm-storage-rusqlite`
@@ -172,6 +175,8 @@ Proof this sprint must leave behind:
   `atm-rusqlite` survives only as the pre-convergence source state
 - the SQLite backend is a backend implementation, not a second copy of `atm-core` storage semantics
 - SQLite-only observability and lifecycle helpers are no longer exposed as if they were shared contract concepts
+- speculative SQLite task-store code is not converged as approved shared
+  storage scope merely because it exists in the current repo
 - capability traits are explicit and few, not an escape hatch for old surface-area sprawl
 - `SqliteBoundaryAssembly` closure happens here; `AC.4` may only remove
   remaining consumers of its replacement
@@ -180,7 +185,8 @@ Proof this sprint must leave behind:
 
 ## Acceptance Criteria
 
-- the SQLite backend can satisfy the shared CRUD contract without importing `atm-core`
+- the SQLite backend can satisfy the approved shared mail/roster contract
+  without importing `atm-core`
 - no base trait method is widened purely to fit SQLite-specific power
 - notification semantics are documented as post-commit only
 - the backend crate rename to `atm-storage-rusqlite` lands in this sprint
@@ -214,7 +220,6 @@ Proof this sprint must leave behind:
 - backend architecture docs for SQLite storage ownership
 - rename the backend crate path to `crates/atm-storage-rusqlite/`
 - update `boundaries/atm-storage-rusqlite/mail-store-sqlite.toml`
-- update `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
 - update `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`
 - delete `boundaries/atm-rusqlite/` TOML records when the crate rename to
   `atm-storage-rusqlite` lands

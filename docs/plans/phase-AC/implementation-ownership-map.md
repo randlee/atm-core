@@ -16,8 +16,8 @@ Current concrete trait implementers found during `AC.0`:
 | --- | --- | --- | --- |
 | `MailStore` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
 | `MailStoreDoctor` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
+| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
+| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
 | `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
 | `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
 | `RemoteReplayStore` capability/internalization | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
@@ -53,7 +53,8 @@ Current high-pressure record families that later sprints must collapse:
 
 - `MailStoreMessageRecord` <-> `MessageEnvelope` / logical delivery records
 - `RosterMemberRecord` <-> `ClaudeCodeRosterMember` / `ClaudeCodeTeamRoster`
-- `TaskStoreTaskRecord` <-> `TaskStoreTaskMetadata` and task wrapper families
+- speculative task-store wrappers and records that should not be preserved as
+  approved `AC` contract surface
 
 Representative consumers are spread broadly through:
 
@@ -68,8 +69,10 @@ Representative consumers are spread broadly through:
 
 Planning consequence:
 
-- `AC.1` must define the canonical shared types before `AC.4` and `AC.5`
-  attempt consumer migration
+- `AC.1` must define the canonical message/roster shared types before `AC.4`
+  and `AC.5` attempt consumer migration
+- speculative task-store code is not an input to the shared contract and is
+  instead routed to deletion/quarantine closeout
 
 ## Sprint Routing
 
@@ -97,6 +100,8 @@ Owns:
 - making replay/finalizer seams compatible with the new storage model
 - deciding whether replay/finalizer seams survive as backend-internal details
   or named optional capabilities
+- explicitly not treating SQLite task persistence as approved shared-contract
+  scope
 
 ### AC.4
 
@@ -117,6 +122,9 @@ Owns:
 Owns:
 
 - residual deletion closeout for old wrappers and backend leakage
+- speculative task-store deletion by default so later phases do not inherit
+  accidental legacy assumptions; quarantine is only a fallback if removal is
+  concretely blocked
 
 ### AC.7
 

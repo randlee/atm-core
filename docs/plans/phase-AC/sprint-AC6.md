@@ -72,6 +72,12 @@ Primary closure rule:
   - `SqliteObservabilityEvent`
   - `SqliteObservabilityOutcome`
   - `NullSqliteObservability`
+- [ ] delete speculative task-store surfaces by default so they no longer
+  appear as approved Phase `AC` contract; quarantine is allowed only if
+  immediate deletion is blocked by unrelated stabilization work:
+  - `TaskStore*Request` / `TaskStore*Response`
+  - `TaskStore` / `TaskStoreDoctor` public contract assumptions
+  - SQLite task-store ownership and related boundary claims
 - [ ] update `docs/plans/phase-AC/type-ledger.md` with final closure notes for
   each deletion family touched in this sprint
 - [ ] keep `AC.7` as the sole owner of SQL Server readiness proof language
@@ -100,6 +106,8 @@ Proof this sprint must leave behind:
 - the remaining shared contract is small enough for direct manual audit
 - the resulting contract surface is clean enough to serve as the fixed input to
   `AC.7`
+- speculative task-store code is deleted outright unless the sprint records a
+  concrete blocker that forces temporary quarantine instead
 - any row still needing a first-time ownership decision in `AC.6` should be
   treated as a prior-sprint planning defect, not normal scope
 
@@ -108,6 +116,9 @@ Proof this sprint must leave behind:
 - the shared storage contract remains small enough to audit directly
 - no remaining obsolete wrapper families survive only for compatibility with the old design
 - the deletion sweep is checked against `docs/plans/phase-AC/type-ledger.md`, not only ad hoc grep patterns
+- speculative task-store code is removed rather than normalized as a supported
+  compatibility surface, except where a documented blocker forces temporary
+  quarantine
 - `AC.6` does not reopen capability or ownership decisions that earlier sprints
   were required to close
 

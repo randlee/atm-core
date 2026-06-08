@@ -18,9 +18,6 @@ families:
 - `MessageQuery`
 - `RosterMember`
 - `RosterSnapshot`
-- `Task`
-- `TaskKey`
-- `TaskQuery`
 - notification event types
 
 ## Current Duplicate Families
@@ -67,8 +64,10 @@ Current task-shaped duplication appears across:
 
 Planning direction:
 
-- one canonical `Task` record
-- small semantic query / mutation helpers only where needed
+- task storage is deferred out of the initial Phase `AC` shared contract
+- these shapes are not canonical seeds for `atm-storage`
+- any future task-storage line must start from canonical Claude-code schema
+  plus Pydantic validation, not from these speculative wrappers
 
 ## RPC Convergence Rule
 
@@ -85,6 +84,8 @@ It must not preserve:
 
 ## Required Use In Later Sprints
 
-- `AC.1` uses this map to define the canonical shared type set in `atm-storage`
-- `AC.5` uses this map to collapse RPC body duplication
+- `AC.1` uses this map to define the canonical shared message/roster type set
+  in `atm-storage`
+- `AC.5` uses this map to collapse RPC body duplication for those approved
+  shared families
 - `AC.6` uses this map to verify redundant type families were deleted

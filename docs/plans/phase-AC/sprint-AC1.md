@@ -25,6 +25,8 @@ Production-ready commitment:
 - every deliverable listed in this sprint is expected to land at a
   production-ready level for the contract-definition scope this sprint claims;
   boundary-only, test-only, or placeholder contract closure is not accepted
+- task storage is explicitly out of scope for this sprint and must not be
+  smuggled into `atm-storage` as speculative compatibility surface
 
 Primary closure rule:
 - `AC.1` is the primary closure sprint for the shared `atm-storage` contract,
@@ -77,13 +79,6 @@ Why this sprint is not split:
       fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
   }
 
-  pub trait TaskStore {
-      fn save_task(&self, task: &Task) -> Result<(), AtmError>;
-      fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
-      fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
-      fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
-  }
-
   pub trait StorageNotifier {
       fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
       fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
@@ -100,9 +95,6 @@ Why this sprint is not split:
   - `MessageQuery`
   - `RosterMember`
   - `RosterSnapshot`
-  - `Task`
-  - `TaskKey`
-  - `TaskQuery`
   - notification event structs
 
 - The crate does **not** carry:
@@ -128,7 +120,6 @@ Move into `atm-storage` as canonical shared types or small semantic helpers:
 - canonical replacements for:
   - `MailStoreMessageRecord` -> `Message`
   - `MailStoreMailboxMetadataRow` / `MailStoreMailboxMetadataCounts` -> `MessageQuery` helpers
-  - `TaskStoreTaskRecord` + `TaskStoreTaskMetadata` -> `Task`
   - `RosterMemberRecord` -> `RosterMember`
   - roster snapshot wrappers -> `RosterSnapshot`
 
@@ -136,17 +127,24 @@ Delete or collapse during `AC.1` rather than carrying them forward:
 
 - all `MailStore*Request` / `MailStore*Response` wrappers except the temporary
   `MailStoreBootstrap*` compile bridge owned by `AC.4`
-- all `TaskStore*Request` / `TaskStore*Response` wrappers
 - all `RosterStore*Request` / `RosterStore*Response` wrappers
 - `MailStoreRequest` / `MailStoreResponse`
-- `TaskStoreRequest` / `TaskStoreResponse`
 - `RosterStoreRequest` / `RosterStoreResponse`
 
 Replace old storage traits in this sprint:
 
 - `MailStore` -> `MessageStore`
-- `TaskStore` -> `TaskStore` in `atm-storage`
 - `RosterStore` -> `RosterStore` in `atm-storage`
+
+Task-storage deferral rule:
+
+- `TaskStore`, `Task`, `TaskKey`, and `TaskQuery` are not part of the initial
+  `atm-storage` contract
+- existing `TaskStore*` wrappers and SQLite task-store code are speculative
+  surface and must not be re-homed into `atm-storage`
+- any future task-storage line must start from canonical Claude-code task
+  schema plus Pydantic validation rather than inheriting these speculative
+  shapes
 
 Must remain outside `atm-storage` even if they still exist elsewhere:
 
@@ -170,9 +168,6 @@ Implementation order for `AC.1`:
    - `MessageQuery`
    - `RosterMember`
    - `RosterSnapshot`
-   - `Task`
-   - `TaskKey`
-   - `TaskQuery`
    - notification event types
 3. Reuse existing semantic seeds where possible rather than cloning them:
    - `schema::AtmMessageId`
@@ -182,8 +177,8 @@ Implementation order for `AC.1`:
 4. Replace the old store traits with the new CRUD traits in `atm-storage`.
 5. Keep the workspace buildable while the consumer cutover is incomplete:
    - a deprecated compile bridge may remain temporarily inside `atm-core`
-   - that bridge may forward or alias legacy `MailStore` / `TaskStore` /
-     `RosterStore` names to the new `atm-storage` contract
+   - that bridge may forward or alias legacy `MailStore` / `RosterStore`
+     names to the new `atm-storage` contract
    - the bridge is not authoritative API surface and must not gain new
      semantics
    - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.4`
@@ -211,12 +206,14 @@ Proof this sprint must leave behind:
 - the crate graph remains `atm-core -> atm-storage`, not the reverse
 - `MessageKey` wraps `AtmMessageId` per `ADR-012` rather than introducing a divergent message-identity contract
 - `atm-storage` is the only authoritative shared storage contract after
-  `AC.1`; any surviving legacy `MailStore` / `TaskStore` / `RosterStore` names
-  are compile-bridge shims only and must be deleted by `AC.4`
+  `AC.1`; any surviving legacy `MailStore` / `RosterStore` names are
+  compile-bridge shims only and must be deleted by `AC.4`
 - no `*Request` / `*Response` storage wrapper families are recreated inside `crates/atm-storage`
 - `RosterMemberRecord`, `ClaudeCodeRosterMember`, and `ClaudeCodeTeamRoster` are not copied into `atm-storage` unchanged
 - task mutations are intentionally notification-free in the initial contract;
   `StorageNotifier` does not silently grow a `task_changed` event in this sprint
+- `atm-storage` does not introduce `TaskStore`, `Task`, `TaskKey`, or
+  `TaskQuery` as speculative first-pass contract surface
 
 ## Required Validation
 
@@ -225,8 +222,8 @@ Proof this sprint must leave behind:
 - `cargo clippy -p atm-storage -- -D warnings`
 - `cargo tree -p atm-storage`
 - `git diff --check`
-- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|TaskStore(Create|Load|Update|Attach|Detach|Record|Query|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
-- `rg -n "MailStore|TaskStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
+- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
+- `rg -n "MailStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
 ## Required Document Updates
@@ -239,7 +236,6 @@ Proof this sprint must leave behind:
 - create `boundaries/atm-storage/` TOML records for:
   - `MessageStore`
   - `RosterStore`
-  - `TaskStore`
   - `StorageNotifier`
 - each `boundaries/atm-storage/` TOML record must include `allowed_dependents = ["atm-core", "atm-storage-claude", "atm-storage-rusqlite"]` so `lint_boundaries.py` can enforce the ownership topology
 - update existing `boundaries/atm-core/` store TOMLs to reflect the ownership move into `atm-storage`
