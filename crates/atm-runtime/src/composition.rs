@@ -236,23 +236,19 @@ impl boundary::MailStore for SqliteMailStoreBoundary {
             .map(mailbox_metadata_counts)
     }
 
-    fn upsert_message_state(
-        &self,
-        state: boundary::MailMessageState,
-    ) -> Result<(), AtmError> {
-        self.backend
-            .upsert_message_state(SqliteMessageStateRecord {
-                team: state.team,
-                agent: state.agent,
-                actor: state.actor,
-                message_key: state.message_key.clone(),
-                read: state.read,
-                pending_ack_at: state.pending_ack_at,
-                acknowledged_at: state.acknowledged_at,
-                expires_at: state.expires_at,
-                deleted_at: state.deleted_at,
-                updated_at: state.updated_at,
-            })
+    fn upsert_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        self.backend.upsert_message_state(SqliteMessageStateRecord {
+            team: state.team,
+            agent: state.agent,
+            actor: state.actor,
+            message_key: state.message_key.clone(),
+            read: state.read,
+            pending_ack_at: state.pending_ack_at,
+            acknowledged_at: state.acknowledged_at,
+            expires_at: state.expires_at,
+            deleted_at: state.deleted_at,
+            updated_at: state.updated_at,
+        })
     }
 
     fn load_message_state(
