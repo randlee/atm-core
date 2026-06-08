@@ -632,7 +632,7 @@ mod tests {
     use crate::schema::{AgentMember, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::AgentName;
+    use crate::types::{AgentName, TeamName};
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -681,6 +681,7 @@ mod tests {
     impl crate::boundary::sealed::Sealed for TestRosterStore {}
 
     impl boundary::MailStore for UnusedMailStore {
+        #[allow(deprecated)]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,
@@ -688,80 +689,77 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn run_transaction(
-            &self,
-            _request: boundary::MailStoreTransactionRequest,
-        ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
         fn upsert_message(
             &self,
-            _request: boundary::MailStoreUpsertMessageRequest,
-        ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_message(
             &self,
-            _request: boundary::MailStoreLoadMessageRequest,
-        ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn load_stored_message(
-            &self,
-            _request: boundary::MailStoreLoadStoredMessageRequest,
-        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn query_mailbox_metadata(
             &self,
-            _request: boundary::MailStoreQueryMailboxMetadataRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn query_mailbox_metadata_counts(
             &self,
-            _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<boundary::MailStoreMailboxMetadataCounts, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn upsert_message_state(
-            &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+        fn upsert_message_state(&self, _state: boundary::MailMessageState) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_message_state(
             &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _actor: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailMessageState>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn record_ingest_replay_state(
             &self,
-            _request: boundary::MailStoreRecordIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _source: &boundary::ReplaySource,
+            _state: &boundary::MailStoreIngestReplayState,
+        ) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_ingest_replay_state(
             &self,
-            _request: boundary::MailStoreLoadIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _source: &boundary::ReplaySource,
+        ) -> Result<Option<boundary::MailStoreIngestReplayState>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn health_snapshot(
             &self,
-            _request: boundary::MailStoreHealthSnapshotRequest,
-        ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<boundary::MailStoreHealthSnapshot, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
     }
@@ -820,39 +818,36 @@ mod tests {
     impl boundary::RosterStore for TestRosterStore {
         fn replace_roster(
             &self,
-            _request: boundary::RosterStoreReplaceRosterRequest,
-        ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
+            _team: &TeamName,
+            _members: &[boundary::RosterMemberRecord],
+            _source: Option<&boundary::ReplaySource>,
+        ) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
         fn load_roster(
             &self,
-            request: boundary::RosterStoreLoadRosterRequest,
-        ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-            Ok(boundary::RosterStoreLoadRosterResponse {
-                team: request.team,
-                members: self.members.clone(),
-            })
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+            Ok(self.members.clone())
         }
 
         fn query_membership(
             &self,
-            _request: boundary::RosterStoreQueryMembershipRequest,
-        ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
+            _team: &TeamName,
+            _member: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
-        fn list_teams(
-            &self,
-            _request: boundary::RosterStoreListTeamsRequest,
-        ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
         fn health_snapshot(
             &self,
-            _request: boundary::RosterStoreHealthSnapshotRequest,
-        ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
+            _team: &TeamName,
+        ) -> Result<boundary::RosterStoreHealthSnapshot, AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
     }

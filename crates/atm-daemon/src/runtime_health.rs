@@ -547,13 +547,8 @@ impl DaemonRequestDispatcher {
                     "Restore the runtime-bound roster store and restart atm-daemon before retrying heartbeat traffic.",
                 )
             })?;
-        let membership = roster_store.query_membership(
-            atm_core::boundary::RosterStoreQueryMembershipRequest {
-                team: request.team.clone(),
-                member: request.member.clone(),
-            },
-        )?;
-        if !membership.is_member {
+        let membership = roster_store.query_membership(&request.team, &request.member)?;
+        if membership.is_none() {
             return Err(AtmError::agent_not_found(
                 request.member.as_str(),
                 request.team.as_str(),

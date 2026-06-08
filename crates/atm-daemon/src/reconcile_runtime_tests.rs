@@ -607,76 +607,55 @@ impl boundary::sealed::Sealed for RecordingRosterStore {}
 impl RosterStore for RecordingRosterStore {
     fn replace_roster(
         &self,
-        request: RosterStoreReplaceRosterRequest,
-    ) -> Result<RosterStoreReplaceRosterResponse, AtmError> {
+        team: &atm_core::types::TeamName,
+        members: &[boundary::RosterMemberRecord],
+        _source: Option<&boundary::ReplaySource>,
+    ) -> Result<(), AtmError> {
         let mut state = self.state.lock().expect("roster state");
-        let previous_member_count = state
-            .rosters
-            .get(&request.team)
-            .map_or(0, |members| members.len() as u64);
-        let current_member_count = request.members.len() as u64;
-        state.rosters.insert(request.team.clone(), request.members);
+        state.rosters.insert(team.clone(), members.to_vec());
         state.replace_count += 1;
-        Ok(RosterStoreReplaceRosterResponse {
-            team: request.team,
-            previous_member_count,
-            current_member_count,
-            replaced: true,
-        })
+        Ok(())
     }
 
     fn load_roster(
         &self,
-        request: RosterStoreLoadRosterRequest,
-    ) -> Result<RosterStoreLoadRosterResponse, AtmError> {
-        Ok(RosterStoreLoadRosterResponse {
-            team: request.team.clone(),
-            members: self.members_for(&request.team),
-        })
+        team: &atm_core::types::TeamName,
+    ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+        Ok(self.members_for(team))
     }
 
     fn query_membership(
         &self,
-        request: RosterStoreQueryMembershipRequest,
-    ) -> Result<RosterStoreQueryMembershipResponse, AtmError> {
+        team: &atm_core::types::TeamName,
+        member: &atm_core::types::AgentName,
+    ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
         let member = self
-            .members_for(&request.team)
+            .members_for(team)
             .into_iter()
-            .find(|record| record.agent_name == request.member);
-        Ok(RosterStoreQueryMembershipResponse {
-            team: request.team,
-            is_member: member.is_some(),
-            member,
-        })
+            .find(|record| record.agent_name == *member);
+        Ok(member)
     }
 
-    fn list_teams(
-        &self,
-        _request: RosterStoreListTeamsRequest,
-    ) -> Result<RosterStoreListTeamsResponse, AtmError> {
-        Ok(RosterStoreListTeamsResponse {
-            teams: self
-                .state
-                .lock()
-                .expect("roster state")
-                .rosters
-                .keys()
-                .cloned()
-                .collect(),
-        })
+    fn list_teams(&self) -> Result<Vec<atm_core::types::TeamName>, AtmError> {
+        Ok(self
+            .state
+            .lock()
+            .expect("roster state")
+            .rosters
+            .keys()
+            .cloned()
+            .collect())
     }
 
     fn health_snapshot(
         &self,
-        request: RosterStoreHealthSnapshotRequest,
-    ) -> Result<RosterStoreHealthSnapshotResponse, AtmError> {
-        Ok(RosterStoreHealthSnapshotResponse {
-            snapshot: RosterStoreHealthSnapshot {
-                team: request.team.clone(),
-                member_count: self.members_for(&request.team).len() as u64,
-                stale: false,
-                refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
-            },
+        team: &atm_core::types::TeamName,
+    ) -> Result<RosterStoreHealthSnapshot, AtmError> {
+        Ok(RosterStoreHealthSnapshot {
+            team: team.clone(),
+            member_count: self.members_for(team).len() as u64,
+            stale: false,
+            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
         })
     }
 }

@@ -125,7 +125,7 @@ impl AtmError {
     }
 
     pub fn primary_recovery(&self) -> Option<&str> {
-        self.recovery.last().map(String::as_str)
+        self.recovery.first().map(String::as_str)
     }
 
     pub fn with_source<E>(mut self, source: E) -> Self
@@ -439,6 +439,18 @@ impl fmt::Display for AtmError {
         for recovery in &self.recovery {
             write!(f, "\n  Recovery: {recovery}")?;
         }
+        if let Some(source) = self.source() {
+            write!(f, "\n  Source: {source}")?;
+            let mut current = source.source();
+            while let Some(next) = current {
+                write!(f, "\n  Caused by: {next}")?;
+                current = next.source();
+            }
+        }
+        match self.backtrace() {
+            Some(backtrace) => write!(f, "\n  Backtrace:\n{backtrace}")?,
+            None => write!(f, "\n  Backtrace: {:?}", self.backtrace.status())?,
+        }
         Ok(())
     }
 }
@@ -495,5 +507,59 @@ impl AtmErrorKind {
             Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
             Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AtmError, AtmErrorKind};
+    use std::error::Error;
+    use std::fmt;
+
+    #[derive(Debug)]
+    struct LeafError(&'static str);
+
+    impl fmt::Display for LeafError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+
+    impl Error for LeafError {}
+
+    #[derive(Debug)]
+    struct ParentError {
+        message: &'static str,
+        source: LeafError,
+    }
+
+    impl fmt::Display for ParentError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.message)
+        }
+    }
+
+    impl Error for ParentError {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(&self.source)
+        }
+    }
+
+    #[test]
+    fn display_includes_recovery_source_chain_and_backtrace_label() {
+        let error = AtmError::new(AtmErrorKind::Validation, "storage contract failed")
+            .with_recovery("Repair the contract fixture.")
+            .with_source(ParentError {
+                message: "parent source",
+                source: LeafError("leaf source"),
+            });
+
+        let rendered = error.to_string();
+
+        assert!(rendered.contains("storage contract failed"));
+        assert!(rendered.contains("Recovery: Repair the contract fixture."));
+        assert!(rendered.contains("Source: parent source"));
+        assert!(rendered.contains("Caused by: leaf source"));
+        assert!(rendered.contains("Backtrace:"));
     }
 }

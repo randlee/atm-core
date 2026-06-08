@@ -9,7 +9,6 @@ use tracing::warn;
 use crate::address::validate_path_segment;
 use crate::boundary::{
     ConfigLoadRequest, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
-    RosterStoreListTeamsRequest, RosterStoreLoadRosterRequest, RosterStoreReplaceRosterRequest,
 };
 use crate::config::{load_claude_team_config_document, resolve_team};
 use crate::error::{AtmError, AtmErrorKind};
@@ -252,16 +251,13 @@ fn list_teams_from_roster_store(
     current_team: TeamName,
 ) -> Result<TeamsList, AtmError> {
     let mut teams = roster_store
-        .list_teams(RosterStoreListTeamsRequest)
-        .map(|response| response.teams)?
+        .list_teams()?
         .into_iter()
         .map(|team| {
-            roster_store
-                .load_roster(RosterStoreLoadRosterRequest { team: team.clone() })
-                .map(|response| TeamSummary {
-                    name: team,
-                    member_count: response.members.len(),
-                })
+            roster_store.load_roster(&team).map(|members| TeamSummary {
+                name: team,
+                member_count: members.len(),
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     teams.sort_by(|a, b| a.name.cmp(&b.name));
@@ -399,12 +395,7 @@ fn replace_roster_for_member_add(
     existing_roster: &[RosterMemberRecord],
 ) -> Result<(), AtmError> {
     roster_store
-        .replace_roster(RosterStoreReplaceRosterRequest {
-            team: team.clone(),
-            members: existing_roster.to_vec(),
-            source: None,
-        })
-        .map(|_| ())
+        .replace_roster(team, existing_roster, None)
         .map_err(|error| {
             error.with_recovery(
                 "Check ATM roster store availability and rerun `atm teams add-member`.",
@@ -549,9 +540,7 @@ fn load_team_roster(
     roster_store: &dyn RosterStore,
     team: &TeamName,
 ) -> Result<Vec<RosterMemberRecord>, AtmError> {
-    roster_store
-        .load_roster(RosterStoreLoadRosterRequest { team: team.clone() })
-        .map(|response| response.members)
+    roster_store.load_roster(team)
 }
 
 pub(super) fn project_team_config_from_roster(
@@ -581,7 +570,8 @@ fn agent_member_from_roster_record(record: &RosterMemberRecord) -> AgentMember {
         agent_id: AgentId::new(
             metadata_string(&record.metadata_json, "agentId")
                 .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
-        ),
+        )
+        .expect("validated agent id from roster record"),
         agent_type: record.agent_type.clone(),
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
@@ -848,17 +838,13 @@ mod tests {
         list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
-        self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
-        RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
-        RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest,
-        RosterStoreListTeamsResponse, RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse,
-        RosterStoreQueryMembershipRequest, RosterStoreQueryMembershipResponse,
-        RosterStoreReplaceRosterRequest, RosterStoreReplaceRosterResponse,
+        self, ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+        RosterStoreHealthSnapshot,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
     use crate::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use crate::types::TeamName;
+    use crate::types::{AgentName, TeamName};
 
     #[derive(Default)]
     struct RecordingRosterStore {
@@ -880,92 +866,74 @@ mod tests {
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(
             &self,
-            request: RosterStoreReplaceRosterRequest,
-        ) -> Result<RosterStoreReplaceRosterResponse, crate::error::AtmError> {
+            team: &TeamName,
+            members: &[RosterMemberRecord],
+            _source: Option<&ReplaySource>,
+        ) -> Result<(), crate::error::AtmError> {
             self.teams
                 .lock()
                 .expect("roster store lock")
-                .insert(request.team.clone(), request.members.clone());
-            let current_member_count = request.members.len() as u64;
-            Ok(RosterStoreReplaceRosterResponse {
-                team: request.team,
-                previous_member_count: 0,
-                current_member_count,
-                replaced: true,
-            })
+                .insert(team.clone(), members.to_vec());
+            Ok(())
         }
 
         fn load_roster(
             &self,
-            request: RosterStoreLoadRosterRequest,
-        ) -> Result<RosterStoreLoadRosterResponse, crate::error::AtmError> {
-            let members = self
+            team: &TeamName,
+        ) -> Result<Vec<RosterMemberRecord>, crate::error::AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .cloned()
-                .unwrap_or_default();
-            Ok(RosterStoreLoadRosterResponse {
-                team: request.team,
-                members,
-            })
+                .unwrap_or_default())
         }
 
         fn query_membership(
             &self,
-            request: RosterStoreQueryMembershipRequest,
-        ) -> Result<RosterStoreQueryMembershipResponse, crate::error::AtmError> {
-            let member = self
+            team: &TeamName,
+            member: &AgentName,
+        ) -> Result<Option<RosterMemberRecord>, crate::error::AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .and_then(|members| {
                     members
                         .iter()
-                        .find(|member| member.agent_name == request.member)
+                        .find(|existing| existing.agent_name == *member)
                         .cloned()
-                });
-            Ok(RosterStoreQueryMembershipResponse {
-                team: request.team,
-                is_member: member.is_some(),
-                member,
-            })
+                }))
         }
 
-        fn list_teams(
-            &self,
-            _request: RosterStoreListTeamsRequest,
-        ) -> Result<RosterStoreListTeamsResponse, crate::error::AtmError> {
-            let teams = self
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
                 .keys()
                 .cloned()
-                .collect();
-            Ok(RosterStoreListTeamsResponse { teams })
+                .collect())
         }
 
         fn health_snapshot(
             &self,
-            request: RosterStoreHealthSnapshotRequest,
-        ) -> Result<RosterStoreHealthSnapshotResponse, crate::error::AtmError> {
+            team: &TeamName,
+        ) -> Result<RosterStoreHealthSnapshot, crate::error::AtmError> {
             let member_count = self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .map(|members| members.len() as u64)
                 .unwrap_or_default();
-            Ok(RosterStoreHealthSnapshotResponse {
-                snapshot: RosterStoreHealthSnapshot {
-                    team: request.team,
-                    member_count,
-                    stale: false,
-                    refreshed_at: None,
-                },
+            Ok(RosterStoreHealthSnapshot {
+                team: team.clone(),
+                member_count,
+                stale: false,
+                refreshed_at: None,
             })
         }
     }
@@ -1064,11 +1032,8 @@ mod tests {
         assert_eq!(member.extra["isActive"], serde_json::json!(true));
 
         let roster = roster_store
-            .load_roster(RosterStoreLoadRosterRequest {
-                team: TEST_TEAM.parse().expect("team"),
-            })
-            .expect("load roster")
-            .members;
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].recipient_pane_id.as_deref(), Some("%7"));
     }
@@ -1095,11 +1060,8 @@ mod tests {
         .expect("add member");
 
         let roster = roster_store
-            .load_roster(RosterStoreLoadRosterRequest {
-                team: TEST_TEAM.parse().expect("team"),
-            })
-            .expect("load roster")
-            .members;
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
         assert_eq!(roster[0].recipient_pane_id.as_deref(), Some("session:1.2"));
     }
 
@@ -1192,11 +1154,8 @@ mod tests {
         .expect("add member");
 
         let roster = roster_store
-            .load_roster(RosterStoreLoadRosterRequest {
-                team: TEST_TEAM.parse().expect("team"),
-            })
-            .expect("load roster")
-            .members;
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
         assert_eq!(roster.len(), 2);
         assert!(roster.iter().any(|member| member.agent_name == TEST_SENDER));
 

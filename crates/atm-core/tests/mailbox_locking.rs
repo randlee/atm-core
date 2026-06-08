@@ -1160,32 +1160,25 @@ impl Fixture {
                     .expect("message key")
             };
             mail_store
-                .upsert_message(atm_core::boundary::MailStoreUpsertMessageRequest {
-                    record: atm_core::boundary::MailStoreMessageRecord {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        message_key: message_key.clone(),
-                        envelope: message.clone(),
-                    },
+                .upsert_message(atm_core::boundary::MailStoreMessageRecord {
+                    team: team.clone(),
+                    agent: agent_name.clone(),
+                    message_key: message_key.clone(),
+                    envelope: message.clone(),
                 })
                 .expect("seed sqlite message");
             mail_store
-                .upsert_message_state(atm_core::boundary::UpsertMailMessageStateRequest {
+                .upsert_message_state(atm_core::boundary::MailMessageState {
                     team: team.clone(),
                     agent: agent_name.clone(),
                     actor: agent_name.clone(),
-                    state: atm_core::boundary::MailMessageState {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        message_key,
-                        read: message.read,
-                        pending_ack_at: message.pending_ack_at,
-                        acknowledged_at: message.acknowledged_at,
-                        expires_at: message.expires_at,
-                        deleted_at: None,
-                        updated_at: Some(message.timestamp),
-                    },
+                    message_key,
+                    read: message.read,
+                    pending_ack_at: message.pending_ack_at,
+                    acknowledged_at: message.acknowledged_at,
+                    expires_at: message.expires_at,
+                    deleted_at: None,
+                    updated_at: Some(message.timestamp),
                 })
                 .expect("seed sqlite message state");
         }
@@ -1231,13 +1224,13 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
             recipient_pane_id: None,
             metadata_json: serde_json::Map::new(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     roster_store
-        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team,
-            members,
-            source: Some(atm_core::boundary::ReplaySource::new("config.json").expect("source")),
-        })
+        .replace_roster(
+            &team,
+            &members,
+            Some(&atm_core::boundary::ReplaySource::new("config.json").expect("source")),
+        )
         .expect("seed sqlite roster");
 }
 

@@ -317,9 +317,7 @@ pub(crate) fn build_runtime_status_cache_state(
     roster_store: &dyn boundary::RosterStore,
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = build_empty_runtime_status_cache_state(current_state);
-    let teams = roster_store
-        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?
-        .teams;
+    let teams = roster_store.list_teams()?;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
             "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
@@ -349,9 +347,8 @@ fn hydrate_runtime_status_cache_team(
     roster_store: &dyn boundary::RosterStore,
     team: TeamName,
 ) -> Result<(), AtmError> {
-    let roster = roster_store
-        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
-    for member in roster.members {
+    let roster = roster_store.load_roster(&team)?;
+    for member in roster {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(
                 "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",

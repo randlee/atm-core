@@ -45,7 +45,6 @@ dependencies = [
  "tempfile",
  "toml",
  "tracing",
- "ulid",
  "uuid",
  "windows-sys 0.59.0",
 ]

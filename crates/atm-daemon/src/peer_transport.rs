@@ -1035,7 +1035,7 @@ mod tests {
             error
                 .primary_recovery()
                 .expect("recovery guidance")
-                .contains("host-scoped ATM durable replay store")
+                .contains("atm-daemon binary is installed")
         );
     }
 
@@ -1109,7 +1109,7 @@ mod tests {
             error
                 .primary_recovery()
                 .expect("recovery guidance")
-                .contains("remote retry budget configuration")
+                .contains("atm-daemon binary is installed")
         );
     }
 
