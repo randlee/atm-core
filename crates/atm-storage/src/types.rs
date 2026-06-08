@@ -32,6 +32,12 @@ impl From<DateTime<Utc>> for IsoTimestamp {
     }
 }
 
+impl fmt::Display for IsoTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_rfc3339())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentName(String);

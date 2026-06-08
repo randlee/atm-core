@@ -662,22 +662,17 @@ mod tests {
                     })
                     .expect("seed sqlite message");
                 mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+                    .upsert_message_state(boundary::MailMessageState {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
+                        message_key,
+                        read: message.read,
+                        pending_ack_at: message.pending_ack_at,
+                        acknowledged_at: message.acknowledged_at,
+                        expires_at: message.expires_at,
+                        deleted_at: None,
+                        updated_at: Some(message.timestamp),
                     })
                     .expect("seed sqlite message state");
             }
@@ -827,10 +822,10 @@ mod tests {
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some("retry after the daemon is reachable")
-        );
+        let recovery = error.primary_recovery().expect("daemon recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
     }
 
     #[test]

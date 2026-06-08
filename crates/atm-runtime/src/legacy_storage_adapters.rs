@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
     reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge until atm-core consumer cutover is complete."
 )]
 use atm_core::boundary::{
-    self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
-    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
+    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
     MailStoreMessageRecord, ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
@@ -236,7 +236,7 @@ impl MailStore for BoundaryMailStoreView {
         Ok(LoadMailMessageStateResponse {
             state: self
                 .load_matching_message(&request.team, &request.agent, &request.message_key)?
-                .map(|message| MailMessageState {
+                .map(|message| boundary::MailMessageState {
                     team: request.team,
                     agent: request.agent,
                     actor: request.actor,

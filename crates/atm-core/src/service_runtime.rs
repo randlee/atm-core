@@ -4,10 +4,7 @@ use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
-use crate::boundary::{
-    MessageKey, ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportReexportMessageRequest,
-};
+use crate::boundary::{MessageKey, ProjectionAppendMode};
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -347,12 +344,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<(), AtmError> {
         let messages = load_store_backed_mailbox_projection(self, team, agent)?;
-
-        crate::direct_boundaries::reexport_messages(ProjectionExportReexportMessageRequest {
-            path: inbox_path.to_path_buf(),
-            messages,
-        })
-        .map(|_| ())
+        crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
     fn append_compat_inbox_message(
@@ -382,12 +374,16 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         mode: ProjectionAppendMode,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
-        crate::direct_boundaries::append_message_set(ProjectionExportAppendMessageSetRequest {
-            path: inbox_path.to_path_buf(),
-            messages: messages.to_vec(),
-            mode,
-        })
-        .map(|_| ())
+        match mode {
+            ProjectionAppendMode::RecoveredLogicalMessageSet => {
+                let export_policy = crate::mailbox::store::export_policy_for_path(inbox_path)?;
+                crate::mailbox::store::append_compat_mailbox_message_set(
+                    inbox_path,
+                    export_policy,
+                    messages,
+                )
+            }
+        }
     }
 
     fn load_roster_member(
