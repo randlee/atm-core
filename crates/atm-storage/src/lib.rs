@@ -11,6 +11,7 @@ pub const ROLE_TEAM_LEAD: &str = "team-lead";
 // Protocol role identity for worker agents used in shared storage fixtures.
 pub const ROLE_WORKER: &str = "worker";
 // Canonical ATM team name used by shared storage contract fixtures.
+#[cfg(test)]
 pub const TEAM_ATM_DEV: &str = "atm-dev";
 
 pub use contract::{
