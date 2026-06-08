@@ -77,7 +77,13 @@ struct ReconcileRuntimeInner {
     worker: Arc<JoinHandleOwner>,
     // Production writes begin recording projection journal entries in Z.11 when
     // the team-admin path becomes the canonical config projection writer.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "AC.2 carries the projection journal field until daemon-owned config projection suppression is wired through the live reconcile path."
+        )
+    )]
     projection_write_journal: ProjectionWriteJournal,
     queue_capacity: usize,
     debounce: Duration,
