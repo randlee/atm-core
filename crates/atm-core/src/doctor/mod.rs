@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::boundary::{
-    ConfigDoctor, MailStoreDoctor, RosterMemberRecord, RosterStoreDoctor, TaskStoreDoctor,
+    ConfigDoctor, MailStoreDoctor, RosterEntry, RosterStoreDoctor, TaskStoreDoctor,
 };
 use crate::config;
 use crate::error_codes::AtmErrorCode;
@@ -382,7 +382,7 @@ fn load_doctor_roster_compare_inputs(
     team: &TeamName,
     team_dir: &Path,
     findings: &mut Vec<DoctorFinding>,
-) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterMemberRecord>>)> {
+) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterEntry>>)> {
     let team_config = match runtime.load_team_config_for_doctor_compare(team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
@@ -403,7 +403,7 @@ fn load_doctor_roster_compare_inputs(
 fn record_doctor_roster_drift(
     team: &TeamName,
     team_config: &crate::schema::TeamConfig,
-    atm_roster: Option<Vec<RosterMemberRecord>>,
+    atm_roster: Option<Vec<RosterEntry>>,
     findings: &mut Vec<DoctorFinding>,
 ) {
     let present = team_config

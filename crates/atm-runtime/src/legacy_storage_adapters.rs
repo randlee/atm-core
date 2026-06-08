@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
     MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, MailStoreMessageRecord,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, StoredMessageRecord,
     ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
     TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
@@ -150,7 +150,7 @@ impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
 impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
 impl MailStore for BoundaryMailStoreView {
-    fn upsert_message(&self, record: MailStoreMessageRecord) -> Result<(), AtmError> {
+    fn upsert_message(&self, record: StoredMessageRecord) -> Result<(), AtmError> {
         self.store.save_message(&SharedMessage {
             team: record.team,
             agent: record.agent,
@@ -164,10 +164,10 @@ impl MailStore for BoundaryMailStoreView {
         team: &TeamName,
         agent: &AgentName,
         message_key: &atm_storage::MessageKey,
-    ) -> Result<Option<MailStoreMessageRecord>, AtmError> {
+    ) -> Result<Option<StoredMessageRecord>, AtmError> {
         Ok(self
             .load_matching_message(team, agent, message_key)?
-            .map(|message| MailStoreMessageRecord {
+            .map(|message| StoredMessageRecord {
                 team: message.team,
                 agent: message.agent,
                 message_key: message.message_key,
@@ -313,7 +313,7 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
     fn replace_roster(
         &self,
         team: &TeamName,
-        members: &[boundary::RosterMemberRecord],
+        members: &[boundary::RosterEntry],
         _source: Option<&ReplaySource>,
     ) -> Result<(), AtmError> {
         self.store.save_roster(&RosterSnapshot {
@@ -323,7 +323,7 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
         })
     }
 
-    fn load_roster(&self, team: &TeamName) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<boundary::RosterEntry>, AtmError> {
         self.store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
@@ -333,7 +333,7 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
         &self,
         team: &TeamName,
         member: &AgentName,
-    ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Option<boundary::RosterEntry>, AtmError> {
         let snapshot = self.store.load_roster(team)?;
         Ok(snapshot
             .members

@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::schema::inbox_message::{SharedAppendPolicy, to_shared_inbox_value_with_policy};
 
 /// Atomically replace one shared inbox file from fully serialized records.
@@ -31,7 +31,7 @@ use crate::schema::inbox_message::{SharedAppendPolicy, to_shared_inbox_value_wit
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub fn write_messages(
     path: &Path,
-    messages: &[MessageEnvelope],
+    messages: &[InboxMessage],
     export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
     write_message_iter(path, messages.iter(), export_policy)
@@ -43,7 +43,7 @@ pub fn write_message_iter<'a, I>(
     export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError>
 where
-    I: IntoIterator<Item = &'a MessageEnvelope>,
+    I: IntoIterator<Item = &'a InboxMessage>,
 {
     let iterator = messages.into_iter();
     let mut encoded = Vec::<Value>::new();
@@ -64,7 +64,7 @@ where
 
 pub fn append_message(
     path: &Path,
-    message: &MessageEnvelope,
+    message: &InboxMessage,
     export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
     let encoded = to_shared_inbox_value_with_policy(message, export_policy)?;

@@ -10,7 +10,7 @@ use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::{InboxMessage, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
@@ -61,28 +61,28 @@ pub(crate) trait RetainedServiceRuntime:
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError>;
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
         mode: ProjectionAppendMode,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn load_roster_member(
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError>;
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError>;
     fn load_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError>;
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError>;
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
@@ -350,7 +350,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError> {
         crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
             if current_claude_inbox_requires_repair(inbox_path).unwrap_or(false) {
@@ -372,7 +372,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         &self,
         inbox_path: &Path,
         mode: ProjectionAppendMode,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
         match mode {
             ProjectionAppendMode::RecoveredLogicalMessageSet => {
@@ -390,7 +390,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
         Ok(self
             .roster_store
             .load_roster(team)?
@@ -402,7 +402,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
         self.roster_store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
@@ -411,7 +411,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
         self.non_claude_outbound
             .deliver_payloads(crate::boundary::NonClaudeOutboundDeliveryRequest {
@@ -448,7 +448,7 @@ fn load_store_backed_mailbox_projection(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
     agent: &AgentName,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
+) -> Result<Vec<InboxMessage>, AtmError> {
     let mut metadata_rows =
         crate::service_runtime_store::RetainedMailboxRuntime::query_mailbox_metadata_rows(
             runtime,
@@ -478,7 +478,7 @@ fn load_projection_message(
     team: &TeamName,
     agent: &AgentName,
     message_key: &MessageKey,
-) -> Result<MessageEnvelope, AtmError> {
+) -> Result<InboxMessage, AtmError> {
     crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
         runtime,
         Path::new(""),
@@ -518,7 +518,7 @@ mod tests {
     use crate::boundary;
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
-    use crate::schema::MessageEnvelope;
+    use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
     use serde_json::Value;
@@ -644,8 +644,8 @@ mod tests {
         }
     }
 
-    fn message() -> MessageEnvelope {
-        MessageEnvelope {
+    fn message() -> InboxMessage {
+        InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
@@ -834,7 +834,7 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 agent: AgentName::from_validated("recipient"),
                 recipient_pane_id: None,
-                messages: vec![MessageEnvelope {
+                messages: vec![InboxMessage {
                     text: oversized_body,
                     ..message()
                 }],

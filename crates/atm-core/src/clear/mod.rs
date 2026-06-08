@@ -14,7 +14,7 @@ use crate::mailbox::source::ResolvedTarget;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, MessageClass, TeamName};
@@ -88,7 +88,7 @@ struct ClearRuntimeContext {
     actor: AgentName,
     target: ResolvedTarget,
     metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
-    removable: Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>,
+    removable: Vec<(boundary::MessageKey, InboxMessage, MessageClass)>,
 }
 
 fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -213,7 +213,7 @@ fn validate_clear_target_member_in_roster<R: RetainedServiceRuntime>(
 fn persist_deleted_messages<R: RetainedMailboxRuntime>(
     runtime: &R,
     target: &ResolvedTarget,
-    removable: &[(boundary::MessageKey, MessageEnvelope, MessageClass)],
+    removable: &[(boundary::MessageKey, InboxMessage, MessageClass)],
 ) -> Result<(), AtmError> {
     let deleted_at = IsoTimestamp::now();
     for (message_key, envelope, _) in removable {
@@ -241,7 +241,7 @@ fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
     metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
-) -> Result<Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>, AtmError> {
+) -> Result<Vec<(boundary::MessageKey, InboxMessage, MessageClass)>, AtmError> {
     let mut removable = Vec::new();
 
     for row in metadata_rows {
@@ -291,7 +291,7 @@ fn cutoff_timestamp(
         .map(|delta| delta.map(|delta| Utc::now() - delta))
 }
 
-fn is_idle_notification(message: &MessageEnvelope) -> bool {
+fn is_idle_notification(message: &InboxMessage) -> bool {
     // Claude Code currently defines idle notifications as JSON encoded in the
     // native `text` field. Do not replace this with an ATM-local schema here;
     // any ownership change must be documented in docs/claude-code-message-schema.md.
@@ -338,7 +338,7 @@ mod tests {
     use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::observability::NullObservability;
-    use crate::schema::MessageEnvelope;
+    use crate::schema::InboxMessage;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
@@ -444,7 +444,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            _message: &MessageEnvelope,
+            _message: &InboxMessage,
         ) -> Result<(), AtmError> {
             unreachable!("clear roster-truth tests do not append compat inbox messages")
         }
@@ -453,7 +453,7 @@ mod tests {
             &self,
             _inbox_path: &Path,
             _mode: ProjectionAppendMode,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), AtmError> {
             unreachable!("clear roster-truth tests do not append compat inbox message sets")
         }
@@ -461,7 +461,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), AtmError> {
             unreachable!("clear roster-truth tests do not route outbound payloads")
         }
@@ -470,8 +470,8 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
-            Ok(self.roster_present.then(|| boundary::RosterMemberRecord {
+        ) -> Result<Option<boundary::RosterEntry>, AtmError> {
+            Ok(self.roster_present.then(|| boundary::RosterEntry {
                 team_name: team.clone(),
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
@@ -486,7 +486,7 @@ mod tests {
         fn load_team_roster(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+        ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
             Ok(Vec::new())
         }
 
@@ -524,13 +524,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &boundary::MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        ) -> Result<Option<boundary::StoredMessageRecord>, AtmError> {
             unreachable!("clear roster-truth tests do not load message records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::MailStoreMessageRecord,
+            _record: boundary::StoredMessageRecord,
         ) -> Result<(), AtmError> {
             unreachable!("clear roster-truth tests do not persist message records")
         }

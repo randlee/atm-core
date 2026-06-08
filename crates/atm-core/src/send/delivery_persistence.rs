@@ -1,4 +1,4 @@
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 
 use super::WarningEntry;
 
@@ -11,13 +11,13 @@ pub(crate) enum DeliveryPersistenceDisposition {
 #[derive(Debug, Clone)]
 pub(crate) struct DeliveryPersistenceResult {
     pub(crate) disposition: DeliveryPersistenceDisposition,
-    pub(crate) original_message: MessageEnvelope,
-    pub(crate) companion_message: Option<MessageEnvelope>,
+    pub(crate) original_message: InboxMessage,
+    pub(crate) companion_message: Option<InboxMessage>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
 impl DeliveryPersistenceResult {
-    pub(crate) fn persisted(original_message: MessageEnvelope) -> Self {
+    pub(crate) fn persisted(original_message: InboxMessage) -> Self {
         Self {
             disposition: DeliveryPersistenceDisposition::Persisted,
             original_message,
@@ -27,8 +27,8 @@ impl DeliveryPersistenceResult {
     }
 
     pub(crate) fn sqlite_failed_recovered(
-        original_message: MessageEnvelope,
-        companion_message: MessageEnvelope,
+        original_message: InboxMessage,
+        companion_message: InboxMessage,
         warning: WarningEntry,
     ) -> Self {
         Self {

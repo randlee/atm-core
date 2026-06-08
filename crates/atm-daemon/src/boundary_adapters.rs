@@ -249,7 +249,7 @@ mod tests {
     use super::{DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink};
     use atm_core::boundary::NotificationSink;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
-    use atm_core::schema::{AtmMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, InboxMessage};
     use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
     use atm_storage_claude::compat::{
@@ -411,10 +411,10 @@ mod tests {
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
 
-    fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+    fn sample_message(from: &str, text: &str) -> InboxMessage {
         let message_id = AtmMessageId::new();
 
-        MessageEnvelope {
+        InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),

@@ -8,7 +8,7 @@ use tracing::warn;
 
 use crate::address::validate_path_segment;
 use crate::boundary::{
-    ConfigLoadRequest, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+    ConfigLoadRequest, RosterHarness, RosterMemberKind, RosterEntry, RosterStore,
 };
 use crate::config::{load_claude_team_config_document, resolve_team};
 use crate::error::{AtmError, AtmErrorKind};
@@ -111,7 +111,7 @@ pub struct AddMemberOutcome {
 struct MemberAddContext {
     team_dir: PathBuf,
     current_extra: serde_json::Map<String, Value>,
-    existing_roster: Vec<RosterMemberRecord>,
+    existing_roster: Vec<RosterEntry>,
 }
 
 /// Parameters for creating one team backup.
@@ -338,7 +338,7 @@ fn load_member_add_context(
 }
 
 fn ensure_member_absent(
-    existing_roster: &[RosterMemberRecord],
+    existing_roster: &[RosterEntry],
     team: &TeamName,
     member: &AgentName,
 ) -> Result<(), AtmError> {
@@ -360,7 +360,7 @@ fn ensure_member_absent(
 
 fn build_member_add_roster_record(
     request: &AddMemberRequest,
-) -> Result<RosterMemberRecord, AtmError> {
+) -> Result<RosterEntry, AtmError> {
     let normalized_tmux_pane_id = request.tmux_pane_id.clone();
     let mut extra = serde_json::Map::new();
     if normalized_tmux_pane_id.is_some() {
@@ -377,7 +377,7 @@ fn build_member_add_roster_record(
     );
     extra.insert("cwd".to_string(), json!(request.cwd.display().to_string()));
 
-    Ok(RosterMemberRecord {
+    Ok(RosterEntry {
         team_name: request.team.clone(),
         agent_name: request.member.clone(),
         member_kind: RosterMemberKind::Permanent,
@@ -392,7 +392,7 @@ fn build_member_add_roster_record(
 fn replace_roster_for_member_add(
     roster_store: &dyn RosterStore,
     team: &TeamName,
-    existing_roster: &[RosterMemberRecord],
+    existing_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
     roster_store
         .replace_roster(team, existing_roster, None)
@@ -486,7 +486,7 @@ pub fn restore_team_with_roster_store(
     restore::restore_team_with_roster_store(roster_store, request)
 }
 
-fn ordered_roster_member_summaries(records: &[RosterMemberRecord]) -> Vec<MemberSummary> {
+fn ordered_roster_member_summaries(records: &[RosterEntry]) -> Vec<MemberSummary> {
     let mut members = Vec::with_capacity(records.len());
     if let Some(team_lead) = records
         .iter()
@@ -503,7 +503,7 @@ fn ordered_roster_member_summaries(records: &[RosterMemberRecord]) -> Vec<Member
     members
 }
 
-fn member_summary_from_roster(record: &RosterMemberRecord) -> MemberSummary {
+fn member_summary_from_roster(record: &RosterEntry) -> MemberSummary {
     MemberSummary {
         name: record.agent_name.clone(),
         agent_id: metadata_string(&record.metadata_json, "agentId")
@@ -539,13 +539,13 @@ fn load_team_projection_extra_for_member_add(
 fn load_team_roster(
     roster_store: &dyn RosterStore,
     team: &TeamName,
-) -> Result<Vec<RosterMemberRecord>, AtmError> {
+) -> Result<Vec<RosterEntry>, AtmError> {
     roster_store.load_roster(team)
 }
 
 pub(super) fn project_team_config_from_roster(
     extra: serde_json::Map<String, Value>,
-    records: &[RosterMemberRecord],
+    records: &[RosterEntry],
 ) -> TeamConfig {
     let mut members = Vec::with_capacity(records.len());
     if let Some(team_lead) = records
@@ -563,7 +563,7 @@ pub(super) fn project_team_config_from_roster(
     TeamConfig { members, extra }
 }
 
-fn agent_member_from_roster_record(record: &RosterMemberRecord) -> AgentMember {
+fn agent_member_from_roster_record(record: &RosterEntry) -> AgentMember {
     let mut extra = compatibility_extra_fields(&record.metadata_json);
     AgentMember {
         name: record.agent_name.clone(),
@@ -838,7 +838,7 @@ mod tests {
         list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+        self, ReplaySource, RosterHarness, RosterMemberKind, RosterEntry, RosterStore,
         RosterStoreHealthSnapshot,
     };
     use crate::error_codes::AtmErrorCode;
@@ -849,11 +849,11 @@ mod tests {
     #[derive(Default)]
     struct RecordingRosterStore {
         // Test-only seam: Mutex keeps the fixture simple while serial tests own all access.
-        teams: Mutex<BTreeMap<TeamName, Vec<RosterMemberRecord>>>,
+        teams: Mutex<BTreeMap<TeamName, Vec<RosterEntry>>>,
     }
 
     impl RecordingRosterStore {
-        fn seed_team(&self, team: &str, members: Vec<RosterMemberRecord>) {
+        fn seed_team(&self, team: &str, members: Vec<RosterEntry>) {
             self.teams
                 .lock()
                 .expect("roster store lock")
@@ -867,7 +867,7 @@ mod tests {
         fn replace_roster(
             &self,
             team: &TeamName,
-            members: &[RosterMemberRecord],
+            members: &[RosterEntry],
             _source: Option<&ReplaySource>,
         ) -> Result<(), crate::error::AtmError> {
             self.teams
@@ -880,7 +880,7 @@ mod tests {
         fn load_roster(
             &self,
             team: &TeamName,
-        ) -> Result<Vec<RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Vec<RosterEntry>, crate::error::AtmError> {
             Ok(self
                 .teams
                 .lock()
@@ -894,7 +894,7 @@ mod tests {
             &self,
             team: &TeamName,
             member: &AgentName,
-        ) -> Result<Option<RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Option<RosterEntry>, crate::error::AtmError> {
             Ok(self
                 .teams
                 .lock()
@@ -938,8 +938,8 @@ mod tests {
         }
     }
 
-    fn roster_member(team: &str, agent: &str) -> RosterMemberRecord {
-        RosterMemberRecord {
+    fn roster_member(team: &str, agent: &str) -> RosterEntry {
+        RosterEntry {
             team_name: team.parse().expect("team"),
             agent_name: agent.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,

@@ -20,5 +20,5 @@ pub use observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
-pub use schema::{AlertKind, AtmMessageId, MessageEnvelope, PendingAck, ThreadMode};
+pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use types::{AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};

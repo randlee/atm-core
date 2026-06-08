@@ -268,7 +268,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::read::ClassifiedMessage;
-    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
@@ -289,7 +289,7 @@ mod tests {
             source_path: PathBuf::from("recipient.json"),
             bucket: DisplayBucket::Unread,
             class: MessageClass::Unread,
-            envelope: MessageEnvelope {
+            envelope: InboxMessage {
                 from: TEST_SENDER.parse::<AgentName>().expect("agent"),
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
@@ -427,7 +427,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            _message: &MessageEnvelope,
+            _message: &InboxMessage,
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not append compat inbox messages")
         }
@@ -436,7 +436,7 @@ mod tests {
             &self,
             _inbox_path: &Path,
             _mode: ProjectionAppendMode,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not append compat inbox message sets")
         }
@@ -444,7 +444,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not route outbound payloads")
         }
@@ -453,8 +453,8 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
-            Ok(self.roster_present.then(|| boundary::RosterMemberRecord {
+        ) -> Result<Option<boundary::RosterEntry>, AtmError> {
+            Ok(self.roster_present.then(|| boundary::RosterEntry {
                 team_name: team.clone(),
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
@@ -469,7 +469,7 @@ mod tests {
         fn load_team_roster(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+        ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
             Ok(Vec::new())
         }
 
@@ -507,13 +507,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &boundary::MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        ) -> Result<Option<boundary::StoredMessageRecord>, AtmError> {
             unreachable!("list roster-truth tests do not load message records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::MailStoreMessageRecord,
+            _record: boundary::StoredMessageRecord,
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not persist message records")
         }

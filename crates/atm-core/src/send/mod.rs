@@ -20,7 +20,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
@@ -484,7 +484,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(MessageEnvelope {
+        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.display_sender.clone(),
             text: body.to_string(),
             timestamp,
@@ -505,7 +505,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             extra: Map::new(),
         }));
     }
-    let envelope = MessageEnvelope {
+    let envelope = InboxMessage {
         from: context.display_sender.clone(),
         text: body.to_string(),
         timestamp,
@@ -630,8 +630,8 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn prepare_threaded_message(
-    envelope: &mut MessageEnvelope,
-    inbox_messages: &[MessageEnvelope],
+    envelope: &mut InboxMessage,
+    inbox_messages: &[InboxMessage],
 ) -> Result<(), AtmError> {
     match (
         envelope.parent_message_id,
@@ -656,8 +656,8 @@ fn prepare_threaded_message(
 }
 
 fn validate_thread_append(
-    envelope: &mut MessageEnvelope,
-    inbox_messages: &[MessageEnvelope],
+    envelope: &mut InboxMessage,
+    inbox_messages: &[InboxMessage],
     parent_id: AtmMessageId,
 ) -> Result<(), AtmError> {
     let index = ThreadIndex::new(inbox_messages);

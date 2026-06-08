@@ -157,7 +157,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_core::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use atm_storage::{
-        AtmMessageId, IsoTimestamp, Message, MessageEnvelope, MessageKey, ModelName, RosterHarness,
+        AtmMessageId, IsoTimestamp, Message, InboxMessage, MessageKey, ModelName, RosterHarness,
         RosterMember, RosterMemberKind,
     };
     use tempfile::tempdir;
@@ -173,7 +173,7 @@ mod tests {
             team: TEAM_NAME.parse().expect("team"),
             agent: ROLE_QUALITY_MGR.parse().expect("agent"),
             message_key: MessageKey::from(AtmMessageId::new()),
-            envelope: MessageEnvelope {
+            envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("from"),
                 text: "body".to_string(),
                 timestamp: IsoTimestamp::now(),

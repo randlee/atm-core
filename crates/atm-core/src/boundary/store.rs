@@ -5,7 +5,7 @@
 
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, MessageEnvelope};
+use crate::schema::{AgentMember, InboxMessage};
 use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
 use atm_storage::contract::{AckTransition, MessageKey, TaskState};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
@@ -51,12 +51,12 @@ pub struct RosterStoreHealthSnapshot {
     pub refreshed_at: Option<IsoTimestamp>,
 }
 
-pub type RosterMemberRecord = atm_storage::contract::RosterMember;
+pub type RosterEntry = atm_storage::contract::RosterMember;
 
 pub fn roster_member_record_from_claude_code_member(
     team_name: TeamName,
     member: AgentMember,
-) -> RosterMemberRecord {
+) -> RosterEntry {
     let recipient_pane_id = member.tmux_pane_id;
     let mut metadata_json = member.extra;
     if !member.agent_id.is_empty() {
@@ -78,7 +78,7 @@ pub fn roster_member_record_from_claude_code_member(
         );
     }
 
-    RosterMemberRecord {
+    RosterEntry {
         team_name,
         agent_name: member.name,
         member_kind: RosterMemberKind::Permanent,
@@ -91,7 +91,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ProjectionRosterMember {
+pub(crate) struct ProjectedRosterEntry {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -101,15 +101,15 @@ pub(crate) struct ProjectionRosterMember {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProjectionRoster {
     pub team_name: TeamName,
-    pub members: Arc<[ProjectionRosterMember]>,
+    pub members: Arc<[ProjectedRosterEntry]>,
 }
 
 impl ProjectionRoster {
-    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
+    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterEntry]) -> Self {
         let members = records
             .iter()
             .filter(|record| record.harness == RosterHarness::ClaudeCode)
-            .map(|record| ProjectionRosterMember {
+            .map(|record| ProjectedRosterEntry {
                 member_name: record.agent_name.clone(),
                 harness: record.harness,
                 inbox_path: None,
@@ -295,7 +295,7 @@ pub struct NonClaudeOutboundDeliveryRequest {
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
     /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and
     /// `LocalFileNonClaudeOutbound::deliver_payloads` (CLI path, see service_runtime.rs:218).
-    pub messages: Vec<MessageEnvelope>,
+    pub messages: Vec<InboxMessage>,
 }
 
 /// Canonical non-Claude outbound response payload.
@@ -375,13 +375,13 @@ pub trait RosterStore: sealed::Sealed {
     fn replace_roster(
         &self,
         team: &TeamName,
-        members: &[RosterMemberRecord],
+        members: &[RosterEntry],
         source: Option<&ReplaySource>,
     ) -> Result<(), AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when one roster snapshot cannot be loaded.
-    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError>;
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when membership cannot be queried.
@@ -389,7 +389,7 @@ pub trait RosterStore: sealed::Sealed {
         &self,
         team: &TeamName,
         member: &AgentName,
-    ) -> Result<Option<RosterMemberRecord>, AtmError>;
+    ) -> Result<Option<RosterEntry>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when the canonical roster team set cannot be
