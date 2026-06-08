@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
-use crate::boundary::{MessageKey, ProjectionAppendMode};
+use crate::boundary::ProjectionAppendMode;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -463,39 +463,25 @@ fn load_store_backed_mailbox_projection(
             .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
     });
 
-    metadata_rows
-        .into_iter()
-        .map(|row| load_projection_message(runtime, team, agent, &row.message_key))
-        .collect()
-}
-
-#[allow(
-    dead_code,
-    reason = "Called only from load_store_backed_mailbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
-)]
-fn load_projection_message(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &AgentName,
-    message_key: &MessageKey,
-) -> Result<InboxMessage, AtmError> {
-    crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
-        runtime,
-        Path::new(""),
-        team,
-        agent,
-        message_key,
-    )?
-    .map(|record| record.envelope)
-    .ok_or_else(|| {
-        AtmError::validation(format!(
-            "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-            message_key
-        ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-        )
-    })
+    let mut messages = Vec::with_capacity(metadata_rows.len());
+    for row in metadata_rows {
+        // Keep the repair/rebuild projection consistent with the live send
+        // export path: a row deleted between metadata enumeration and reload is
+        // a legal concurrent-clear race, not a fatal rebuild error.
+        let Some(record) =
+            crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
+                runtime,
+                Path::new(""),
+                team,
+                agent,
+                &row.message_key,
+            )?
+        else {
+            continue;
+        };
+        messages.push(record.envelope);
+    }
+    Ok(messages)
 }
 
 fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {

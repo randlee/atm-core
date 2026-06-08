@@ -131,23 +131,19 @@ fn load_store_backed_mailbox_projection(
             .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
     });
 
-    metadata_rows
-        .into_iter()
-        .map(|row| {
-            runtime
-                .load_message_record(home_dir, team, agent, &row.message_key)?
-                .map(|record| record.envelope)
-                .ok_or_else(|| {
-                    AtmError::validation(format!(
-                        "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-                        row.message_key
-                    ))
-                    .with_recovery(
-                        "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-                    )
-                })
-        })
-        .collect()
+    let mut messages = Vec::with_capacity(metadata_rows.len());
+    for row in metadata_rows {
+        // Concurrent clear/ack paths can legally delete a row after metadata
+        // enumeration but before the compatibility export reloads it. Skip the
+        // vanished row and export the current mailbox contents instead of
+        // failing the whole send after the write already committed.
+        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
+        else {
+            continue;
+        };
+        messages.push(record.envelope);
+    }
+    Ok(messages)
 }
 
 fn mirror_message_to_store(
