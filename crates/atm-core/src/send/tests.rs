@@ -870,9 +870,7 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     );
     assert_eq!(
         error.primary_recovery(),
-        Some(
-            "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
-        )
+        Some("Update the team membership or target a different recipient.")
     );
     assert!(
         runtime

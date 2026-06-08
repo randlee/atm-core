@@ -48,7 +48,7 @@ pub(crate) trait RetainedServiceRuntime:
     fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
     #[allow(
         dead_code,
-        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
+        reason = "Called from tests while still appearing dead in the production compile."
     )]
     fn rebuild_compat_inbox_projection(
         &self,
@@ -553,15 +553,18 @@ mod tests {
 
         fn upsert_message_state(
             &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, crate::error::AtmError> {
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_message_state(
             &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _actor: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailMessageState>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
@@ -776,11 +779,11 @@ mod tests {
             .append_compat_inbox_message(&inbox_path, &message())
             .expect_err("malformed Claude array path must fail closed");
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(
-            error
-                .primary_recovery()
-                .unwrap_or_default()
-                .contains("explicit repair/rebuild inbox projection path"),
+        assert_eq!(
+            error.primary_recovery(),
+            Some(
+                "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument."
+            ),
             "unexpected recovery: {error:?}"
         );
     }
@@ -895,7 +898,7 @@ mod tests {
         assert_eq!(
             error.primary_recovery(),
             Some(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
+                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
             )
         );
         assert!(!output_path.exists());

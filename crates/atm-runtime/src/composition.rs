@@ -238,40 +238,33 @@ impl boundary::MailStore for SqliteMailStoreBoundary {
 
     fn upsert_message_state(
         &self,
-        request: boundary::UpsertMailMessageStateRequest,
-    ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+        state: boundary::MailMessageState,
+    ) -> Result<(), AtmError> {
         self.backend
             .upsert_message_state(SqliteMessageStateRecord {
-                team: request.team,
-                agent: request.agent,
-                actor: request.actor,
-                message_key: request.state.message_key.clone(),
-                read: request.state.read,
-                pending_ack_at: request.state.pending_ack_at,
-                acknowledged_at: request.state.acknowledged_at,
-                expires_at: request.state.expires_at,
-                deleted_at: request.state.deleted_at,
-                updated_at: request.state.updated_at,
-            })?;
-        Ok(boundary::UpsertMailMessageStateResponse {
-            state: request.state,
-        })
+                team: state.team,
+                agent: state.agent,
+                actor: state.actor,
+                message_key: state.message_key.clone(),
+                read: state.read,
+                pending_ack_at: state.pending_ack_at,
+                acknowledged_at: state.acknowledged_at,
+                expires_at: state.expires_at,
+                deleted_at: state.deleted_at,
+                updated_at: state.updated_at,
+            })
     }
 
     fn load_message_state(
         &self,
-        request: boundary::LoadMailMessageStateRequest,
-    ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+        team: &atm_core::types::TeamName,
+        agent: &atm_core::types::AgentName,
+        actor: &atm_core::types::AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailMessageState>, AtmError> {
         self.backend
-            .load_message_state(
-                &request.team,
-                &request.agent,
-                &request.actor,
-                &request.message_key,
-            )
-            .map(|state| boundary::LoadMailMessageStateResponse {
-                state: state.map(message_state_record),
-            })
+            .load_message_state(team, agent, actor, message_key)
+            .map(|state| state.map(message_state_record))
     }
 
     fn record_ingest_replay_state(

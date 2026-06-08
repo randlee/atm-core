@@ -122,13 +122,6 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
-        self.mail_store
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                team: state.team.clone(),
-                agent: state.agent.clone(),
-                actor: state.actor.clone(),
-                state,
-            })
-            .map(|_| ())
+        self.mail_store.upsert_message_state(state)
     }
 }

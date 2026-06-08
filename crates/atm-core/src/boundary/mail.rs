@@ -1,7 +1,7 @@
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use atm_storage::contract::MessageKey;
+use atm_storage::contract::{MailMessageState, MessageFingerprint, MessageKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -54,60 +54,6 @@ pub struct MailStoreMessageRecord {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailMessageState {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub actor: AgentName,
-    pub message_key: MessageKey,
-    pub read: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pending_ack_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub acknowledged_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deleted_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<IsoTimestamp>,
-}
-
-/// Opaque hash or content-addressable identifier that marks the last
-/// successfully ingested message boundary for a replay source. Used by
-/// incremental ingest workflows to resume without re-processing already-seen
-/// messages.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct MessageFingerprint(String);
-
-impl MessageFingerprint {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for MessageFingerprint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl From<String> for MessageFingerprint {
-    fn from(s: String) -> Self {
-        Self::new(s)
-    }
-}
-
-impl AsRef<str> for MessageFingerprint {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -186,37 +132,6 @@ pub struct MailStoreBootstrapResponse {
     pub opened: bool,
 }
 
-/// Stub mail-store upsert-message-state request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct UpsertMailMessageStateRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub actor: AgentName,
-    pub state: MailMessageState,
-}
-
-/// Stub mail-store upsert-message-state response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct UpsertMailMessageStateResponse {
-    pub state: MailMessageState,
-}
-
-/// Stub mail-store load-message-state request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LoadMailMessageStateRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub actor: AgentName,
-    pub message_key: MessageKey,
-}
-
-/// Stub mail-store load-message-state response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LoadMailMessageStateResponse {
-    #[serde(default)]
-    pub state: Option<MailMessageState>,
-}
-
 pub type DoctorFinding = crate::doctor::DoctorFinding;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -274,18 +189,18 @@ pub trait MailStore: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when message-state persistence fails.
-    fn upsert_message_state(
-        &self,
-        request: UpsertMailMessageStateRequest,
-    ) -> Result<UpsertMailMessageStateResponse, AtmError>;
+    fn upsert_message_state(&self, state: MailMessageState) -> Result<(), AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when message state cannot be loaded.
     fn load_message_state(
         &self,
-        request: LoadMailMessageStateRequest,
-    ) -> Result<LoadMailMessageStateResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+        actor: &AgentName,
+        message_key: &MessageKey,
+    ) -> Result<Option<MailMessageState>, AtmError>;
 
     /// # Errors
     ///

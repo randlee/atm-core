@@ -722,17 +722,17 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn upsert_message_state(
-            &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+        fn upsert_message_state(&self, _state: boundary::MailMessageState) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_message_state(
             &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _actor: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailMessageState>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 

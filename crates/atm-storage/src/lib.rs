@@ -1,3 +1,6 @@
+//! Shared audited storage contract and canonical storage-facing domain types
+//! for ATM backends and their callers.
+
 pub mod contract;
 pub mod error;
 pub mod error_codes;
@@ -15,9 +18,9 @@ pub const ROLE_WORKER: &str = "worker";
 pub const TEAM_ATM_DEV: &str = "atm-dev";
 
 pub use contract::{
-    AckTransition, Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
-    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-    StorageNotifier, TaskState,
+    AckTransition, AgentType, MailMessageState, Message, MessageFingerprint, MessageKey,
+    MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent, RosterHarness,
+    RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, TaskState,
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;
