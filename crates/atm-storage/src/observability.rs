@@ -1,13 +1,13 @@
 use crate::{AtmError, AtmErrorCode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SqliteObservabilityOutcome {
+pub enum SqliteObservabilityOutcome {
     Failed,
     Timeout,
 }
 
 impl SqliteObservabilityOutcome {
-    pub(crate) const fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Failed => "failed",
             Self::Timeout => "timeout",
@@ -17,7 +17,7 @@ impl SqliteObservabilityOutcome {
 
 /// Structured SQLite subsystem event emitted through the observability port.
 #[derive(Debug, Clone)]
-pub(crate) struct SqliteObservabilityEvent {
+pub struct SqliteObservabilityEvent {
     pub action: &'static str,
     pub outcome: SqliteObservabilityOutcome,
     pub message: String,
@@ -25,7 +25,7 @@ pub(crate) struct SqliteObservabilityEvent {
 }
 
 impl SqliteObservabilityEvent {
-    pub(crate) fn new(
+    pub fn new(
         action: &'static str,
         outcome: SqliteObservabilityOutcome,
         message: impl Into<String>,
@@ -47,7 +47,7 @@ impl SqliteObservabilityEvent {
 /// provide already-shaped SQLite event content and the implementation decides
 /// only how to emit or project that event. This trait is intentionally open
 /// for extension by downstream observability backends.
-pub(crate) trait SqliteObservability: Send + Sync {
+pub trait SqliteObservability: Send + Sync {
     fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError>;
 
     fn emit_or_warn(&self, event: SqliteObservabilityEvent) {
@@ -67,7 +67,7 @@ pub(crate) trait SqliteObservability: Send + Sync {
 /// No-op SQLite observability sink used by callers that intentionally do not
 /// retain or project SQLite subsystem events.
 #[derive(Debug, Default)]
-pub(crate) struct NullSqliteObservability;
+pub struct NullSqliteObservability;
 
 impl SqliteObservability for NullSqliteObservability {
     fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> {

@@ -6,9 +6,7 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::boundary::{
-    ConfigDoctor, MailStoreDoctor, RosterEntry, RosterStoreDoctor, TaskStoreDoctor,
-};
+use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterEntry, RosterStoreDoctor};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -37,7 +35,6 @@ pub struct DoctorQuery {
 pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
-    pub task_store_doctor: Arc<dyn TaskStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
 }
 
@@ -46,7 +43,6 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
         f.debug_struct("RuntimeDoctorPorts")
             .field("config_doctor", &"dyn ConfigDoctor")
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
-            .field("task_store_doctor", &"dyn TaskStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .finish()
     }
@@ -116,7 +112,6 @@ pub fn run_doctor_with_runtime(
         observability: observability_health,
         config: crate::boundary::ConfigDoctorReport::default(),
         mail_store: crate::boundary::MailStoreDoctorReport::default(),
-        task_store: crate::boundary::TaskStoreDoctorReport::default(),
         roster_store: crate::boundary::RosterStoreDoctorReport::default(),
         daemon_runtime: None,
         drift_findings: Vec::new(),
@@ -175,7 +170,6 @@ pub fn run_doctor_with_runtime_ports(
         observability: observability_health,
         config: reports.config,
         mail_store: reports.mail_store,
-        task_store: reports.task_store,
         roster_store: reports.roster_store,
         daemon_runtime,
         drift_findings,
@@ -187,7 +181,6 @@ pub fn run_doctor_with_runtime_ports(
 struct DoctorSectionReports {
     config: crate::boundary::ConfigDoctorReport,
     mail_store: crate::boundary::MailStoreDoctorReport,
-    task_store: crate::boundary::TaskStoreDoctorReport,
     roster_store: crate::boundary::RosterStoreDoctorReport,
 }
 
@@ -199,10 +192,6 @@ fn inspect_runtime_doctor_sections(
         config: inspect_doctor_section(runtime_doctors.config_doctor.inspect_config(), findings),
         mail_store: inspect_doctor_section(
             runtime_doctors.mail_store_doctor.inspect_mail_store(),
-            findings,
-        ),
-        task_store: inspect_doctor_section(
-            runtime_doctors.task_store_doctor.inspect_task_store(),
             findings,
         ),
         roster_store: inspect_doctor_section(
@@ -239,7 +228,6 @@ fn collect_doctor_findings(
     let mut findings = Vec::new();
     findings.extend(reports.config.findings.iter().cloned());
     findings.extend(reports.mail_store.findings.iter().cloned());
-    findings.extend(reports.task_store.findings.iter().cloned());
     findings.extend(reports.roster_store.findings.iter().cloned());
     findings.extend(drift_findings.iter().cloned());
     findings.extend(general_findings.iter().cloned());

@@ -12,12 +12,11 @@ use atm_core::boundary::{
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, ReplaySource,
     RosterStoreDoctor, RosterStoreDoctorReport, TaskStore, TaskStoreAttachMessageLinkRequest,
     TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
-    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
-    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
-    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
-    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord,
-    TaskStoreUpdateTaskRequest, TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse,
+    TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse, TaskStoreQueryTaskMetadataRequest,
+    TaskStoreQueryTaskMetadataResponse, TaskStoreRecordAckTransitionRequest,
+    TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
+    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
@@ -52,9 +51,6 @@ where
 
 #[derive(Clone, Default)]
 struct NoopTaskStore;
-
-#[derive(Clone, Default)]
-struct NoopTaskStoreDoctor;
 
 #[derive(Clone, Default)]
 struct DefaultMailStoreDoctor;
@@ -146,7 +142,6 @@ pub(crate) fn runtime_doctor_ports(
     RuntimeDoctorPorts {
         config_doctor,
         mail_store_doctor: Arc::new(DefaultMailStoreDoctor),
-        task_store_doctor: Arc::new(NoopTaskStoreDoctor),
         roster_store_doctor: Arc::new(DefaultRosterStoreDoctor),
     }
 }
@@ -155,7 +150,6 @@ impl boundary::sealed::Sealed for BoundaryRosterStoreView {}
 impl boundary::sealed::Sealed for NoopTaskStore {}
 impl boundary::sealed::Sealed for DefaultMailStoreDoctor {}
 impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
-impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
 impl MailStore for BoundaryMailStoreView {
     fn upsert_message(&self, record: Message) -> Result<(), AtmError> {
@@ -467,14 +461,6 @@ impl RosterStoreDoctor for DefaultRosterStoreDoctor {
         // This bridge doctor has no backend-owned failure mode; it only reports
         // the absence of extra diagnostics while AC.4 keeps the compile bridge.
         Ok(RosterStoreDoctorReport::default())
-    }
-}
-
-impl TaskStoreDoctor for NoopTaskStoreDoctor {
-    fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError> {
-        // Task storage is intentionally absent on this runtime assembly, so the
-        // doctor stays infallible and reports an empty diagnostic surface.
-        Ok(TaskStoreDoctorReport::default())
     }
 }
 
