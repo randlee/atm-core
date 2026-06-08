@@ -401,11 +401,11 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-pub(crate) use atm_storage_claude::compat::{
+pub(crate) use atm_storage::compat::{
     ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
     ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
     ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
+    ProjectionExportReexportMessageResponse, SourceFileRecord, SourceIngressDiagnosticsRequest,
     SourceIngressDiagnosticsResponse, SourceIngressImportRequest, SourceIngressImportResponse,
 };
 
