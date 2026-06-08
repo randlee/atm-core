@@ -514,6 +514,10 @@ mod tests {
     impl boundary::sealed::Sealed for NoopMailStore {}
 
     impl boundary::MailStore for NoopMailStore {
+        #[allow(
+            deprecated,
+            reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
+        )]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,

@@ -1147,7 +1147,7 @@ impl Fixture {
 
     fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-        let mail_store = assembly.mail_store();
+        let mail_store = assembly.mail_store_arc();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -1215,7 +1215,7 @@ fn create_team_with_config(
 
 fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
     let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
-    let roster_store = assembly.roster_store();
+    let roster_store = assembly.roster_store_arc();
     let team = team.parse::<TeamName>().expect("team");
     let members = members
         .iter()

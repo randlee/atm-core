@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.4
 worktree: ../atm-core-worktrees/feature/pAC-s4-atm-core-storage-boundary-adoption
 branch: feature/pAC-s4-atm-core-storage-boundary-adoption
-status: planned
+status: complete
 estimated_scope: large
 ```
 

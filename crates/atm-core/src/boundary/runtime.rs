@@ -2,13 +2,10 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::protocol::RequestEnvelope;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use super::{
-    ConfigDoctor, MailStore, MailStoreDoctor, MessageKey, RosterStore, RosterStoreDoctor,
-    TaskStore, TaskStoreDoctor, sealed,
+    MessageKey, sealed,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,33 +23,6 @@ pub struct RemoteReplayStateRecord {
     pub last_attempt_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error: Option<AtmErrorCode>,
-}
-
-#[derive(Clone)]
-pub struct RuntimeBundle {
-    pub mail_store: Arc<dyn MailStore + Send + Sync>,
-    pub task_store: Arc<dyn TaskStore + Send + Sync>,
-    pub roster_store: Arc<dyn RosterStore + Send + Sync>,
-    pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
-    pub task_store_doctor: Arc<dyn TaskStoreDoctor + Send + Sync>,
-    pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
-    pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
-    pub remote_replay_store: Arc<dyn RemoteReplayStore + Send + Sync>,
-}
-
-impl fmt::Debug for RuntimeBundle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RuntimeBundle")
-            .field("mail_store", &"dyn MailStore")
-            .field("task_store", &"dyn TaskStore")
-            .field("roster_store", &"dyn RosterStore")
-            .field("mail_store_doctor", &"dyn MailStoreDoctor")
-            .field("task_store_doctor", &"dyn TaskStoreDoctor")
-            .field("roster_store_doctor", &"dyn RosterStoreDoctor")
-            .field("config_doctor", &"dyn ConfigDoctor")
-            .field("remote_replay_store", &"dyn RemoteReplayStore")
-            .finish()
-    }
 }
 
 /// BOUNDARY-RemoteReplayStore — see docs/atm-core/boundaries.md.

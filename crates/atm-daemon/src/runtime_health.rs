@@ -60,8 +60,9 @@ pub(crate) struct DaemonRequestDispatcher {
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
-    runtime_bundle: boundary::RuntimeBundle,
+    doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn boundary::RosterStore + Send + Sync>>,
+    remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     notification_runtime: NotificationRuntime,
     advisory_runtime: AdvisoryRuntime,
@@ -73,8 +74,9 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
             .field("service_runtime", &self.service_runtime)
-            .field("runtime_bundle", &self.runtime_bundle)
+            .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
+            .field("remote_replay_store_present", &self.remote_replay_store.is_some())
             .field(
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
@@ -337,7 +339,7 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let roster_store = runtime_assembly.runtime_bundle.roster_store.clone();
+        let roster_store = runtime_assembly.roster_store.clone();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -362,8 +364,9 @@ impl DaemonRequestDispatcher {
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
             service_runtime: runtime_assembly.service_runtime,
-            runtime_bundle: runtime_assembly.runtime_bundle,
+            doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
+            remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
             notification_runtime,
             advisory_runtime: AdvisoryRuntime::new_with_observability(
@@ -613,11 +616,11 @@ impl DaemonRequestDispatcher {
                 )),
             ],
         };
-        let mut report = doctor::run_doctor_with_runtime_bundle(
+        let mut report = doctor::run_doctor_with_runtime_ports(
             query,
             self.observability.as_ref(),
             &self.service_runtime,
-            &self.runtime_bundle,
+            &self.doctor_ports,
             Some(daemon_runtime),
         )?;
         let runtime_status = match &report.member_roster {
@@ -802,7 +805,7 @@ impl DaemonRequestDispatcher {
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
         match build_runtime_status_cache_state(
             None,
-            runtime_assembly.runtime_bundle.roster_store.as_ref(),
+            runtime_assembly.roster_store.as_ref(),
         ) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -833,8 +836,9 @@ impl DaemonRequestDispatcher {
             runtime_health_observability,
             status_cache,
             service_runtime: runtime_assembly.service_runtime.clone(),
-            runtime_bundle: runtime_assembly.runtime_bundle.clone(),
-            roster_store: Some(runtime_assembly.runtime_bundle.roster_store.clone()),
+            doctor_ports: runtime_assembly.doctor_ports.clone(),
+            roster_store: Some(runtime_assembly.roster_store.clone()),
+            remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
             notification_runtime,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(

@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
+use atm_storage_rusqlite::{
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeSqliteOutcome {
-    Ok,
     Failed,
     Timeout,
 }
@@ -13,7 +14,6 @@ pub enum RuntimeSqliteOutcome {
 impl RuntimeSqliteOutcome {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Ok => "ok",
             Self::Failed => "failed",
             Self::Timeout => "timeout",
         }
@@ -23,7 +23,6 @@ impl RuntimeSqliteOutcome {
 impl From<SqliteObservabilityOutcome> for RuntimeSqliteOutcome {
     fn from(value: SqliteObservabilityOutcome) -> Self {
         match value {
-            SqliteObservabilityOutcome::Ok => Self::Ok,
             SqliteObservabilityOutcome::Failed => Self::Failed,
             SqliteObservabilityOutcome::Timeout => Self::Timeout,
         }

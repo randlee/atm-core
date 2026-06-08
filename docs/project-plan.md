@@ -325,7 +325,7 @@ Sprint line:
 - `AC.1` `feature/pAC-s1-atm-storage-contract-and-canonical-types` `complete`
 - `AC.2` `feature/pAC-s2-atm-storage-claude-extraction` `complete`
 - `AC.3` `feature/pAC-s3-sqlite-backend-convergence` `complete`
-- `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption`
+- `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption` `complete`
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification`
 - `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout`
 - `AC.7` `feature/pAC-s7-sqlserver-readiness-proof`

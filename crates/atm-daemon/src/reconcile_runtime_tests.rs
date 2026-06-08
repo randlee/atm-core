@@ -7,11 +7,11 @@ use crate::worker_support::{
     retained_join_helper_count_for_test,
 };
 use atm_core::boundary::{
-    self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-    InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, NotificationSink,
-    ReconcileRequest, RosterStore, RosterStoreHealthSnapshot, WatchEventBatch, WatchEventSource,
-    WatchSubscriptionRequest,
+    self, NotificationEvent, NotificationSink, ReconcileRequest, RosterStore,
+    RosterStoreHealthSnapshot, SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
@@ -506,11 +506,11 @@ impl WatchEventSource for FakeWatchSource {
 
 #[derive(Clone)]
 struct FakeInboxIngress {
-    imports: Arc<Mutex<Vec<InboxIngressImportResponse>>>,
+    imports: Arc<Mutex<Vec<SourceIngressImportResponse>>>,
 }
 
 impl FakeInboxIngress {
-    fn new(imports: Vec<InboxIngressImportResponse>) -> Self {
+    fn new(imports: Vec<SourceIngressImportResponse>) -> Self {
         Self {
             imports: Arc::new(Mutex::new(imports)),
         }
@@ -519,14 +519,14 @@ impl FakeInboxIngress {
 
 impl boundary::sealed::Sealed for FakeInboxIngress {}
 
-impl InboxIngress for FakeInboxIngress {
+impl SourceIngress for FakeInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: InboxIngressImportRequest,
-    ) -> Result<InboxIngressImportResponse, atm_core::error::AtmError> {
+        _request: SourceIngressImportRequest,
+    ) -> Result<SourceIngressImportResponse, atm_core::error::AtmError> {
         let mut imports = self.imports.lock().expect("imports");
         if imports.is_empty() {
-            return Ok(InboxIngressImportResponse {
+            return Ok(SourceIngressImportResponse {
                 source_files: Vec::new(),
             });
         }
@@ -535,9 +535,9 @@ impl InboxIngress for FakeInboxIngress {
 
     fn compute_identity_fingerprint(
         &self,
-        request: InboxIngressIdentityFingerprintRequest,
-    ) -> InboxIngressIdentityFingerprintResponse {
-        InboxIngressIdentityFingerprintResponse {
+        request: SourceIngressIdentityFingerprintRequest,
+    ) -> SourceIngressIdentityFingerprintResponse {
+        SourceIngressIdentityFingerprintResponse {
             fingerprint: request.message.message_id.map(|message_id| {
                 atm_core::boundary::MessageFingerprint::from(message_id.to_string())
             }),
@@ -546,9 +546,9 @@ impl InboxIngress for FakeInboxIngress {
 
     fn report_diagnostics(
         &self,
-        _request: InboxIngressDiagnosticsRequest,
-    ) -> InboxIngressDiagnosticsResponse {
-        InboxIngressDiagnosticsResponse {
+        _request: SourceIngressDiagnosticsRequest,
+    ) -> SourceIngressDiagnosticsResponse {
+        SourceIngressDiagnosticsResponse {
             duplicate_message_ids: 0,
             messages_without_ids: 0,
         }
@@ -809,7 +809,7 @@ fn z8_deletes_startup_only_config_bootstrap_helper() {
 #[test]
 fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let ingress = FakeInboxIngress::new(vec![InboxIngressImportResponse {
+    let ingress = FakeInboxIngress::new(vec![SourceIngressImportResponse {
         source_files: vec![inbox_source_with_message(sample_message(
             "projected message",
         ))],
@@ -874,10 +874,10 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
             calls: Arc::new(AtomicU64::new(0)),
         }),
         Arc::new(FakeInboxIngress::new(vec![
-            InboxIngressImportResponse {
+            SourceIngressImportResponse {
                 source_files: vec![repeated_source.clone()],
             },
-            InboxIngressImportResponse {
+            SourceIngressImportResponse {
                 source_files: vec![repeated_source],
             },
         ])),
@@ -908,7 +908,7 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
 fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after_eviction() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
     let imports = (0..=MAX_RECONCILE_FINGERPRINT_KEYS)
-        .map(|index| InboxIngressImportResponse {
+        .map(|index| SourceIngressImportResponse {
             source_files: vec![inbox_source_with_message(sample_message(&format!(
                 "message-{index}"
             )))],
@@ -946,7 +946,7 @@ fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after
 #[test]
 fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let repeated_import = InboxIngressImportResponse {
+    let repeated_import = SourceIngressImportResponse {
         source_files: (0..=MAX_RECONCILE_FINGERPRINTS_PER_KEY)
             .map(|index| inbox_source_with_message(sample_message(&format!("message-{index}"))))
             .collect(),
@@ -991,8 +991,8 @@ impl WatchEventSource for CountingWatchSource {
 
 fn inbox_source_with_message(
     message: MessageEnvelope,
-) -> atm_core::boundary::InboxSourceFileRecord {
-    atm_core::boundary::InboxSourceFileRecord {
+) -> SourceFileRecord {
+    SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],
     }

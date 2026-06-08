@@ -231,7 +231,7 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let peer_transport_config =
             load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
-        let reconcile_roster_store = runtime_assembly.runtime_bundle.roster_store.clone();
+        let reconcile_roster_store = runtime_assembly.roster_store.clone();
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
@@ -252,7 +252,7 @@ impl RuntimeComposition {
             &observability,
         );
         let peer_transport_runtime = build_peer_transport_runtime(
-            runtime_assembly.runtime_bundle.remote_replay_store.clone(),
+            runtime_assembly.remote_replay_store.clone(),
             peer_transport_config,
             observability,
         );

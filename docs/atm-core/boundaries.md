@@ -204,15 +204,17 @@ Purpose:
 
 Owned shared contracts:
 - `DoctorFinding`
-- `RuntimeBundle`
+- `RuntimeDoctorPorts`
 - `RemoteReplayStateRecord`
 - `RemoteReplayStore`
 - `RuntimeStorageFinalizer`
 
 Notes:
-- `RuntimeBundle` groups the installed storage-neutral service and doctor
-  handles that callers consume after `atm-runtime` assembles the concrete
-  backend.
+- `RuntimeDoctorPorts` groups the installed storage-neutral doctor handles
+  that callers consume after `atm-runtime` assembles the concrete backend.
+- `RuntimeAssembly` now carries the generic `StorageBackends<M, R>` seam plus
+  the legacy compile-bridge `MailStore` / `RosterStore` handles used during
+  AC.4 consumer cutover.
 - `RemoteReplayStore` keeps bounded replay persistence behind an
   `atm-core`-owned contract even though the first implementation is SQLite.
 - `RuntimeStorageFinalizer` keeps shutdown-time storage finalization, such as

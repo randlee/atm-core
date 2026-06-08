@@ -189,8 +189,8 @@ Required subsystem boundaries:
 - `RuntimeStorageFinalizer` boundary
 
 Phase AA shared runtime-composition contracts:
-- `RuntimeBundle` is an `atm-core` DTO that groups the storage-neutral
-  runtime/service handles consumed by daemon and direct-doctor callers
+- `RuntimeDoctorPorts` is the `atm-core` DTO that groups the storage-neutral
+  doctor handles consumed by daemon and direct-doctor callers
 - `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
   trait family
 - replay persistence ownership crosses the crate boundary through

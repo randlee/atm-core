@@ -87,6 +87,10 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+#[allow(
+    deprecated,
+    reason = "AC.4 preserves the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
+)]
 pub use boundary::{
     AckTransition, AtmProtocol, ProjectionExport,
     ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
@@ -100,7 +104,7 @@ pub use boundary::{
     ReconcileCoordinator, ReconcileRequest, ReconcileResult, RemoteReplayStateRecord,
     RemoteReplayStore, RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord,
     RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeBundle, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceFileRecord,
+    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceFileRecord,
     SourceIngress, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
     SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
     SourceIngressImportRequest, SourceIngressImportResponse, SourceIngressRequest,

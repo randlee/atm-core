@@ -230,6 +230,10 @@ pub trait MailStore: sealed::Sealed {
     ///
     /// Returns `AtmError` when durable mailbox persistence, transaction
     /// boundaries, or replay-state access cannot satisfy the contract.
+    #[allow(
+        deprecated,
+        reason = "AC.4 preserves the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
+    )]
     fn bootstrap(
         &self,
         request: MailStoreBootstrapRequest,

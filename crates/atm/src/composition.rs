@@ -574,7 +574,7 @@ mod tests {
 
         fn seed_sqlite_roster(&self, recipient: &str) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let roster_store = assembly.roster_store();
+            let roster_store = assembly.roster_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
@@ -588,7 +588,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })
-                .collect();
+                .collect::<Vec<_>>();
             roster_store
                 .replace_roster(
                     &team,
@@ -643,7 +643,7 @@ mod tests {
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let mail_store = assembly.mail_store();
+            let mail_store = assembly.mail_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");
 

@@ -10,7 +10,8 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::{atm_home, host_runtime_dir_from_home},
 };
-use atm_rusqlite::{SqliteBoundaryAssembly, SqliteWriterLockGuard};
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver, assemble_sqlite_runtime};
+use atm_storage_rusqlite::SqliteWriterLockGuard;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 // Mutex required because sqlite retained runtimes are cached across concurrent
@@ -63,12 +64,35 @@ impl Drop for SqliteRuntimeGuard {
     }
 }
 
-pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAssembly, AtmError> {
-    SqliteBoundaryAssembly::new(path.as_ref())
+#[derive(Debug, Default)]
+struct NullRuntimeSqliteObserver;
+
+impl RuntimeSqliteObserver for NullRuntimeSqliteObserver {
+    fn emit_sqlite_event(&self, _event: RuntimeSqliteEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    let sqlite_db_path = path.as_ref().to_path_buf();
+    assemble_sqlite_runtime(RuntimeAssemblyInputs {
+        sqlite_db_path: sqlite_db_path.clone(),
+        config_current_dir: std::env::current_dir().unwrap_or_else(|_| {
+            sqlite_db_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf()
+        }),
+        sqlite_observer: std::sync::Arc::new(NullRuntimeSqliteObserver),
+        non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
+        notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
+            sqlite_db_path.with_extension("notifications.jsonl"),
+        )),
+    })
 }
 
 pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
-    atm_rusqlite::hold_sqlite_writer_lock(path)
+    atm_storage_rusqlite::hold_sqlite_writer_lock(path)
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
@@ -89,7 +113,7 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
         return Ok(runtime.clone());
     }
 
-    let assembly = SqliteBoundaryAssembly::new(&path)?;
+    let assembly = open_sqlite_boundary(&path)?;
     let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),

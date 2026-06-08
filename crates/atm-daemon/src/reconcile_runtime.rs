@@ -2,7 +2,7 @@ mod notification_fingerprints;
 
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, RosterStore,
+    NotificationSink, ReconcileRequest, ReconcileResult, RosterStore, SourceIngress,
     WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
@@ -176,7 +176,7 @@ impl ReconcileRuntime {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
-        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        inbox_ingress: Arc<dyn SourceIngress + Send + Sync>,
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
@@ -191,7 +191,7 @@ impl ReconcileRuntime {
 
     pub(crate) fn new_with_observability(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
-        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        inbox_ingress: Arc<dyn SourceIngress + Send + Sync>,
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
@@ -212,7 +212,7 @@ impl ReconcileRuntime {
                     &projection_write_journal_for_executor,
                 )?;
                 let import = inbox_ingress.import_inbox_source(
-                    atm_core::boundary::InboxIngressImportRequest {
+                    atm_core::boundary::SourceIngressImportRequest {
                         home_dir: request.home_dir.clone(),
                         team: request.team.clone(),
                         agent: request.agent.clone(),
@@ -672,15 +672,15 @@ impl ReconcileRuntimeInner {
 }
 
 fn compute_reconcile_notification_fingerprints(
-    import: &atm_core::boundary::InboxIngressImportResponse,
-    inbox_ingress: &dyn InboxIngress,
+    import: &atm_core::boundary::SourceIngressImportResponse,
+    inbox_ingress: &dyn SourceIngress,
 ) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
         for message in &source.messages {
             let fingerprint = inbox_ingress
                 .compute_identity_fingerprint(
-                    atm_core::boundary::InboxIngressIdentityFingerprintRequest {
+                    atm_core::boundary::SourceIngressIdentityFingerprintRequest {
                         message: message.clone(),
                     },
                 )

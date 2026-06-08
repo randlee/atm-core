@@ -6,8 +6,9 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::boundary::RosterMemberRecord;
-use crate::boundary::RuntimeBundle;
+use crate::boundary::{
+    ConfigDoctor, MailStoreDoctor, RosterMemberRecord, RosterStoreDoctor, TaskStoreDoctor,
+};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -17,6 +18,7 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
+use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -29,6 +31,25 @@ pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+}
+
+#[derive(Clone)]
+pub struct RuntimeDoctorPorts {
+    pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
+    pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
+    pub task_store_doctor: Arc<dyn TaskStoreDoctor + Send + Sync>,
+    pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
+}
+
+impl std::fmt::Debug for RuntimeDoctorPorts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeDoctorPorts")
+            .field("config_doctor", &"dyn ConfigDoctor")
+            .field("mail_store_doctor", &"dyn MailStoreDoctor")
+            .field("task_store_doctor", &"dyn TaskStoreDoctor")
+            .field("roster_store_doctor", &"dyn RosterStoreDoctor")
+            .finish()
+    }
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -104,11 +125,11 @@ pub fn run_doctor_with_runtime(
     })
 }
 
-pub fn run_doctor_with_runtime_bundle(
+pub fn run_doctor_with_runtime_ports(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-    runtime_bundle: &RuntimeBundle,
+    runtime_doctors: &RuntimeDoctorPorts,
     daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
@@ -119,7 +140,7 @@ pub fn run_doctor_with_runtime_bundle(
     let (observability_health, observability_finding) = doctor_observability_status(observability);
     let mut general_findings = Vec::new();
     let mut drift_findings = Vec::new();
-    let mut reports = inspect_runtime_bundle_sections(runtime_bundle, &mut general_findings);
+    let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
     push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
     let member_roster = resolved_team.as_ref().and_then(|team| {
         load_member_roster(
@@ -170,22 +191,22 @@ struct DoctorSectionReports {
     roster_store: crate::boundary::RosterStoreDoctorReport,
 }
 
-fn inspect_runtime_bundle_sections(
-    runtime_bundle: &RuntimeBundle,
+fn inspect_runtime_doctor_sections(
+    runtime_doctors: &RuntimeDoctorPorts,
     findings: &mut Vec<DoctorFinding>,
 ) -> DoctorSectionReports {
     DoctorSectionReports {
-        config: inspect_doctor_section(runtime_bundle.config_doctor.inspect_config(), findings),
+        config: inspect_doctor_section(runtime_doctors.config_doctor.inspect_config(), findings),
         mail_store: inspect_doctor_section(
-            runtime_bundle.mail_store_doctor.inspect_mail_store(),
+            runtime_doctors.mail_store_doctor.inspect_mail_store(),
             findings,
         ),
         task_store: inspect_doctor_section(
-            runtime_bundle.task_store_doctor.inspect_task_store(),
+            runtime_doctors.task_store_doctor.inspect_task_store(),
             findings,
         ),
         roster_store: inspect_doctor_section(
-            runtime_bundle.roster_store_doctor.inspect_roster_store(),
+            runtime_doctors.roster_store_doctor.inspect_roster_store(),
             findings,
         ),
     }
@@ -681,6 +702,10 @@ mod tests {
     impl crate::boundary::sealed::Sealed for TestRosterStore {}
 
     impl boundary::MailStore for UnusedMailStore {
+        #[allow(
+            deprecated,
+            reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
+        )]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,

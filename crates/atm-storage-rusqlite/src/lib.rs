@@ -17,6 +17,11 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
+pub use observability::{
+    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
+    SqliteObservabilityOutcome,
+};
+
 #[derive(Debug)]
 pub struct SqliteWriterLockGuard {
     connection: Connection,
@@ -328,6 +333,81 @@ impl SqliteStorageBackend {
 
     pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
         self.message_store.db.checkpoint_wal()
+    }
+
+    pub fn upsert_remote_replay_state(
+        &self,
+        team: &str,
+        agent: &str,
+        message_key: &str,
+        state_json: &str,
+    ) -> Result<(), AtmError> {
+        self.message_store.db.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT INTO daemon_remote_replay_states (team, agent, message_key, state_json)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(team, agent, message_key)
+                     DO UPDATE SET state_json = excluded.state_json;",
+                    params![team, agent, message_key, state_json],
+                )
+                .map_err(|error| {
+                    self.message_store
+                        .db
+                        .error("failed to persist daemon remote replay state", error)
+                })?;
+            Ok(())
+        })
+    }
+
+    pub fn load_all_remote_replay_states(&self) -> Result<Vec<String>, AtmError> {
+        self.message_store.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT state_json
+                     FROM daemon_remote_replay_states
+                     ORDER BY team, agent, message_key;",
+                )
+                .map_err(|error| {
+                    self.message_store
+                        .db
+                        .error("failed to prepare daemon remote replay load", error)
+                })?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| {
+                    self.message_store
+                        .db
+                        .error("failed to query daemon remote replay rows", error)
+                })?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
+                self.message_store
+                    .db
+                    .error("failed to decode daemon remote replay row", error)
+            })
+        })
+    }
+
+    pub fn delete_remote_replay_state(
+        &self,
+        team: &str,
+        agent: &str,
+        message_key: &str,
+    ) -> Result<(), AtmError> {
+        self.message_store.db.with_connection(|connection| {
+            connection
+                .execute(
+                    "DELETE FROM daemon_remote_replay_states
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    params![team, agent, message_key],
+                )
+                .map_err(|error| {
+                    self.message_store
+                        .db
+                        .error("failed to delete daemon remote replay row", error)
+                })?;
+            Ok(())
+        })
     }
 }
 
