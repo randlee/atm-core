@@ -468,13 +468,14 @@ fn load_store_backed_mailbox_projection(
         // Keep the repair/rebuild projection consistent with the live send
         // export path: a row deleted between metadata enumeration and reload is
         // a legal concurrent-clear race, not a fatal rebuild error.
-        let Some(record) = crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
-            runtime,
-            Path::new(""),
-            team,
-            agent,
-            &row.message_key,
-        )?
+        let Some(record) =
+            crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
+                runtime,
+                Path::new(""),
+                team,
+                agent,
+                &row.message_key,
+            )?
         else {
             continue;
         };
