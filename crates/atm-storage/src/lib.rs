@@ -1,4 +1,3 @@
-pub mod compat;
 pub mod contract;
 pub mod error;
 pub mod error_codes;

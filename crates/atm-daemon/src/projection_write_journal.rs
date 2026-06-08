@@ -34,7 +34,13 @@ impl ProjectionWriteJournal {
     /// Records one daemon-authored Claude config projection write. External
     /// CLI/team-admin writes are intentionally treated as ordinary idempotent
     /// ingress events and do not record suppression entries here.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "AC.2 keeps the journal write path available for the upcoming daemon-owned config projection writer."
+        )
+    )]
     pub(crate) fn remember_projected_config_write(
         &self,
         path: &Path,
