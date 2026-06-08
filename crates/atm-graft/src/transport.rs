@@ -60,7 +60,7 @@ impl GraftLocalIpcClientTransport {
                 .with_source(source)
             })?;
         let envelope = RpcEnvelope::encode_request(RequestEnvelope::AdvisoryStream(request))?;
-        let request_id = envelope.header.request_id;
+        let request_id = envelope.header.request_id();
         let frame = envelope.into_frame_payload();
         atm_core::protocol::write_frame(
             &mut stream,

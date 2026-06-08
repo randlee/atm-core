@@ -3,40 +3,84 @@ use super::{
     next_request_id, request_from_frame_payload, request_to_frame_payload,
     response_from_frame_payload, response_to_frame_payload,
 };
-use atm_core::error::AtmError;
+use atm_storage::AtmError;
 use bytes::Bytes;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+/// Canonical RPC transport header for same-host ATM daemon-client traffic.
+///
+/// The header carries routing metadata only. Body semantics remain encoded in
+/// canonical JSON bytes within [`RpcEnvelope::body`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RpcHeader {
-    pub request_id: RequestId,
-    pub message_kind: MessageKind,
-    pub flags: u16,
+    request_id: RequestId,
+    message_kind: MessageKind,
+    flags: u16,
 }
 
+impl RpcHeader {
+    /// Build a protocol-v1 header with the only currently supported flag set.
+    pub fn new(request_id: RequestId, message_kind: MessageKind) -> Self {
+        Self {
+            request_id,
+            message_kind,
+            flags: ATM_FRAME_FLAGS_V1,
+        }
+    }
+
+    fn from_parts(request_id: RequestId, message_kind: MessageKind, flags: u16) -> Self {
+        Self {
+            request_id,
+            message_kind,
+            flags,
+        }
+    }
+
+    /// Return the request id carried by this transport header.
+    pub fn request_id(&self) -> RequestId {
+        self.request_id
+    }
+
+    /// Return the protocol message kind carried by this transport header.
+    pub fn message_kind(&self) -> MessageKind {
+        self.message_kind
+    }
+
+    /// Return the transport flags from the protocol header.
+    pub fn flags(&self) -> u16 {
+        self.flags
+    }
+}
+
+/// Generic same-host RPC envelope.
+///
+/// `body` stores canonical JSON bytes for shared domain payloads so the same
+/// message and roster structs can cross both transport and storage boundaries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RpcEnvelope {
     pub header: RpcHeader,
+    /// Canonical JSON-encoded body bytes for the shared domain payload.
     pub body: Bytes,
 }
 
 impl RpcEnvelope {
+    /// Build a new transport envelope from an already prepared header and
+    /// canonical JSON payload bytes.
     pub fn new(header: RpcHeader, body: Bytes) -> Self {
         Self { header, body }
     }
 
+    /// Convert a framed payload from the daemon protocol into the generic RPC
+    /// envelope surface used by same-host clients.
     pub fn from_frame_payload(frame: FramePayload) -> Self {
         Self {
-            header: RpcHeader {
-                request_id: frame.request_id,
-                message_kind: frame.message_kind,
-                flags: frame.flags,
-            },
+            header: RpcHeader::from_parts(frame.request_id, frame.message_kind, frame.flags),
             body: Bytes::from(frame.bytes),
         }
     }
 
+    /// Convert the generic RPC envelope back into the daemon frame payload.
     pub fn into_frame_payload(self) -> FramePayload {
         FramePayload {
             request_id: self.header.request_id,
@@ -46,6 +90,8 @@ impl RpcEnvelope {
         }
     }
 
+    /// Encode any serializable canonical domain body into JSON bytes under the
+    /// supplied transport header.
     pub fn encode_body<T>(header: RpcHeader, body: &T) -> Result<Self, AtmError>
     where
         T: Serialize,
@@ -54,6 +100,7 @@ impl RpcEnvelope {
         Ok(Self::new(header, Bytes::from(bytes)))
     }
 
+    /// Decode the canonical JSON body bytes into the requested domain type.
     pub fn decode_body<T>(&self) -> Result<T, AtmError>
     where
         T: DeserializeOwned,
@@ -66,15 +113,18 @@ impl RpcEnvelope {
         })
     }
 
+    /// Wrap a request envelope into the generic RPC transport surface.
     pub fn encode_request(request: RequestEnvelope) -> Result<Self, AtmError> {
         let frame = request_to_frame_payload(next_request_id(), request)?;
         Ok(Self::from_frame_payload(frame))
     }
 
+    /// Decode a generic RPC envelope into the request id plus request payload.
     pub fn decode_request(self) -> Result<(RequestId, RequestEnvelope), AtmError> {
         request_from_frame_payload(self.into_frame_payload())
     }
 
+    /// Wrap a response envelope into the generic RPC transport surface.
     pub fn encode_response(
         request_id: RequestId,
         response: ResponseEnvelope,
@@ -83,26 +133,17 @@ impl RpcEnvelope {
         Ok(Self::from_frame_payload(frame))
     }
 
+    /// Decode a generic RPC envelope into the response id plus response
+    /// payload.
     pub fn decode_response(self) -> Result<(RequestId, ResponseEnvelope), AtmError> {
         response_from_frame_payload(self.into_frame_payload())
-    }
-}
-
-impl Default for RpcHeader {
-    fn default() -> Self {
-        Self {
-            request_id: next_request_id(),
-            message_kind: MessageKind::ErrorResponse,
-            flags: ATM_FRAME_FLAGS_V1,
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ATM_FRAME_FLAGS_V1, MessageKind, RequestEnvelope, ResponseEnvelope, RpcEnvelope, RpcHeader,
-        next_request_id,
+        MessageKind, RequestEnvelope, ResponseEnvelope, RpcEnvelope, RpcHeader, next_request_id,
     };
     use crate::{SendRequestEnvelope, SendResponseEnvelope};
     use atm_core::roles::ROLE_TEAM_LEAD;
@@ -120,11 +161,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
-        let header = RpcHeader {
-            request_id: next_request_id(),
-            message_kind: MessageKind::SendComposeRequest,
-            flags: ATM_FRAME_FLAGS_V1,
-        };
+        let header = RpcHeader::new(next_request_id(), MessageKind::SendComposeRequest);
         let message = Message {
             team: TEAM_NAME.parse().expect("team"),
             agent: ROLE_QUALITY_MGR.parse().expect("agent"),
@@ -156,11 +193,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_canonical_roster_member_body() {
-        let header = RpcHeader {
-            request_id: next_request_id(),
-            message_kind: MessageKind::HeartbeatRequest,
-            flags: ATM_FRAME_FLAGS_V1,
-        };
+        let header = RpcHeader::new(next_request_id(), MessageKind::HeartbeatRequest);
         let roster = RosterMember {
             team_name: TEAM_NAME.parse().expect("team"),
             agent_name: ROLE_ARCH_CTM.parse().expect("agent"),

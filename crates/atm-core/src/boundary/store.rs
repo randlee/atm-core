@@ -86,7 +86,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRosterMember {
+pub(crate) struct ProjectionRosterMember {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -94,7 +94,7 @@ pub struct ProjectionRosterMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRoster {
+pub(crate) struct ProjectionRoster {
     pub team_name: TeamName,
     pub members: Arc<[ProjectionRosterMember]>,
 }

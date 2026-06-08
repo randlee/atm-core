@@ -100,7 +100,7 @@ pub use boundary::{
     MailStoreMessageRecord, MessageFingerprint, MessageKey, NotificationEvent, NotificationSink,
     ProjectionExport, ProjectionExportReexportMessageRequest,
     ProjectionExportReexportMessageResponse, ProjectionExportRequest, ProjectionExportResponse,
-    ProjectionRoster, ProjectionRosterMember, ReconcileCoordinator, ReconcileRequest,
+    ReconcileCoordinator, ReconcileRequest,
     ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterHarness,
     RosterMemberKind, RosterMemberRecord, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
     RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,

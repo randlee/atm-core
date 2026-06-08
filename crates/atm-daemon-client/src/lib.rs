@@ -28,6 +28,7 @@ pub(crate) use atm_core::protocol::{SendRequestEnvelope, SendResponseEnvelope};
 
 mod rpc;
 
+#[doc(inline)]
 pub use rpc::{RpcEnvelope, RpcHeader};
 
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -362,7 +363,7 @@ pub fn exchange_envelope(
         stream.set_recv_timeout(Some(request_deadline)),
         "failed to configure daemon local IPC read timeout",
     )?;
-    let request_id = request.header.request_id;
+    let request_id = request.header.request_id();
     let frame = request.into_frame_payload();
     atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
     stream.flush().map_err(|source| {
