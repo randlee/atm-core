@@ -1,9 +1,9 @@
 use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_thread_mode};
-use atm_core::boundary;
-use atm_core::error::AtmError;
-use atm_core::schema::MessageEnvelope;
-use atm_core::types::IsoTimestamp;
+use atm_storage::contract::Message;
+use atm_storage::error::AtmError;
+use atm_storage::schema::MessageEnvelope;
+use atm_storage::types::IsoTimestamp;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
@@ -11,14 +11,12 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
-    UpsertMessage(Box<boundary::MailStoreMessageRecord>),
-    UpsertMessageState(Box<boundary::UpsertMailMessageStateRequest>),
+    UpsertMessage(Box<Message>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WriteOpResult {
     UpsertMessage { inserted: bool },
-    MessageStateUpdated,
 }
 
 pub(crate) fn execute(
@@ -28,19 +26,11 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::UpsertMessage(request) => {
-            execute_upsert_message(request, connection, cache, target)
-        }
-        WriteOp::UpsertMessageState(request) => {
-            execute_upsert_message_state(request, connection, cache, target)
-                .map(|()| WriteOpResult::MessageStateUpdated)
-        }
+        WriteOp::UpsertMessage(request) => execute_upsert_message(request, connection, cache, target),
     }
 }
 
-pub(crate) fn validate_upsert_message_request(
-    record: &boundary::MailStoreMessageRecord,
-) -> Result<(), AtmError> {
+pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), AtmError> {
     let envelope_json = serialize_json(
         &StorageEnvelope::new(&record.envelope),
         "mail-store envelope",
@@ -57,7 +47,7 @@ pub(crate) fn validate_upsert_message_request(
 }
 
 fn execute_upsert_message(
-    record: &boundary::MailStoreMessageRecord,
+    record: &Message,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
@@ -138,7 +128,7 @@ fn insert_initial_message_state(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-    record: &boundary::MailStoreMessageRecord,
+    record: &Message,
     timestamps: InitialStateTimestamps,
 ) -> Result<(), AtmError> {
     cache
@@ -163,7 +153,7 @@ fn insert_initial_message_state(
 }
 
 fn validate_message_record(
-    record: &boundary::MailStoreMessageRecord,
+    record: &Message,
     envelope_json_len: usize,
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -195,7 +185,7 @@ fn validate_message_record(
 }
 
 fn validate_single_successor_invariant(
-    record: &boundary::MailStoreMessageRecord,
+    record: &Message,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
@@ -234,7 +224,7 @@ fn validate_single_successor_invariant(
 }
 
 fn validate_message_id_uniqueness(
-    record: &boundary::MailStoreMessageRecord,
+    record: &Message,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
@@ -272,71 +262,14 @@ fn validate_message_id_uniqueness(
     Ok(())
 }
 
-fn execute_upsert_message_state(
-    request: &boundary::UpsertMailMessageStateRequest,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let state_timestamp = request.state.updated_at.unwrap_or_else(IsoTimestamp::now);
-    if request
-        .state
-        .expires_at
-        .is_some_and(|expires_at| expires_at <= state_timestamp)
-    {
-        return Err(AtmError::validation(
-            "expires_at must be later than the persisted message-state timestamp".to_string(),
-        )
-        .with_recovery(
-            "Persist a future expiration timestamp or clear the expiration before retrying the message-state update.",
-        ));
-    }
-
-    cache
-        .upsert_message_state(
-            connection,
-            params![
-                request.team.as_str(),
-                request.agent.as_str(),
-                request.state.message_key.as_ref(),
-                i64::from(request.state.read),
-                request
-                    .state
-                    .pending_ack_at
-                    .map(|value| value.into_inner().to_rfc3339()),
-                request
-                    .state
-                    .acknowledged_at
-                    .map(|value| value.into_inner().to_rfc3339()),
-                request.state.expires_at.map(rfc3339),
-                request
-                    .state
-                    .deleted_at
-                    .map(|value| value.into_inner().to_rfc3339()),
-                request
-                    .state
-                    .updated_at
-                    .map(|value| value.into_inner().to_rfc3339()),
-            ],
-        )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(
-                target,
-                "failed to upsert unified mail message state",
-                error,
-            )
-        })?;
-    Ok(())
-}
-
 #[derive(Serialize)]
 struct StorageEnvelope<'a> {
-    from: &'a atm_core::types::AgentName,
+    from: &'a atm_storage::types::AgentName,
     text: &'a str,
     timestamp: IsoTimestamp,
     read: bool,
     #[serde(default)]
-    source_team: &'a Option<atm_core::types::TeamName>,
+    source_team: &'a Option<atm_storage::types::TeamName>,
     #[serde(default)]
     summary: &'a Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -358,11 +291,11 @@ struct StorageEnvelope<'a> {
     )]
     parent_message_id: Option<String>,
     #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
-    thread_mode: &'a Option<atm_core::schema::ThreadMode>,
+    thread_mode: &'a Option<atm_storage::schema::ThreadMode>,
     #[serde(rename = "expiresAt", skip_serializing_if = "Option::is_none")]
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
-    task_id: &'a Option<atm_core::types::TaskId>,
+    task_id: &'a Option<atm_storage::types::TaskId>,
     #[serde(flatten)]
     extra: &'a serde_json::Map<String, serde_json::Value>,
 }

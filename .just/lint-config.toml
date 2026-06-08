@@ -29,7 +29,7 @@ max_scoped_code_lines = 0
 [line_counts.exclusions]
 "crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
 "crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
-"crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"
+"crates/atm-storage-rusqlite/src/tests.rs" = "Q.6 split pending"
 
 [cargo_shear.allowed_empty_files]
 "src/config/bridge.rs" = "deferred bridge-hostname config scope; placeholder module reserved for future phase"
@@ -47,10 +47,10 @@ toml_glob = "boundaries/*/*.toml"
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"
-allowed_manifest_paths = ["crates/atm-rusqlite/Cargo.toml"]
-allowed_source_roots = ["crates/atm-rusqlite/src"]
-manifest_message = "only crates/atm-rusqlite may depend on rusqlite"
-source_message = "only crates/atm-rusqlite source may import rusqlite directly"
+allowed_manifest_paths = ["crates/atm-storage-rusqlite/Cargo.toml"]
+allowed_source_roots = ["crates/atm-storage-rusqlite/src"]
+manifest_message = "only crates/atm-storage-rusqlite may depend on rusqlite"
+source_message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
@@ -72,9 +72,9 @@ message = "atm-core must not depend on atm-daemon"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-daemon/Cargo.toml"
-dependency_package = "atm-rusqlite"
+dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dependencies"]
-message = "atm-daemon may depend on atm-rusqlite only through the documented runtime-owned SQLite boundaries"
+message = "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries"
 
 [version_sync.winget]
 enabled = true

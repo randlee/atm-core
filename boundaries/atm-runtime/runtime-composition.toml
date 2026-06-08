@@ -25,10 +25,10 @@ io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-core", "atm-rusqlite"]
+allowed_dependencies = ["atm-core", "atm-storage-rusqlite"]
 forbidden_edges = [
-  "atm -> atm-rusqlite",
-  "atm-daemon -> atm-rusqlite",
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
   "atm-runtime -> atm-daemon",
 ]
 
@@ -54,5 +54,5 @@ state = "concrete_landed"
 notes = [
   "implemented by AA.2 as the concrete runtime/store composition root for atm and atm-daemon",
   "daemon startup remains fail-closed on any RuntimeBundle assembly failure",
-  "AA.5 relocks the sqlite boundary TOMLs so this record and the sqlite boundary records now agree on the forbidden atm-daemon -> atm-rusqlite edge",
+  "the sqlite boundary TOMLs and runtime composition record agree on the forbidden atm-daemon -> atm-storage-rusqlite edge",
 ]

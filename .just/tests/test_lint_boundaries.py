@@ -19,7 +19,7 @@ from lint_boundaries import parse_simple_yaml_document
 
 ROOT_MANIFEST = """\
 [workspace]
-members = ["crates/atm-core", "crates/atm-rusqlite", "crates/atm", "crates/atm-daemon"]
+members = ["crates/atm-core", "crates/atm-storage-rusqlite", "crates/atm", "crates/atm-daemon"]
 resolver = "2"
 
 [workspace.package]
@@ -39,16 +39,16 @@ toml_glob = "boundaries/*/*.toml"
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"
-allowed_manifest_paths = ["crates/atm-rusqlite/Cargo.toml"]
-allowed_source_roots = ["crates/atm-rusqlite/src"]
-manifest_message = "only crates/atm-rusqlite may depend on rusqlite"
-source_message = "only crates/atm-rusqlite source may import rusqlite directly"
+allowed_manifest_paths = ["crates/atm-storage-rusqlite/Cargo.toml"]
+allowed_source_roots = ["crates/atm-storage-rusqlite/src"]
+manifest_message = "only crates/atm-storage-rusqlite may depend on rusqlite"
+source_message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
-dependency_package = "atm-rusqlite"
+dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dev-dependencies"]
-message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+message = "atm-core may reference atm-storage-rusqlite only in dev-dependencies"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm/Cargo.toml"
@@ -64,9 +64,9 @@ message = "atm-core must not depend on atm-daemon"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-daemon/Cargo.toml"
-dependency_package = "atm-rusqlite"
+dependency_package = "atm-storage-rusqlite"
 allowed_sections = []
-message = "atm-daemon must not depend on atm-rusqlite"
+message = "atm-daemon must not depend on atm-storage-rusqlite"
 """
 
 BASE_BOUNDARY_DOC = """\
@@ -76,8 +76,8 @@ BASE_BOUNDARY_DOC = """\
 
 ```yaml
 boundary_id: BOUNDARY-MailStore-Sqlite
-owner_package: atm-rusqlite
-owner_crate_path: atm_rusqlite
+owner_package: atm-storage-rusqlite
+owner_crate_path: atm_storage_rusqlite
 name: SqliteMailStoreAdapter
 
 public:
@@ -107,8 +107,8 @@ dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
-    - atm -> atm-rusqlite
-    - atm-graft -> atm-rusqlite
+    - atm -> atm-storage-rusqlite
+    - atm-graft -> atm-storage-rusqlite
 
 references:
   scope: outside_owner_crate

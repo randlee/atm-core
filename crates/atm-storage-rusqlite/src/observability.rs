@@ -1,8 +1,7 @@
-use atm_core::error::{AtmError, AtmErrorCode};
+use atm_storage::{AtmError, AtmErrorCode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteObservabilityOutcome {
-    Ok,
     Failed,
     Timeout,
 }
@@ -10,7 +9,6 @@ pub enum SqliteObservabilityOutcome {
 impl SqliteObservabilityOutcome {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Ok => "ok",
             Self::Failed => "failed",
             Self::Timeout => "timeout",
         }
@@ -58,6 +56,7 @@ pub trait SqliteObservability: Send + Sync {
                 %error,
                 action = event.action,
                 outcome = event.outcome.as_str(),
+                event_message = %event.message,
                 error_code = ?event.error_code,
                 "sqlite subsystem observability emission failed"
             );

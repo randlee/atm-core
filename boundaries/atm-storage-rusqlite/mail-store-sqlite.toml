@@ -1,6 +1,6 @@
 boundary_id = "BOUNDARY-MailStore-Sqlite"
-owner_package = "atm-rusqlite"
-owner_crate_path = "atm_rusqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
 name = "SqliteMailStoreAdapter"
 
 [public]
@@ -13,7 +13,7 @@ visibility = "private"
 constructor = "private"
 
 [composition]
-roots = ["atm_rusqlite::assemble_boundary"]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
 
 [ownership]
 io_owns = [
@@ -26,15 +26,15 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
 allowed_dependencies = [
-  "atm-core",
+  "atm-storage",
   "rusqlite",
 ]
 forbidden_edges = [
-  "atm -> atm-rusqlite",
-  "atm-daemon -> atm-rusqlite",
-  "atm-graft -> atm-rusqlite",
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
+  "atm-graft -> atm-storage-rusqlite",
 ]
 
 [references]
@@ -46,12 +46,12 @@ forbidden = [
 ]
 
 [contracts]
-request_types = ["MailStore method inputs"]
-response_types = ["atm-core mailbox DTOs"]
+request_types = ["MessageStore method inputs"]
+response_types = ["atm-storage message DTOs"]
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]
+allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
@@ -68,7 +68,6 @@ review_gates = [
 [status]
 state = "active"
 notes = [
-  "crate-root implementation remains temporary; module split is still deferred",
-  "assembled through atm_rusqlite::SqliteBoundaryAssembly",
-  "AA.5 relocks this store boundary so daemon callers must reach it only through atm-runtime-owned composition",
+  "SQLite message persistence is a backend-only implementation of the shared atm-storage MessageStore trait",
+  "notification semantics remain post-commit only",
 ]

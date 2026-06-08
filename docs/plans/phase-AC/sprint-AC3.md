@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.3
 worktree: ../atm-core-worktrees/feature/pAC-s3-sqlite-backend-convergence
 branch: feature/pAC-s3-sqlite-backend-convergence
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -207,7 +207,7 @@ Proof this sprint must leave behind:
 - `cargo test -p atm-storage-rusqlite`
 - `cargo clippy -p atm-storage-rusqlite -- -D warnings`
 - `cargo tree -p atm-storage-rusqlite`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - verify the updated boundary TOMLs and `cargo tree` output both show `atm-storage`, not `atm-core`, as the shared storage dependency
 - `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-storage-rusqlite crates/atm-runtime crates/atm-core -S`

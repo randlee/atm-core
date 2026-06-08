@@ -14,20 +14,20 @@ use cargo_metadata::{DependencyKind, MetadataCommand};
 use serde::Deserialize;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
-    ("atm", "atm-rusqlite"),
-    ("atm-daemon", "atm-rusqlite"),
-    ("atm-graft", "atm-rusqlite"),
+    ("atm", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-graft", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
 ];
 
 #[test]
-fn atm_daemon_must_not_depend_on_atm_rusqlite() {
-    assert_forbidden_edge_absent("atm-daemon", "atm-rusqlite");
+fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-daemon", "atm-storage-rusqlite");
 }
 
 #[test]
-fn atm_must_not_depend_on_atm_rusqlite() {
-    assert_forbidden_edge_absent("atm", "atm-rusqlite");
+fn atm_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
 }
 
 #[test]
@@ -36,8 +36,8 @@ fn atm_runtime_must_not_depend_on_atm_daemon() {
 }
 
 #[test]
-fn atm_graft_must_not_depend_on_atm_rusqlite() {
-    assert_forbidden_edge_absent("atm-graft", "atm-rusqlite");
+fn atm_graft_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-graft", "atm-storage-rusqlite");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn boundary_toml_forbidden_edges_match_rust_guard_catalog() {
 }
 
 #[test]
-fn daemon_boundary_tomls_must_not_allow_atm_rusqlite() {
+fn daemon_boundary_tomls_must_not_allow_atm_storage_rusqlite() {
     let violations = daemon_boundary_files()
         .into_iter()
         .filter_map(|path| {
@@ -64,14 +64,14 @@ fn daemon_boundary_tomls_must_not_allow_atm_rusqlite() {
             boundary
                 .dependencies
                 .allowed_dependencies
-                .contains(&"atm-rusqlite".to_string())
+                .contains(&"atm-storage-rusqlite".to_string())
                 .then(|| path.display().to_string())
         })
         .collect::<Vec<_>>();
 
     assert!(
         violations.is_empty(),
-        "daemon boundary TOMLs must not allow atm-rusqlite directly; violating files: {violations:?}"
+        "daemon boundary TOMLs must not allow atm-storage-rusqlite directly; violating files: {violations:?}"
     );
 }
 
@@ -79,7 +79,7 @@ fn daemon_boundary_tomls_must_not_allow_atm_rusqlite() {
 fn synthetic_daemon_boundary_relaxation_fixture_is_detected() {
     let fixture = BoundaryToml {
         dependencies: BoundaryDependencies {
-            allowed_dependencies: vec!["atm-core".to_string(), "atm-rusqlite".to_string()],
+            allowed_dependencies: vec!["atm-storage".to_string(), "atm-storage-rusqlite".to_string()],
             ..BoundaryDependencies::default()
         },
     };
@@ -88,8 +88,8 @@ fn synthetic_daemon_boundary_relaxation_fixture_is_detected() {
         fixture
             .dependencies
             .allowed_dependencies
-            .contains(&"atm-rusqlite".to_string()),
-        "synthetic fixture must demonstrate the daemon TOML relock would fail closed if atm-rusqlite were re-added"
+            .contains(&"atm-storage-rusqlite".to_string()),
+        "synthetic fixture must demonstrate the daemon TOML relock would fail closed if atm-storage-rusqlite were re-added"
     );
 }
 
@@ -98,12 +98,12 @@ fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
     // Synthetic fixture proving the guard will fail closed if a forbidden edge
     // is relaxed out of the Rust catalog or the boundary TOMLs.
     let mut relaxed = expected_edge_set();
-    relaxed.remove(&("atm-daemon".to_string(), "atm-rusqlite".to_string()));
+    relaxed.remove(&("atm-daemon".to_string(), "atm-storage-rusqlite".to_string()));
 
     let missing = missing_forbidden_edges(&expected_edge_set(), &relaxed);
     assert_eq!(
         missing,
-        vec!["atm-daemon -> atm-rusqlite".to_string()],
+        vec!["atm-daemon -> atm-storage-rusqlite".to_string()],
         "synthetic relaxation fixture must demonstrate the removed daemon/sqlite edge is detected"
     );
 }
@@ -190,8 +190,8 @@ fn missing_forbidden_edges(
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![root.join("boundaries/atm-runtime/runtime-composition.toml")];
-    let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-rusqlite"))
-        .expect("boundaries/atm-rusqlite directory must be readable")
+    let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
+        .expect("boundaries/atm-storage-rusqlite directory must be readable")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
         .collect::<Vec<_>>();

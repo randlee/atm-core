@@ -190,7 +190,7 @@ name = "atm-runtime"
 version = "1.2.1"
 dependencies = [
  "agent-team-mail-core",
- "atm-rusqlite",
+ "atm-storage-rusqlite",
 ]
 
 [[package]]
@@ -198,22 +198,7 @@ name = "atm-runtime-test-support"
 version = "1.2.1"
 dependencies = [
  "agent-team-mail-core",
- "atm-rusqlite",
-]
-
-[[package]]
-name = "atm-rusqlite"
-version = "1.2.1"
-dependencies = [
- "agent-team-mail-core",
- "atm-runtime-test-support",
- "chrono",
- "rusqlite",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "tracing",
+ "atm-storage-rusqlite",
 ]
 
 [[package]]
@@ -226,6 +211,20 @@ dependencies = [
  "toml",
  "ulid",
  "uuid",
+]
+
+[[package]]
+name = "atm-storage-rusqlite"
+version = "1.2.1"
+dependencies = [
+ "atm-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 boundary_id = "BOUNDARY-SharedDb-Sqlite"
-owner_package = "atm-rusqlite"
-owner_crate_path = "atm_rusqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
 name = "SharedDbStateRoot"
 
 [public]
@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_rusqlite::SqliteBoundaryAssembly::new"]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
 
 [ownership]
 io_owns = [
@@ -27,15 +27,15 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
 allowed_dependencies = [
-  "atm-core",
+  "atm-storage",
   "rusqlite",
 ]
 forbidden_edges = [
-  "atm -> atm-rusqlite",
-  "atm-daemon -> atm-rusqlite",
-  "atm-graft -> atm-rusqlite",
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
+  "atm-graft -> atm-storage-rusqlite",
 ]
 
 [references]
@@ -70,5 +70,5 @@ state = "unix_implemented_windows_pending"
 notes = [
   "crate-private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
   "shared database root is host-scoped under the ADR-005 durable-state model",
-  "AA.5 relocks this state-root boundary so daemon callers must reach sqlite bootstrap and transaction policy only through atm-runtime-owned composition",
+  "daemon callers must reach sqlite bootstrap and transaction policy only through atm-runtime-owned composition",
 ]

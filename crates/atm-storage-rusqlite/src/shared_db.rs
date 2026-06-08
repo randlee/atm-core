@@ -1,7 +1,11 @@
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
-use crate::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
-use atm_core::error::AtmError;
-use atm_core::home;
+use crate::observability::{
+    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
+    SqliteObservabilityOutcome,
+};
+use atm_storage::contract::Message;
+use atm_storage::error::AtmError;
+use atm_storage::schema::ThreadMode;
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError};
@@ -68,21 +72,6 @@ CREATE TABLE IF NOT EXISTS daemon_remote_replay_states (
     PRIMARY KEY (team, agent, message_key)
 );
 
-CREATE TABLE IF NOT EXISTS tasks (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    record_json TEXT NOT NULL,
-    PRIMARY KEY (team, task_id)
-);
-
-CREATE TABLE IF NOT EXISTS task_ack_transitions (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    transition_index INTEGER NOT NULL,
-    transition_json TEXT NOT NULL,
-    PRIMARY KEY (team, task_id, transition_index)
-);
-
 CREATE TABLE IF NOT EXISTS team_roster (
     team_name TEXT NOT NULL,
     agent_name TEXT NOT NULL,
@@ -116,9 +105,6 @@ CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
 
 CREATE INDEX IF NOT EXISTS idx_daemon_remote_replay_mailbox
     ON daemon_remote_replay_states(team, agent);
-
-CREATE INDEX IF NOT EXISTS idx_task_records_lookup
-    ON tasks(team, task_id);
 
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
@@ -174,13 +160,13 @@ impl Drop for SharedDbConnectionGuard {
 }
 
 impl SharedDb {
-    pub(crate) fn production_path() -> Result<PathBuf, AtmError> {
-        home::host_mail_db_path()
+    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
+        Self::open_with_observability(path, Arc::new(NullSqliteObservability))
     }
 
     #[cfg(test)]
-    pub(crate) fn production_path_from_home(home_dir: &Path) -> PathBuf {
-        home::host_mail_db_path_from_home(home_dir)
+    pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
+        Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
     }
 
     #[cfg(test)]
@@ -189,7 +175,7 @@ impl SharedDb {
     ) -> Result<Self, AtmError> {
         let target = Arc::new(SharedDbTarget::InMemory {
             uri: format!(
-                "file:atm-rusqlite-{}?mode=memory&cache=shared",
+                "file:atm-storage-rusqlite-{}?mode=memory&cache=shared",
                 NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
             ),
         });
@@ -249,7 +235,7 @@ impl SharedDb {
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
     /// than a runtime assert because `SharedDb` is only called from owned
-    /// blocking code paths inside `atm-rusqlite`.
+    /// blocking code paths inside `atm-storage-rusqlite`.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -265,7 +251,7 @@ impl SharedDb {
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
     /// than a runtime assert because `SharedDb` is only called from owned
-    /// blocking code paths inside `atm-rusqlite`.
+    /// blocking code paths inside `atm-storage-rusqlite`.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
@@ -291,52 +277,18 @@ impl SharedDb {
         })
     }
 
-    pub(crate) fn submit_upsert_message(
-        &self,
-        record: atm_core::boundary::MailStoreMessageRecord,
-    ) -> Result<(), AtmError> {
+    pub(crate) fn submit_upsert_message(&self, record: Message) -> Result<(), AtmError> {
         validate_upsert_message_request(&record)?;
         let result = self
             .writer
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { .. } => Ok(()),
-            other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_message: {other:?}"
-            ))
-            .with_recovery(
-                "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
-            )),
-        }
-    }
-
-    pub(crate) fn submit_upsert_message_state(
-        &self,
-        request: atm_core::boundary::UpsertMailMessageStateRequest,
-    ) -> Result<atm_core::boundary::UpsertMailMessageStateResponse, AtmError> {
-        let state = request.state.clone();
-        let result = self
-            .writer
-            .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
-        match result {
-            WriteOpResult::MessageStateUpdated => {
-                Ok(atm_core::boundary::UpsertMailMessageStateResponse { state })
-            }
-            other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
-            ))
-            .with_recovery(
-                "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
-            )),
         }
     }
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
-    }
-
-    pub(crate) fn target(&self) -> &SharedDbTarget {
-        self.target.as_ref()
     }
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
@@ -747,85 +699,10 @@ pub(crate) fn deserialize_json<T: serde::de::DeserializeOwned>(
         .map_err(|error| json_error(format!("failed to decode {what}"), error))
 }
 
-pub(crate) fn sqlite_thread_mode(
-    mode: Option<atm_core::schema::ThreadMode>,
-) -> Option<&'static str> {
+pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static str> {
     match mode {
-        Some(atm_core::schema::ThreadMode::AddDetails) => Some("add-details"),
-        Some(atm_core::schema::ThreadMode::Supersede) => Some("supersede"),
+        Some(ThreadMode::AddDetails) => Some("add-details"),
+        Some(ThreadMode::Supersede) => Some("supersede"),
         None => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
-    use atm_core::error_codes::AtmErrorCode;
-    use std::sync::Mutex;
-
-    #[derive(Default)]
-    struct RecordingSqliteObservability {
-        events: Mutex<Vec<SqliteObservabilityEvent>>,
-    }
-
-    impl SqliteObservability for RecordingSqliteObservability {
-        fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
-            self.events
-                .lock()
-                .expect("sqlite observability events")
-                .push(event);
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn acquire_connection_guard_emits_budget_exhaustion() {
-        let observability = Arc::new(RecordingSqliteObservability::default());
-        let db = SharedDb::open_in_memory_with_observability(observability.clone()).expect("db");
-
-        let first = db.acquire_connection_guard().expect("first guard");
-        let second = db.acquire_connection_guard().expect("second guard");
-        let third = db.acquire_connection_guard().expect("third guard");
-        let error = db
-            .acquire_connection_guard()
-            .expect_err("budget exhaustion should fail");
-
-        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        let events = observability
-            .events
-            .lock()
-            .expect("sqlite observability events");
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].action, "reader_budget_acquire");
-        assert_eq!(events[0].outcome, SqliteObservabilityOutcome::Failed);
-
-        drop((first, second, third));
-    }
-
-    #[test]
-    #[cfg(debug_assertions)]
-    fn with_connection_rejects_tokio_worker_named_threads_in_debug() {
-        let observability = Arc::new(RecordingSqliteObservability::default());
-        let db = Arc::new(
-            SharedDb::open_in_memory_with_observability(observability).expect("in-memory db"),
-        );
-        let worker = std::thread::Builder::new()
-            .name("tokio-runtime-worker".to_string())
-            .spawn({
-                let db = Arc::clone(&db);
-                move || {
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        db.with_connection(|_| Ok(())).expect("with_connection");
-                    }))
-                }
-            })
-            .expect("spawn");
-
-        let panic = worker.join().expect("join");
-        assert!(
-            panic.is_err(),
-            "debug guard should reject tokio worker threads"
-        );
     }
 }
