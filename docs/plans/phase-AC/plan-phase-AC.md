@@ -218,6 +218,13 @@ Purpose:
 Execution branch:
 - `feature/pAC-s1-atm-storage-contract-and-canonical-types`
 
+Current status:
+- complete
+- `crates/atm-storage` now owns the canonical message/roster contract and
+  shared storage-facing types
+- `atm-core` retains only a temporary compile bridge for the legacy
+  `MailStore` / `RosterStore` consumer window
+
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s1-atm-storage-contract-and-canonical-types`
 

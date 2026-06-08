@@ -31,6 +31,7 @@ name = "agent-team-mail-core"
 version = "1.2.1"
 dependencies = [
  "atm-runtime-test-support",
+ "atm-storage",
  "chrono",
  "fs2",
  "interprocess",
@@ -44,7 +45,6 @@ dependencies = [
  "tempfile",
  "toml",
  "tracing",
- "ulid",
  "uuid",
  "windows-sys 0.59.0",
 ]
@@ -214,6 +214,18 @@ dependencies = [
  "serial_test",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "atm-storage"
+version = "1.2.1"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "toml",
+ "ulid",
+ "uuid",
 ]
 
 [[package]]

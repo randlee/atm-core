@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/atm-architecture",
+    "crates/atm-storage",
     "crates/atm-core",
     "crates/atm-runtime",
     "crates/atm-runtime-test-support",

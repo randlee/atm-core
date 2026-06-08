@@ -1,6 +1,4 @@
-use atm_core::boundary::{
-    ReconcileRequest, ReplaySource, RosterStore, RosterStoreReplaceRosterRequest, WatchEventBatch,
-};
+use atm_core::boundary::{ReconcileRequest, ReplaySource, RosterStore, WatchEventBatch};
 use atm_core::error::AtmError;
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -142,18 +140,18 @@ pub(crate) fn ingest_claude_team_config_from_watch_batch(
         .members
         .into_iter()
         .map(|member| {
-            atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+            atm_core::boundary::roster_member_record_from_claude_code_member(
                 request.team.clone(),
                 member,
             )
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(RosterStoreReplaceRosterRequest {
-            team: request.team.clone(),
-            members,
-            source: Some(replay_source_static("watcher-config-ingress")),
-        })
+        .replace_roster(
+            &request.team,
+            &members,
+            Some(&replay_source_static("watcher-config-ingress")),
+        )
         .map_err(|error| {
             AtmError::daemon_unavailable(format!(
                 "reconcile runtime could not replace canonical ATM roster state from {}",

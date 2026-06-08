@@ -883,9 +883,7 @@ mod tests {
         );
         assert_eq!(
             error.primary_recovery(),
-            Some(
-                "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
-            )
+            Some("Update the team membership or target a different recipient.")
         );
     }
 }

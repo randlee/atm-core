@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-MessageStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "MessageStore"
+
+[public]
+trait = "MessageStore"
+notes = "canonical audited shared message-storage contract introduced in AC.1"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["durable_message_state", "canonical_message_records"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-storage-claude", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["Message", "MessageKey", "MessageQuery"]
+response_types = ["Message", "Vec<Message>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
+review_gates = ["no_backend_specific_message_contract"]
+
+[status]
+state = "concrete_landed"
+notes = ["AC.1 created the shared audited message-storage trait in crates/atm-storage", "atm-core legacy MailStore remains compile-bridge surface only until AC.4 consumer cutover closes"]
+

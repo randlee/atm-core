@@ -11,8 +11,8 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
-    UpsertMessage(Box<boundary::MailStoreUpsertMessageRequest>),
-    UpsertMessageState(Box<boundary::UpsertMailMessageStateRequest>),
+    UpsertMessage(Box<boundary::MailStoreMessageRecord>),
+    UpsertMessageState(Box<boundary::MailMessageState>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,10 +39,10 @@ pub(crate) fn execute(
 }
 
 pub(crate) fn validate_upsert_message_request(
-    request: &boundary::MailStoreUpsertMessageRequest,
+    record: &boundary::MailStoreMessageRecord,
 ) -> Result<(), AtmError> {
     let envelope_json = serialize_json(
-        &StorageEnvelope::new(&request.record.envelope),
+        &StorageEnvelope::new(&record.envelope),
         "mail-store envelope",
     )?;
     if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
@@ -57,12 +57,11 @@ pub(crate) fn validate_upsert_message_request(
 }
 
 fn execute_upsert_message(
-    request: &boundary::MailStoreUpsertMessageRequest,
+    record: &boundary::MailStoreMessageRecord,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    let record = &request.record;
     let envelope_json = serialize_json(
         &StorageEnvelope::new(&record.envelope),
         "mail-store envelope",
@@ -80,11 +79,11 @@ fn execute_upsert_message(
     let pending_ack_at = record
         .envelope
         .pending_ack_at
-        .map(|value| value.into_inner().to_rfc3339());
+        .map(|value: IsoTimestamp| value.into_inner().to_rfc3339());
     let acknowledged_at = record
         .envelope
         .acknowledged_at
-        .map(|value| value.into_inner().to_rfc3339());
+        .map(|value: IsoTimestamp| value.into_inner().to_rfc3339());
     let from_agent = record.envelope.from.to_string();
     let message_text = record.envelope.text.clone();
     let summary = record.envelope.summary.clone();
@@ -274,14 +273,13 @@ fn validate_message_id_uniqueness(
 }
 
 fn execute_upsert_message_state(
-    request: &boundary::UpsertMailMessageStateRequest,
+    state: &boundary::MailMessageState,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let state_timestamp = request.state.updated_at.unwrap_or_else(IsoTimestamp::now);
-    if request
-        .state
+    let state_timestamp = state.updated_at.unwrap_or_else(IsoTimestamp::now);
+    if state
         .expires_at
         .is_some_and(|expires_at| expires_at <= state_timestamp)
     {
@@ -297,25 +295,21 @@ fn execute_upsert_message_state(
         .upsert_message_state(
             connection,
             params![
-                request.team.as_str(),
-                request.agent.as_str(),
-                request.state.message_key.as_ref(),
-                i64::from(request.state.read),
-                request
-                    .state
+                state.team.as_str(),
+                state.agent.as_str(),
+                state.message_key.as_ref(),
+                i64::from(state.read),
+                state
                     .pending_ack_at
                     .map(|value| value.into_inner().to_rfc3339()),
-                request
-                    .state
+                state
                     .acknowledged_at
                     .map(|value| value.into_inner().to_rfc3339()),
-                request.state.expires_at.map(rfc3339),
-                request
-                    .state
+                state.expires_at.map(rfc3339),
+                state
                     .deleted_at
                     .map(|value| value.into_inner().to_rfc3339()),
-                request
-                    .state
+                state
                     .updated_at
                     .map(|value| value.into_inner().to_rfc3339()),
             ],

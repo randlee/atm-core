@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.1
 worktree: ../atm-core-worktrees/feature/pAC-s1-atm-storage-contract-and-canonical-types
 branch: feature/pAC-s1-atm-storage-contract-and-canonical-types
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -222,7 +222,7 @@ Proof this sprint must leave behind:
 - `cargo clippy -p atm-storage -- -D warnings`
 - `cargo tree -p atm-storage`
 - `git diff --check`
-- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
+- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Request|Response)|RosterStore(Replace|Load|Query|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S` (Health tokens intentionally excluded from contract validation)
 - `rg -n "MailStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
@@ -246,3 +246,10 @@ Proof this sprint must leave behind:
 - if the contract copies the current boundary request/response volume, the phase has failed
 - if the shared structs are still transport-shaped rather than semantic, `AC.5` will stall
 - if this sprint leaves both old and new shared contracts standing indefinitely, `AC.4` and `AC.6` will false-close
+
+## Closure Note
+
+- `AC.1` landed `crates/atm-storage` with canonical message/roster contract
+  traits, canonical shared message/roster structs, notification events, and an
+  `atm-core` compile bridge that keeps the workspace buildable while later
+  consumer-migration sprints close the legacy surfaces

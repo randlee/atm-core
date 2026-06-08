@@ -635,19 +635,15 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
-        RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
-        RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest,
-        RosterStoreListTeamsResponse, RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse,
-        RosterStoreQueryMembershipRequest, RosterStoreQueryMembershipResponse,
-        RosterStoreReplaceRosterRequest, RosterStoreReplaceRosterResponse,
+        self, ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+        RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::TeamConfig;
     use crate::team_admin::{RestoreRequest, RestoreResult};
     use crate::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use crate::types::TeamName;
+    use crate::types::{AgentName, TeamName};
 
     #[derive(Default)]
     struct RecordingRosterStore {
@@ -668,95 +664,68 @@ mod tests {
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(
             &self,
-            request: RosterStoreReplaceRosterRequest,
-        ) -> Result<RosterStoreReplaceRosterResponse, AtmError> {
-            let previous_member_count = self
-                .teams
+            team: &TeamName,
+            members: &[RosterMemberRecord],
+            _source: Option<&ReplaySource>,
+        ) -> Result<(), AtmError> {
+            self.teams
                 .lock()
                 .expect("roster store lock")
-                .insert(request.team.clone(), request.members.clone())
-                .map(|members| members.len() as u64)
-                .unwrap_or_default();
-            Ok(RosterStoreReplaceRosterResponse {
-                team: request.team,
-                previous_member_count,
-                current_member_count: request.members.len() as u64,
-                replaced: true,
-            })
+                .insert(team.clone(), members.to_vec());
+            Ok(())
         }
 
-        fn load_roster(
-            &self,
-            request: RosterStoreLoadRosterRequest,
-        ) -> Result<RosterStoreLoadRosterResponse, AtmError> {
-            let members = self
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .cloned()
-                .unwrap_or_default();
-            Ok(RosterStoreLoadRosterResponse {
-                team: request.team,
-                members,
-            })
+                .unwrap_or_default())
         }
 
         fn query_membership(
             &self,
-            request: RosterStoreQueryMembershipRequest,
-        ) -> Result<RosterStoreQueryMembershipResponse, AtmError> {
-            let member = self
+            team: &TeamName,
+            member: &AgentName,
+        ) -> Result<Option<RosterMemberRecord>, AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .and_then(|members| {
                     members
                         .iter()
-                        .find(|member| member.agent_name == request.member)
+                        .find(|existing| existing.agent_name == *member)
                         .cloned()
-                });
-            Ok(RosterStoreQueryMembershipResponse {
-                team: request.team,
-                is_member: member.is_some(),
-                member,
-            })
+                }))
         }
 
-        fn list_teams(
-            &self,
-            _request: RosterStoreListTeamsRequest,
-        ) -> Result<RosterStoreListTeamsResponse, AtmError> {
-            Ok(RosterStoreListTeamsResponse {
-                teams: self
-                    .teams
-                    .lock()
-                    .expect("roster store lock")
-                    .keys()
-                    .cloned()
-                    .collect(),
-            })
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            Ok(self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .keys()
+                .cloned()
+                .collect())
         }
 
-        fn health_snapshot(
-            &self,
-            request: RosterStoreHealthSnapshotRequest,
-        ) -> Result<RosterStoreHealthSnapshotResponse, AtmError> {
+        fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError> {
             let member_count = self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .map(|members| members.len() as u64)
                 .unwrap_or_default();
-            Ok(RosterStoreHealthSnapshotResponse {
-                snapshot: RosterStoreHealthSnapshot {
-                    team: request.team,
-                    member_count,
-                    stale: false,
-                    refreshed_at: None,
-                },
+            Ok(RosterStoreHealthSnapshot {
+                team: team.clone(),
+                member_count,
+                stale: false,
+                refreshed_at: None,
             })
         }
     }

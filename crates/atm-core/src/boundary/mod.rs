@@ -7,9 +7,9 @@ pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::str::FromStr;
+pub use atm_storage::contract::{
+    AckTransition, MailMessageState, MessageFingerprint, MessageKey, TaskState,
+};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
@@ -32,135 +32,6 @@ mod store;
 pub use mail::*;
 pub use runtime::*;
 pub use store::*;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct MessageKey(String);
-
-impl MessageKey {
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the key is blank or only whitespace.
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("message key must not be blank").with_recovery(
-                    "Populate a stable ATM message key before calling the Phase R boundary.",
-                ),
-            );
-        }
-        Ok(Self(value))
-    }
-}
-
-impl AsRef<str> for MessageKey {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for MessageKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for MessageKey {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct TaskState(String);
-
-impl TaskState {
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the state is blank or only whitespace.
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("task state must not be blank").with_recovery(
-                    "Populate a non-empty task state before calling the Phase R boundary.",
-                ),
-            );
-        }
-        Ok(Self(value))
-    }
-}
-
-impl AsRef<str> for TaskState {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for TaskState {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl PartialEq<&str> for TaskState {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_ref() == *other
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct AckTransition(String);
-
-impl AckTransition {
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the transition is blank or only whitespace.
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("ack transition must not be blank").with_recovery(
-                    "Populate a non-empty ack transition before calling the Phase R boundary.",
-                ),
-            );
-        }
-        Ok(Self(value))
-    }
-}
-
-impl AsRef<str> for AckTransition {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for AckTransition {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for AckTransition {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
 
 /// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
 pub trait AtmProtocol: sealed::Sealed {

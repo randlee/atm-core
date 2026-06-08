@@ -5,7 +5,7 @@ name = "RosterStore"
 
 [public]
 trait = "RosterStore"
-notes = "trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore"
+notes = "legacy compile-bridge roster-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as RosterStore"
 
 [implementation]
 visibility = "trait_only"
@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-REFERENCES"]
 review_gates = ["no_concrete_store_leakage"]
 
 [status]
-state = "concrete_landed"
-notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore", "live status belongs elsewhere; this boundary owns durable roster truth only", "canonical roster truth is explicit member rows rather than a TeamConfig snapshot document", "daemon-owned pid continuity is transient runtime state and is outside this boundary"]
+state = "active"
+notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "this boundary remains temporary compile-bridge surface until AC.4 completes consumer cutover", "concrete store implementation still lands in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]

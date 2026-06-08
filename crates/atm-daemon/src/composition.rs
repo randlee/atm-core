@@ -1141,7 +1141,7 @@ mod tests {
             error
                 .primary_recovery()
                 .expect("recovery guidance")
-                .contains("at least one second"),
+                .contains("valid target or argument"),
             "{error}"
         );
     }

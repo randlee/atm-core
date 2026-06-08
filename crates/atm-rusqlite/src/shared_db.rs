@@ -293,17 +293,14 @@ impl SharedDb {
 
     pub(crate) fn submit_upsert_message(
         &self,
-        request: atm_core::boundary::MailStoreUpsertMessageRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertMessageResponse, AtmError> {
-        validate_upsert_message_request(&request)?;
-        let record = request.record.clone();
+        record: atm_core::boundary::MailStoreMessageRecord,
+    ) -> Result<(), AtmError> {
+        validate_upsert_message_request(&record)?;
         let result = self
             .writer
-            .submit(WriteOp::UpsertMessage(Box::new(request)))?;
+            .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
-            WriteOpResult::UpsertMessage { inserted } => {
-                Ok(atm_core::boundary::MailStoreUpsertMessageResponse { record, inserted })
-            }
+            WriteOpResult::UpsertMessage { .. } => Ok(()),
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned unexpected result for upsert_message: {other:?}"
             ))
@@ -315,16 +312,13 @@ impl SharedDb {
 
     pub(crate) fn submit_upsert_message_state(
         &self,
-        request: atm_core::boundary::UpsertMailMessageStateRequest,
-    ) -> Result<atm_core::boundary::UpsertMailMessageStateResponse, AtmError> {
-        let state = request.state.clone();
+        state: atm_core::boundary::MailMessageState,
+    ) -> Result<(), AtmError> {
         let result = self
             .writer
-            .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
+            .submit(WriteOp::UpsertMessageState(Box::new(state)))?;
         match result {
-            WriteOpResult::MessageStateUpdated => {
-                Ok(atm_core::boundary::UpsertMailMessageStateResponse { state })
-            }
+            WriteOpResult::MessageStateUpdated => Ok(()),
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
             ))

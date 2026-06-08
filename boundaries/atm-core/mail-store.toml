@@ -5,7 +5,7 @@ name = "MailStore"
 
 [public]
 trait = "MailStore"
-notes = "trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteMailStore"
+notes = "legacy compile-bridge mail-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as MessageStore"
 
 [implementation]
 visibility = "trait_only"
@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-MAILSTORE-REFERENCES"]
 review_gates = ["no_concrete_store_leakage"]
 
 [status]
-state = "concrete_landed"
-notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteMailStore", "mail state remains distinct from task and roster state"]
+state = "active"
+notes = ["AC.1 introduced crates/atm-storage::MessageStore as the authoritative shared message contract", "this boundary remains temporary compile-bridge surface until AC.4 completes consumer cutover", "concrete store implementation still lands in crates/atm-rusqlite/src/lib.rs as SqliteMailStore during the convergence window"]

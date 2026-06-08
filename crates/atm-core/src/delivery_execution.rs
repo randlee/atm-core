@@ -1075,10 +1075,13 @@ mod tests {
                 .message
                 .contains("warning: notification delivery failed for recipient@test-team")
         );
-        assert_eq!(
-            result.warnings[0].recovery.as_deref(),
-            Some("Restore the notification boundary before retrying retained-runtime delivery.")
-        );
+        let recovery = result.warnings[0]
+            .recovery
+            .as_deref()
+            .expect("notification recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
         assert!(
             runtime
                 .notification_events

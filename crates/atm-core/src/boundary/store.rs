@@ -1,16 +1,17 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::AgentType;
 use crate::schema::{AgentMember, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
+use atm_storage::contract::{AckTransition, MessageFingerprint, MessageKey, TaskState};
+pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::{DoctorFinding, MessageFingerprint};
-use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
+use super::mail::DoctorFinding;
+use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {
@@ -45,71 +46,42 @@ pub struct RosterStoreHealthSnapshot {
     pub refreshed_at: Option<IsoTimestamp>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum RosterMemberKind {
-    Permanent,
-    Ephemeral,
-}
+pub type RosterMemberRecord = atm_storage::contract::RosterMember;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum RosterHarness {
-    ClaudeCode,
-    CodexCli,
-    GeminiCli,
-    Opencode,
-}
+pub fn roster_member_record_from_claude_code_member(
+    team_name: TeamName,
+    member: AgentMember,
+) -> RosterMemberRecord {
+    let recipient_pane_id = member.tmux_pane_id;
+    let mut metadata_json = member.extra;
+    if !member.agent_id.is_empty() {
+        metadata_json.insert(
+            "agentId".to_string(),
+            Value::String(member.agent_id.to_string()),
+        );
+    }
+    if let Some(joined_at) = member.joined_at {
+        metadata_json.insert(
+            "joinedAt".to_string(),
+            Value::Number(serde_json::Number::from(joined_at)),
+        );
+    }
+    if !member.cwd.as_os_str().is_empty() {
+        metadata_json.insert(
+            "cwd".to_string(),
+            Value::String(member.cwd.display().to_string()),
+        );
+    }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterMemberRecord {
-    pub team_name: TeamName,
-    pub agent_name: AgentName,
-    pub member_kind: RosterMemberKind,
-    pub harness: RosterHarness,
-    #[serde(default)]
-    pub agent_type: AgentType,
-    #[serde(default)]
-    pub model: ModelName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recipient_pane_id: Option<PaneId>,
-    #[serde(default)]
-    pub metadata_json: Map<String, Value>,
-}
-
-impl RosterMemberRecord {
-    pub fn from_claude_code_member(team_name: TeamName, member: AgentMember) -> Self {
-        let recipient_pane_id = member.tmux_pane_id;
-        let mut metadata_json = member.extra;
-        if !member.agent_id.is_empty() {
-            metadata_json.insert(
-                "agentId".to_string(),
-                Value::String(member.agent_id.to_string()),
-            );
-        }
-        if let Some(joined_at) = member.joined_at {
-            metadata_json.insert(
-                "joinedAt".to_string(),
-                Value::Number(serde_json::Number::from(joined_at)),
-            );
-        }
-        if !member.cwd.as_os_str().is_empty() {
-            metadata_json.insert(
-                "cwd".to_string(),
-                Value::String(member.cwd.display().to_string()),
-            );
-        }
-
-        Self {
-            team_name,
-            agent_name: member.name,
-            member_kind: RosterMemberKind::Permanent,
-            harness: RosterHarness::ClaudeCode,
-            agent_type: member.agent_type,
-            model: member.model,
-            recipient_pane_id,
-            metadata_json,
-        }
+    RosterMemberRecord {
+        team_name,
+        agent_name: member.name,
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::ClaudeCode,
+        agent_type: member.agent_type,
+        model: member.model,
+        recipient_pane_id,
+        metadata_json,
     }
 }
 
@@ -279,98 +251,6 @@ pub struct TaskStoreResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,
-}
-
-/// Stub roster-store request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreReplaceRosterRequest {
-    pub team: TeamName,
-    pub members: Vec<RosterMemberRecord>,
-    /// Invariant: when present, source names one concrete roster-ingest origin
-    /// and must not be synthesized from an empty or whitespace-only string.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<ReplaySource>,
-}
-
-/// Stub roster-store response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreReplaceRosterResponse {
-    pub team: TeamName,
-    pub previous_member_count: u64,
-    pub current_member_count: u64,
-    pub replaced: bool,
-}
-
-/// Stub roster-store load-roster request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreLoadRosterRequest {
-    pub team: TeamName,
-}
-
-/// Stub roster-store load-roster response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreLoadRosterResponse {
-    pub team: TeamName,
-    pub members: Vec<RosterMemberRecord>,
-}
-
-/// Stub roster-store query-membership request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreQueryMembershipRequest {
-    pub team: TeamName,
-    pub member: AgentName,
-}
-
-/// Stub roster-store query-membership response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreQueryMembershipResponse {
-    pub team: TeamName,
-    #[serde(default)]
-    pub member: Option<RosterMemberRecord>,
-    #[serde(default)]
-    pub is_member: bool,
-}
-
-/// Stub roster-store health-snapshot request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreHealthSnapshotRequest {
-    pub team: TeamName,
-}
-
-/// Stub roster-store health-snapshot response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreHealthSnapshotResponse {
-    pub snapshot: RosterStoreHealthSnapshot,
-}
-
-/// Canonical roster-store list-teams request payload.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreListTeamsRequest;
-
-/// Canonical roster-store list-teams response payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreListTeamsResponse {
-    pub teams: Vec<TeamName>,
-}
-
-/// Canonical Phase R roster-store request entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreRequest {
-    pub team: TeamName,
-    pub members: Vec<RosterMemberRecord>,
-    /// Invariant: when present, source names one concrete roster-ingest origin
-    /// and must not be synthesized from an empty or whitespace-only string.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<ReplaySource>,
-}
-
-/// Canonical Phase R roster-store response entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreResponse {
-    pub team: TeamName,
-    pub previous_member_count: u64,
-    pub current_member_count: u64,
-    pub replaced: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -590,37 +470,31 @@ pub trait RosterStore: sealed::Sealed {
     /// Returns `AtmError` when roster replacement cannot be applied safely.
     fn replace_roster(
         &self,
-        request: RosterStoreReplaceRosterRequest,
-    ) -> Result<RosterStoreReplaceRosterResponse, AtmError>;
+        team: &TeamName,
+        members: &[RosterMemberRecord],
+        source: Option<&ReplaySource>,
+    ) -> Result<(), AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when one roster snapshot cannot be loaded.
-    fn load_roster(
-        &self,
-        request: RosterStoreLoadRosterRequest,
-    ) -> Result<RosterStoreLoadRosterResponse, AtmError>;
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when membership cannot be queried.
     fn query_membership(
         &self,
-        request: RosterStoreQueryMembershipRequest,
-    ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
+        team: &TeamName,
+        member: &AgentName,
+    ) -> Result<Option<RosterMemberRecord>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when the canonical roster team set cannot be
     /// enumerated safely.
-    fn list_teams(
-        &self,
-        request: RosterStoreListTeamsRequest,
-    ) -> Result<RosterStoreListTeamsResponse, AtmError>;
+    fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when roster health cannot be collected.
-    fn health_snapshot(
-        &self,
-        request: RosterStoreHealthSnapshotRequest,
-    ) -> Result<RosterStoreHealthSnapshotResponse, AtmError>;
+    fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError>;
 }
 
 /// BOUNDARY-RosterStoreDoctor — see docs/atm-core/boundaries.md.

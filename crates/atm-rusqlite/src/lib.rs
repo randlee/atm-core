@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(deprecated)]
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
@@ -162,43 +163,6 @@ impl SqliteMailStore {
         }
         envelope
     }
-
-    fn load_stored_message_record(
-        &self,
-        request: &boundary::MailStoreLoadStoredMessageRequest,
-    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
-        let envelope_json = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT envelope_json
-                     FROM mail_messages
-                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.message_key.as_ref()
-                    ],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| {
-                    self.db
-                        .error("failed to load stored mail-store message", error)
-                })
-        })?;
-
-        envelope_json
-            .map(|envelope_json| {
-                let envelope = deserialize_json(&envelope_json, "stored mail-store envelope")?;
-                Ok(boundary::MailStoreMessageRecord {
-                    team: request.team.clone(),
-                    agent: request.agent.clone(),
-                    message_key: request.message_key.clone(),
-                    envelope,
-                })
-            })
-            .transpose()
-    }
 }
 
 impl boundary::sealed::Sealed for SqliteMailStore {}
@@ -216,190 +180,128 @@ impl boundary::MailStore for SqliteMailStore {
         })
     }
 
-    fn run_transaction(
-        &self,
-        request: boundary::MailStoreTransactionRequest,
-    ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-        if !request.requested_operations.is_empty() {
-            return Err(AtmError::config(
-                "sqlite mail-store ad-hoc requested_operations are not implemented",
-            )
-            .with_recovery(
-                "Use the typed MailStore methods instead of run_transaction(requested_operations) until the generic transaction payload is specified.",
-            ));
-        }
-
-        self.db.with_transaction(|_transaction| {
-            Ok(boundary::MailStoreTransactionResponse {
-                team: request.team,
-                committed: true,
-                operations_executed: 0,
-            })
-        })
-    }
-
-    fn upsert_message(
-        &self,
-        request: boundary::MailStoreUpsertMessageRequest,
-    ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
-        self.db.submit_upsert_message(request)
+    fn upsert_message(&self, record: boundary::MailStoreMessageRecord) -> Result<(), AtmError> {
+        self.db.submit_upsert_message(record)
     }
 
     fn load_message(
         &self,
-        request: boundary::MailStoreLoadMessageRequest,
-    ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
         let record = self.db.with_connection(|connection| {
             let loaded = connection
                 .query_row(
                     "SELECT envelope_json
                      FROM mail_messages
                      WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.message_key.as_ref()
-                    ],
+                    params![team.as_str(), agent.as_str(), message_key.as_ref()],
                     |row| row.get::<_, String>(0),
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to load mail-store message", error))?;
-            let state = self.load_message_state(
-                connection,
-                &request.team,
-                &request.agent,
-                &request.message_key,
-            )?;
+            let state = self.load_message_state(connection, team, agent, message_key)?;
             Ok(loaded.map(|envelope_json| (envelope_json, state)))
         })?;
 
-        let record = if let Some((envelope_json, state)) = record {
+        if let Some((envelope_json, state)) = record {
             let envelope = deserialize_json(&envelope_json, "mail-store envelope")?;
             let envelope = Self::apply_loaded_state(envelope, state.as_ref());
-            Some(boundary::MailStoreMessageRecord {
-                team: request.team.clone(),
-                agent: request.agent.clone(),
-                message_key: request.message_key.clone(),
+            Ok(Some(boundary::MailStoreMessageRecord {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key: message_key.clone(),
                 envelope,
-            })
+            }))
         } else {
-            None
-        };
-
-        Ok(boundary::MailStoreLoadMessageResponse { record })
-    }
-
-    fn load_stored_message(
-        &self,
-        request: boundary::MailStoreLoadStoredMessageRequest,
-    ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
-        Ok(boundary::MailStoreLoadStoredMessageResponse {
-            record: self.load_stored_message_record(&request)?,
-        })
+            Ok(None)
+        }
     }
 
     fn query_mailbox_metadata(
         &self,
-        request: boundary::MailStoreQueryMailboxMetadataRequest,
-    ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
-        Ok(boundary::MailStoreQueryMailboxMetadataResponse {
-            rows: query_mailbox_metadata_rows(
-                &self.db,
-                &request.team,
-                &request.agent,
-                request.limit,
-            )?,
-        })
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        query_mailbox_metadata_rows(&self.db, team, agent, limit)
     }
 
     fn query_mailbox_metadata_counts(
         &self,
-        request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
-    ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
-        Ok(boundary::MailStoreQueryMailboxMetadataCountsResponse {
-            counts: query_mailbox_metadata_counts(&self.db, &request.team, &request.agent)?,
-        })
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<boundary::MailStoreMailboxMetadataCounts, AtmError> {
+        query_mailbox_metadata_counts(&self.db, team, agent)
     }
 
-    fn upsert_message_state(
-        &self,
-        request: boundary::UpsertMailMessageStateRequest,
-    ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
-        self.db.submit_upsert_message_state(request)
+    fn upsert_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        self.db.submit_upsert_message_state(state)
     }
 
     fn load_message_state(
         &self,
-        request: boundary::LoadMailMessageStateRequest,
-    ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+        team: &TeamName,
+        agent: &AgentName,
+        actor: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailMessageState>, AtmError> {
         let state = self.db.with_connection(|connection| {
-            self.load_message_state(
-                connection,
-                &request.team,
-                &request.agent,
-                &request.message_key,
-            )
+            self.load_message_state(connection, team, agent, message_key)
         })?;
-        let state = state.map(|state| boundary::MailMessageState {
-            team: request.team.clone(),
-            agent: request.agent.clone(),
-            actor: request.actor.clone(),
-            message_key: request.message_key.clone(),
+        Ok(state.map(|state| boundary::MailMessageState {
+            team: team.clone(),
+            agent: agent.clone(),
+            actor: actor.clone(),
+            message_key: message_key.clone(),
             read: state.read,
             pending_ack_at: state.pending_ack_at,
             acknowledged_at: state.acknowledged_at,
             expires_at: state.expires_at,
             deleted_at: state.deleted_at,
             updated_at: state.updated_at,
-        });
-
-        Ok(boundary::LoadMailMessageStateResponse { state })
+        }))
     }
 
     fn record_ingest_replay_state(
         &self,
-        request: boundary::MailStoreRecordIngestReplayStateRequest,
-    ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
-        let state_json = serialize_json(&request.state, "mail-store ingest replay state")?;
+        team: &TeamName,
+        agent: &AgentName,
+        source: &boundary::ReplaySource,
+        state: &boundary::MailStoreIngestReplayState,
+    ) -> Result<(), AtmError> {
+        let state_json = serialize_json(state, "mail-store ingest replay state")?;
         self.db.with_transaction(|transaction| {
             transaction
                 .execute(
                     "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
-                     VALUES (?1, ?2, ?3, ?4)
+                    VALUES (?1, ?2, ?3, ?4)
                      ON CONFLICT(team, agent, source) DO UPDATE SET
                        state_json = excluded.state_json;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.source.as_str(),
-                        state_json,
-                    ],
+                    params![team.as_str(), agent.as_str(), source.as_str(), state_json,],
                 )
                 .map_err(|error| {
                     self.db
                         .error("failed to record mail-store ingest replay state", error)
                 })?;
-            Ok(boundary::MailStoreRecordIngestReplayStateResponse {
-                state: request.state,
-            })
+            Ok(())
         })
     }
 
     fn load_ingest_replay_state(
         &self,
-        request: boundary::MailStoreLoadIngestReplayStateRequest,
-    ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
+        team: &TeamName,
+        agent: &AgentName,
+        source: &boundary::ReplaySource,
+    ) -> Result<Option<boundary::MailStoreIngestReplayState>, AtmError> {
         let state_json = self.db.with_connection(|connection| {
             connection
                 .query_row(
                     "SELECT state_json
                      FROM mail_ingest_replay_states
                      WHERE team = ?1 AND agent = ?2 AND source = ?3;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.source.as_str()
-                    ],
+                    params![team.as_str(), agent.as_str(), source.as_str()],
                     |row| row.get::<_, String>(0),
                 )
                 .optional()
@@ -413,13 +315,14 @@ impl boundary::MailStore for SqliteMailStore {
             .map(|value| deserialize_json(&value, "mail-store ingest replay state"))
             .transpose()?;
 
-        Ok(boundary::MailStoreLoadIngestReplayStateResponse { state })
+        Ok(state)
     }
 
     fn health_snapshot(
         &self,
-        request: boundary::MailStoreHealthSnapshotRequest,
-    ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<boundary::MailStoreHealthSnapshot, AtmError> {
         let (total_messages, pending_ack_messages, read_message_count, latest_message_timestamp) =
             self.db.with_connection(|connection| {
                 connection
@@ -444,7 +347,7 @@ impl boundary::MailStore for SqliteMailStore {
                              MAX(COALESCE(recorded_at, message_at))
                          FROM mail_messages
                          WHERE team = ?1 AND agent = ?2;",
-                        params![request.team.as_str(), request.agent.as_str()],
+                        params![team.as_str(), agent.as_str()],
                         |row| {
                             Ok((
                                 row.get::<_, i64>(0)? as u64,
@@ -463,15 +366,13 @@ impl boundary::MailStore for SqliteMailStore {
         let latest_message_timestamp =
             Self::parse_optional_timestamp(latest_message_timestamp, "health latest_message")?;
 
-        Ok(boundary::MailStoreHealthSnapshotResponse {
-            snapshot: boundary::MailStoreHealthSnapshot {
-                team: request.team,
-                agent: request.agent,
-                total_messages,
-                pending_ack_messages,
-                read_message_count,
-                latest_message_timestamp,
-            },
+        Ok(boundary::MailStoreHealthSnapshot {
+            team: team.clone(),
+            agent: agent.clone(),
+            total_messages,
+            pending_ack_messages,
+            read_message_count,
+            latest_message_timestamp,
         })
     }
 }
@@ -889,22 +790,23 @@ mod tests {
         team_name: &TeamName,
         agent_name: &AgentName,
     ) {
+        let members = vec![boundary::RosterMemberRecord {
+            team_name: team_name.clone(),
+            agent_name: agent_name.clone(),
+            member_kind: boundary::RosterMemberKind::Permanent,
+            harness: boundary::RosterHarness::ClaudeCode,
+            agent_type: atm_core::schema::AgentType::default(),
+            model: atm_core::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }];
         assembly
             .roster_store()
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team_name.clone(),
-                members: vec![boundary::RosterMemberRecord {
-                    team_name: team_name.clone(),
-                    agent_name: agent_name.clone(),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: atm_core::schema::AgentType::default(),
-                    model: atm_core::types::ModelName::default(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                }],
-                source: Some(replay_source_static("sqlite-test")),
-            })
+            .replace_roster(
+                team_name,
+                &members,
+                Some(&replay_source_static("sqlite-test")),
+            )
             .expect("replace roster");
     }
 
@@ -1021,11 +923,11 @@ mod tests {
         };
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record: active })
+            .upsert_message(active)
             .expect("upsert active");
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record: expired })
+            .upsert_message(expired)
             .expect("upsert expired");
         seed_roster_member(&assembly, &team(), &agent());
 
@@ -1077,7 +979,7 @@ mod tests {
         };
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .upsert_message(record)
             .expect("upsert message");
         seed_roster_member(&assembly, &team(), &agent());
 
@@ -1159,7 +1061,7 @@ mod tests {
         };
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .upsert_message(record)
             .expect("upsert message");
         seed_roster_member(&assembly, &team_name, &agent_name);
 
@@ -1236,7 +1138,7 @@ mod tests {
         };
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .upsert_message(record)
             .expect("upsert message");
         seed_roster_member(&assembly, &team_name, &agent_name);
 
@@ -1293,7 +1195,7 @@ mod tests {
         };
         assembly
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .upsert_message(record)
             .expect("upsert message");
 
         let recorded_at: String = assembly
@@ -1432,27 +1334,21 @@ mod tests {
         let first = assemble_boundary(&path).expect("first assembly");
         first
             .mail_store()
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: boundary::MailStoreMessageRecord {
-                    team: team(),
-                    agent: agent(),
-                    message_key: message_key("atm:test-reopen"),
-                    envelope: envelope(),
-                },
+            .upsert_message(boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: message_key("atm:test-reopen"),
+                envelope: envelope(),
             })
             .expect("write");
 
         let second = assemble_boundary(&path).expect("second assembly");
         let loaded = second
             .mail_store()
-            .load_message(boundary::MailStoreLoadMessageRequest {
-                team: team(),
-                agent: agent(),
-                message_key: message_key("atm:test-reopen"),
-            })
+            .load_message(&team(), &agent(), &message_key("atm:test-reopen"))
             .expect("reload");
 
-        assert!(loaded.record.is_some());
+        assert!(loaded.is_some());
     }
 
     #[test]
@@ -1479,21 +1375,12 @@ mod tests {
                 ..envelope()
             },
         };
-        let upsert = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: record.clone(),
-            })
-            .expect("upsert");
-        assert!(upsert.inserted);
+        store.upsert_message(record.clone()).expect("upsert");
 
         let loaded = store
-            .load_message(boundary::MailStoreLoadMessageRequest {
-                team: team(),
-                agent: agent(),
-                message_key: message_key("atm:test-1"),
-            })
+            .load_message(&team(), &agent(), &message_key("atm:test-1"))
             .expect("load");
-        assert_eq!(loaded.record, Some(record.clone()));
+        assert_eq!(loaded, Some(record.clone()));
 
         let visibility = boundary::MailMessageState {
             team: team(),
@@ -1508,39 +1395,23 @@ mod tests {
             updated_at: Some(IsoTimestamp::now()),
         };
         store
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                state: visibility.clone(),
-            })
+            .upsert_message_state(visibility.clone())
             .expect("upsert visibility");
         let loaded_visibility = store
-            .load_message_state(boundary::LoadMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                message_key: message_key("atm:test-1"),
-            })
+            .load_message_state(&team(), &agent(), &actor(), &message_key("atm:test-1"))
             .expect("load visibility");
-        assert_eq!(loaded_visibility.state, Some(visibility));
+        assert_eq!(loaded_visibility, Some(visibility));
         assert_eq!(
             loaded
-                .record
                 .as_ref()
                 .and_then(|record| record.envelope.expires_at),
             Some(expires_at)
         );
 
-        let health = store
-            .health_snapshot(boundary::MailStoreHealthSnapshotRequest {
-                team: team(),
-                agent: agent(),
-            })
-            .expect("health");
-        assert_eq!(health.snapshot.total_messages, 1);
-        assert_eq!(health.snapshot.pending_ack_messages, 1);
-        assert_eq!(health.snapshot.read_message_count, 1);
+        let health = store.health_snapshot(&team(), &agent()).expect("health");
+        assert_eq!(health.total_messages, 1);
+        assert_eq!(health.pending_ack_messages, 1);
+        assert_eq!(health.read_message_count, 1);
 
         assembly
             .mail_store
@@ -1600,7 +1471,7 @@ mod tests {
             };
             assembly
                 .mail_store()
-                .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+                .upsert_message(record)
                 .expect("upsert metadata row");
         }
 
@@ -1652,57 +1523,47 @@ mod tests {
             };
             assembly
                 .mail_store()
-                .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+                .upsert_message(record)
                 .expect("upsert state row");
         }
 
         assembly
             .mail_store()
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+            .upsert_message_state(boundary::MailMessageState {
                 team: team.clone(),
                 agent: agent.clone(),
                 actor: actor(),
-                state: boundary::MailMessageState {
-                    team: team.clone(),
-                    agent: agent.clone(),
-                    actor: actor(),
-                    message_key: message_key("atm:state-1"),
-                    read: true,
-                    pending_ack_at: None,
-                    acknowledged_at: None,
-                    expires_at: None,
-                    deleted_at: Some(IsoTimestamp::from_datetime(
-                        now + chrono::Duration::minutes(1),
-                    )),
-                    updated_at: Some(IsoTimestamp::from_datetime(
-                        now + chrono::Duration::minutes(1),
-                    )),
-                },
+                message_key: message_key("atm:state-1"),
+                read: true,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                expires_at: None,
+                deleted_at: Some(IsoTimestamp::from_datetime(
+                    now + chrono::Duration::minutes(1),
+                )),
+                updated_at: Some(IsoTimestamp::from_datetime(
+                    now + chrono::Duration::minutes(1),
+                )),
             })
             .expect("mark deleted");
 
         assembly
             .mail_store()
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+            .upsert_message_state(boundary::MailMessageState {
                 team: team.clone(),
                 agent: agent.clone(),
                 actor: actor(),
-                state: boundary::MailMessageState {
-                    team: team.clone(),
-                    agent: agent.clone(),
-                    actor: actor(),
-                    message_key: message_key("atm:state-2"),
-                    read: false,
-                    pending_ack_at: None,
-                    acknowledged_at: None,
-                    expires_at: Some(IsoTimestamp::from_datetime(
-                        now - chrono::Duration::minutes(1),
-                    )),
-                    deleted_at: None,
-                    updated_at: Some(IsoTimestamp::from_datetime(
-                        now - chrono::Duration::minutes(2),
-                    )),
-                },
+                message_key: message_key("atm:state-2"),
+                read: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                expires_at: Some(IsoTimestamp::from_datetime(
+                    now - chrono::Duration::minutes(1),
+                )),
+                deleted_at: None,
+                updated_at: Some(IsoTimestamp::from_datetime(
+                    now - chrono::Duration::minutes(2),
+                )),
             })
             .expect("mark expired");
 
@@ -1763,13 +1624,11 @@ mod tests {
         let now = chrono::Utc::now();
 
         store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: boundary::MailStoreMessageRecord {
-                    team: team(),
-                    agent: agent(),
-                    message_key: message_key("atm:deleted-state"),
-                    envelope: envelope(),
-                },
+            .upsert_message(boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: message_key("atm:deleted-state"),
+                envelope: envelope(),
             })
             .expect("upsert message");
 
@@ -1791,24 +1650,19 @@ mod tests {
         };
 
         store
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                state: deleted_state.clone(),
-            })
+            .upsert_message_state(deleted_state.clone())
             .expect("upsert deleted state");
 
         let loaded = store
-            .load_message_state(boundary::LoadMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                message_key: message_key("atm:deleted-state"),
-            })
+            .load_message_state(
+                &team(),
+                &agent(),
+                &actor(),
+                &message_key("atm:deleted-state"),
+            )
             .expect("load deleted state");
 
-        assert_eq!(loaded.state, Some(deleted_state));
+        assert_eq!(loaded, Some(deleted_state));
     }
 
     #[test]
@@ -1916,20 +1770,14 @@ mod tests {
                 ..envelope()
             },
         };
-        store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: root_record,
-            })
-            .expect("root upsert");
+        store.upsert_message(root_record).expect("root upsert");
 
         let invalid = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: boundary::MailStoreMessageRecord {
-                    team: team(),
-                    agent: agent(),
-                    message_key: MessageKey::new("bad-key").expect("non-empty"),
-                    envelope: envelope(),
-                },
+            .upsert_message(boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: MessageKey::new("bad-key").expect("non-empty"),
+                envelope: envelope(),
             })
             .expect_err("invalid key");
         assert!(invalid.is_validation());
@@ -1946,23 +1794,19 @@ mod tests {
             },
         };
         store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: first_successor,
-            })
+            .upsert_message(first_successor)
             .expect("first successor");
 
         let duplicate_successor = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: boundary::MailStoreMessageRecord {
-                    team: team(),
-                    agent: agent(),
-                    message_key: message_key("atm:successor-2"),
-                    envelope: MessageEnvelope {
-                        message_id: Some(atm_core::schema::AtmMessageId::new()),
-                        parent_message_id: Some(root_id),
-                        thread_mode: Some(atm_core::schema::ThreadMode::Supersede),
-                        ..envelope()
-                    },
+            .upsert_message(boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: message_key("atm:successor-2"),
+                envelope: MessageEnvelope {
+                    message_id: Some(atm_core::schema::AtmMessageId::new()),
+                    parent_message_id: Some(root_id),
+                    thread_mode: Some(atm_core::schema::ThreadMode::Supersede),
+                    ..envelope()
                 },
             })
             .expect_err("duplicate successor");
@@ -1975,15 +1819,13 @@ mod tests {
         );
 
         let duplicate_message_identity = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: boundary::MailStoreMessageRecord {
-                    team: team(),
-                    agent: agent(),
-                    message_key: message_key("atm:dup-legacy"),
-                    envelope: MessageEnvelope {
-                        message_id: Some(root_id),
-                        ..envelope()
-                    },
+            .upsert_message(boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: message_key("atm:dup-legacy"),
+                envelope: MessageEnvelope {
+                    message_id: Some(root_id),
+                    ..envelope()
                 },
             })
             .expect_err("duplicate message identity");
@@ -2016,27 +1858,14 @@ mod tests {
             ..original.clone()
         };
 
-        let first = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: original.clone(),
-            })
+        store
+            .upsert_message(original.clone())
             .expect("first upsert");
-        let second = store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: replacement,
-            })
-            .expect("second upsert");
-
-        assert!(first.inserted);
-        assert!(!second.inserted);
+        store.upsert_message(replacement).expect("second upsert");
         let loaded = store
-            .load_message(boundary::MailStoreLoadMessageRequest {
-                team: team(),
-                agent: agent(),
-                message_key: message_key("atm:duplicate"),
-            })
+            .load_message(&team(), &agent(), &message_key("atm:duplicate"))
             .expect("load duplicate");
-        assert_eq!(loaded.record, Some(original));
+        assert_eq!(loaded, Some(original));
     }
 
     #[test]
@@ -2047,15 +1876,15 @@ mod tests {
         for index in 0..16 {
             let store = Arc::clone(&store);
             workers.push(std::thread::spawn(move || {
-                let response = store.upsert_message(boundary::MailStoreUpsertMessageRequest {
-                    record: boundary::MailStoreMessageRecord {
+                store
+                    .upsert_message(boundary::MailStoreMessageRecord {
                         team: team(),
                         agent: agent(),
                         message_key: message_key(&format!("atm:concurrent-{index}")),
                         envelope: envelope(),
-                    },
-                });
-                response.expect("concurrent upsert").inserted
+                    })
+                    .expect("concurrent upsert");
+                true
             }));
         }
 
@@ -2068,12 +1897,9 @@ mod tests {
 
         let health = assembly
             .mail_store()
-            .health_snapshot(boundary::MailStoreHealthSnapshotRequest {
-                team: team(),
-                agent: agent(),
-            })
+            .health_snapshot(&team(), &agent())
             .expect("health after concurrent upserts");
-        assert_eq!(health.snapshot.total_messages, 16);
+        assert_eq!(health.total_messages, 16);
     }
 
     #[test]
@@ -2200,33 +2026,24 @@ mod tests {
                 )]),
             },
         ];
-        let replaced = store
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team(),
-                members: members.clone(),
-                source: Some(replay_source_static("config.json")),
-            })
+        store
+            .replace_roster(
+                &team(),
+                &members,
+                Some(&replay_source_static("config.json")),
+            )
             .expect("replace");
-        assert!(replaced.replaced);
 
-        let loaded = store
-            .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
-            .expect("load roster");
-        assert_eq!(loaded.members, members);
+        let loaded = store.load_roster(&team()).expect("load roster");
+        assert_eq!(loaded, members);
 
         let membership = store
-            .query_membership(boundary::RosterStoreQueryMembershipRequest {
-                team: team(),
-                member: "alpha".parse().expect("agent name"),
-            })
+            .query_membership(&team(), &"alpha".parse().expect("agent name"))
             .expect("membership");
-        assert!(membership.is_member);
-        assert_eq!(membership.member, Some(members[0].clone()));
+        assert_eq!(membership, Some(members[0].clone()));
 
-        let health = store
-            .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })
-            .expect("health");
-        assert_eq!(health.snapshot.member_count, members.len() as u64);
+        let health = store.health_snapshot(&team()).expect("health");
+        assert_eq!(health.member_count, members.len() as u64);
     }
 
     #[test]
@@ -2234,11 +2051,9 @@ mod tests {
         let assembly = in_memory_assembly();
         let store = assembly.roster_store();
 
-        let loaded = store
-            .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
-            .expect("load empty roster");
+        let loaded = store.load_roster(&team()).expect("load empty roster");
 
-        assert!(loaded.members.is_empty());
+        assert!(loaded.is_empty());
     }
 
     #[test]
@@ -2249,9 +2064,9 @@ mod tests {
         let bravo_team: TeamName = "bravo".parse().expect("team name");
 
         store
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: bravo_team.clone(),
-                members: vec![boundary::RosterMemberRecord {
+            .replace_roster(
+                &bravo_team,
+                &[boundary::RosterMemberRecord {
                     team_name: bravo_team.clone(),
                     agent_name: "zulu".parse().expect("agent name"),
                     member_kind: boundary::RosterMemberKind::Permanent,
@@ -2261,13 +2076,13 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
-                source: Some(replay_source_static("config.json")),
-            })
+                Some(&replay_source_static("config.json")),
+            )
             .expect("replace bravo roster");
         store
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: alpha_team.clone(),
-                members: vec![boundary::RosterMemberRecord {
+            .replace_roster(
+                &alpha_team,
+                &[boundary::RosterMemberRecord {
                     team_name: alpha_team.clone(),
                     agent_name: "alpha-agent".parse().expect("agent name"),
                     member_kind: boundary::RosterMemberKind::Permanent,
@@ -2277,15 +2092,13 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
-                source: Some(replay_source_static("config.json")),
-            })
+                Some(&replay_source_static("config.json")),
+            )
             .expect("replace alpha roster");
 
-        let teams = store
-            .list_teams(boundary::RosterStoreListTeamsRequest)
-            .expect("list teams");
+        let teams = store.list_teams().expect("list teams");
 
-        assert_eq!(teams.teams, vec![alpha_team, bravo_team]);
+        assert_eq!(teams, vec![alpha_team, bravo_team]);
     }
 
     #[test]

@@ -588,13 +588,13 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })
-                .collect();
+                .collect::<Vec<_>>();
             roster_store
-                .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                    team,
-                    members,
-                    source: Some(boundary::ReplaySource::new("config.json").expect("source")),
-                })
+                .replace_roster(
+                    &team,
+                    &members,
+                    Some(&boundary::ReplaySource::new("config.json").expect("source")),
+                )
                 .expect("seed sqlite roster");
         }
 
@@ -654,32 +654,25 @@ mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                        record: boundary::MailStoreMessageRecord {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            message_key: message_key.clone(),
-                            envelope: message.clone(),
-                        },
+                    .upsert_message(boundary::MailStoreMessageRecord {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        message_key: message_key.clone(),
+                        envelope: message.clone(),
                     })
                     .expect("seed sqlite message");
                 mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+                    .upsert_message_state(boundary::MailMessageState {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
+                        message_key,
+                        read: message.read,
+                        pending_ack_at: message.pending_ack_at,
+                        acknowledged_at: message.acknowledged_at,
+                        expires_at: message.expires_at,
+                        deleted_at: None,
+                        updated_at: Some(message.timestamp),
                     })
                     .expect("seed sqlite message state");
             }
@@ -829,10 +822,10 @@ mod tests {
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some("retry after the daemon is reachable")
-        );
+        let recovery = error.primary_recovery().expect("daemon recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
     }
 
     #[test]
