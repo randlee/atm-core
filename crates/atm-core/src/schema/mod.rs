@@ -8,7 +8,5 @@ pub mod team_config;
 
 pub use agent_member::AgentMember;
 pub use atm_storage::contract::AgentType;
-pub use inbox_message::{
-    AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode,
-};
+pub use inbox_message::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 pub use team_config::TeamConfig;

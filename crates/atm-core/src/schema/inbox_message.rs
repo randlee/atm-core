@@ -3,8 +3,6 @@
 
 pub use atm_storage::schema::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 
-pub type InboxMessage = MessageEnvelope;
-
 use serde_json::{Map, Value};
 
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};

@@ -3,10 +3,7 @@ use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, 
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
-use atm_runtime::{
-    RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
-    assemble_sqlite_runtime,
-};
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 
 use interprocess::local_socket::Name as LocalSocketName;
 use interprocess::local_socket::Stream as LocalSocketStream;
@@ -48,18 +45,6 @@ impl Drop for LifecycleFlagResetGuard {
 
 #[derive(Debug, Default)]
 pub(crate) struct DoctorOnlyDispatcher;
-
-#[derive(Debug, Default)]
-struct NoopRuntimeSqliteObserver;
-
-impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
-    fn emit_sqlite_event(
-        &self,
-        _event: RuntimeSqliteEvent,
-    ) -> Result<(), atm_core::error::AtmError> {
-        Ok(())
-    }
-}
 
 impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
 

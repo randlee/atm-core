@@ -155,16 +155,11 @@ mod tests {
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
-    use atm_core::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use atm_storage::{
         AtmMessageId, InboxMessage, IsoTimestamp, Message, MessageKey, ModelName, RosterHarness,
         RosterMember, RosterMemberKind,
     };
     use tempfile::tempdir;
-
-    const TEAM_NAME: &str = TEST_TEAM;
-    const ROLE_ARCH_CTM: &str = TEST_SENDER;
-    const ROLE_QUALITY_MGR: &str = TEST_QA;
 
     const RPC_TEST_TEAM: &str = "test-team";
     const RPC_TEST_QUALITY_MGR: &str = "quality-mgr";
