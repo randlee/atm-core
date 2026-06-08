@@ -590,11 +590,11 @@ mod tests {
                 })
                 .collect();
             roster_store
-                .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                    team,
-                    members,
-                    source: Some(boundary::ReplaySource::new("config.json").expect("source")),
-                })
+                .replace_roster(
+                    &team,
+                    &members,
+                    Some(&boundary::ReplaySource::new("config.json").expect("source")),
+                )
                 .expect("seed sqlite roster");
         }
 
@@ -654,13 +654,11 @@ mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                        record: boundary::MailStoreMessageRecord {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            message_key: message_key.clone(),
-                            envelope: message.clone(),
-                        },
+                    .upsert_message(boundary::MailStoreMessageRecord {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        message_key: message_key.clone(),
+                        envelope: message.clone(),
                     })
                     .expect("seed sqlite message");
                 mail_store

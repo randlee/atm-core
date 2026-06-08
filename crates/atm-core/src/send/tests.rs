@@ -11,10 +11,10 @@ use super::{
     alert_state, build_send_delivery_plan, persist_message_and_seed_workflow,
     prepare_threaded_message,
 };
+use crate::boundary::NonClaudeOutboundDeliveryRequest;
 use crate::boundary::{
     ClaudeCompatibilityDeliveryMode, MailMessageState, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageKey, NonClaudeOutboundDeliveryRequest, RosterHarness,
-    RosterMemberKind, RosterMemberRecord,
+    MailStoreMessageRecord, MessageKey, RosterHarness, RosterMemberKind, RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};

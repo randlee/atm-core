@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub use atm_storage::contract::AgentType;
 use crate::types::{AgentId, AgentName, ModelName, PaneId};
+pub use atm_storage::contract::AgentType;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +14,7 @@ pub struct AgentMember {
     /// Compound `agent@team` address as supplied by the external Claude Code
     /// agent-team API. Opaque passthrough — format is owned externally and not
     /// validated as an ATM path segment.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "AgentId::is_empty")]
     pub agent_id: AgentId,
 
     /// Agent type as deserialized from Claude Code agent-team config. ATM

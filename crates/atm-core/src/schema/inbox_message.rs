@@ -122,8 +122,8 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, MessageEnvelope, PendingAck, SharedInboxExportPolicy,
-        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        AlertKind, AtmMessageId, MessageEnvelope, PendingAck, SharedInboxExportPolicy, ThreadMode,
+        to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;

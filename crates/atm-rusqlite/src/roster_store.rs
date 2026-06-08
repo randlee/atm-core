@@ -24,38 +24,33 @@ struct StoredRosterMemberRow {
 impl boundary::RosterStore for SqliteRosterStore {
     fn replace_roster(
         &self,
-        request: boundary::RosterStoreReplaceRosterRequest,
-    ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
-        if request.members.len() > MAX_CANONICAL_ROSTER_MEMBERS {
+        team: &TeamName,
+        members: &[boundary::RosterMemberRecord],
+        source: Option<&boundary::ReplaySource>,
+    ) -> Result<(), AtmError> {
+        if members.len() > MAX_CANONICAL_ROSTER_MEMBERS {
             return Err(AtmError::validation(format!(
                 "roster-store replace rejected team {} because {} members exceeds the canonical roster cap of {}",
-                request.team,
-                request.members.len(),
+                team,
+                members.len(),
                 MAX_CANONICAL_ROSTER_MEMBERS
             ))
             .with_recovery(
                 "Reduce the roster payload size or raise the documented canonical roster cap before retrying replace_roster.",
             ));
         }
-        let previous_member_count = self
-            .load_roster(boundary::RosterStoreLoadRosterRequest {
-                team: request.team.clone(),
-            })
-            .ok()
-            .map(|response| response.members.len() as u64)
-            .unwrap_or(0);
         let updated_at = chrono::Utc::now().to_rfc3339();
         self.db.with_transaction(|transaction| {
             transaction
                 .execute(
                     "DELETE FROM team_roster WHERE team_name = ?1;",
-                    params![request.team.as_str()],
+                    params![team.as_str()],
                 ).map_err(|error| self.db.error("failed to clear canonical team roster", error))?;
-            for member in &request.members {
-                if member.team_name != request.team {
+            for member in members {
+                if member.team_name != *team {
                     return Err(AtmError::validation(format!(
                         "roster-store replace rejected member {} because team_name {} did not match request team {}",
-                        member.agent_name, member.team_name, request.team
+                        member.agent_name, member.team_name, team
                     ))
                     .with_recovery(
                         "Repair the incoming roster payload so every member row uses the same team_name as the replace_roster request before retrying.",
@@ -77,34 +72,24 @@ impl boundary::RosterStore for SqliteRosterStore {
                             updated_at
                          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
                         params![
-                            request.team.as_str(),
+                            team.as_str(),
                             member.agent_name.as_str(),
                             roster_member_kind_value(member.member_kind),
                             roster_harness_value(member.harness),
                             member.agent_type.to_string(),
                             member.model.to_string(),
                             metadata_json,
-                            request.source.as_ref().map(|source| source.as_str()),
+                            source.map(|source| source.as_str()),
                             member.recipient_pane_id.as_ref().map(ToString::to_string),
                             updated_at.clone(),
                         ],
                     ).map_err(|error| self.db.error("failed to replace canonical team-roster member", error))?;
             }
             Ok(())
-        })?;
-
-        Ok(boundary::RosterStoreReplaceRosterResponse {
-            team: request.team,
-            previous_member_count,
-            current_member_count: request.members.len() as u64,
-            replaced: true,
         })
     }
 
-    fn load_roster(
-        &self,
-        request: boundary::RosterStoreLoadRosterRequest,
-    ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
         let members = self.db.with_connection(|connection| {
             let mut statement = connection.prepare(
                 "SELECT agent_name, member_kind, harness, agent_type, model, recipient_pane_id, metadata_json
@@ -115,7 +100,7 @@ impl boundary::RosterStore for SqliteRosterStore {
             ).map_err(|error| self.db.error("failed to prepare canonical team-roster load", error))?;
             let rows = statement.query_map(
                 params![
-                    request.team.as_str(),
+                    team.as_str(),
                     (MAX_CANONICAL_ROSTER_MEMBERS as i64) + 1
                 ],
                 |row| {
@@ -144,7 +129,7 @@ impl boundary::RosterStore for SqliteRosterStore {
                 ) = row
                     .map_err(|error| self.db.error("failed to decode canonical team-roster row", error))?;
                 members.push(build_roster_member(
-                    &request.team,
+                    team,
                     agent_name,
                     StoredRosterMemberRow {
                         member_kind,
@@ -159,7 +144,7 @@ impl boundary::RosterStore for SqliteRosterStore {
             if members.len() > MAX_CANONICAL_ROSTER_MEMBERS {
                 return Err(AtmError::validation(format!(
                     "roster-store load rejected team {} because persisted roster rows exceeded the canonical cap of {}",
-                    request.team, MAX_CANONICAL_ROSTER_MEMBERS
+                    team, MAX_CANONICAL_ROSTER_MEMBERS
                 ))
                 .with_recovery(
                     "Reduce the canonical team_roster rows for that team or raise the documented roster cap before retrying load_roster.",
@@ -167,23 +152,21 @@ impl boundary::RosterStore for SqliteRosterStore {
             }
             Ok(members)
         })?;
-        Ok(boundary::RosterStoreLoadRosterResponse {
-            team: request.team,
-            members,
-        })
+        Ok(members)
     }
 
     fn query_membership(
         &self,
-        request: boundary::RosterStoreQueryMembershipRequest,
-    ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
+        team: &TeamName,
+        member: &atm_core::types::AgentName,
+    ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
         let membership = self.db.with_connection(|connection| {
             connection
                 .query_row(
                     "SELECT member_kind, harness, agent_type, model, recipient_pane_id, metadata_json
                      FROM team_roster
                      WHERE team_name = ?1 AND agent_name = ?2;",
-                    params![request.team.as_str(), request.member.as_str()],
+                    params![team.as_str(), member.as_str()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -205,8 +188,8 @@ impl boundary::RosterStore for SqliteRosterStore {
             .map(
                 |(member_kind, harness, agent_type, model, recipient_pane_id, metadata_json)| {
                     build_roster_member(
-                        &request.team,
-                        request.member.as_str().to_string(),
+                        team,
+                        member.as_str().to_string(),
                         StoredRosterMemberRow {
                             member_kind,
                             harness,
@@ -219,19 +202,10 @@ impl boundary::RosterStore for SqliteRosterStore {
                 },
             )
             .transpose()?;
-        let is_member = member.is_some();
-
-        Ok(boundary::RosterStoreQueryMembershipResponse {
-            team: request.team,
-            member,
-            is_member,
-        })
+        Ok(member)
     }
 
-    fn list_teams(
-        &self,
-        _request: boundary::RosterStoreListTeamsRequest,
-    ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+    fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
         let teams = self.db.with_connection(|connection| {
             let mut statement = connection
                 .prepare(
@@ -267,20 +241,20 @@ impl boundary::RosterStore for SqliteRosterStore {
             }
             Ok(teams)
         })?;
-        Ok(boundary::RosterStoreListTeamsResponse { teams })
+        Ok(teams)
     }
 
     fn health_snapshot(
         &self,
-        request: boundary::RosterStoreHealthSnapshotRequest,
-    ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
+        team: &TeamName,
+    ) -> Result<boundary::RosterStoreHealthSnapshot, AtmError> {
         let (member_count, updated_at) = self.db.with_connection(|connection| {
             connection
                 .query_row(
                     "SELECT COUNT(1), MAX(updated_at)
                          FROM team_roster
                          WHERE team_name = ?1;",
-                    params![request.team.as_str()],
+                    params![team.as_str()],
                     |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)),
                 )
                 .map_err(|error| {
@@ -291,7 +265,7 @@ impl boundary::RosterStore for SqliteRosterStore {
         let updated_at = updated_at.ok_or_else(|| {
             AtmError::validation(format!(
                 "roster-store health failed because team {} has no persisted roster members",
-                request.team
+                team
             ))
             .with_recovery(
                 "Replace the roster through RosterStore::replace_roster before requesting health.",
@@ -310,13 +284,11 @@ impl boundary::RosterStore for SqliteRosterStore {
                 .with_source(error)
             })?;
 
-        Ok(boundary::RosterStoreHealthSnapshotResponse {
-            snapshot: boundary::RosterStoreHealthSnapshot {
-                team: request.team,
-                member_count: member_count as u64,
-                stale: false,
-                refreshed_at: Some(refreshed_at),
-            },
+        Ok(boundary::RosterStoreHealthSnapshot {
+            team: team.clone(),
+            member_count: member_count as u64,
+            stale: false,
+            refreshed_at: Some(refreshed_at),
         })
     }
 }

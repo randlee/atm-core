@@ -101,13 +101,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         agent: &AgentName,
         limit: Option<usize>,
     ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-        self.mail_store
-            .query_mailbox_metadata(boundary::MailStoreQueryMailboxMetadataRequest {
-                team: team.clone(),
-                agent: agent.clone(),
-                limit,
-            })
-            .map(|response| response.rows)
+        self.mail_store.query_mailbox_metadata(team, agent, limit)
     }
 
     fn load_message_record(
@@ -117,22 +111,14 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
-        self.mail_store
-            .load_message(boundary::MailStoreLoadMessageRequest {
-                team: team.clone(),
-                agent: agent.clone(),
-                message_key: message_key.clone(),
-            })
-            .map(|response| response.record)
+        self.mail_store.load_message(team, agent, message_key)
     }
 
     fn persist_message_record(
         &self,
         record: boundary::MailStoreMessageRecord,
     ) -> Result<(), AtmError> {
-        self.mail_store
-            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
-            .map(|_| ())
+        self.mail_store.upsert_message(record)
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {

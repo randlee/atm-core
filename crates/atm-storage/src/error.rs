@@ -58,26 +58,66 @@ impl AtmError {
         }
     }
 
-    pub fn is_config(&self) -> bool { self.kind == AtmErrorKind::Config }
-    pub fn is_address(&self) -> bool { self.kind == AtmErrorKind::Address }
-    pub fn is_missing_document(&self) -> bool { self.kind == AtmErrorKind::MissingDocument }
-    pub fn is_identity(&self) -> bool { self.kind == AtmErrorKind::Identity }
-    pub fn is_team_not_found(&self) -> bool { self.kind == AtmErrorKind::TeamNotFound }
-    pub fn is_daemon_unavailable(&self) -> bool { self.kind == AtmErrorKind::DaemonUnavailable }
-    pub fn is_agent_not_found(&self) -> bool { self.kind == AtmErrorKind::AgentNotFound }
-    pub fn is_mailbox_read(&self) -> bool { self.kind == AtmErrorKind::MailboxRead }
-    pub fn is_mailbox_lock(&self) -> bool { self.kind == AtmErrorKind::MailboxLock }
-    pub fn is_mailbox_write(&self) -> bool { self.kind == AtmErrorKind::MailboxWrite }
-    pub fn is_file_policy(&self) -> bool { self.kind == AtmErrorKind::FilePolicy }
-    pub fn is_internal(&self) -> bool { self.kind == AtmErrorKind::Internal }
-    pub fn is_validation(&self) -> bool { self.kind == AtmErrorKind::Validation }
-    pub fn is_serialization(&self) -> bool { self.kind == AtmErrorKind::Serialization }
-    pub fn is_timeout(&self) -> bool { self.kind == AtmErrorKind::Timeout }
-    pub fn is_observability_emit(&self) -> bool { self.kind == AtmErrorKind::ObservabilityEmit }
-    pub fn is_observability_bootstrap(&self) -> bool { self.kind == AtmErrorKind::ObservabilityBootstrap }
-    pub fn is_observability_query(&self) -> bool { self.kind == AtmErrorKind::ObservabilityQuery }
-    pub fn is_observability_follow(&self) -> bool { self.kind == AtmErrorKind::ObservabilityFollow }
-    pub fn is_observability_health(&self) -> bool { self.kind == AtmErrorKind::ObservabilityHealth }
+    pub fn is_config(&self) -> bool {
+        self.kind == AtmErrorKind::Config
+    }
+    pub fn is_address(&self) -> bool {
+        self.kind == AtmErrorKind::Address
+    }
+    pub fn is_missing_document(&self) -> bool {
+        self.kind == AtmErrorKind::MissingDocument
+    }
+    pub fn is_identity(&self) -> bool {
+        self.kind == AtmErrorKind::Identity
+    }
+    pub fn is_team_not_found(&self) -> bool {
+        self.kind == AtmErrorKind::TeamNotFound
+    }
+    pub fn is_daemon_unavailable(&self) -> bool {
+        self.kind == AtmErrorKind::DaemonUnavailable
+    }
+    pub fn is_agent_not_found(&self) -> bool {
+        self.kind == AtmErrorKind::AgentNotFound
+    }
+    pub fn is_mailbox_read(&self) -> bool {
+        self.kind == AtmErrorKind::MailboxRead
+    }
+    pub fn is_mailbox_lock(&self) -> bool {
+        self.kind == AtmErrorKind::MailboxLock
+    }
+    pub fn is_mailbox_write(&self) -> bool {
+        self.kind == AtmErrorKind::MailboxWrite
+    }
+    pub fn is_file_policy(&self) -> bool {
+        self.kind == AtmErrorKind::FilePolicy
+    }
+    pub fn is_internal(&self) -> bool {
+        self.kind == AtmErrorKind::Internal
+    }
+    pub fn is_validation(&self) -> bool {
+        self.kind == AtmErrorKind::Validation
+    }
+    pub fn is_serialization(&self) -> bool {
+        self.kind == AtmErrorKind::Serialization
+    }
+    pub fn is_timeout(&self) -> bool {
+        self.kind == AtmErrorKind::Timeout
+    }
+    pub fn is_observability_emit(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityEmit
+    }
+    pub fn is_observability_bootstrap(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityBootstrap
+    }
+    pub fn is_observability_query(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityQuery
+    }
+    pub fn is_observability_follow(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityFollow
+    }
+    pub fn is_observability_health(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityHealth
+    }
 
     pub fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
         self.recovery.push(recovery.into());
@@ -399,6 +439,18 @@ impl fmt::Display for AtmError {
         for recovery in &self.recovery {
             write!(f, "\n  Recovery: {recovery}")?;
         }
+        if let Some(source) = self.source() {
+            write!(f, "\n  Source: {source}")?;
+            let mut current = source.source();
+            while let Some(next) = current {
+                write!(f, "\n  Caused by: {next}")?;
+                current = next.source();
+            }
+        }
+        match self.backtrace() {
+            Some(backtrace) => write!(f, "\n  Backtrace:\n{backtrace}")?,
+            None => write!(f, "\n  Backtrace: {:?}", self.backtrace.status())?,
+        }
         Ok(())
     }
 }
@@ -455,5 +507,59 @@ impl AtmErrorKind {
             Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
             Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AtmError, AtmErrorKind};
+    use std::error::Error;
+    use std::fmt;
+
+    #[derive(Debug)]
+    struct LeafError(&'static str);
+
+    impl fmt::Display for LeafError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+
+    impl Error for LeafError {}
+
+    #[derive(Debug)]
+    struct ParentError {
+        message: &'static str,
+        source: LeafError,
+    }
+
+    impl fmt::Display for ParentError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.message)
+        }
+    }
+
+    impl Error for ParentError {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(&self.source)
+        }
+    }
+
+    #[test]
+    fn display_includes_recovery_source_chain_and_backtrace_label() {
+        let error = AtmError::new(AtmErrorKind::Validation, "storage contract failed")
+            .with_recovery("Repair the contract fixture.")
+            .with_source(ParentError {
+                message: "parent source",
+                source: LeafError("leaf source"),
+            });
+
+        let rendered = error.to_string();
+
+        assert!(rendered.contains("storage contract failed"));
+        assert!(rendered.contains("Recovery: Repair the contract fixture."));
+        assert!(rendered.contains("Source: parent source"));
+        assert!(rendered.contains("Caused by: leaf source"));
+        assert!(rendered.contains("Backtrace:"));
     }
 }

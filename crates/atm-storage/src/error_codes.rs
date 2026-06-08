@@ -245,4 +245,3 @@ impl<'de> Deserialize<'de> for AtmErrorCode {
         value.parse().map_err(serde::de::Error::custom)
     }
 }
-

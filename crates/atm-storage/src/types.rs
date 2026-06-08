@@ -103,13 +103,22 @@ impl PartialEq<&str> for AgentName {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentId(String);
 
 impl AgentId {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let trimmed = value.trim();
+        match trimmed.split_once('@') {
+            Some((agent, team)) => {
+                validate_path_segment(agent, "agent id")?;
+                validate_path_segment(team, "agent id")?;
+            }
+            None => validate_path_segment(trimmed, "agent id")?,
+        }
+        Ok(Self(trimmed.to_string()))
     }
 
     pub fn as_str(&self) -> &str {
@@ -122,6 +131,24 @@ impl AgentId {
 
     pub fn into_inner(self) -> String {
         self.0
+    }
+}
+
+impl FromStr for AgentId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -213,6 +240,41 @@ impl Deref for TeamName {
 impl fmt::Display for TeamName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AgentId, AgentName};
+
+    #[test]
+    fn agent_id_new_matches_agent_name_validation_for_valid_value() {
+        let agent_id = AgentId::new("worker-1").expect("agent id");
+        let agent_name: AgentName = "worker-1".parse().expect("agent name");
+
+        assert_eq!(agent_id.as_str(), agent_name.as_str());
+    }
+
+    #[test]
+    fn agent_id_new_rejects_invalid_path_segments() {
+        for invalid in ["", ".hidden", "two..dots", "bad/name", "bad name"] {
+            assert!(
+                AgentId::new(invalid).is_err(),
+                "expected `{invalid}` to fail"
+            );
+        }
+    }
+
+    #[test]
+    fn agent_id_deserialize_applies_validation() {
+        let parsed: AgentId = serde_json::from_str("\"worker-2\"").expect("deserialize");
+        assert_eq!(parsed.as_str(), "worker-2");
+        let compound: AgentId =
+            serde_json::from_str("\"worker-2@test-team\"").expect("compound deserialize");
+        assert_eq!(compound.as_str(), "worker-2@test-team");
+
+        let error = serde_json::from_str::<AgentId>("\"bad/name\"").expect_err("invalid id");
+        assert!(error.to_string().contains("path separators"));
     }
 }
 
@@ -431,4 +493,3 @@ impl fmt::Display for PaneId {
         f.write_str(self.as_str())
     }
 }
-

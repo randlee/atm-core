@@ -390,21 +390,14 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
-        self.roster_store
-            .query_membership(crate::boundary::RosterStoreQueryMembershipRequest {
-                team: team.clone(),
-                member: agent.clone(),
-            })
-            .map(|response| response.member)
+        self.roster_store.query_membership(team, agent)
     }
 
     fn load_team_roster(
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
-        self.roster_store
-            .load_roster(crate::boundary::RosterStoreLoadRosterRequest { team: team.clone() })
-            .map(|response| response.members)
+        self.roster_store.load_roster(team)
     }
 
     fn deliver_non_claude_payloads(
@@ -450,12 +443,7 @@ fn load_store_backed_mailbox_projection(
 ) -> Result<Vec<MessageEnvelope>, AtmError> {
     let mut metadata_rows = runtime
         .mail_store
-        .query_mailbox_metadata(crate::boundary::MailStoreQueryMailboxMetadataRequest {
-            team: team.clone(),
-            agent: agent.clone(),
-            limit: None,
-        })?
-        .rows;
+        .query_mailbox_metadata(team, agent, None)?;
     metadata_rows.sort_by(|left, right| {
         left.message_at
             .cmp(&right.message_at)
@@ -478,14 +466,7 @@ fn load_projection_message(
     agent: &AgentName,
     message_key: &MessageKey,
 ) -> Result<MessageEnvelope, AtmError> {
-    runtime
-        .mail_store
-        .load_message(crate::boundary::MailStoreLoadMessageRequest {
-            team: team.clone(),
-            agent: agent.clone(),
-            message_key: message_key.clone(),
-        })?
-        .record
+    runtime.mail_store.load_message(team, agent, message_key)?
         .map(|record| record.envelope)
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -540,47 +521,36 @@ mod tests {
             unimplemented!("test stub")
         }
 
-        fn run_transaction(
-            &self,
-            _request: boundary::MailStoreTransactionRequest,
-        ) -> Result<boundary::MailStoreTransactionResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
         fn upsert_message(
             &self,
-            _request: boundary::MailStoreUpsertMessageRequest,
-        ) -> Result<boundary::MailStoreUpsertMessageResponse, crate::error::AtmError> {
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_message(
             &self,
-            _request: boundary::MailStoreLoadMessageRequest,
-        ) -> Result<boundary::MailStoreLoadMessageResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_stored_message(
-            &self,
-            _request: boundary::MailStoreLoadStoredMessageRequest,
-        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn query_mailbox_metadata(
             &self,
-            _request: boundary::MailStoreQueryMailboxMetadataRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, crate::error::AtmError>
-        {
-            Ok(boundary::MailStoreQueryMailboxMetadataResponse { rows: Vec::new() })
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            Ok(Vec::new())
         }
 
         fn query_mailbox_metadata_counts(
             &self,
-            _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, crate::error::AtmError>
-        {
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<boundary::MailStoreMailboxMetadataCounts, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
@@ -600,24 +570,28 @@ mod tests {
 
         fn record_ingest_replay_state(
             &self,
-            _request: boundary::MailStoreRecordIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, crate::error::AtmError>
-        {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _source: &boundary::ReplaySource,
+            _state: &boundary::MailStoreIngestReplayState,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_ingest_replay_state(
             &self,
-            _request: boundary::MailStoreLoadIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, crate::error::AtmError>
-        {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _source: &boundary::ReplaySource,
+        ) -> Result<Option<boundary::MailStoreIngestReplayState>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn health_snapshot(
             &self,
-            _request: boundary::MailStoreHealthSnapshotRequest,
-        ) -> Result<boundary::MailStoreHealthSnapshotResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<boundary::MailStoreHealthSnapshot, crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }
@@ -687,36 +661,36 @@ mod tests {
     impl boundary::RosterStore for NoopRosterStore {
         fn replace_roster(
             &self,
-            _request: boundary::RosterStoreReplaceRosterRequest,
-        ) -> Result<boundary::RosterStoreReplaceRosterResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _members: &[boundary::RosterMemberRecord],
+            _source: Option<&boundary::ReplaySource>,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_roster(
             &self,
-            _request: boundary::RosterStoreLoadRosterRequest,
-        ) -> Result<boundary::RosterStoreLoadRosterResponse, crate::error::AtmError> {
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn query_membership(
             &self,
-            _request: boundary::RosterStoreQueryMembershipRequest,
-        ) -> Result<boundary::RosterStoreQueryMembershipResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _member: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
-        fn list_teams(
-            &self,
-            _request: boundary::RosterStoreListTeamsRequest,
-        ) -> Result<boundary::RosterStoreListTeamsResponse, crate::error::AtmError> {
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn health_snapshot(
             &self,
-            _request: boundary::RosterStoreHealthSnapshotRequest,
-        ) -> Result<boundary::RosterStoreHealthSnapshotResponse, crate::error::AtmError> {
+            _team: &TeamName,
+        ) -> Result<boundary::RosterStoreHealthSnapshot, crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }

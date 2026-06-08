@@ -311,3 +311,157 @@ pub trait StorageNotifier {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent,
+        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
+        StorageNotifier,
+    };
+    use crate::error::AtmError;
+    use crate::schema::MessageEnvelope;
+    use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use chrono::Utc;
+    use serde_json::Map;
+
+    #[derive(Default)]
+    struct DummyStore;
+
+    impl MessageStore for DummyStore {
+        fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
+            Ok(None)
+        }
+
+        fn list_messages(&self, _query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn delete_message(&self, _key: &MessageKey) -> Result<(), AtmError> {
+            Ok(())
+        }
+    }
+
+    impl RosterStore for DummyStore {
+        fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError> {
+            Ok(RosterSnapshot {
+                team_name: team.clone(),
+                members: Vec::new(),
+                refreshed_at: None,
+            })
+        }
+
+        fn save_roster(&self, _roster: &RosterSnapshot) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            Ok(Vec::new())
+        }
+    }
+
+    impl StorageNotifier for DummyStore {
+        fn message_received(&self, _event: &MessageReceivedEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn roster_changed(&self, _event: &RosterChangedEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn storage_traits_are_object_safe() {
+        let store = DummyStore;
+        let message_store: &dyn MessageStore = &store;
+        let roster_store: &dyn RosterStore = &store;
+        let notifier: &dyn StorageNotifier = &store;
+
+        let team: TeamName = "atm-dev".parse().expect("team");
+        let agent: AgentName = "worker".parse().expect("agent");
+        let key = MessageKey::new("atm:test-1").expect("key");
+
+        let message = Message {
+            team: team.clone(),
+            agent: agent.clone(),
+            message_key: key.clone(),
+            envelope: MessageEnvelope {
+                from: agent.clone(),
+                text: "hello".to_string(),
+                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+                read: false,
+                source_team: Some(team.clone()),
+                summary: None,
+                message_id: None,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+        };
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![RosterMember {
+                team_name: team.clone(),
+                agent_name: agent.clone(),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: super::AgentType::Worker,
+                model: ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            }],
+            refreshed_at: None,
+        };
+
+        message_store.save_message(&message).expect("save message");
+        assert!(message_store.load_message(&key).expect("load").is_none());
+        assert!(
+            message_store
+                .list_messages(&MessageQuery {
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    sender: None,
+                    task_id: None,
+                    limit: Some(5),
+                })
+                .expect("list")
+                .is_empty()
+        );
+        message_store.delete_message(&key).expect("delete");
+
+        roster_store.save_roster(&roster).expect("save roster");
+        assert_eq!(
+            roster_store
+                .load_roster(&team)
+                .expect("load roster")
+                .team_name,
+            team
+        );
+        assert!(roster_store.list_teams().expect("list teams").is_empty());
+
+        notifier
+            .message_received(&MessageReceivedEvent {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key: key,
+                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+            })
+            .expect("message notification");
+        notifier
+            .roster_changed(&RosterChangedEvent {
+                team,
+                member_count: 1,
+                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+            })
+            .expect("roster notification");
+    }
+}
