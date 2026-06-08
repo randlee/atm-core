@@ -27,8 +27,9 @@ use atm_daemon_bootstrap::{
 #[cfg(test)]
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
-    BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, exchange as daemon_exchange,
-    try_connect as daemon_try_connect, unexpected_response,
+    BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, RpcEnvelope,
+    exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
+    unexpected_response,
 };
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
@@ -96,7 +97,11 @@ impl LocalIpcClientTransportAdapter {
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
+        let envelope = RpcEnvelope::encode_request(request)?;
+        let response =
+            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?;
+        let (_, response) = response.decode_response()?;
+        Ok(response)
     }
 }
 

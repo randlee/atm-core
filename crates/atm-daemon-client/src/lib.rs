@@ -19,6 +19,10 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
+mod rpc;
+
+pub use rpc::{RpcEnvelope, RpcHeader};
+
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
@@ -329,6 +333,19 @@ pub fn exchange(
     request: RequestEnvelope,
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
+    let envelope = RpcEnvelope::encode_request(request)?;
+    let response = exchange_envelope(endpoint, envelope, request_deadline)?;
+    let (_, response) = response.decode_response()?;
+    Ok(response)
+}
+
+/// This function performs blocking IPC I/O. Callers in async contexts must
+/// wrap this in `tokio::task::spawn_blocking`.
+pub fn exchange_envelope(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: RpcEnvelope,
+    request_deadline: Duration,
+) -> Result<RpcEnvelope, AtmError> {
     let mut stream = try_connect(endpoint)?;
     let _send_deadline_support = apply_local_ipc_deadline(
         stream.set_send_timeout(Some(request_deadline)),
@@ -338,8 +355,8 @@ pub fn exchange(
         stream.set_recv_timeout(Some(request_deadline)),
         "failed to configure daemon local IPC read timeout",
     )?;
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
+    let request_id = request.header.request_id;
+    let frame = request.into_frame_payload();
     atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
@@ -356,7 +373,7 @@ pub fn exchange(
             "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
         ));
     }
-    Ok(response)
+    RpcEnvelope::encode_response(response_id, response)
 }
 
 fn read_response_frame_with_deadline(

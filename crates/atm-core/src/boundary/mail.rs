@@ -1,7 +1,7 @@
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
+use crate::schema::{AtmMessageId, TeamConfig, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use atm_storage::contract::MessageKey;
+use atm_storage::contract::{Message as CanonicalMessage, MessageKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -48,13 +48,7 @@ impl From<ReplaySource> for String {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreMessageRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-    pub envelope: MessageEnvelope,
-}
+pub type MailStoreMessageRecord = CanonicalMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailMessageState {

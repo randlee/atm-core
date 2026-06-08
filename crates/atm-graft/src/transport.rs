@@ -3,7 +3,8 @@ use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, RequestId, ResponseEnvelope};
 use atm_daemon_client::{
-    DaemonLocalIpcEndpoint, exchange as daemon_exchange, try_connect as daemon_try_connect,
+    DaemonLocalIpcEndpoint, RpcEnvelope, exchange_envelope as daemon_exchange_envelope,
+    try_connect as daemon_try_connect,
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -38,7 +39,11 @@ impl GraftLocalIpcClientTransport {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
+        let envelope = RpcEnvelope::encode_request(request)?;
+        let response =
+            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?;
+        let (_, response) = response.decode_response()?;
+        Ok(response)
     }
 
     pub(crate) fn open_advisory_stream(
@@ -54,11 +59,9 @@ impl GraftLocalIpcClientTransport {
                 )
                 .with_source(source)
             })?;
-        let request_id = atm_core::protocol::next_request_id();
-        let frame = atm_core::protocol::request_to_frame_payload(
-            request_id,
-            RequestEnvelope::AdvisoryStream(request),
-        )?;
+        let envelope = RpcEnvelope::encode_request(RequestEnvelope::AdvisoryStream(request))?;
+        let request_id = envelope.header.request_id;
+        let frame = envelope.into_frame_payload();
         atm_core::protocol::write_frame(
             &mut stream,
             &frame,

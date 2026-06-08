@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.5
 worktree: ../atm-core-worktrees/feature/pAC-s5-rpc-envelope-and-domain-type-unification
 branch: feature/pAC-s5-rpc-envelope-and-domain-type-unification
-status: planned
+status: complete
 estimated_scope: large
 ```
 

@@ -329,6 +329,16 @@ Phase S payload encoding direction:
 - frame structure is independent of payload serialization choice for a future
   protocol version
 
+Phase AC transport-envelope note:
+- `atm-daemon-client::RpcEnvelope` is now the shared generic transport wrapper
+  for same-host daemon clients
+- `RpcHeader` owns transport metadata such as request id, packet kind, and
+  frame flags
+- `RpcEnvelope.body` carries UTF-8 JSON bytes for the current protocol DTO
+  layer
+- canonical message and roster bodies are expected to converge on
+  `atm-storage` shared structs rather than transport-local clones
+
 Current request/response payload ownership maps to the shared envelope family
 and the concrete Rust DTO types in `crates/atm-core/src/protocol.rs`.
 
