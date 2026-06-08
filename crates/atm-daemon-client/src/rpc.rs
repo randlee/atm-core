@@ -162,9 +162,9 @@ mod tests {
     use tempfile::tempdir;
 
     const RPC_TEST_TEAM: &str = "test-team";
-    const RPC_TEST_QUALITY_MGR: &str = "quality-mgr";
-    const RPC_TEST_ARCH_CTM: &str = "arch-ctm";
-    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "quality-mgr@test-team";
+    const RPC_TEST_QUALITY_MGR: &str = "test-agent";
+    const RPC_TEST_ARCH_CTM: &str = "test-sender";
+    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "test-agent@test-team";
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
