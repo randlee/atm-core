@@ -66,7 +66,6 @@ mod tests {
     use super::ClaudeStorageBackend;
 
     const TEST_TEAM: &str = "test-team";
-    const TEST_AGENT: &str = "test-agent";
     const TEST_SENDER: &str = "test-sender";
     const TEST_SENDER_2: &str = "test-sender-2";
     // Protocol identity: this must stay aligned with the reserved ATM lead role.

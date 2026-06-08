@@ -2,10 +2,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use atm_storage::{
-    AgentName, AtmError, Message, MessageEnvelope, MessageKey, MessageQuery, TeamName,
+    AgentName, AtmError, AtmMessageId, Message, MessageEnvelope, MessageKey, MessageQuery, TeamName,
 };
 
 use crate::compat::{ProjectionAppendMode, SourceFileRecord};
+
+const DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Clone)]
 struct SourceProjectionFile {
@@ -52,6 +54,69 @@ fn read_message_file(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
         ))
         .with_source(error)
     })
+}
+
+fn retrieval_stub_text(message_id: AtmMessageId) -> String {
+    format!("atm read --message-id {message_id}")
+}
+
+fn find_config_override(path: &Path) -> Result<Option<usize>, AtmError> {
+    for ancestor in path.ancestors() {
+        let config_path = ancestor.join(".atm.toml");
+        if !config_path.exists() {
+            continue;
+        }
+        let raw = fs::read_to_string(&config_path).map_err(|error| {
+            AtmError::config(format!(
+                "failed to read ATM config {}: {error}",
+                config_path.display()
+            ))
+            .with_source(error)
+        })?;
+        let value = raw.parse::<toml::Value>().map_err(|error| {
+            AtmError::config(format!(
+                "failed to parse ATM config {}: {error}",
+                config_path.display()
+            ))
+            .with_source(error)
+        })?;
+        let parsed = value
+            .get("atm")
+            .and_then(|section| section.get("claude_jsonl_body_export_max_bytes"))
+            .and_then(toml::Value::as_integer)
+            .map(|value| value.max(0) as usize);
+        return Ok(parsed);
+    }
+    Ok(None)
+}
+
+fn export_cap_for_path(path: &Path) -> Result<usize, AtmError> {
+    Ok(find_config_override(path)?.unwrap_or(DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES))
+}
+
+fn projected_export_message(
+    path: &Path,
+    message: &MessageEnvelope,
+) -> Result<MessageEnvelope, AtmError> {
+    let export_cap = export_cap_for_path(path)?;
+    if let Some(message_id) = message.message_id
+        && (export_cap == 0 || message.text.len() > export_cap)
+    {
+        let mut projected = message.clone();
+        projected.text = retrieval_stub_text(message_id);
+        return Ok(projected);
+    }
+    Ok(message.clone())
+}
+
+fn projected_export_messages(
+    path: &Path,
+    messages: &[MessageEnvelope],
+) -> Result<Vec<MessageEnvelope>, AtmError> {
+    messages
+        .iter()
+        .map(|message| projected_export_message(path, message))
+        .collect()
 }
 
 fn write_message_file(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
@@ -354,7 +419,8 @@ pub(crate) fn export_source_projections(source_files: &[SourceFileRecord]) -> Re
 }
 
 pub(crate) fn reexport_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
-    write_message_file(path, messages)
+    let projected = projected_export_messages(path, messages)?;
+    write_message_file(path, &projected)
 }
 
 pub(crate) fn append_message_set(
@@ -364,12 +430,13 @@ pub(crate) fn append_message_set(
 ) -> Result<(), AtmError> {
     match mode {
         ProjectionAppendMode::RecoveredLogicalMessageSet => {
+            let projected = projected_export_messages(path, messages)?;
             let mut existing = if path.exists() {
                 read_message_file(path)?
             } else {
                 Vec::new()
             };
-            existing.extend(messages.iter().cloned());
+            existing.extend(projected);
             write_message_file(path, &existing)
         }
     }
