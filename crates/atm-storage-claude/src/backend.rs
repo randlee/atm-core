@@ -59,8 +59,8 @@ mod tests {
 
     use atm_storage::{
         AgentName, IsoTimestamp, Message, MessageEnvelope, MessageKey, MessageQuery, MessageStore,
-        ROLE_TEAM_LEAD, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
-        RosterStore, TeamName,
+        ROLE_TEAM_LEAD, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
+        TeamName,
     };
     use tempfile::tempdir;
 

@@ -401,15 +401,7 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-pub(crate) use atm_storage::compat::{
-    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
-    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
-    ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, SourceFileRecord, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
-    SourceIngressImportResponse,
-};
+pub(crate) use atm_storage::compat::ProjectionAppendMode;
 
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -557,53 +549,6 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
     /// Returns `AtmError` when config diagnostics cannot be collected or
     /// summarized into the shared doctor report shape.
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
-}
-
-/// BOUNDARY-SourceIngress — see docs/atm-core/boundaries.md.
-pub(crate) trait SourceIngress: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when compatibility inbox material cannot be
-    /// imported, fingerprinted, or diagnosed into ATM-owned state.
-    fn import_inbox_source(
-        &self,
-        request: SourceIngressImportRequest,
-    ) -> Result<SourceIngressImportResponse, AtmError>;
-    fn compute_identity_fingerprint(
-        &self,
-        request: SourceIngressIdentityFingerprintRequest,
-    ) -> SourceIngressIdentityFingerprintResponse;
-    fn report_diagnostics(
-        &self,
-        request: SourceIngressDiagnosticsRequest,
-    ) -> SourceIngressDiagnosticsResponse;
-}
-
-/// BOUNDARY-ProjectionExport — see docs/atm-core/boundaries.md.
-pub(crate) trait ProjectionExport: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when ATM-owned state cannot be projected back to the
-    /// compatibility inbox/export surfaces.
-    fn export_record(
-        &self,
-        request: ProjectionExportRecordRequest,
-    ) -> Result<ProjectionExportRecordResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the message re-export cannot be materialized.
-    fn reexport_message(
-        &self,
-        request: ProjectionExportReexportMessageRequest,
-    ) -> Result<ProjectionExportReexportMessageResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a recovered Claude logical message set cannot
-    /// be materialized through one owned export operation.
-    fn append_message_set(
-        &self,
-        request: ProjectionExportAppendMessageSetRequest,
-    ) -> Result<ProjectionExportAppendMessageSetResponse, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
