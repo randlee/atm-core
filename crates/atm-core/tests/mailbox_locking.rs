@@ -1168,22 +1168,17 @@ impl Fixture {
                 })
                 .expect("seed sqlite message");
             mail_store
-                .upsert_message_state(atm_core::boundary::UpsertMailMessageStateRequest {
+                .upsert_message_state(atm_core::boundary::MailMessageState {
                     team: team.clone(),
                     agent: agent_name.clone(),
                     actor: agent_name.clone(),
-                    state: atm_core::boundary::MailMessageState {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        message_key,
-                        read: message.read,
-                        pending_ack_at: message.pending_ack_at,
-                        acknowledged_at: message.acknowledged_at,
-                        expires_at: message.expires_at,
-                        deleted_at: None,
-                        updated_at: Some(message.timestamp),
-                    },
+                    message_key,
+                    read: message.read,
+                    pending_ack_at: message.pending_ack_at,
+                    acknowledged_at: message.acknowledged_at,
+                    expires_at: message.expires_at,
+                    deleted_at: None,
+                    updated_at: Some(message.timestamp),
                 })
                 .expect("seed sqlite message state");
         }

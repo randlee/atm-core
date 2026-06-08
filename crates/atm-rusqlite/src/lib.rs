@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(deprecated)]
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
@@ -235,39 +236,32 @@ impl boundary::MailStore for SqliteMailStore {
         query_mailbox_metadata_counts(&self.db, team, agent)
     }
 
-    fn upsert_message_state(
-        &self,
-        request: boundary::UpsertMailMessageStateRequest,
-    ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
-        self.db.submit_upsert_message_state(request)
+    fn upsert_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        self.db.submit_upsert_message_state(state)
     }
 
     fn load_message_state(
         &self,
-        request: boundary::LoadMailMessageStateRequest,
-    ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+        team: &TeamName,
+        agent: &AgentName,
+        actor: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailMessageState>, AtmError> {
         let state = self.db.with_connection(|connection| {
-            self.load_message_state(
-                connection,
-                &request.team,
-                &request.agent,
-                &request.message_key,
-            )
+            self.load_message_state(connection, team, agent, message_key)
         })?;
-        let state = state.map(|state| boundary::MailMessageState {
-            team: request.team.clone(),
-            agent: request.agent.clone(),
-            actor: request.actor.clone(),
-            message_key: request.message_key.clone(),
+        Ok(state.map(|state| boundary::MailMessageState {
+            team: team.clone(),
+            agent: agent.clone(),
+            actor: actor.clone(),
+            message_key: message_key.clone(),
             read: state.read,
             pending_ack_at: state.pending_ack_at,
             acknowledged_at: state.acknowledged_at,
             expires_at: state.expires_at,
             deleted_at: state.deleted_at,
             updated_at: state.updated_at,
-        });
-
-        Ok(boundary::LoadMailMessageStateResponse { state })
+        }))
     }
 
     fn record_ingest_replay_state(
@@ -1401,25 +1395,14 @@ mod tests {
             updated_at: Some(IsoTimestamp::now()),
         };
         store
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                state: visibility.clone(),
-            })
+            .upsert_message_state(visibility.clone())
             .expect("upsert visibility");
         let loaded_visibility = store
-            .load_message_state(boundary::LoadMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                message_key: message_key("atm:test-1"),
-            })
+            .load_message_state(&team(), &agent(), &actor(), &message_key("atm:test-1"))
             .expect("load visibility");
-        assert_eq!(loaded_visibility.state, Some(visibility));
+        assert_eq!(loaded_visibility, Some(visibility));
         assert_eq!(
             loaded
-                .record
                 .as_ref()
                 .and_then(|record| record.envelope.expires_at),
             Some(expires_at)
@@ -1546,51 +1529,41 @@ mod tests {
 
         assembly
             .mail_store()
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+            .upsert_message_state(boundary::MailMessageState {
                 team: team.clone(),
                 agent: agent.clone(),
                 actor: actor(),
-                state: boundary::MailMessageState {
-                    team: team.clone(),
-                    agent: agent.clone(),
-                    actor: actor(),
-                    message_key: message_key("atm:state-1"),
-                    read: true,
-                    pending_ack_at: None,
-                    acknowledged_at: None,
-                    expires_at: None,
-                    deleted_at: Some(IsoTimestamp::from_datetime(
-                        now + chrono::Duration::minutes(1),
-                    )),
-                    updated_at: Some(IsoTimestamp::from_datetime(
-                        now + chrono::Duration::minutes(1),
-                    )),
-                },
+                message_key: message_key("atm:state-1"),
+                read: true,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                expires_at: None,
+                deleted_at: Some(IsoTimestamp::from_datetime(
+                    now + chrono::Duration::minutes(1),
+                )),
+                updated_at: Some(IsoTimestamp::from_datetime(
+                    now + chrono::Duration::minutes(1),
+                )),
             })
             .expect("mark deleted");
 
         assembly
             .mail_store()
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+            .upsert_message_state(boundary::MailMessageState {
                 team: team.clone(),
                 agent: agent.clone(),
                 actor: actor(),
-                state: boundary::MailMessageState {
-                    team: team.clone(),
-                    agent: agent.clone(),
-                    actor: actor(),
-                    message_key: message_key("atm:state-2"),
-                    read: false,
-                    pending_ack_at: None,
-                    acknowledged_at: None,
-                    expires_at: Some(IsoTimestamp::from_datetime(
-                        now - chrono::Duration::minutes(1),
-                    )),
-                    deleted_at: None,
-                    updated_at: Some(IsoTimestamp::from_datetime(
-                        now - chrono::Duration::minutes(2),
-                    )),
-                },
+                message_key: message_key("atm:state-2"),
+                read: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                expires_at: Some(IsoTimestamp::from_datetime(
+                    now - chrono::Duration::minutes(1),
+                )),
+                deleted_at: None,
+                updated_at: Some(IsoTimestamp::from_datetime(
+                    now - chrono::Duration::minutes(2),
+                )),
             })
             .expect("mark expired");
 
@@ -1677,24 +1650,19 @@ mod tests {
         };
 
         store
-            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                state: deleted_state.clone(),
-            })
+            .upsert_message_state(deleted_state.clone())
             .expect("upsert deleted state");
 
         let loaded = store
-            .load_message_state(boundary::LoadMailMessageStateRequest {
-                team: team(),
-                agent: agent(),
-                actor: actor(),
-                message_key: message_key("atm:deleted-state"),
-            })
+            .load_message_state(
+                &team(),
+                &agent(),
+                &actor(),
+                &message_key("atm:deleted-state"),
+            )
             .expect("load deleted state");
 
-        assert_eq!(loaded.state, Some(deleted_state));
+        assert_eq!(loaded, Some(deleted_state));
     }
 
     #[test]

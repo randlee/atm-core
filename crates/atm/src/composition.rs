@@ -588,7 +588,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })
-                .collect();
+                .collect::<Vec<_>>();
             roster_store
                 .replace_roster(
                     &team,
@@ -662,22 +662,17 @@ mod tests {
                     })
                     .expect("seed sqlite message");
                 mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+                    .upsert_message_state(boundary::MailMessageState {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
+                        message_key,
+                        read: message.read,
+                        pending_ack_at: message.pending_ack_at,
+                        acknowledged_at: message.acknowledged_at,
+                        expires_at: message.expires_at,
+                        deleted_at: None,
+                        updated_at: Some(message.timestamp),
                     })
                     .expect("seed sqlite message state");
             }

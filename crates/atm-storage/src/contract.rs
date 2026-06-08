@@ -156,6 +156,59 @@ pub struct Message {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailMessageState {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub actor: AgentName,
+    pub message_key: MessageKey,
+    pub read: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_ack_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<IsoTimestamp>,
+}
+
+/// Opaque hash or content-addressable identifier that marks the last
+/// successfully ingested message boundary for a replay source.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MessageFingerprint(String);
+
+impl MessageFingerprint {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MessageFingerprint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<String> for MessageFingerprint {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl AsRef<str> for MessageFingerprint {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MessageQuery {
     pub team: TeamName,
     pub agent: AgentName,

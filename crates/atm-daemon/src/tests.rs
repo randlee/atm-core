@@ -318,7 +318,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let roster = members
         .iter()
         .map(|name| {
-            atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+            atm_core::boundary::roster_member_record_from_claude_code_member(
                 test_team().clone(),
                 AgentMember::with_name((*name).parse().expect("member")),
             )

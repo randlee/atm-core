@@ -514,6 +514,7 @@ mod tests {
     impl boundary::sealed::Sealed for NoopMailStore {}
 
     impl boundary::MailStore for NoopMailStore {
+        #[allow(deprecated)]
         fn bootstrap(
             &self,
             _request: boundary::MailStoreBootstrapRequest,
@@ -556,15 +557,18 @@ mod tests {
 
         fn upsert_message_state(
             &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, crate::error::AtmError> {
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_message_state(
             &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, crate::error::AtmError> {
+            _team: &TeamName,
+            _agent: &AgentName,
+            _actor: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailMessageState>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 

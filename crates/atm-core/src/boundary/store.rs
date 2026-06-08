@@ -2,7 +2,7 @@ use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
-use atm_storage::contract::{AckTransition, MessageKey, TaskState};
+use atm_storage::contract::{AckTransition, MessageFingerprint, MessageKey, TaskState};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::{DoctorFinding, MessageFingerprint};
+use super::mail::DoctorFinding;
 use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
