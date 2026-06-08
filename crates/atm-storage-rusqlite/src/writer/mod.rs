@@ -10,6 +10,7 @@ use atm_storage::{
     AtmError, AtmErrorCode, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
+use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
@@ -451,7 +452,8 @@ fn process_batch(
     batch: Vec<QueuedWrite>,
 ) {
     let batch_len = batch.len();
-    let mut transaction = match connection.transaction() {
+    let mut transaction = match connection.transaction_with_behavior(TransactionBehavior::Immediate)
+    {
         Ok(transaction) => transaction,
         Err(error) => {
             send_batch_transaction_open_error(target, batch, error);

@@ -7,7 +7,7 @@ use atm_storage::schema::ThreadMode;
 use atm_storage::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 #[cfg(test)]
 use rusqlite::OpenFlags;
-use rusqlite::{Connection, Error as RusqliteError};
+use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -253,13 +253,18 @@ impl SharedDb {
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_transaction");
         self.with_connection(|connection| {
-            let transaction = connection.transaction().map_err(|error| {
-                sqlite_error(
-                    self.target.as_ref(),
-                    "failed to open sqlite transaction",
-                    error,
-                )
-            })?;
+            // Acquire the SQLite writer lock up front so concurrent write paths
+            // wait under the configured busy_timeout instead of failing during
+            // deferred lock escalation on slower Windows schedulers.
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(|error| {
+                    sqlite_error(
+                        self.target.as_ref(),
+                        "failed to open sqlite immediate transaction",
+                        error,
+                    )
+                })?;
             let value = operation(&transaction)?;
             transaction.commit().map_err(|error| {
                 sqlite_error(
