@@ -114,8 +114,8 @@ their present form:
 Move into `atm-storage` as canonical shared types or small semantic helpers:
 
 - `MessageKey`
-- `TaskState`
-- `AckTransition`
+- `TaskState` and `AckTransition` as ack-state semantic helpers, not as part
+  of the deferred `TaskStore` family
 - `MessageFingerprint` if still justified after the contract pass
 - canonical replacements for:
   - `MailStoreMessageRecord` -> `Message`

@@ -74,7 +74,7 @@ Primary closure rule:
   ```
 
 Design note:
-- `StorageBackends<M, R, T>` is a composition-root seam, not a new shared
+- `StorageBackends<M, R>` is a composition-root seam, not a new shared
   storage contract type
 - it exists to keep concrete backend naming localized to one static assembly
   point and to avoid reintroducing backend-aware branching into `atm-core`,
@@ -126,7 +126,7 @@ Proof this sprint must leave behind:
 
 ## Acceptance Criteria
 
-- a generic `StorageBackends<M, R, T>` seam exists at the approved
+- a generic `StorageBackends<M: MessageStore, R: RosterStore>` seam exists at the approved
   daemon/runtime assembly root and is the sole location where concrete backend
   storage types are named
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon -S` is clean outside approved composition seams
@@ -154,7 +154,7 @@ Proof this sprint must leave behind:
 - core/runtime/daemon architecture docs
 - update `atm-core`, `atm-daemon`, and `atm-runtime` boundary TOMLs for the
   removed concrete backend dependencies and the approved
-  `StorageBackends<M, R, T>` composition seam
+  `StorageBackends<M, R>` composition seam
 
 ## Risks And Watchouts
 

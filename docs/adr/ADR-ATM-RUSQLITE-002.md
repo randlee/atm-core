@@ -53,6 +53,10 @@ truth. Any current `TaskStore` code in `atm-rusqlite` is outside the approved
 storage-architecture baseline and is not normative for later storage-contract
 work.
 
+Phase `AC` follow-up note:
+- `ADR-018` supersedes any historical `atm-core` store-trait references here
+  when the backend converges into `atm-storage-rusqlite`
+
 ## Consequences
 
 - write-path serialization becomes explicit at the crate boundary

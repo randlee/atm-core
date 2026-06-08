@@ -116,9 +116,16 @@ Proof this sprint must leave behind:
 - the shared storage contract remains small enough to audit directly
 - no remaining obsolete wrapper families survive only for compatibility with the old design
 - the deletion sweep is checked against `docs/plans/phase-AC/type-ledger.md`, not only ad hoc grep patterns
+- the explicit TaskStore deletion grep gate passes for trait and record types:
+  `pub trait TaskStore`, `pub trait TaskStoreDoctor`, `TaskStoreTaskRecord`,
+  `TaskStoreTaskMetadata`, and `TaskStoreDoctorReport`
 - speculative task-store code is removed rather than normalized as a supported
   compatibility surface, except where a documented blocker forces temporary
   quarantine
+- any quarantine claim is recorded under the affected
+  `docs/plans/phase-AC/type-ledger.md` row with a `quarantine-reason`
+  annotation that names the specific blocking branch, open issue, or failing
+  test; quarantine survives `AC.6` only and must not roll into `AC.7+`
 - `AC.6` does not reopen capability or ownership decisions that earlier sprints
   were required to close
 
@@ -129,6 +136,7 @@ Proof this sprint must leave behind:
 - `python3 scripts/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "MailStore.*Request|MailStore.*Response|TaskStore.*Request|TaskStore.*Response|RosterStore.*Request|RosterStore.*Response" crates docs -S`
+- `rg -n "pub trait TaskStore|pub trait TaskStoreDoctor|TaskStoreTaskRecord|TaskStoreTaskMetadata|TaskStoreDoctorReport" crates -S`
 - `rg -n "InboxIngress.*Request|InboxIngress.*Response|InboxExport.*Request|InboxExport.*Response|SqliteBoundaryAssembly|RuntimeBundle" crates docs -S`
 
 ## Required Document Updates
