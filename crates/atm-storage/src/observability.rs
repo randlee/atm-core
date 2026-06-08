@@ -1,4 +1,4 @@
-use atm_storage::{AtmError, AtmErrorCode};
+use crate::{AtmError, AtmErrorCode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteObservabilityOutcome {
@@ -70,8 +70,6 @@ pub trait SqliteObservability: Send + Sync {
 pub struct NullSqliteObservability;
 
 impl SqliteObservability for NullSqliteObservability {
-    /// Intentionally succeeds without side effects so callers can reuse the
-    /// same SQLite emission sites when observability is disabled.
     fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> {
         Ok(())
     }

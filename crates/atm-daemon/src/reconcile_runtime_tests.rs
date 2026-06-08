@@ -8,16 +8,19 @@ use crate::worker_support::{
 };
 use atm_core::boundary::{
     self, NotificationEvent, NotificationSink, ReconcileRequest, RosterStore,
-    RosterStoreHealthSnapshot, SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
-    SourceIngressImportResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    RosterStoreHealthSnapshot, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, MessageEnvelope};
 use atm_core::types::IsoTimestamp;
+use atm_storage_claude::compat::{
+    SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
+};
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -517,8 +520,6 @@ impl FakeInboxIngress {
     }
 }
 
-impl boundary::sealed::Sealed for FakeInboxIngress {}
-
 impl SourceIngress for FakeInboxIngress {
     fn import_inbox_source(
         &self,
@@ -538,9 +539,10 @@ impl SourceIngress for FakeInboxIngress {
         request: SourceIngressIdentityFingerprintRequest,
     ) -> SourceIngressIdentityFingerprintResponse {
         SourceIngressIdentityFingerprintResponse {
-            fingerprint: request.message.message_id.map(|message_id| {
-                atm_core::boundary::MessageFingerprint::from(message_id.to_string())
-            }),
+            fingerprint: request
+                .message
+                .message_id
+                .map(|message_id| message_id.to_string()),
         }
     }
 
@@ -989,9 +991,7 @@ impl WatchEventSource for CountingWatchSource {
     }
 }
 
-fn inbox_source_with_message(
-    message: MessageEnvelope,
-) -> SourceFileRecord {
+fn inbox_source_with_message(message: MessageEnvelope) -> SourceFileRecord {
     SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],

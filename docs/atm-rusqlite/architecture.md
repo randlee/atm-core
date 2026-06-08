@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the `atm-rusqlite` crate architectural boundary.
+This document defines the `atm-storage-rusqlite` crate architectural boundary.
 
 It complements the product and `atm-core` architecture documents and owns only
 the first concrete SQLite implementation of the current store family.
@@ -16,7 +16,7 @@ The crate-local machine-readable boundary inventory lives in:
 
 ```yaml
 adr_id: ADR-ATM-RUSQLITE-001
-crate: atm-rusqlite
+crate: atm-storage-rusqlite
 title: Concrete SQLite adapters remain private
 status: accepted
 date: 2026-05-03
@@ -55,8 +55,8 @@ Follow-up work:
 
 ## 2. Architectural Rules
 
-- `atm-rusqlite` implements store contracts; it does not define them.
-- `atm-rusqlite` must not own workflow, routing, daemon, watcher, transport,
+- `atm-storage-rusqlite` implements store contracts; it does not define them.
+- `atm-storage-rusqlite` must not own workflow, routing, daemon, watcher, transport,
   or notifier business logic.
 - bounded queue-query support for Phase S now owns the concrete SQL metadata
   projections and bounded row/count helpers used by `atm list` and
@@ -65,8 +65,8 @@ Follow-up work:
 - all direct SQLite access stays inside this crate.
 - concrete `rusqlite` types, row mappers, connection wiring, and migration
   helpers remain private implementation details.
-- public callers depend on `atm-core` traits such as `MailStore`, `TaskStore`,
-  and `RosterStore`, not on concrete SQLite structs.
+- public callers depend on `atm-storage` traits plus runtime-owned
+  `atm-core` adapter seams, not on concrete SQLite structs.
 - Phase AA pairs those capability traits with subsystem-owned doctor traits so
   SQLite-specific diagnosis stays in this crate instead of moving upward into
   daemon or CLI code.
@@ -87,7 +87,8 @@ public boundary shape must remain split:
 - `MailStore`
 - `RosterStore`
 - `TaskStore` may remain an upstream trait, but no SQLite task schema is
-  approved until the task model is explicitly designed.
+  approved until the task model is explicitly designed explicitly around the
+  Claude-code task schema.
 - the paired doctor contract owns:
   - path resolution
   - openability
@@ -120,7 +121,7 @@ Architectural rule:
 
 ## 4. Migration And Transaction Boundary
 
-`atm-rusqlite` owns:
+`atm-storage-rusqlite` owns:
 
 - opening/creating the SQLite database
 - schema bootstrap and migration execution
@@ -131,7 +132,7 @@ Architectural rule:
   - `busy_timeout = 5000ms`
   - explicit transactions for mutating operations
 
-`atm-rusqlite` does not own:
+`atm-storage-rusqlite` does not own:
 
 - deciding when the application should perform a command
 - transport/runtime retry policy
@@ -139,7 +140,7 @@ Architectural rule:
 
 ## 5. Error Translation Boundary
 
-`atm-rusqlite` must translate raw SQLite failures into typed ATM store errors.
+`atm-storage-rusqlite` must translate raw SQLite failures into typed ATM store errors.
 
 Rules:
 - no raw SQLite error should leak across the public store boundary as the
@@ -173,7 +174,7 @@ Rules:
 
 ## 7. Testability
 
-`atm-rusqlite` must be testable entirely in process.
+`atm-storage-rusqlite` must be testable entirely in process.
 
 Rules:
 - no daemon process required

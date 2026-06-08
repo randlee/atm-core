@@ -2,11 +2,15 @@ mod notification_fingerprints;
 
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    NotificationSink, ReconcileRequest, ReconcileResult, RosterStore, SourceIngress,
-    WatchEventSource, WatchSubscriptionRequest,
+    NotificationSink, ReconcileRequest, ReconcileResult, RosterStore, WatchEventSource,
+    WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
+use atm_storage_claude::compat::{
+    SourceIngress, SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
+    SourceIngressImportResponse,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -211,13 +215,11 @@ impl ReconcileRuntime {
                     roster_store.as_ref(),
                     &projection_write_journal_for_executor,
                 )?;
-                let import = inbox_ingress.import_inbox_source(
-                    atm_core::boundary::SourceIngressImportRequest {
-                        home_dir: request.home_dir.clone(),
-                        team: request.team.clone(),
-                        agent: request.agent.clone(),
-                    },
-                )?;
+                let import = inbox_ingress.import_inbox_source(SourceIngressImportRequest {
+                    home_dir: request.home_dir.clone(),
+                    team: request.team.clone(),
+                    agent: request.agent.clone(),
+                })?;
                 Ok(ReconcileExecution {
                     result: ReconcileResult {
                         observed_paths: batch.paths.len(),
@@ -672,18 +674,16 @@ impl ReconcileRuntimeInner {
 }
 
 fn compute_reconcile_notification_fingerprints(
-    import: &atm_core::boundary::SourceIngressImportResponse,
+    import: &SourceIngressImportResponse,
     inbox_ingress: &dyn SourceIngress,
 ) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
         for message in &source.messages {
             let fingerprint = inbox_ingress
-                .compute_identity_fingerprint(
-                    atm_core::boundary::SourceIngressIdentityFingerprintRequest {
-                        message: message.clone(),
-                    },
-                )
+                .compute_identity_fingerprint(SourceIngressIdentityFingerprintRequest {
+                    message: message.clone(),
+                })
                 .fingerprint;
             let fingerprint = fingerprint?;
             current_fingerprints.insert(NotificationFingerprint::new(fingerprint.to_string())?);

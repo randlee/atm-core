@@ -1,10 +1,10 @@
 use super::SqliteRosterStore;
 use crate::shared_db::{deserialize_json, serialize_json};
+use atm_storage::AtmError;
 use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::AtmError;
 use rusqlite::params;
 use serde_json::{Map, Value};
 
@@ -206,7 +206,8 @@ fn build_roster_member(
             "Repair the malformed team_roster.agent_name row before retrying the roster query.",
         )
     })?;
-    let metadata_json = deserialize_json::<Map<String, Value>>(&row.metadata_json, "team-roster metadata")?;
+    let metadata_json =
+        deserialize_json::<Map<String, Value>>(&row.metadata_json, "team-roster metadata")?;
     let model = if row.model.is_empty() {
         ModelName::default()
     } else {
@@ -293,7 +294,7 @@ fn roster_harness_value(harness: RosterHarness) -> &'static str {
 mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
-    use atm_storage::IsoTimestamp;
+    use atm_storage::{IsoTimestamp, ROLE_WORKER};
 
     #[test]
     fn save_roster_rejects_mismatched_team_names() {
@@ -302,7 +303,7 @@ mod tests {
             .roster_store;
         let team: TeamName = "team-a".parse().expect("team");
         let other_team: TeamName = "team-b".parse().expect("team");
-        let agent: AgentName = "worker".parse().expect("agent");
+        let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let roster = RosterSnapshot {
             team_name: team,
             members: vec![RosterMember {

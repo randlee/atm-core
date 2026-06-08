@@ -12,6 +12,7 @@ homepage.workspace = true
 atm-storage = { path = "../atm-storage" }
 serde.workspace = true
 serde_json.workspace = true
+toml = "0.8"
 
 [dev-dependencies]
 tempfile = "3"

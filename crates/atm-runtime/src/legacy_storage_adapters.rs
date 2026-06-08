@@ -7,8 +7,7 @@ use std::sync::{Arc, Mutex};
 )]
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
-    MailMessageState, MailStore, MailStoreBootstrapRequest, MailStoreBootstrapResponse,
-    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
     MailStoreMessageRecord, ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
@@ -146,22 +145,7 @@ impl boundary::sealed::Sealed for DefaultMailStoreDoctor {}
 impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
 impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
-#[allow(
-    deprecated,
-    reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge until atm-core consumer cutover is complete."
-)]
 impl MailStore for LegacyMailStoreAdapter {
-    fn bootstrap(
-        &self,
-        request: MailStoreBootstrapRequest,
-    ) -> Result<MailStoreBootstrapResponse, AtmError> {
-        Ok(MailStoreBootstrapResponse {
-            team: request.team,
-            bootstrapped: false,
-            opened: true,
-        })
-    }
-
     fn upsert_message(&self, record: MailStoreMessageRecord) -> Result<(), AtmError> {
         self.store.save_message(&SharedMessage {
             team: record.team,

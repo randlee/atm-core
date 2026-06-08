@@ -14,12 +14,12 @@ Current concrete trait implementers found during `AC.0`:
 
 | Trait Surface | Current Implementer | Current Location | Planned Owner |
 | --- | --- | --- | --- |
-| `MailStore` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `MailStoreDoctor` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
-| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
-| `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
-| `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
+| `MailStore` | `SqliteMailStoreBoundary` over `SqliteStorageBackend` | `crates/atm-runtime/src/composition.rs` | `AC.3` |
+| `MailStoreDoctor` | `SqliteMailStoreBoundary` over `SqliteStorageBackend` | `crates/atm-runtime/src/composition.rs` | `AC.3` |
+| `TaskStore` | `UnsupportedSqliteTaskStore` | `crates/atm-runtime/src/composition.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
+| `TaskStoreDoctor` | `UnsupportedSqliteTaskStore` | `crates/atm-runtime/src/composition.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
+| `RosterStore` | `SqliteRosterStoreBoundary` over `SqliteStorageBackend` | `crates/atm-runtime/src/composition.rs` | `AC.3` |
+| `RosterStoreDoctor` | `SqliteRosterStoreBoundary` over `SqliteStorageBackend` | `crates/atm-runtime/src/composition.rs` | `AC.3` |
 | `RemoteReplayStore` capability/internalization | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
 | `RemoteReplayStore` consumer seam deletion | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.4` |
 | `RuntimeStorageFinalizer` capability/internalization | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
@@ -65,7 +65,7 @@ Representative consumers are spread broadly through:
 - `delivery_execution.rs`
 - `service_runtime.rs`
 - `send/`
-- `atm-rusqlite`
+- `atm-storage-rusqlite`
 
 Planning consequence:
 
@@ -96,7 +96,7 @@ Owns:
 Owns:
 
 - moving the SQLite backend behind `atm-storage`
-- reducing `atm-rusqlite` dependence on `atm-core`
+- keeping `atm-storage-rusqlite` free of `atm-core`
 - making replay/finalizer seams compatible with the new storage model
 - deciding whether replay/finalizer seams survive as backend-internal details
   or named optional capabilities

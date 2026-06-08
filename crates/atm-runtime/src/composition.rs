@@ -8,6 +8,7 @@ use atm_core::boundary::{
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
+use atm_core::home::host_mail_db_path;
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::host_runtime_dir, load_atm_config,
@@ -99,12 +100,15 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
 fn assemble_sqlite_runtime_at_path(
     sqlite_db_path: &Path,
     config_current_dir: PathBuf,
-    _sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
+    sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    let _sqlite_observability = Arc::new(RuntimeSqliteObservability::new(_sqlite_observer));
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new(sqlite_db_path)?);
+    let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        sqlite_db_path,
+        sqlite_observability,
+    )?);
     let shared_messages = sqlite_backend.message_store();
     let shared_rosters = sqlite_backend.roster_store();
     let storage_backends = StorageBackends {
@@ -115,9 +119,9 @@ fn assemble_sqlite_runtime_at_path(
     let roster_store = legacy_roster_store(shared_rosters);
     let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        mail_store.clone(),
+        storage_backends.messages.clone(),
         task_store.clone(),
-        roster_store.clone(),
+        storage_backends.rosters.clone(),
         non_claude_outbound,
         notification_sink,
     );
@@ -161,7 +165,10 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             .with_source(source)
         })?;
     }
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new(atm_core::home::host_mail_db_path()?)?);
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
     let shared_messages = sqlite_backend.message_store();
     let shared_rosters = sqlite_backend.roster_store();
     let storage_backends = StorageBackends {
@@ -172,9 +179,9 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     let roster_store = legacy_roster_store(shared_rosters);
     let task_store = noop_task_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        mail_store.clone(),
+        storage_backends.messages.clone(),
         task_store.clone(),
-        roster_store.clone(),
+        storage_backends.rosters.clone(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
@@ -198,6 +205,10 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 }
 
 impl RuntimeAssembly {
+    pub fn message_store_arc(&self) -> Arc<dyn SharedMessageStore + Send + Sync> {
+        self.storage_backends.messages.clone()
+    }
+
     pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
         self.mail_store.clone()
     }
@@ -208,6 +219,10 @@ impl RuntimeAssembly {
 
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
         self.roster_store.clone()
+    }
+
+    pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
+        self.storage_backends.rosters.clone()
     }
 }
 

@@ -694,96 +694,31 @@ mod tests {
     struct UnusedMailStore;
     struct UnusedTaskStore;
     struct TestRosterStore {
-        members: Vec<boundary::RosterMemberRecord>,
+        members: Vec<atm_storage::RosterMember>,
     }
 
-    impl crate::boundary::sealed::Sealed for UnusedMailStore {}
     impl crate::boundary::sealed::Sealed for UnusedTaskStore {}
-    impl crate::boundary::sealed::Sealed for TestRosterStore {}
 
-    impl boundary::MailStore for UnusedMailStore {
-        #[allow(
-            deprecated,
-            reason = "AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-        )]
-        fn bootstrap(
-            &self,
-            _request: boundary::MailStoreBootstrapRequest,
-        ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn upsert_message(
-            &self,
-            _record: boundary::MailStoreMessageRecord,
-        ) -> Result<(), AtmError> {
+    impl atm_storage::MessageStore for UnusedMailStore {
+        fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_message(
             &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _message_key: &boundary::MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+            _message_key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn query_mailbox_metadata(
+        fn list_messages(
             &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _limit: Option<usize>,
-        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn query_mailbox_metadata_counts(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<boundary::MailStoreMailboxMetadataCounts, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn upsert_message_state(
-            &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn load_message_state(
-            &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn record_ingest_replay_state(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _source: &boundary::ReplaySource,
-            _state: &boundary::MailStoreIngestReplayState,
-        ) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn load_ingest_replay_state(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _source: &boundary::ReplaySource,
-        ) -> Result<Option<boundary::MailStoreIngestReplayState>, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn health_snapshot(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<boundary::MailStoreHealthSnapshot, AtmError> {
+        fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
     }
@@ -839,39 +774,20 @@ mod tests {
         }
     }
 
-    impl boundary::RosterStore for TestRosterStore {
-        fn replace_roster(
-            &self,
-            _team: &TeamName,
-            _members: &[boundary::RosterMemberRecord],
-            _source: Option<&boundary::ReplaySource>,
-        ) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+    impl atm_storage::RosterStore for TestRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self.members.clone(),
+                refreshed_at: None,
+            })
         }
 
-        fn load_roster(
-            &self,
-            _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
-            Ok(self.members.clone())
-        }
-
-        fn query_membership(
-            &self,
-            _team: &TeamName,
-            _member: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
+        fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
-        }
-
-        fn health_snapshot(
-            &self,
-            _team: &TeamName,
-        ) -> Result<boundary::RosterStoreHealthSnapshot, AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
     }
@@ -880,13 +796,13 @@ mod tests {
         TestRosterStore {
             members: members
                 .iter()
-                .map(|member| boundary::RosterMemberRecord {
+                .map(|member| atm_storage::RosterMember {
                     team_name: TEST_TEAM.parse().expect("team"),
                     agent_name: AgentName::from_validated(*member),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: crate::schema::AgentType::default(),
-                    model: crate::types::ModelName::default(),
+                    member_kind: atm_storage::RosterMemberKind::Permanent,
+                    harness: atm_storage::RosterHarness::ClaudeCode,
+                    agent_type: atm_storage::contract::AgentType::default(),
+                    model: atm_storage::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 })

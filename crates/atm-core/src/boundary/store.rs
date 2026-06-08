@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
+)]
+
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, MessageEnvelope};
@@ -10,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::{DoctorFinding, MessageFingerprint};
+use super::mail::DoctorFinding;
 use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -86,7 +91,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRosterMember {
+pub(crate) struct ProjectionRosterMember {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -94,7 +99,7 @@ pub struct ProjectionRosterMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRoster {
+pub(crate) struct ProjectionRoster {
     pub team_name: TeamName,
     pub members: Arc<[ProjectionRosterMember]>,
 }
@@ -275,112 +280,15 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-/// Imported source-file snapshot returned by inbox ingress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceFileRecord {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-ingress request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceIngressImportRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Stub inbox-ingress response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceIngressImportResponse {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceIngressIdentityFingerprintRequest {
-    pub message: MessageEnvelope,
-}
-
-/// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceIngressIdentityFingerprintResponse {
-    pub fingerprint: Option<MessageFingerprint>,
-}
-
-/// Stub inbox-ingress diagnostics request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceIngressDiagnosticsRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Stub inbox-ingress diagnostics response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceIngressDiagnosticsResponse {
-    pub duplicate_message_ids: usize,
-    pub messages_without_ids: usize,
-}
-
-/// Canonical Phase R inbox-ingress request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SourceIngressRequest;
-
-/// Canonical Phase R inbox-ingress response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SourceIngressResponse;
-
-/// Stub inbox-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionExportRecordRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Stub inbox-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionExportRecordResponse {
-    pub committed_paths: usize,
-}
-
-/// Stub inbox-export re-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionExportReexportMessageRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-export re-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionExportReexportMessageResponse {
-    pub wrote_messages: usize,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum ProjectionAppendMode {
-    RecoveredLogicalMessageSet,
-}
-
-/// Explicit inbox-export append-message-set request for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionExportAppendMessageSetRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-    pub mode: ProjectionAppendMode,
-}
-
-/// Explicit inbox-export append-message-set response for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionExportAppendMessageSetResponse {
-    pub wrote_messages: usize,
-}
-
-/// Canonical Phase R inbox-export request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ProjectionExportRequest;
-
-/// Canonical Phase R inbox-export response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ProjectionExportResponse;
+pub(crate) use atm_storage::compat::{
+    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
+    ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, SourceFileRecord, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
+};
 
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -525,7 +433,7 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
 }
 
 /// BOUNDARY-SourceIngress — see docs/atm-core/boundaries.md.
-pub trait SourceIngress: sealed::Sealed {
+pub(crate) trait SourceIngress: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when compatibility inbox material cannot be
@@ -545,7 +453,7 @@ pub trait SourceIngress: sealed::Sealed {
 }
 
 /// BOUNDARY-ProjectionExport — see docs/atm-core/boundaries.md.
-pub trait ProjectionExport: sealed::Sealed {
+pub(crate) trait ProjectionExport: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when ATM-owned state cannot be projected back to the

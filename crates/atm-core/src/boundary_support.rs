@@ -1,14 +1,19 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 preserves these crate-private Claude compatibility helpers until later internal consumers are removed."
+)]
+
 //! Hidden daemon-side ingress/export helper layer used by concrete boundary
 //! adapters.
 
 use crate::boundary::{
-    ProjectionAppendMode, ConfigLoadRequest, ConfigLoadResponse,
+    ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMode,
     ProjectionExportAppendMessageSetRequest, ProjectionExportAppendMessageSetResponse,
-    ProjectionExportRecordRequest, ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest, SourceIngressImportResponse,
-    SourceFileRecord,
+    ProjectionExportRecordRequest, ProjectionExportRecordResponse,
+    ProjectionExportReexportMessageRequest, ProjectionExportReexportMessageResponse,
+    SourceFileRecord, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
+    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
+    SourceIngressImportRequest, SourceIngressImportResponse,
 };
 use crate::config;
 use crate::error::AtmError;
@@ -78,13 +83,13 @@ pub(crate) fn compute_identity_fingerprint(
     let fingerprint = request
         .message
         .message_id
-        .map(|message_id| crate::boundary::MessageFingerprint::from(message_id.to_string()))
+        .map(|message_id| message_id.to_string())
         .or_else(|| {
-            Some(crate::boundary::MessageFingerprint::from(format!(
+            Some(format!(
                 "{}:{}",
                 request.message.from,
                 request.message.timestamp.into_inner().to_rfc3339()
-            )))
+            ))
         });
     SourceIngressIdentityFingerprintResponse { fingerprint }
 }
@@ -139,8 +144,6 @@ pub(crate) fn export_source_files(
 pub(crate) fn reexport_messages(
     request: ProjectionExportReexportMessageRequest,
 ) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
-    // This seam is rebuild-only after Yb Y.10. Runtime send/ack delivery must
-    // not route through full mailbox rewrite.
     let wrote_messages = request.messages.len();
     mailbox::export_compat_mailbox_projection(&request.path, &request.messages).map_err(
         |error| {

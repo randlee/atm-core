@@ -662,16 +662,14 @@ fn build_peer_transport_runtime(
 
 #[cfg(test)]
 pub(crate) fn build_production_runtime(
-    mail_store: Arc<dyn atm_core::boundary::MailStore + Send + Sync>,
-    task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    roster_store: Arc<dyn atm_core::boundary::RosterStore + Send + Sync>,
+    assembly: &RuntimeAssembly,
     non_claude_outbound: Arc<dyn atm_core::boundary::NonClaudeOutbound + Send + Sync>,
     notification_sink: Arc<dyn atm_core::boundary::NotificationSink + Send + Sync>,
 ) -> atm_core::LocalServiceRuntime {
     atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
-        mail_store,
-        task_store,
-        roster_store,
+        assembly.message_store_arc(),
+        assembly.task_store_arc(),
+        assembly.shared_roster_store_arc(),
         non_claude_outbound,
         notification_sink,
     )

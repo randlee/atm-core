@@ -6,10 +6,10 @@ pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
 };
-use crate::observability::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+use atm_storage::{
+    AtmError, AtmErrorCode, SqliteObservability, SqliteObservabilityEvent,
+    SqliteObservabilityOutcome,
 };
-use atm_storage::{AtmError, AtmErrorCode};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
