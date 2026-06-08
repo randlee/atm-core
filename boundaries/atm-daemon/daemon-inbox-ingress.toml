@@ -4,7 +4,7 @@ owner_crate_path = "atm_daemon"
 name = "DaemonInboxIngressAdapter"
 
 [public]
-trait = "InboxIngress"
+trait = "SourceIngress"
 
 [implementation]
 type = "DaemonInboxIngress"
@@ -21,7 +21,7 @@ io_forbidden = ["sqlite", "socket_io", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core"]
+allowed_dependencies = ["atm-core", "atm-storage-claude"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
@@ -43,4 +43,4 @@ review_gates = ["no_public_impl", "no_public_constructor", "no_direct_mailbox_he
 
 [status]
 state = "active"
-notes = ["atm_core owns the contract; daemon runtime now supplies the crate-root adapter implementation", "watcher-driven reconcile now routes through this boundary rather than directly to mailbox helpers"]
+notes = ["atm-storage-claude owns the Claude ingress contract; daemon runtime now supplies the crate-root adapter implementation", "watcher-driven reconcile now routes through this boundary rather than directly to mailbox helpers"]

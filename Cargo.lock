@@ -140,6 +140,8 @@ dependencies = [
  "arc-swap",
  "atm-runtime",
  "atm-runtime-test-support",
+ "atm-storage",
+ "atm-storage-claude",
  "chrono",
  "fs2",
  "interprocess",
@@ -216,6 +218,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "tracing",
  "ulid",
  "uuid",
 ]
@@ -228,6 +231,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -239,8 +243,6 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "serial_test",
- "tempfile",
  "tracing",
 ]
 

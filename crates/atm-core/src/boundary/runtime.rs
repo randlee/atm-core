@@ -4,9 +4,7 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-use super::{
-    MessageKey, sealed,
-};
+use super::{MessageKey, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteReplayStateRecord {

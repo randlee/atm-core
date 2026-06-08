@@ -630,7 +630,7 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{self, ProjectionAppendMode, MessageKey};
+    use crate::boundary::{self, MessageKey, ProjectionAppendMode};
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;

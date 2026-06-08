@@ -1,14 +1,13 @@
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
-use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
-};
+#[cfg(test)]
+use atm_storage::NullSqliteObservability;
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
+use atm_storage::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 #[cfg(test)]
 use rusqlite::OpenFlags;
-use rusqlite::{Connection, Error as RusqliteError};
+use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -160,10 +159,6 @@ impl Drop for SharedDbConnectionGuard {
 }
 
 impl SharedDb {
-    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::open_with_observability(path, Arc::new(NullSqliteObservability))
-    }
-
     #[cfg(test)]
     pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
         Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
@@ -258,13 +253,18 @@ impl SharedDb {
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_transaction");
         self.with_connection(|connection| {
-            let transaction = connection.transaction().map_err(|error| {
-                sqlite_error(
-                    self.target.as_ref(),
-                    "failed to open sqlite transaction",
-                    error,
-                )
-            })?;
+            // Acquire the SQLite writer lock up front so concurrent write paths
+            // wait under the configured busy_timeout instead of failing during
+            // deferred lock escalation on slower Windows schedulers.
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(|error| {
+                    sqlite_error(
+                        self.target.as_ref(),
+                        "failed to open sqlite immediate transaction",
+                        error,
+                    )
+                })?;
             let value = operation(&transaction)?;
             transaction.commit().map_err(|error| {
                 sqlite_error(
@@ -289,6 +289,14 @@ impl SharedDb {
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
+    }
+
+    pub(crate) fn target_path(&self) -> Option<&PathBuf> {
+        match self.target.as_ref() {
+            SharedDbTarget::Path(path) => Some(path),
+            #[cfg(test)]
+            SharedDbTarget::InMemory { .. } => None,
+        }
     }
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {

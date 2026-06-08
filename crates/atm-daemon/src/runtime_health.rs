@@ -39,6 +39,7 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
+use atm_storage::RosterStore;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -61,7 +62,7 @@ pub(crate) struct DaemonRequestDispatcher {
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
-    roster_store: Option<Arc<dyn boundary::RosterStore + Send + Sync>>,
+    roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     notification_runtime: NotificationRuntime,
@@ -76,7 +77,10 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("service_runtime", &self.service_runtime)
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
-            .field("remote_replay_store_present", &self.remote_replay_store.is_some())
+            .field(
+                "remote_replay_store_present",
+                &self.remote_replay_store.is_some(),
+            )
             .field(
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
@@ -339,7 +343,7 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let roster_store = runtime_assembly.roster_store.clone();
+        let roster_store = runtime_assembly.shared_roster_store_arc();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -550,7 +554,11 @@ impl DaemonRequestDispatcher {
                     "Restore the runtime-bound roster store and restart atm-daemon before retrying heartbeat traffic.",
                 )
             })?;
-        let membership = roster_store.query_membership(&request.team, &request.member)?;
+        let membership = roster_store
+            .load_roster(&request.team)?
+            .members
+            .into_iter()
+            .find(|entry| entry.agent_name == request.member);
         if membership.is_none() {
             return Err(AtmError::agent_not_found(
                 request.member.as_str(),
@@ -805,7 +813,7 @@ impl DaemonRequestDispatcher {
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
         match build_runtime_status_cache_state(
             None,
-            runtime_assembly.roster_store.as_ref(),
+            runtime_assembly.shared_roster_store_arc().as_ref(),
         ) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -837,7 +845,7 @@ impl DaemonRequestDispatcher {
             status_cache,
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
-            roster_store: Some(runtime_assembly.roster_store.clone()),
+            roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
             notification_runtime,

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::error::AtmError;
@@ -89,6 +90,14 @@ impl AsRef<str> for TaskState {
     }
 }
 
+impl Deref for TaskState {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl fmt::Display for TaskState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_ref())
@@ -133,6 +142,14 @@ impl AsRef<str> for AckTransition {
     }
 }
 
+impl Deref for AckTransition {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl fmt::Display for AckTransition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_ref())
@@ -153,6 +170,59 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailMessageState {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub actor: AgentName,
+    pub message_key: MessageKey,
+    pub read: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_ack_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<IsoTimestamp>,
+}
+
+/// Opaque hash or content-addressable identifier that marks the last
+/// successfully ingested message boundary for a replay source.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MessageFingerprint(String);
+
+impl MessageFingerprint {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MessageFingerprint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<String> for MessageFingerprint {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl AsRef<str> for MessageFingerprint {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -319,6 +389,7 @@ mod tests {
         RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
         StorageNotifier,
     };
+    use crate::ROLE_WORKER;
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
@@ -381,8 +452,8 @@ mod tests {
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
 
-        let team: TeamName = "atm-dev".parse().expect("team");
-        let agent: AgentName = "worker".parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
 
         let message = Message {

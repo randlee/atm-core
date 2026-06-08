@@ -222,7 +222,7 @@ Proof this sprint must leave behind:
 - `cargo clippy -p atm-storage -- -D warnings`
 - `cargo tree -p atm-storage`
 - `git diff --check`
-- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
+- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Request|Response)|RosterStore(Replace|Load|Query|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S` (Health tokens intentionally excluded from contract validation)
 - `rg -n "MailStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 

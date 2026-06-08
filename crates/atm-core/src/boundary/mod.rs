@@ -7,7 +7,7 @@ pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
-pub use atm_storage::contract::{AckTransition, MessageKey, TaskState};
+pub use atm_storage::contract::{AckTransition, MessageFingerprint, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
