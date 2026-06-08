@@ -48,6 +48,7 @@ impl From<ReplaySource> for String {
 }
 
 pub type MailStoreMessageRecord = CanonicalMessage;
+pub type Message = MailStoreMessageRecord;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailMessageState {

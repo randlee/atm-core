@@ -13,4 +13,4 @@ description = "Compile-only proof crate showing the atm-storage contract can sup
 name = "atm_storage_sqlserver_proof"
 
 [dependencies]
-atm-storage = { path = "../atm-storage" }
+atm-storage = { path = "../atm-storage", version = "1.2.1" }

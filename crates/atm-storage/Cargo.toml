@@ -16,4 +16,3 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 ulid = { version = "1.2.1", features = ["serde"] }
 uuid.workspace = true
-tracing.workspace = true

@@ -1,52 +1,44 @@
 use atm_core::{
-    boundary::{
-        ConfigLoadRequest, ConfigLoadResponse, ProjectionAppendMessageSetRequest,
-        ProjectionAppendMessageSetResponse, ProjectionRecordRequest, ProjectionRecordResponse,
-        ProjectionReexportMessageRequest, ProjectionReexportMessageResponse,
-        SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
-        SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse,
-    },
+    boundary::MessageFingerprint,
+    boundary::{ConfigLoadRequest, ConfigLoadResponse},
     error::AtmError,
+    load_atm_config,
 };
+use atm_storage::{AgentName, MessageEnvelope, TeamName};
+use atm_storage_claude::compat::{
+    SourceFileRecord, SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
+};
+use std::path::Path;
 
 pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
-    atm_core::direct_boundaries::load_workspace_config(request)
+    Ok(ConfigLoadResponse {
+        config: load_atm_config(&request.current_dir)?,
+    })
 }
 
 pub(crate) fn import_inbox_source(
-    request: SourceImportRequest,
-) -> Result<SourceImportResponse, AtmError> {
-    atm_core::direct_boundaries::import_inbox_source(request)
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<SourceFileRecord>, AtmError> {
+    atm_storage_claude::compat::import_inbox_source(SourceIngressImportRequest {
+        home_dir: home_dir.to_path_buf(),
+        team: team.clone(),
+        agent: agent.clone(),
+    })
+    .map(|response| response.source_files)
 }
 
 pub(crate) fn compute_identity_fingerprint(
-    request: SourceIdentityFingerprintRequest,
-) -> SourceIdentityFingerprintResponse {
-    atm_core::direct_boundaries::compute_identity_fingerprint(request)
-}
-
-pub(crate) fn report_inbox_diagnostics(
-    request: SourceDiagnosticsRequest,
-) -> SourceDiagnosticsResponse {
-    atm_core::direct_boundaries::report_inbox_diagnostics(request)
-}
-
-pub(crate) fn export_source_files(
-    request: ProjectionRecordRequest,
-) -> Result<ProjectionRecordResponse, AtmError> {
-    atm_core::direct_boundaries::export_source_files(request)
-}
-
-pub(crate) fn reexport_messages(
-    request: ProjectionReexportMessageRequest,
-) -> Result<ProjectionReexportMessageResponse, AtmError> {
-    atm_core::direct_boundaries::reexport_messages(request)
-}
-
-pub(crate) fn append_message_set(
-    request: ProjectionAppendMessageSetRequest,
-) -> Result<ProjectionAppendMessageSetResponse, AtmError> {
-    atm_core::direct_boundaries::append_message_set(request)
+    message: &MessageEnvelope,
+) -> Option<MessageFingerprint> {
+    atm_storage_claude::compat::compute_identity_fingerprint(
+        SourceIngressIdentityFingerprintRequest {
+            message: message.clone(),
+        },
+    )
+    .fingerprint
+    .map(MessageFingerprint::from)
 }

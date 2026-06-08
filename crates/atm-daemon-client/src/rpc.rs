@@ -99,12 +99,26 @@ mod tests {
     use atm_core::protocol::{
         MessageKind, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
     };
+    use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_storage::{
         AtmMessageId, IsoTimestamp, Message, MessageEnvelope, MessageKey, ModelName, RosterHarness,
         RosterMember, RosterMemberKind,
     };
     use std::path::PathBuf;
+
+    // rule-008: allow-next-line -- centralized production-team test literal for
+    // canonical RPC/body round-trip coverage on the ATM dev path.
+    const RPC_TEST_TEAM: &str = "atm-dev";
+    // rule-008: allow-next-line -- centralized production-agent test literal
+    // for canonical RPC/body round-trip coverage.
+    const RPC_TEST_QUALITY_MGR: &str = "quality-mgr";
+    // rule-008: allow-next-line -- centralized production-agent test literal
+    // for canonical RPC/body round-trip coverage.
+    const RPC_TEST_ARCH_CTM: &str = "arch-ctm";
+    // rule-008: allow-next-line -- centralized production-address test literal
+    // for canonical RPC/body round-trip coverage.
+    const RPC_TEST_QUALITY_MGR_ADDRESS: &str = "quality-mgr@atm-dev";
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
@@ -114,15 +128,15 @@ mod tests {
             flags: atm_core::protocol::ATM_FRAME_FLAGS_V1,
         };
         let message = Message {
-            team: "atm-dev".parse().expect("team"),
-            agent: "quality-mgr".parse().expect("agent"),
+            team: RPC_TEST_TEAM.parse().expect("team"),
+            agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
             message_key: MessageKey::from(AtmMessageId::new()),
             envelope: MessageEnvelope {
-                from: "team-lead".parse().expect("from"),
+                from: ROLE_TEAM_LEAD.parse().expect("from"),
                 text: "body".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
-                source_team: Some("atm-dev".parse().expect("source team")),
+                source_team: Some(RPC_TEST_TEAM.parse().expect("source team")),
                 summary: Some("body".to_string()),
                 message_id: None,
                 pending_ack_at: None,
@@ -150,8 +164,8 @@ mod tests {
             flags: atm_core::protocol::ATM_FRAME_FLAGS_V1,
         };
         let roster = RosterMember {
-            team_name: "atm-dev".parse().expect("team"),
-            agent_name: "arch-ctm".parse().expect("agent"),
+            team_name: RPC_TEST_TEAM.parse().expect("team"),
+            agent_name: RPC_TEST_ARCH_CTM.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::ClaudeCode,
             agent_type: atm_storage::contract::AgentType::Worker,
@@ -171,9 +185,9 @@ mod tests {
         let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
             home_dir: PathBuf::from("/tmp/home"),
             current_dir: PathBuf::from("/tmp/cwd"),
-            sender_override: Some("arch-ctm".parse().expect("sender")),
-            to: "quality-mgr@atm-dev".parse().expect("address"),
-            team_override: Some("atm-dev".parse().expect("team")),
+            sender_override: Some(RPC_TEST_ARCH_CTM.parse().expect("sender")),
+            to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
+            team_override: Some(RPC_TEST_TEAM.parse().expect("team")),
             message_source: SendMessageSource::Inline("body".to_string()),
             summary_override: Some("body".to_string()),
             requires_ack: false,
@@ -192,7 +206,7 @@ mod tests {
                 assert_eq!(decoded.home_dir, PathBuf::from("/tmp/home"));
                 assert_eq!(decoded.current_dir, PathBuf::from("/tmp/cwd"));
                 assert_eq!(decoded.summary_override.as_deref(), Some("body"));
-                assert_eq!(decoded.to.to_string(), "quality-mgr@atm-dev");
+                assert_eq!(decoded.to.to_string(), RPC_TEST_QUALITY_MGR_ADDRESS);
             }
             other => panic!("unexpected request envelope: {other:?}"),
         }
@@ -202,9 +216,9 @@ mod tests {
     fn rpc_envelope_round_trips_response_envelopes() {
         let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
             action: atm_core::types::CommandAction::Send,
-            team: "atm-dev".parse().expect("team"),
-            agent: "quality-mgr".parse().expect("agent"),
-            sender: "team-lead".parse().expect("sender"),
+            team: RPC_TEST_TEAM.parse().expect("team"),
+            agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
+            sender: ROLE_TEAM_LEAD.parse().expect("sender"),
             outcome: SendCommandOutcome::Sent,
             message_id: AtmMessageId::new(),
             requires_ack: false,
@@ -222,9 +236,9 @@ mod tests {
         assert_eq!(decoded_request_id, request_id);
         match decoded {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(decoded)) => {
-                assert_eq!(decoded.team.to_string(), "atm-dev");
-                assert_eq!(decoded.agent.to_string(), "quality-mgr");
-                assert_eq!(decoded.sender.to_string(), "team-lead");
+                assert_eq!(decoded.team.to_string(), RPC_TEST_TEAM);
+                assert_eq!(decoded.agent.to_string(), RPC_TEST_QUALITY_MGR);
+                assert_eq!(decoded.sender.to_string(), ROLE_TEAM_LEAD);
                 assert_eq!(decoded.summary.as_deref(), Some("body"));
                 assert_eq!(decoded.message.as_deref(), Some("body"));
             }

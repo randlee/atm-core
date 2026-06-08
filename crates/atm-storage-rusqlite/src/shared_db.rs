@@ -1,10 +1,12 @@
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 #[cfg(test)]
-use atm_storage::NullSqliteObservability;
+use crate::observability::NullSqliteObservability;
+use crate::observability::{
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+};
+use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
-use atm_storage::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};

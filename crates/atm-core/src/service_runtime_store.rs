@@ -87,11 +87,8 @@ pub(crate) trait RetainedMailboxRuntime {
         team: &TeamName,
         agent: &AgentName,
         message_key: &boundary::MessageKey,
-    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError>;
-    fn persist_message_record(
-        &self,
-        record: boundary::MailStoreMessageRecord,
-    ) -> Result<(), AtmError>;
+    ) -> Result<Option<boundary::Message>, AtmError>;
+    fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
 }
 
@@ -125,7 +122,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
         message_key: &boundary::MessageKey,
-    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+    ) -> Result<Option<boundary::Message>, AtmError> {
         Ok(self
             .message_store
             .load_message(message_key)?
@@ -133,10 +130,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .map(shared_message_to_record))
     }
 
-    fn persist_message_record(
-        &self,
-        record: boundary::MailStoreMessageRecord,
-    ) -> Result<(), AtmError> {
+    fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {
         self.message_store.save_message(&SharedMessage {
             team: record.team,
             agent: record.agent,
@@ -170,8 +164,8 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     }
 }
 
-fn shared_message_to_record(message: SharedMessage) -> boundary::MailStoreMessageRecord {
-    boundary::MailStoreMessageRecord {
+fn shared_message_to_record(message: SharedMessage) -> boundary::Message {
+    boundary::Message {
         team: message.team,
         agent: message.agent,
         message_key: message.message_key,

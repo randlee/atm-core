@@ -5,6 +5,7 @@
 mod composition;
 mod legacy_storage_adapters;
 mod replay_store;
+mod sqlite_observability;
 
 pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_default_runtime, assemble_sqlite_runtime,
@@ -12,3 +13,6 @@ pub use composition::{
 };
 #[cfg(any(test, feature = "test-utils"))]
 pub use replay_store::sqlite_remote_replay_store_for_test;
+pub use sqlite_observability::{
+    RuntimeSqliteEvent, RuntimeSqliteObservability, RuntimeSqliteObserver, RuntimeSqliteOutcome,
+};

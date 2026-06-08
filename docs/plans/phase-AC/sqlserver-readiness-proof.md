@@ -66,7 +66,7 @@ And it forbids the old architectural drift:
 - the shared contract does not encode SQLite-only lifecycle or observability
   concepts
 
-The proof crate lands compileable backend stubs that implement the same
+The proof crate lands compilable backend stubs that implement the same
 contract as the Claude and SQLite backends:
 
 - `SqlServerMessageStore: MessageStore`

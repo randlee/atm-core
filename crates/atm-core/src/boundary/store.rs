@@ -1,6 +1,11 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
+)]
+
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, MessageEnvelope};
+use crate::schema::{AgentMember, InboxMessage};
 use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
@@ -8,7 +13,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::{DoctorFinding, MessageFingerprint};
+use super::mail::DoctorFinding;
 use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -21,12 +26,13 @@ pub struct RosterStoreHealthSnapshot {
     pub refreshed_at: Option<IsoTimestamp>,
 }
 
-pub type RosterMemberRecord = atm_storage::contract::RosterMember;
+pub type RosterEntry = atm_storage::contract::RosterMember;
+pub type RosterMemberRecord = RosterEntry;
 
 pub fn roster_member_record_from_claude_code_member(
     team_name: TeamName,
     member: AgentMember,
-) -> RosterMemberRecord {
+) -> RosterEntry {
     let recipient_pane_id = member.tmux_pane_id;
     let mut metadata_json = member.extra;
     if !member.agent_id.is_empty() {
@@ -48,7 +54,7 @@ pub fn roster_member_record_from_claude_code_member(
         );
     }
 
-    RosterMemberRecord {
+    RosterEntry {
         team_name,
         agent_name: member.name,
         member_kind: RosterMemberKind::Permanent,
@@ -61,7 +67,7 @@ pub fn roster_member_record_from_claude_code_member(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRosterMember {
+pub(crate) struct ProjectedRosterEntry {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
@@ -69,17 +75,17 @@ pub struct ProjectionRosterMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectionRoster {
+pub(crate) struct ProjectionRoster {
     pub team_name: TeamName,
-    pub members: Arc<[ProjectionRosterMember]>,
+    pub members: Arc<[ProjectedRosterEntry]>,
 }
 
 impl ProjectionRoster {
-    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
+    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterEntry]) -> Self {
         let members = records
             .iter()
             .filter(|record| record.harness == RosterHarness::ClaudeCode)
-            .map(|record| ProjectionRosterMember {
+            .map(|record| ProjectedRosterEntry {
                 member_name: record.agent_name.clone(),
                 harness: record.harness,
                 inbox_path: None,
@@ -119,95 +125,10 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-/// Imported source-file snapshot returned by inbox ingress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceFileRecord {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Imported Claude source request for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceImportRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Imported Claude source response for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceImportResponse {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Claude source identity-fingerprint request for the daemon/private path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceIdentityFingerprintRequest {
-    pub message: MessageEnvelope,
-}
-
-/// Claude source identity-fingerprint response for the daemon/private path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceIdentityFingerprintResponse {
-    pub fingerprint: Option<MessageFingerprint>,
-}
-
-/// Claude source diagnostics request for the daemon/private path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceDiagnosticsRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Claude source diagnostics response for the daemon/private path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SourceDiagnosticsResponse {
-    pub duplicate_message_ids: usize,
-    pub messages_without_ids: usize,
-}
-
-/// Claude projection-record request for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionRecordRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Claude projection-record response for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionRecordResponse {
-    pub committed_paths: usize,
-}
-
-/// Claude projection re-export request for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionReexportMessageRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Claude projection re-export response for the daemon/private compatibility path.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionReexportMessageResponse {
-    pub wrote_messages: usize,
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProjectionAppendMode {
     RecoveredLogicalMessageSet,
-}
-
-/// Explicit inbox-export append-message-set request for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ProjectionAppendMessageSetRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-    pub mode: ProjectionAppendMode,
-}
-
-/// Explicit inbox-export append-message-set response for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectionAppendMessageSetResponse {
-    pub wrote_messages: usize,
 }
 
 /// Canonical non-Claude outbound request payload.
@@ -219,7 +140,7 @@ pub struct NonClaudeOutboundDeliveryRequest {
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
     /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and
     /// `LocalFileNonClaudeOutbound::deliver_payloads` (CLI path, see service_runtime.rs:218).
-    pub messages: Vec<MessageEnvelope>,
+    pub messages: Vec<InboxMessage>,
 }
 
 /// Canonical non-Claude outbound response payload.
@@ -236,13 +157,13 @@ pub trait RosterStore: sealed::Sealed {
     fn replace_roster(
         &self,
         team: &TeamName,
-        members: &[RosterMemberRecord],
+        members: &[RosterEntry],
         source: Option<&ReplaySource>,
     ) -> Result<(), AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when one roster snapshot cannot be loaded.
-    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError>;
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when membership cannot be queried.
@@ -250,7 +171,7 @@ pub trait RosterStore: sealed::Sealed {
         &self,
         team: &TeamName,
         member: &AgentName,
-    ) -> Result<Option<RosterMemberRecord>, AtmError>;
+    ) -> Result<Option<RosterEntry>, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when the canonical roster team set cannot be
@@ -287,53 +208,6 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
     /// Returns `AtmError` when config diagnostics cannot be collected or
     /// summarized into the shared doctor report shape.
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
-}
-
-/// BOUNDARY-SourceIngress — see docs/atm-core/boundaries.md.
-pub trait SourceIngress: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when compatibility inbox material cannot be
-    /// imported, fingerprinted, or diagnosed into ATM-owned state.
-    fn import_inbox_source(
-        &self,
-        request: SourceImportRequest,
-    ) -> Result<SourceImportResponse, AtmError>;
-    fn compute_identity_fingerprint(
-        &self,
-        request: SourceIdentityFingerprintRequest,
-    ) -> SourceIdentityFingerprintResponse;
-    fn report_diagnostics(
-        &self,
-        request: SourceDiagnosticsRequest,
-    ) -> SourceDiagnosticsResponse;
-}
-
-/// BOUNDARY-ProjectionExport — see docs/atm-core/boundaries.md.
-pub trait ProjectionExport: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when ATM-owned state cannot be projected back to the
-    /// compatibility inbox/export surfaces.
-    fn export_record(
-        &self,
-        request: ProjectionRecordRequest,
-    ) -> Result<ProjectionRecordResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the message re-export cannot be materialized.
-    fn reexport_message(
-        &self,
-        request: ProjectionReexportMessageRequest,
-    ) -> Result<ProjectionReexportMessageResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a recovered Claude logical message set cannot
-    /// be materialized through one owned export operation.
-    fn append_message_set(
-        &self,
-        request: ProjectionAppendMessageSetRequest,
-    ) -> Result<ProjectionAppendMessageSetResponse, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.

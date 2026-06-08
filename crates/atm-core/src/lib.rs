@@ -87,23 +87,17 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+#[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, ProjectionAppendMessageSetRequest,
-    ProjectionAppendMessageSetResponse, ProjectionExport, ProjectionRecordRequest,
-    ProjectionRecordResponse, ProjectionReexportMessageRequest,
-    ProjectionReexportMessageResponse, ProjectionRoster, ProjectionRosterMember,
-    ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
+    AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
+    ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageFingerprint, MessageKey, NotificationEvent, NotificationSink,
-    ReconcileCoordinator, ReconcileRequest, ReconcileResult, RemoteReplayStateRecord,
-    RemoteReplayStore, RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceFileRecord,
-    SourceDiagnosticsRequest, SourceDiagnosticsResponse, SourceIdentityFingerprintRequest,
-    SourceIdentityFingerprintResponse, SourceImportRequest, SourceImportResponse, SourceIngress,
+    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
+    MessageKey, NotificationEvent, NotificationSink, ReconcileCoordinator, ReconcileRequest,
+    ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
+    RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
+    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
     StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };

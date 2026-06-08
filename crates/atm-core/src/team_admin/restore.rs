@@ -6,7 +6,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tracing::warn;
 
-use crate::boundary::{RosterMemberRecord, RosterStore};
+use crate::boundary::{RosterEntry, RosterStore};
 use crate::config::load_claude_team_config_document;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
@@ -196,7 +196,7 @@ fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShell
 
 fn build_restored_team_config(
     recreated_shell: &RecreatedLeadShellState,
-    canonical_roster: &[RosterMemberRecord],
+    canonical_roster: &[RosterEntry],
 ) -> crate::schema::TeamConfig {
     let non_lead_roster = canonical_roster
         .iter()
@@ -635,7 +635,7 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
         RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
@@ -647,11 +647,11 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingRosterStore {
-        teams: Mutex<BTreeMap<TeamName, Vec<RosterMemberRecord>>>,
+        teams: Mutex<BTreeMap<TeamName, Vec<RosterEntry>>>,
     }
 
     impl RecordingRosterStore {
-        fn seed_team(&self, team: &str, members: Vec<RosterMemberRecord>) {
+        fn seed_team(&self, team: &str, members: Vec<RosterEntry>) {
             self.teams
                 .lock()
                 .expect("roster store lock")
@@ -665,7 +665,7 @@ mod tests {
         fn replace_roster(
             &self,
             team: &TeamName,
-            members: &[RosterMemberRecord],
+            members: &[RosterEntry],
             _source: Option<&ReplaySource>,
         ) -> Result<(), AtmError> {
             self.teams
@@ -675,7 +675,7 @@ mod tests {
             Ok(())
         }
 
-        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError> {
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(self
                 .teams
                 .lock()
@@ -689,7 +689,7 @@ mod tests {
             &self,
             team: &TeamName,
             member: &AgentName,
-        ) -> Result<Option<RosterMemberRecord>, AtmError> {
+        ) -> Result<Option<RosterEntry>, AtmError> {
             Ok(self
                 .teams
                 .lock()
@@ -730,8 +730,8 @@ mod tests {
         }
     }
 
-    fn roster_member(team: &str, agent: &str) -> RosterMemberRecord {
-        RosterMemberRecord {
+    fn roster_member(team: &str, agent: &str) -> RosterEntry {
+        RosterEntry {
             team_name: team.parse().expect("team"),
             agent_name: agent.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
@@ -769,7 +769,7 @@ mod tests {
     }
 
     fn write_inbox(path: &Path, text: &str) {
-        let envelope = crate::schema::MessageEnvelope {
+        let envelope = crate::schema::InboxMessage {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
