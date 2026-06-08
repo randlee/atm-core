@@ -730,9 +730,9 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(
             error
-                .primary_recovery()
-                .unwrap_or_default()
-                .contains("explicit repair/rebuild inbox projection path"),
+                .recovery
+                .iter()
+                .any(|recovery| recovery.contains("explicit repair/rebuild inbox projection path")),
             "unexpected recovery: {error:?}"
         );
     }
@@ -847,7 +847,7 @@ mod tests {
         assert_eq!(
             error.primary_recovery(),
             Some(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
+                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
             )
         );
         assert!(!output_path.exists());
