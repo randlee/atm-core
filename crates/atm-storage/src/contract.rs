@@ -396,8 +396,6 @@ mod tests {
     use chrono::Utc;
     use serde_json::Map;
 
-    const TEST_TEAM: &str = "test-team";
-
     #[derive(Default)]
     struct DummyStore;
 
