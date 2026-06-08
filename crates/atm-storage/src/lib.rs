@@ -4,7 +4,6 @@
 pub mod contract;
 pub mod error;
 pub mod error_codes;
-pub mod observability;
 pub mod schema;
 pub mod types;
 mod validation;
@@ -18,9 +17,5 @@ pub use contract::{
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;
-pub use observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
-};
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use types::{AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};

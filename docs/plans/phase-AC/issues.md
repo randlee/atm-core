@@ -27,9 +27,9 @@ The authoritative design reset is:
 | ID | Status | Summary | Planned Closure |
 | --- | --- | --- | --- |
 | `AC-ISSUE-001` | `closed` | the current storage surface is over-modeled with request/response-per-operation wrappers instead of a small semantic contract. | `AC.1` |
-| `AC-ISSUE-002` | `open` | message and roster records are duplicated across RPC, storage, and internal boundaries instead of using canonical shared structs; speculative task-store records also exist and must not be promoted into the approved shared contract. | `AC.1`, `AC.5`, and `AC.6` |
+| `AC-ISSUE-002` | `closed` | message and roster records were duplicated across RPC, storage, and internal boundaries instead of using canonical shared structs; speculative task-store records also existed and were deleted in `AC.6` instead of being promoted into the approved shared contract. | `AC.1`, `AC.5`, and `AC.6` |
 | `AC-ISSUE-003` | `closed` | Claude inbox storage is not currently treated as a first-class storage backend even though ATM 1.0 used it as effective storage. | `AC.2` |
-| `AC-ISSUE-004` | `open` | the concrete SQLite backend has become the implicit home of business logic, causing backend-specific seams and logic leakage upward. | `AC.3` and `AC.4` |
+| `AC-ISSUE-004` | `closed` | the concrete SQLite backend had become the implicit home of business logic, causing backend-specific seams and logic leakage upward; `AC.6` completed the cleanup by removing the last `atm-storage`-level SQLite observability leakage and leaving that surface owned by `atm-storage-rusqlite`. | `AC.3`, `AC.4`, and `AC.6` |
 | `AC-ISSUE-005` | `closed` | notifications are not frozen as a separate post-commit trait, which leaves write and event semantics underspecified across backends. | `AC.1` and `AC.3` |
 | `AC-ISSUE-006` | `open` | the current crate graph does not keep future SQL Server support easy because backend crates still orbit `atm-core` too closely. | `AC.3` and `AC.7` |
 

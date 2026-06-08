@@ -111,7 +111,6 @@ pub(crate) trait RetainedServiceRuntime:
 #[derive(Clone)]
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
-    pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
@@ -122,14 +121,12 @@ pub struct LocalServiceRuntime {
 impl LocalServiceRuntime {
     pub fn new_with_delivery_boundaries(
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
-        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
         notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
-            task_store,
             roster_store,
             non_claude_outbound,
             notification_sink,
@@ -144,7 +141,6 @@ impl fmt::Debug for LocalServiceRuntime {
                 "message_store",
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
-            .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "non_claude_outbound",
@@ -501,7 +497,6 @@ mod tests {
         LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
         MAX_NON_CLAUDE_PAYLOAD_BYTES, RetainedServiceRuntime,
     };
-    use crate::boundary;
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
@@ -542,63 +537,6 @@ mod tests {
             &self,
             _key: &atm_storage::MessageKey,
         ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopTaskStore;
-
-    impl boundary::sealed::Sealed for NoopTaskStore {}
-
-    impl boundary::TaskStore for NoopTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }
@@ -675,7 +613,6 @@ mod tests {
 
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -702,7 +639,6 @@ mod tests {
 
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -729,7 +665,6 @@ mod tests {
         let inbox_path = tempdir.path().join("recipient.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -756,7 +691,6 @@ mod tests {
         let notification_path = tempdir.path().join("notifications.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
-            Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(

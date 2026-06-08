@@ -16,12 +16,7 @@ use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, InboxMessage};
 use atm_core::types::IsoTimestamp;
 use atm_storage::{RosterMember, RosterSnapshot, RosterStore};
-use atm_storage_claude::compat::{
-    SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
-    SourceIngressImportResponse,
-};
+use atm_storage_claude::compat::SourceFileRecord;
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -510,51 +505,45 @@ impl WatchEventSource for FakeWatchSource {
 
 #[derive(Clone)]
 struct FakeInboxIngress {
-    imports: Arc<Mutex<Vec<SourceIngressImportResponse>>>,
+    imports: Arc<Mutex<Vec<SourceImportResponse>>>,
+}
+
+#[derive(Clone)]
+struct SourceImportResponse {
+    source_files: Vec<SourceFileRecord>,
 }
 
 impl FakeInboxIngress {
-    fn new(imports: Vec<SourceIngressImportResponse>) -> Self {
+    fn new(imports: Vec<SourceImportResponse>) -> Self {
         Self {
             imports: Arc::new(Mutex::new(imports)),
         }
     }
 }
 
-impl SourceIngress for FakeInboxIngress {
+impl boundary::sealed::Sealed for FakeInboxIngress {}
+
+impl super::InboxIngressPort for FakeInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: SourceIngressImportRequest,
-    ) -> Result<SourceIngressImportResponse, atm_core::error::AtmError> {
+        _home_dir: &Path,
+        _team: &atm_core::types::TeamName,
+        _agent: &atm_core::types::AgentName,
+    ) -> Result<Vec<SourceFileRecord>, atm_core::error::AtmError> {
         let mut imports = self.imports.lock().expect("imports");
         if imports.is_empty() {
-            return Ok(SourceIngressImportResponse {
-                source_files: Vec::new(),
-            });
+            return Ok(Vec::new());
         }
-        Ok(imports.remove(0))
+        Ok(imports.remove(0).source_files)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        request: SourceIngressIdentityFingerprintRequest,
-    ) -> SourceIngressIdentityFingerprintResponse {
-        SourceIngressIdentityFingerprintResponse {
-            fingerprint: request
-                .message
-                .message_id
-                .map(|message_id| message_id.to_string()),
-        }
-    }
-
-    fn report_diagnostics(
-        &self,
-        _request: SourceIngressDiagnosticsRequest,
-    ) -> SourceIngressDiagnosticsResponse {
-        SourceIngressDiagnosticsResponse {
-            duplicate_message_ids: 0,
-            messages_without_ids: 0,
-        }
+        message: &atm_storage::MessageEnvelope,
+    ) -> Option<atm_core::boundary::MessageFingerprint> {
+        message
+            .message_id
+            .map(|message_id| atm_core::boundary::MessageFingerprint::from(message_id.to_string()))
     }
 }
 
@@ -599,15 +588,9 @@ impl RecordingRosterStore {
     }
 }
 
-impl RosterStore for RecordingRosterStore {
-    fn load_roster(&self, team: &atm_core::types::TeamName) -> Result<RosterSnapshot, AtmError> {
-        Ok(RosterSnapshot {
-            team_name: team.clone(),
-            members: self.members_for(team),
-            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
-        })
-    }
+impl boundary::sealed::Sealed for RecordingRosterStore {}
 
+impl RosterStore for RecordingRosterStore {
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError> {
         let mut state = self.state.lock().expect("roster state");
         state
@@ -615,6 +598,14 @@ impl RosterStore for RecordingRosterStore {
             .insert(roster.team_name.clone(), roster.members.clone());
         state.replace_count += 1;
         Ok(())
+    }
+
+    fn load_roster(&self, team: &atm_core::types::TeamName) -> Result<RosterSnapshot, AtmError> {
+        Ok(RosterSnapshot {
+            team_name: team.clone(),
+            members: self.members_for(team),
+            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+        })
     }
 
     fn list_teams(&self) -> Result<Vec<atm_core::types::TeamName>, AtmError> {
@@ -784,7 +775,7 @@ fn z8_deletes_startup_only_config_bootstrap_helper() {
 #[test]
 fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let ingress = FakeInboxIngress::new(vec![SourceIngressImportResponse {
+    let ingress = FakeInboxIngress::new(vec![SourceImportResponse {
         source_files: vec![inbox_source_with_message(sample_message(
             "projected message",
         ))],
@@ -849,10 +840,10 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
             calls: Arc::new(AtomicU64::new(0)),
         }),
         Arc::new(FakeInboxIngress::new(vec![
-            SourceIngressImportResponse {
+            SourceImportResponse {
                 source_files: vec![repeated_source.clone()],
             },
-            SourceIngressImportResponse {
+            SourceImportResponse {
                 source_files: vec![repeated_source],
             },
         ])),
@@ -883,7 +874,7 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
 fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after_eviction() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
     let imports = (0..=MAX_RECONCILE_FINGERPRINT_KEYS)
-        .map(|index| SourceIngressImportResponse {
+        .map(|index| SourceImportResponse {
             source_files: vec![inbox_source_with_message(sample_message(&format!(
                 "message-{index}"
             )))],
@@ -921,7 +912,7 @@ fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after
 #[test]
 fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let repeated_import = SourceIngressImportResponse {
+    let repeated_import = SourceImportResponse {
         source_files: (0..=MAX_RECONCILE_FINGERPRINTS_PER_KEY)
             .map(|index| inbox_source_with_message(sample_message(&format!("message-{index}"))))
             .collect(),

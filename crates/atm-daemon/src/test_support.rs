@@ -11,8 +11,6 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
-use crate::test_observability::TestDaemonObservability;
-
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
@@ -83,7 +81,6 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                 },
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
-                task_store: atm_core::boundary::TaskStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
                 daemon_runtime: None,
                 drift_findings: Vec::new(),
@@ -113,9 +110,10 @@ pub(crate) fn sqlite_runtime_assembly_for_test(db_path: &std::path::Path) -> Run
     let log_dir = db_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
-        .join("observability");
+        .join("daemon-test-logs");
     let observability = std::sync::Arc::new(
-        TestDaemonObservability::new(log_dir).expect("sqlite runtime test observability"),
+        crate::test_observability::TestDaemonObservability::new(log_dir)
+            .unwrap_or_else(|error| panic!("failed to build daemon test observability: {error}")),
     );
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: db_path.to_path_buf(),

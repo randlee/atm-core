@@ -146,29 +146,6 @@ Purpose:
 - Own durable mail-store diagnostics without moving backend-specific diagnosis
   into daemon or CLI code.
 
-## TaskStore
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/task-store.toml](../../boundaries/atm-core/task-store.toml)
-
-
-Purpose:
-- Owns durable task-domain state and task/message linkage.
-
-Notes:
-- `ack` is not a top-level public method, but it still mutates task state.
-- `TaskStoreDoctor` is the paired subsystem-owned diagnostics boundary for
-  bounded task-store findings.
-
-## TaskStoreDoctor
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/task-store-doctor.toml](../../boundaries/atm-core/task-store-doctor.toml)
-
-Purpose:
-- Own durable task-store diagnostics without widening the main task capability
-  trait family.
-
 ## RosterStore
 
 Canonical machine-readable boundary source:

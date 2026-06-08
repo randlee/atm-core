@@ -10,13 +10,7 @@ use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
     MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, ReplaySource,
-    RosterStoreDoctor, RosterStoreDoctorReport, TaskStore, TaskStoreAttachMessageLinkRequest,
-    TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
-    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
-    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
-    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
-    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord,
-    TaskStoreUpdateTaskRequest, TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest,
+    RosterStoreDoctor, RosterStoreDoctorReport, UpsertMailMessageStateRequest,
     UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
@@ -49,12 +43,6 @@ where
             .finish()
     }
 }
-
-#[derive(Clone, Default)]
-struct NoopTaskStore;
-
-#[derive(Clone, Default)]
-struct NoopTaskStoreDoctor;
 
 #[derive(Clone, Default)]
 struct DefaultMailStoreDoctor;
@@ -146,16 +134,13 @@ pub(crate) fn runtime_doctor_ports(
     RuntimeDoctorPorts {
         config_doctor,
         mail_store_doctor: Arc::new(DefaultMailStoreDoctor),
-        task_store_doctor: Arc::new(NoopTaskStoreDoctor),
         roster_store_doctor: Arc::new(DefaultRosterStoreDoctor),
     }
 }
 impl boundary::sealed::Sealed for BoundaryMailStoreView {}
 impl boundary::sealed::Sealed for BoundaryRosterStoreView {}
-impl boundary::sealed::Sealed for NoopTaskStore {}
 impl boundary::sealed::Sealed for DefaultMailStoreDoctor {}
 impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
-impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
 impl MailStore for BoundaryMailStoreView {
     fn upsert_message(&self, record: Message) -> Result<(), AtmError> {
@@ -375,85 +360,6 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
     }
 }
 
-impl TaskStore for NoopTaskStore {
-    fn create_task(
-        &self,
-        _request: TaskStoreCreateTaskRequest,
-    ) -> Result<TaskStoreCreateTaskResponse, AtmError> {
-        Err(AtmError::validation(
-            "task storage is out of scope for the current runtime assembly",
-        )
-        .with_recovery(
-            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
-        ))
-    }
-
-    fn load_task(
-        &self,
-        request: TaskStoreLoadTaskRequest,
-    ) -> Result<TaskStoreLoadTaskResponse, AtmError> {
-        let _ = request;
-        Ok(TaskStoreLoadTaskResponse { record: None })
-    }
-
-    fn update_task(
-        &self,
-        _request: TaskStoreUpdateTaskRequest,
-    ) -> Result<TaskStoreUpdateTaskResponse, AtmError> {
-        Err(AtmError::validation(
-            "task storage is out of scope for the current runtime assembly",
-        )
-        .with_recovery(
-            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
-        ))
-    }
-
-    fn attach_message_link(
-        &self,
-        _request: TaskStoreAttachMessageLinkRequest,
-    ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError> {
-        Err(AtmError::validation(
-            "task storage is out of scope for the current runtime assembly",
-        )
-        .with_recovery(
-            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
-        ))
-    }
-
-    fn detach_message_link(
-        &self,
-        _request: TaskStoreDetachMessageLinkRequest,
-    ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError> {
-        Err(AtmError::validation(
-            "task storage is out of scope for the current runtime assembly",
-        )
-        .with_recovery(
-            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
-        ))
-    }
-
-    fn record_ack_transition(
-        &self,
-        _request: TaskStoreRecordAckTransitionRequest,
-    ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError> {
-        Err(AtmError::validation(
-            "task storage is out of scope for the current runtime assembly",
-        )
-        .with_recovery(
-            "Use the message and roster storage surfaces only until a task-storage backend is explicitly approved.",
-        ))
-    }
-
-    fn query_task_metadata(
-        &self,
-        _request: TaskStoreQueryTaskMetadataRequest,
-    ) -> Result<TaskStoreQueryTaskMetadataResponse, AtmError> {
-        Ok(TaskStoreQueryTaskMetadataResponse {
-            records: Vec::<TaskStoreTaskRecord>::new(),
-        })
-    }
-}
-
 impl MailStoreDoctor for DefaultMailStoreDoctor {
     fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError> {
         // This bridge doctor has no backend-owned failure mode; it only reports
@@ -468,18 +374,6 @@ impl RosterStoreDoctor for DefaultRosterStoreDoctor {
         // the absence of extra diagnostics while AC.4 keeps the compile bridge.
         Ok(RosterStoreDoctorReport::default())
     }
-}
-
-impl TaskStoreDoctor for NoopTaskStoreDoctor {
-    fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError> {
-        // Task storage is intentionally absent on this runtime assembly, so the
-        // doctor stays infallible and reports an empty diagnostic surface.
-        Ok(TaskStoreDoctorReport::default())
-    }
-}
-
-pub(crate) fn noop_task_store() -> Arc<dyn TaskStore + Send + Sync> {
-    Arc::new(NoopTaskStore)
 }
 
 pub(crate) fn boundary_mail_store_view(

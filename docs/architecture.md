@@ -102,8 +102,6 @@ Phase-AA simplification note:
   runtime state, but must not reimplement backend-specific diagnosis logic
 - `MailStore` and `RosterStore` remain the primary storage-neutral capability
   traits in the simplification line described here
-- current `TaskStore` code exists only as speculative transition surface and
-  is not part of the approved long-term storage baseline
 - backend-specific implementations such as SQLite-backed and Claude-JSON-backed
   adapters are allowed to satisfy the approved behavior-named trait family
 - `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
@@ -118,10 +116,9 @@ Phase-AA simplification note:
 - Phase `AC` later supersedes this simplification line for storage contracts:
   `MessageStore` and `RosterStore` become the approved shared contract, while
   task storage is explicitly deferred until a later line starts from canonical
-  Claude-code task schema plus Pydantic validation instead of inheriting
-  speculative `TaskStore` behavior; speculative task-store code is expected to
-  be deleted during Phase `AC` cleanup rather than preserved as a compatibility
-  line
+  Claude-code task schema plus Pydantic validation instead of inheriting any
+  speculative legacy task-store surface; `AC.6` deletes that speculative
+  contract instead of preserving it as a compatibility line
 
 ## 2. Crate Boundaries
 
@@ -1194,14 +1191,13 @@ Public entrypoint:
 - observability health
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
-  - `TaskStoreDoctor`
   - `RosterStoreDoctor`
   - `ConfigDoctor`
 
 Current-state caveat:
-- the `TaskStoreDoctor` mention above is descriptive of the current
-  transitional code surface, not an approved future storage-contract
-  commitment
+- the historical task-store doctor surface was removed during `AC.6`; future
+  task storage, if approved later, starts from canonical Claude-code schema
+  rather than from a preserved speculative doctor contract
 
 `DoctorFinding` contains:
 - severity
@@ -1213,9 +1209,8 @@ The report model should reuse the current doctor command’s severity/finding
 structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
 Daemon/CLI orchestration stays aggregate-only: those top-level paths may
-compose the `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
-`ConfigDoctor` reports, but they must not reimplement backend-specific store
-investigation logic.
+compose the `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` reports,
+but they must not reimplement backend-specific store investigation logic.
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -2749,29 +2744,15 @@ Scope rule:
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
 
-#### TaskStore (Historical / Speculative Transition Surface)
+#### Task Storage (Deferred)
 
-Phase `AC` supersession note:
-- this section documents the current transitional task-store surface only
-- it does not define the approved future shared storage contract
-- future task storage, if approved, must start from canonical Claude-code task
-  schema plus Pydantic validation rather than from this speculative boundary
-  shape
-
-Dispatch model:
-- synchronous request/response from service or task-handling code
-- transaction-scoped mutating calls where task and mail state must commit
-  together
-
-Object-safety rule:
-- callers depend on an object-safe task-store trait or façade, not concrete
-  SQLite types
-
-Minimum method set:
-- create/load/update task rows
-- attach/detach task linkage to `message_key`
-- record acknowledgement-related task transitions
-- query task metadata needed by mail/CLI projections
+Phase `AC` closeout note:
+- speculative `TaskStore` and `TaskStoreDoctor` surfaces were deleted in
+  `AC.6`
+- future task storage is out of scope for the current shared storage contract
+- if approved later, task storage starts from canonical Claude-code task
+  schema plus Pydantic validation rather than from preserved transition
+  scaffolding
 
 #### RosterStore
 

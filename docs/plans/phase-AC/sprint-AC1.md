@@ -125,8 +125,8 @@ Move into `atm-storage` as canonical shared types or small semantic helpers:
 
 Delete or collapse during `AC.1` rather than carrying them forward:
 
-- all `MailStore*Request` / `MailStore*Response` wrappers except the temporary
-  `MailStoreBootstrap*` compile bridge owned by `AC.4`
+- all `MailStore*Request` / `MailStore*Response` wrappers; `MailStoreBootstrap*`
+  may remain only as a temporary compile bridge until `AC.6` deletes it
 - all `RosterStore*Request` / `RosterStore*Response` wrappers
 - `MailStoreRequest` / `MailStoreResponse`
 - `RosterStoreRequest` / `RosterStoreResponse`
@@ -181,7 +181,7 @@ Implementation order for `AC.1`:
      names to the new `atm-storage` contract
    - the bridge is not authoritative API surface and must not gain new
      semantics
-   - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.4`
+   - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.6`
      removes the backend bootstrap seam
 6. Delete the wrapper families instead of re-homing them, except for the
    temporary `MailStoreBootstrap*` bridge noted above.

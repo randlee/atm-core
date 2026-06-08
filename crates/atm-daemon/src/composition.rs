@@ -1,6 +1,6 @@
 use crate::boundary_adapters::{
-    DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
-    DaemonReconcileCoordinator, FileWatchEventSource,
+    DaemonConfigIngress, DaemonInboxIngress, DaemonNotificationSink, DaemonReconcileCoordinator,
+    FileWatchEventSource,
 };
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
@@ -150,7 +150,6 @@ pub(crate) struct RuntimeComposition {
     _reconcile_coordinator: DaemonReconcileCoordinator,
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
-    _inbox_export: DaemonInboxExport,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -269,7 +268,6 @@ impl RuntimeComposition {
             _reconcile_coordinator: reconcile_coordinator,
             _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
-            _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime,
         })
     }
@@ -667,7 +665,6 @@ pub(crate) fn build_production_runtime(
 ) -> atm_core::LocalServiceRuntime {
     atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.message_store_arc(),
-        assembly.task_store_arc(),
         assembly.shared_roster_store_arc(),
         non_claude_outbound,
         notification_sink,

@@ -18,7 +18,6 @@ live in `atm-daemon`.
   - `StorageBackends<M, R>` over the shared `atm-storage` message/roster traits
   - legacy compile-bridge `MailStore`
   - legacy compile-bridge `RosterStore`
-  - temporary no-op `TaskStore` only while task storage remains out of scope
   - SQLite-backed `RemoteReplayStore`
 - `atm-runtime` must export a storage-neutral shutdown/finalization seam so
   daemon runtime code can finalize storage without depending directly on

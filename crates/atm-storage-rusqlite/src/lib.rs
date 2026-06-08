@@ -4,15 +4,20 @@
 //! message and roster contracts.
 
 mod mailbox_metadata;
+mod observability;
 mod roster_store;
 mod shared_db;
 mod writer;
 
 use crate::mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
+pub use crate::observability::{
+    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
+    SqliteObservabilityOutcome,
+};
 use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp, NullSqliteObservability, SqliteObservability};
+use atm_storage::{AtmError, IsoTimestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;

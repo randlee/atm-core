@@ -327,8 +327,18 @@ Sprint line:
 - `AC.3` `feature/pAC-s3-sqlite-backend-convergence` `complete`
 - `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption` `complete`
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification` `complete`
-- `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout`
+- `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout` `complete`
 - `AC.7` `feature/pAC-s7-sqlserver-readiness-proof`
+
+AC.6 closeout:
+- deleted the speculative `TaskStore` family from `atm-core` and removed the
+  last runtime/daemon compile bridge assumptions instead of preserving them as
+  compatibility surface
+- removed the old Claude `SourceIngress*` / `ProjectionExport*` shared wrapper
+  surface and cut daemon consumers over to direct
+  `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
+- removed `SqliteObservability*` from `atm-storage` and left that surface owned
+  by `atm-storage-rusqlite`
 
 Acceptance:
 - Phase AC exit criteria are satisfied only through

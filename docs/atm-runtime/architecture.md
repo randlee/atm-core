@@ -13,13 +13,12 @@ It sits between:
 
 `atm-runtime` owns:
 - concrete production assembly of runtime/store dependencies
-- installation of the active `MailStore`, `TaskStore`, and `RosterStore`
-  implementations
+- installation of the active `MailStore` and `RosterStore` implementations
 - installation of subsystem doctor implementations
 - the concrete `ConfigDoctor` implementation and its direct local doctor-path
   assembly
 - installation of the active `RemoteReplayStore`
-- SQLite-specific observability injection into SQLite-owned code
+- no public SQLite observability bridge above `atm-storage-rusqlite`
 - the temporary legacy compile bridge from `atm-storage::{MessageStore,RosterStore}`
   into `atm_core::boundary::{MailStore,RosterStore}` during AC.4 cutover
 
@@ -44,7 +43,6 @@ pub struct RuntimeAssembly {
     pub storage_backends: StorageBackends<Arc<dyn MessageStore>, Arc<dyn RosterStore>>,
     pub mail_store: Arc<dyn MailStore>,
     pub roster_store: Arc<dyn RosterStore>,
-    pub task_store: Arc<dyn TaskStore>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn RemoteReplayStore>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer>,

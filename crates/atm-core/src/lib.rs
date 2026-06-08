@@ -98,14 +98,7 @@ pub use boundary::{
     ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
     RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
     RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
-    StatusSource, TaskState, TaskStore, TaskStoreAttachMessageLinkRequest,
-    TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
-    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
-    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
-    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
-    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreRequest,
-    TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
-    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;
