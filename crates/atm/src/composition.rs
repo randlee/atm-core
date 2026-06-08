@@ -559,7 +559,7 @@ mod tests {
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
     use atm_core::read::ReadQuery;
-    use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
+    use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
@@ -660,7 +660,7 @@ mod tests {
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
-                .map(|agent| boundary::RosterMemberRecord {
+                .map(|agent| boundary::RosterEntry {
                     team_name: team.clone(),
                     agent_name: agent.parse().expect("agent"),
                     member_kind: boundary::RosterMemberKind::Permanent,
@@ -693,13 +693,13 @@ mod tests {
             let messages = values
                 .iter()
                 .cloned()
-                .map(serde_json::from_value::<MessageEnvelope>)
+                .map(serde_json::from_value::<InboxMessage>)
                 .collect::<Result<Vec<_>, _>>()
                 .expect("message envelopes");
             self.seed_sqlite_mailbox(agent, &messages);
         }
 
-        fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
+        fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
             if raw.trim_start().starts_with('[') {
                 let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
@@ -710,11 +710,11 @@ mod tests {
             }
             raw.lines()
                 .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str::<MessageEnvelope>(line).expect("json line"))
+                .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
                 .collect()
         }
 
-        fn write_inbox_messages(&self, agent: &str, messages: &[MessageEnvelope]) {
+        fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
             let values = messages
                 .iter()
                 .map(|message| serde_json::to_value(message).expect("message value"))
@@ -723,7 +723,7 @@ mod tests {
             self.seed_sqlite_mailbox(agent, messages);
         }
 
-        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
+        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
             let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
             let mail_store = assembly.mail_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
@@ -736,7 +736,7 @@ mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::MailStoreMessageRecord {
+                    .upsert_message(boundary::StoredMessageRecord {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),
@@ -855,8 +855,8 @@ mod tests {
             }
         }
 
-        fn message(&self, text: &str, read: bool) -> MessageEnvelope {
-            MessageEnvelope {
+        fn message(&self, text: &str, read: bool) -> InboxMessage {
+            InboxMessage {
                 from: TEST_LEAD.parse().expect("lead"),
                 text: text.to_string(),
                 timestamp: Utc::now().into(),
@@ -875,7 +875,7 @@ mod tests {
             }
         }
 
-        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, MessageEnvelope) {
+        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, InboxMessage) {
             let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);
