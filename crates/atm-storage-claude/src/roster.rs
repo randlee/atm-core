@@ -110,7 +110,12 @@ fn to_stored_config(roster: &RosterSnapshot) -> StoredTeamConfig {
         .iter()
         .map(|member| StoredMember {
             name: member.agent_name.clone(),
-            agent_id: AgentId::default(),
+            agent_id: AgentId::new(format!(
+                "{}@{}",
+                member.agent_name.as_str(),
+                member.team_name.as_str()
+            ))
+            .expect("canonical roster member must produce a valid agent id"),
             agent_type: member.agent_type.clone(),
             model: member.model.clone(),
             joined_at: None,
@@ -126,7 +131,7 @@ fn to_stored_config(roster: &RosterSnapshot) -> StoredTeamConfig {
 }
 
 pub fn load_roster(home_dir: &Path, team: &TeamName) -> Result<RosterSnapshot, AtmError> {
-    let path = crate::paths::team_config_path(home_dir, team)?;
+    let path = crate::paths::team_config_path(home_dir, team);
     if !path.exists() {
         return Ok(RosterSnapshot {
             team_name: team.clone(),
@@ -145,7 +150,7 @@ pub fn load_roster(home_dir: &Path, team: &TeamName) -> Result<RosterSnapshot, A
 }
 
 pub fn save_roster(home_dir: &Path, roster: &RosterSnapshot) -> Result<(), AtmError> {
-    let path = crate::paths::team_config_path(home_dir, &roster.team_name)?;
+    let path = crate::paths::team_config_path(home_dir, &roster.team_name);
     let parent = path.parent().ok_or_else(|| {
         AtmError::mailbox_write(format!("team config path {} has no parent", path.display()))
     })?;

@@ -13,7 +13,7 @@ struct ClaudeStorageBackend {
 impl ClaudeStorageBackend {
     #[allow(
         dead_code,
-        reason = "Phase AC.2 lands the backend type before later consumer cutover."
+        reason = "Called from tests while still appearing dead in the production compile."
     )]
     fn new(home_dir: PathBuf) -> Self {
         Self { home_dir }
@@ -54,6 +54,7 @@ impl RosterStore for ClaudeStorageBackend {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::str::FromStr;
 
     use atm_storage::{
@@ -63,6 +64,11 @@ mod tests {
     use tempfile::tempdir;
 
     use super::ClaudeStorageBackend;
+
+    const TEST_TEAM: &str = "test-team";
+    const TEST_LEAD: &str = "test-lead";
+    const TEST_SENDER: &str = "test-sender";
+    const TEST_SENDER_2: &str = "test-sender-2";
 
     fn sample_message(team: &str, agent: &str, sender: &str, text: &str) -> Message {
         let team = TeamName::from_str(team).expect("team");
@@ -96,16 +102,16 @@ mod tests {
     fn message_store_round_trips_primary_array_inbox() {
         let tempdir = tempdir().expect("tempdir");
         let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
-        let first = sample_message("atm-dev", "team-lead", "arch-ctm", "one");
-        let second = sample_message("atm-dev", "team-lead", "quality-mgr", "two");
+        let first = sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER, "one");
+        let second = sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER_2, "two");
 
         backend.save_message(&first).expect("save first");
         backend.save_message(&second).expect("save second");
 
         let listed = backend
             .list_messages(&MessageQuery {
-                team: TeamName::from_str("atm-dev").expect("team"),
-                agent: AgentName::from_str("team-lead").expect("agent"),
+                team: TeamName::from_str(TEST_TEAM).expect("team"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
                 sender: None,
                 task_id: None,
                 limit: None,
@@ -125,8 +131,8 @@ mod tests {
         backend.delete_message(&first.message_key).expect("delete");
         let listed = backend
             .list_messages(&MessageQuery {
-                team: TeamName::from_str("atm-dev").expect("team"),
-                agent: AgentName::from_str("team-lead").expect("agent"),
+                team: TeamName::from_str(TEST_TEAM).expect("team"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
                 sender: None,
                 task_id: None,
                 limit: None,
@@ -141,10 +147,10 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
         let roster = RosterSnapshot {
-            team_name: TeamName::from_str("atm-dev").expect("team"),
+            team_name: TeamName::from_str(TEST_TEAM).expect("team"),
             members: vec![RosterMember {
-                team_name: TeamName::from_str("atm-dev").expect("team"),
-                agent_name: AgentName::from_str("team-lead").expect("agent"),
+                team_name: TeamName::from_str(TEST_TEAM).expect("team"),
+                agent_name: AgentName::from_str(TEST_LEAD).expect("agent"),
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
                 agent_type: atm_storage::contract::AgentType::Lead,
@@ -157,12 +163,63 @@ mod tests {
 
         backend.save_roster(&roster).expect("save roster");
         let loaded = backend
-            .load_roster(&TeamName::from_str("atm-dev").expect("team"))
+            .load_roster(&TeamName::from_str(TEST_TEAM).expect("team"))
             .expect("load roster");
         assert_eq!(loaded.members.len(), 1);
-        assert_eq!(loaded.members[0].agent_name.as_str(), "team-lead");
+        assert_eq!(loaded.members[0].agent_name.as_str(), TEST_LEAD);
 
         let teams = backend.list_teams().expect("teams");
-        assert_eq!(teams, vec![TeamName::from_str("atm-dev").expect("team")]);
+        assert_eq!(teams, vec![TeamName::from_str(TEST_TEAM).expect("team")]);
+    }
+
+    #[test]
+    fn message_store_reports_io_errors() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        fs::create_dir_all(&team_dir).expect("team dir");
+        fs::write(team_dir.join("inboxes"), "not-a-directory").expect("blocking file");
+
+        let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
+        let error = backend
+            .save_message(&sample_message(TEST_TEAM, TEST_LEAD, TEST_SENDER, "one"))
+            .expect_err("save should fail when inboxes path is a file");
+        assert!(error.message.contains("failed to create mailbox directory"));
+    }
+
+    #[test]
+    fn roster_store_returns_empty_snapshot_for_missing_team() {
+        let tempdir = tempdir().expect("tempdir");
+        let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
+
+        let loaded = backend
+            .load_roster(&TeamName::from_str(TEST_TEAM).expect("team"))
+            .expect("missing team should degrade to empty roster");
+        assert_eq!(loaded.team_name.as_str(), TEST_TEAM);
+        assert!(loaded.members.is_empty());
+    }
+
+    #[test]
+    fn message_store_propagates_malformed_json_errors() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(TEST_TEAM)
+            .join("inboxes");
+        fs::create_dir_all(&inbox_dir).expect("inboxes");
+        fs::write(inbox_dir.join(format!("{TEST_LEAD}.json")), "{not-json").expect("inbox");
+
+        let backend = ClaudeStorageBackend::new(tempdir.path().to_path_buf());
+        let error = backend
+            .list_messages(&MessageQuery {
+                team: TeamName::from_str(TEST_TEAM).expect("team"),
+                agent: AgentName::from_str(TEST_LEAD).expect("agent"),
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
+            .expect_err("malformed inbox must propagate as an error");
+        assert!(error.message.contains("failed to parse mailbox"));
     }
 }

@@ -7,9 +7,7 @@ use serde_json::Value;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::schema::MessageEnvelope;
-use crate::schema::inbox_message::{
-    SharedProjectionExportPolicy, to_shared_inbox_value_with_policy,
-};
+use crate::schema::inbox_message::{SharedAppendPolicy, to_shared_inbox_value_with_policy};
 
 /// Atomically replace one shared inbox file from fully serialized records.
 ///
@@ -34,7 +32,7 @@ use crate::schema::inbox_message::{
 pub fn write_messages(
     path: &Path,
     messages: &[MessageEnvelope],
-    export_policy: SharedProjectionExportPolicy,
+    export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
     write_message_iter(path, messages.iter(), export_policy)
 }
@@ -42,7 +40,7 @@ pub fn write_messages(
 pub fn write_message_iter<'a, I>(
     path: &Path,
     messages: I,
-    export_policy: SharedProjectionExportPolicy,
+    export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError>
 where
     I: IntoIterator<Item = &'a MessageEnvelope>,
@@ -67,7 +65,7 @@ where
 pub fn append_message(
     path: &Path,
     message: &MessageEnvelope,
-    export_policy: SharedProjectionExportPolicy,
+    export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
     let encoded = to_shared_inbox_value_with_policy(message, export_policy)?;
     append_jsonl_record(path, &encoded)

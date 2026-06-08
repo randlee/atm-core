@@ -1,16 +1,19 @@
 use atm_core::{
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, NotificationEvent,
-        ProjectionExport, ProjectionExportAppendMessageSetRequest,
-        ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
-        ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
-        ProjectionExportReexportMessageResponse, ReconcileRequest, ReconcileResult, SourceIngress,
-        SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
-        SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
-        SourceIngressImportRequest, SourceIngressImportResponse, WatchEventBatch,
-        WatchSubscriptionRequest,
+        ReconcileRequest, ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
+};
+use atm_storage::RosterStore;
+use atm_storage_claude::compat::{
+    ProjectionExport, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
+    ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, SourceIngress, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
 };
 use std::sync::Arc;
 
@@ -128,7 +131,7 @@ impl DaemonReconcileCoordinator {
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,
-        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: DaemonNotificationSink,
         observability: SubsystemObservability,
     ) -> Self {
@@ -186,8 +189,6 @@ impl DaemonInboxIngress {
     }
 }
 
-impl boundary::sealed::Sealed for DaemonInboxIngress {}
-
 impl SourceIngress for DaemonInboxIngress {
     fn import_inbox_source(
         &self,
@@ -220,8 +221,6 @@ impl DaemonInboxExport {
     }
 }
 
-impl boundary::sealed::Sealed for DaemonInboxExport {}
-
 impl ProjectionExport for DaemonInboxExport {
     fn export_record(
         &self,
@@ -248,18 +247,17 @@ impl ProjectionExport for DaemonInboxExport {
 #[cfg(test)]
 mod tests {
     use super::{DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink};
-    use atm_core::boundary::{
-        NotificationSink, ProjectionExport, ProjectionExportReexportMessageRequest, SourceIngress,
-        SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
-    };
+    use atm_core::boundary::NotificationSink;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
+    use atm_storage_claude::compat::{
+        ProjectionExport, ProjectionExportReexportMessageRequest, SourceIngress,
+        SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
+    };
     use std::sync::Arc;
     use tempfile::TempDir;
-
-    const TEST_LEAD: &str = "test-lead";
 
     #[test]
     fn notifier_delivery_stays_behind_boundary_trait() {

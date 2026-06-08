@@ -909,10 +909,10 @@ mod tests {
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some("retry after the daemon is reachable")
-        );
+        let recovery = error.primary_recovery().expect("daemon recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
     }
 
     #[test]

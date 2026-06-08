@@ -7,17 +7,21 @@ use crate::worker_support::{
     retained_join_helper_count_for_test,
 };
 use atm_core::boundary::{
-    self, NotificationEvent, NotificationSink, ReconcileRequest, RosterStore,
-    RosterStoreHealthSnapshot, SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
-    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
-    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
-    SourceIngressImportResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    self, NotificationEvent, NotificationSink, ReconcileRequest, WatchEventBatch, WatchEventSource,
+    WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, MessageEnvelope};
 use atm_core::types::IsoTimestamp;
+use atm_storage::{RosterMember, RosterSnapshot, RosterStore};
+use atm_storage_claude::compat::{
+    SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,
+    SourceIngressImportResponse,
+};
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -517,8 +521,6 @@ impl FakeInboxIngress {
     }
 }
 
-impl boundary::sealed::Sealed for FakeInboxIngress {}
-
 impl SourceIngress for FakeInboxIngress {
     fn import_inbox_source(
         &self,
@@ -538,9 +540,10 @@ impl SourceIngress for FakeInboxIngress {
         request: SourceIngressIdentityFingerprintRequest,
     ) -> SourceIngressIdentityFingerprintResponse {
         SourceIngressIdentityFingerprintResponse {
-            fingerprint: request.message.message_id.map(|message_id| {
-                atm_core::boundary::MessageFingerprint::from(message_id.to_string())
-            }),
+            fingerprint: request
+                .message
+                .message_id
+                .map(|message_id| message_id.to_string()),
         }
     }
 
@@ -576,7 +579,7 @@ struct RecordingRosterStore {
 
 #[derive(Default)]
 struct RecordingRosterState {
-    rosters: HashMap<atm_core::types::TeamName, Vec<boundary::RosterMemberRecord>>,
+    rosters: HashMap<atm_core::types::TeamName, Vec<RosterMember>>,
     replace_count: u64,
 }
 
@@ -585,7 +588,7 @@ impl RecordingRosterStore {
         self.state.lock().expect("roster state").replace_count
     }
 
-    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<boundary::RosterMemberRecord> {
+    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<RosterMember> {
         self.state
             .lock()
             .expect("roster state")
@@ -596,38 +599,22 @@ impl RecordingRosterStore {
     }
 }
 
-impl boundary::sealed::Sealed for RecordingRosterStore {}
-
 impl RosterStore for RecordingRosterStore {
-    fn replace_roster(
-        &self,
-        team: &atm_core::types::TeamName,
-        members: &[boundary::RosterMemberRecord],
-        _source: Option<&boundary::ReplaySource>,
-    ) -> Result<(), AtmError> {
+    fn load_roster(&self, team: &atm_core::types::TeamName) -> Result<RosterSnapshot, AtmError> {
+        Ok(RosterSnapshot {
+            team_name: team.clone(),
+            members: self.members_for(team),
+            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+        })
+    }
+
+    fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError> {
         let mut state = self.state.lock().expect("roster state");
-        state.rosters.insert(team.clone(), members.to_vec());
+        state
+            .rosters
+            .insert(roster.team_name.clone(), roster.members.clone());
         state.replace_count += 1;
         Ok(())
-    }
-
-    fn load_roster(
-        &self,
-        team: &atm_core::types::TeamName,
-    ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
-        Ok(self.members_for(team))
-    }
-
-    fn query_membership(
-        &self,
-        team: &atm_core::types::TeamName,
-        member: &atm_core::types::AgentName,
-    ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
-        let member = self
-            .members_for(team)
-            .into_iter()
-            .find(|record| record.agent_name == *member);
-        Ok(member)
     }
 
     fn list_teams(&self) -> Result<Vec<atm_core::types::TeamName>, AtmError> {
@@ -639,18 +626,6 @@ impl RosterStore for RecordingRosterStore {
             .keys()
             .cloned()
             .collect())
-    }
-
-    fn health_snapshot(
-        &self,
-        team: &atm_core::types::TeamName,
-    ) -> Result<RosterStoreHealthSnapshot, AtmError> {
-        Ok(RosterStoreHealthSnapshot {
-            team: team.clone(),
-            member_count: self.members_for(team).len() as u64,
-            stale: false,
-            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
-        })
     }
 }
 

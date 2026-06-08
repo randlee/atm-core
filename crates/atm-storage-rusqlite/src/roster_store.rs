@@ -296,6 +296,8 @@ mod tests {
     use crate::SqliteStorageBackend;
     use atm_storage::IsoTimestamp;
 
+    const TEST_WORKER: &str = "worker";
+
     #[test]
     fn save_roster_rejects_mismatched_team_names() {
         let store = SqliteStorageBackend::in_memory_for_test()
@@ -303,7 +305,7 @@ mod tests {
             .roster_store;
         let team: TeamName = "team-a".parse().expect("team");
         let other_team: TeamName = "team-b".parse().expect("team");
-        let agent: AgentName = "worker".parse().expect("agent");
+        let agent: AgentName = TEST_WORKER.parse().expect("agent");
         let roster = RosterSnapshot {
             team_name: team,
             members: vec![RosterMember {

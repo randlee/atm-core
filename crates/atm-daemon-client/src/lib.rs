@@ -911,7 +911,9 @@ impl LaunchGateGuard {
 
 impl Drop for LaunchGateGuard {
     fn drop(&mut self) {
-        let _ = self.file.unlock();
+        if let Err(error) = self.file.unlock() {
+            eprintln!("warning: failed to release daemon launch gate: {error}");
+        }
     }
 }
 
@@ -1100,7 +1102,7 @@ mod tests {
                 .auto_start_detail
                 .as_deref()
                 .expect("auto-start detail")
-                .contains("Build or install atm-daemon")
+                .contains("atm-daemon binary is installed")
         );
     }
 

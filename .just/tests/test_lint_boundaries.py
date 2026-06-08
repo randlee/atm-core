@@ -86,7 +86,7 @@ public:
 
 implementation:
   type: SqliteMailStore
-  module: atm_rusqlite::mail_store
+  module: atm_storage_rusqlite::mail_store
   visibility: private
   constructor: private
 
@@ -145,8 +145,8 @@ status:
 
 BASE_BOUNDARY_TOML = """\
 boundary_id = "BOUNDARY-MailStore-Sqlite"
-owner_package = "atm-rusqlite"
-owner_crate_path = "atm_rusqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
 name = "SqliteMailStoreAdapter"
 
 [public]
@@ -154,7 +154,7 @@ trait = "MailStore"
 
 [implementation]
 type = "SqliteMailStore"
-module = "atm_rusqlite::mail_store"
+module = "atm_storage_rusqlite::mail_store"
 visibility = "private"
 constructor = "private"
 
@@ -168,7 +168,7 @@ io_forbidden = ["socket_io"]
 [dependencies]
 allowed_dependents = ["atm-daemon"]
 allowed_dependencies = ["atm-core", "rusqlite"]
-forbidden_edges = ["atm -> atm-rusqlite", "atm-graft -> atm-rusqlite"]
+forbidden_edges = ["atm -> atm-storage-rusqlite", "atm-graft -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
@@ -198,13 +198,13 @@ class LintBoundariesTests(unittest.TestCase):
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         (repo_root / ".just").mkdir()
         (repo_root / ".just/lint-config.toml").write_text(LINT_CONFIG, encoding="utf-8")
-        for crate_name in ("atm-core", "atm-rusqlite", "atm", "atm-daemon"):
+        for crate_name in ("atm-core", "atm-storage-rusqlite", "atm", "atm-daemon"):
             crate_dir = repo_root / "crates" / crate_name
             crate_dir.mkdir(parents=True)
             (crate_dir / "src").mkdir()
             (crate_dir / "src/lib.rs").write_text("pub fn example() {}\n", encoding="utf-8")
         (repo_root / "crates/atm/src/commands").mkdir(parents=True, exist_ok=True)
-        for doc_name in ("atm-core", "atm-rusqlite", "atm", "atm-daemon"):
+        for doc_name in ("atm-core", "atm-storage-rusqlite", "atm", "atm-daemon"):
             (repo_root / "docs" / doc_name).mkdir(parents=True)
         self.write_scb_config_support(repo_root)
         self.write_scb_retained_support(repo_root)
@@ -216,7 +216,7 @@ class LintBoundariesTests(unittest.TestCase):
         repo_root: Path,
         *,
         atm_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
-        atm_rusqlite_dependencies: str = 'rusqlite = "0.37"\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
+        atm_storage_rusqlite_dependencies: str = 'rusqlite = "0.37"\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
         atm_daemon_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
     ) -> None:
         (repo_root / "crates/atm-core/Cargo.toml").write_text(
@@ -235,14 +235,14 @@ homepage.workspace = true
 name = "atm_core"
 
 [dev-dependencies]
-atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
 """,
             encoding="utf-8",
         )
-        (repo_root / "crates/atm-rusqlite/Cargo.toml").write_text(
+        (repo_root / "crates/atm-storage-rusqlite/Cargo.toml").write_text(
             f"""\
 [package]
-name = "atm-rusqlite"
+name = "atm-storage-rusqlite"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -252,10 +252,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [lib]
-name = "atm_rusqlite"
+name = "atm_storage_rusqlite"
 
 [dependencies]
-{atm_rusqlite_dependencies}""",
+{atm_storage_rusqlite_dependencies}""",
             encoding="utf-8",
         )
         (repo_root / "crates/atm/Cargo.toml").write_text(
@@ -306,7 +306,7 @@ name = "atm_daemon"
                 repo_root,
                 atm_dependencies='atm-daemon = { path = "../atm-daemon", version = "1.1.2" }\n',
             )
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertIn(
@@ -319,7 +319,7 @@ name = "atm_daemon"
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm-core/Cargo.toml").write_text(
                 """\
 [package]
@@ -343,13 +343,13 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             self.write_repo(repo_root)
             self.write_manifests(
                 repo_root,
-                atm_daemon_dependencies='atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\natm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }\n',
+                atm_daemon_dependencies='atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\natm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }\n',
             )
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertNotIn(
-                "crates/atm-daemon/Cargo.toml [dependencies]: atm-daemon may depend on atm-rusqlite only through the documented runtime-owned SQLite boundaries",
+                "crates/atm-daemon/Cargo.toml [dependencies]: atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries",
                 rendered,
             )
 
@@ -449,14 +449,14 @@ fn run_bad(current_dir: &std::path::Path) {
             boundary_id: BOUNDARY-Test
             dependencies:
               forbidden_edges:
-                - atm -> atm-rusqlite
+                - atm -> atm-storage-rusqlite
             status:
               state: planned
             """
         )
         parsed = parse_simple_yaml_document(document)
         self.assertEqual(parsed["boundary_id"], "BOUNDARY-Test")
-        self.assertEqual(parsed["dependencies"]["forbidden_edges"], ["atm -> atm-rusqlite"])
+        self.assertEqual(parsed["dependencies"]["forbidden_edges"], ["atm -> atm-storage-rusqlite"])
         self.assertEqual(parsed["status"]["state"], "planned")
 
     def test_collect_boundary_violations_accepts_allowlisted_startup_helper(self) -> None:
@@ -464,7 +464,7 @@ fn run_bad(current_dir: &std::path::Path) {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_config_support(repo_root)
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
@@ -488,7 +488,7 @@ fn hydrate_roster_from_team_config_once_at_startup_if_empty(team_dir: &std::path
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_config_support(repo_root)
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
@@ -520,7 +520,7 @@ fn send_bad(team_dir: &std::path::Path) {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
             self.write_scb_singleton_support(repo_root)
@@ -543,7 +543,7 @@ fn run_bad() {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_workspace_support(repo_root)
             (repo_root / "crates/atm-core/src/team_admin.rs").write_text(
                 """\
@@ -564,7 +564,7 @@ fn run_bad(current_dir: &std::path::Path) {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_singleton_support(repo_root)
             (repo_root / "crates/atm-core/src/lib.rs").write_text(
                 """\
@@ -581,7 +581,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             records, violations = parse_boundary_records(repo_root)
             self.assertEqual(violations, [])
@@ -594,13 +594,13 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_toml_record(repo_root, "atm-rusqlite")
+            self.write_toml_record(repo_root, "atm-storage-rusqlite")
 
             records, violations = parse_boundary_records(repo_root)
             self.assertEqual(violations, [])
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0].boundary_id, "BOUNDARY-MailStore-Sqlite")
-            self.assertEqual(records[0].source_path.as_posix(), "boundaries/atm-rusqlite/mail-store.toml")
+            self.assertEqual(records[0].source_path.as_posix(), "boundaries/atm-storage-rusqlite/mail-store.toml")
             self.assertFalse(records[0].is_active)
 
     def test_parse_boundary_records_markdown_and_toml_have_parity(self) -> None:
@@ -608,13 +608,13 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             markdown_records, markdown_violations = parse_boundary_records(repo_root)
             self.assertEqual(markdown_violations, [])
 
-            (repo_root / "docs" / "atm-rusqlite" / "boundaries.md").unlink()
-            self.write_toml_record(repo_root, "atm-rusqlite")
+            (repo_root / "docs" / "atm-storage-rusqlite" / "boundaries.md").unlink()
+            self.write_toml_record(repo_root, "atm-storage-rusqlite")
 
             toml_records, toml_violations = parse_boundary_records(repo_root)
             self.assertEqual(toml_violations, [])
@@ -646,12 +646,12 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_doc(
                 repo_root,
                 "atm-core",
-                BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-core").replace(
-                    "owner_crate_path: atm_rusqlite", "owner_crate_path: atm_core"
+                BASE_BOUNDARY_DOC.replace("owner_package: atm-storage-rusqlite", "owner_package: atm-core").replace(
+                    "owner_crate_path: atm_storage_rusqlite", "owner_crate_path: atm_core"
                 ),
             )
 
@@ -662,7 +662,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             joined = "\n".join(lines)
             self.assertIn("boundary docs analyzed:", joined)
             self.assertIn("docs/atm-core/boundaries.md", joined)
-            self.assertIn("docs/atm-rusqlite/boundaries.md", joined)
+            self.assertIn("docs/atm-storage-rusqlite/boundaries.md", joined)
             self.assertIn("boundary doc count: 2", joined)
             self.assertIn("boundary records validated: 2", joined)
 
@@ -671,12 +671,12 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-core", BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-core").replace(
-                "owner_crate_path: atm_rusqlite", "owner_crate_path: atm_core"
+            self.write_doc(repo_root, "atm-core", BASE_BOUNDARY_DOC.replace("owner_package: atm-storage-rusqlite", "owner_package: atm-core").replace(
+                "owner_crate_path: atm_storage_rusqlite", "owner_crate_path: atm_core"
             ))
             self.write_toml_record(
                 repo_root,
-                "atm-rusqlite",
+                "atm-storage-rusqlite",
                 text=BASE_BOUNDARY_TOML,
             )
 
@@ -686,7 +686,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             lines = boundary_doc_section_lines(repo_root, records)
             joined = "\n".join(lines)
             self.assertIn("docs/atm-core/boundaries.md", joined)
-            self.assertIn("boundaries/atm-rusqlite/mail-store.toml", joined)
+            self.assertIn("boundaries/atm-storage-rusqlite/mail-store.toml", joined)
             self.assertIn("boundary doc count: 2", joined)
             self.assertIn("boundary records validated: 2", joined)
 
@@ -695,8 +695,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_rusqlite\n", "")
-            self.write_doc(repo_root, "atm-rusqlite", broken_doc)
+            broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_storage_rusqlite\n", "")
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
 
             _records, violations = parse_boundary_records(repo_root)
             rendered = [violation.render() for violation in violations]
@@ -710,8 +710,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            broken_doc = BASE_BOUNDARY_DOC.replace("- atm -> atm-rusqlite", "- atm => atm-rusqlite")
-            self.write_doc(repo_root, "atm-rusqlite", broken_doc)
+            broken_doc = BASE_BOUNDARY_DOC.replace("- atm -> atm-storage-rusqlite", "- atm => atm-storage-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
 
             _records, violations = parse_boundary_records(repo_root)
             rendered = [violation.render() for violation in violations]
@@ -747,8 +747,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
-            (repo_root / "crates/atm-rusqlite/src/lib.rs").write_text("use rusqlite::Connection;\n", encoding="utf-8")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text("use rusqlite::Connection;\n", encoding="utf-8")
 
             self.assertEqual(collect_boundary_violations(repo_root), [])
 
@@ -757,8 +757,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
-            self.write_doc(repo_root, "atm-daemon", BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-daemon").replace("owner_crate_path: atm_rusqlite", "owner_crate_path: atm_daemon"))
+            self.write_doc(repo_root, "atm-storage-rusqlite")
+            self.write_doc(repo_root, "atm-daemon", BASE_BOUNDARY_DOC.replace("owner_package: atm-storage-rusqlite", "owner_package: atm-daemon").replace("owner_crate_path: atm_storage_rusqlite", "owner_crate_path: atm_daemon"))
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)
@@ -768,8 +768,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
-            self.write_toml_record(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
+            self.write_toml_record(repo_root, "atm-storage-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)
@@ -779,8 +779,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_rusqlite", "owner_crate_path: bad_path")
-            self.write_doc(repo_root, "atm-rusqlite", broken_doc)
+            broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_storage_rusqlite", "owner_crate_path: bad_path")
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("does not match workspace crate path" in item for item in rendered), rendered)
@@ -789,8 +789,8 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
-            self.write_manifests(repo_root, atm_dependencies='atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }\n')
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_manifests(repo_root, atm_dependencies='atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }\n')
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("found unexpected dependent" in item for item in rendered), rendered)
@@ -799,12 +799,12 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
-            self.write_manifests(repo_root, atm_dependencies='atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }\n')
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_manifests(repo_root, atm_dependencies='atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }\n')
+            self.write_doc(repo_root, "atm-storage-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertIn(
-                "crates/atm/Cargo.toml [dependencies]: BOUNDARY-MailStore-Sqlite forbids edge atm -> atm-rusqlite",
+                "crates/atm/Cargo.toml [dependencies]: BOUNDARY-MailStore-Sqlite forbids edge atm -> atm-storage-rusqlite",
                 rendered,
             )
 
@@ -813,7 +813,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm-core/Cargo.toml").write_text(
                 """\
 [package]
@@ -827,7 +827,7 @@ rusqlite = "0.37"
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertIn(
-                "crates/atm-core/Cargo.toml [dependencies]: only crates/atm-rusqlite may depend on rusqlite",
+                "crates/atm-core/Cargo.toml [dependencies]: only crates/atm-storage-rusqlite may depend on rusqlite",
                 rendered,
             )
 
@@ -836,12 +836,12 @@ rusqlite = "0.37"
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm/src/lib.rs").write_text("use rusqlite::Connection;\n", encoding="utf-8")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertIn(
-                "crates/atm/src/lib.rs:1: only crates/atm-rusqlite source may import rusqlite directly",
+                "crates/atm/src/lib.rs:1: only crates/atm-storage-rusqlite source may import rusqlite directly",
                 rendered,
             )
 
@@ -850,21 +850,21 @@ rusqlite = "0.37"
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm-core/Cargo.toml").write_text(
                 """\
 [package]
 name = "agent-team-mail-core"
 
 [dependencies]
-atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
 """,
                 encoding="utf-8",
             )
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertIn(
-                "crates/atm-core/Cargo.toml [dependencies]: atm-core may reference atm-rusqlite only in dev-dependencies",
+                "crates/atm-core/Cargo.toml [dependencies]: atm-core may reference atm-storage-rusqlite only in dev-dependencies",
                 rendered,
             )
 
@@ -873,7 +873,7 @@ atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm-core/src/lib.rs").write_text("pub fn demo() { let _ = SqliteMailStore::open(); }\n", encoding="utf-8")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
@@ -884,7 +884,7 @@ atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(repo_root, "atm-storage-rusqlite")
             (repo_root / "crates/atm-daemon/src/bootstrap.rs").write_text(
                 "pub fn build() { let _ = SqliteMailStore::open(); }\n",
                 encoding="utf-8",
@@ -899,8 +899,8 @@ atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
             active_doc = BASE_BOUNDARY_DOC.replace("state: planned", "state: active")
-            self.write_doc(repo_root, "atm-rusqlite", active_doc)
-            (repo_root / "crates/atm-rusqlite/src/lib.rs").write_text(
+            self.write_doc(repo_root, "atm-storage-rusqlite", active_doc)
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
                 textwrap.dedent(
                     """\
                     pub struct SqliteMailStore;

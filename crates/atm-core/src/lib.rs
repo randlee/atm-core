@@ -87,33 +87,25 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
-#[allow(
-    deprecated,
-    reason = "AC.4 preserves the legacy mail bootstrap surface as a temporary compile bridge during storage-boundary adoption."
-)]
+#[allow(deprecated)]
 pub use boundary::{
     AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
     ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
-    MailStoreBootstrapResponse, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreIngestReplayState, MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageFingerprint, MessageKey, NotificationEvent, NotificationSink,
-    ProjectionExport, ProjectionExportReexportMessageRequest,
-    ProjectionExportReexportMessageResponse, ProjectionExportRequest, ProjectionExportResponse,
-    ReconcileCoordinator, ReconcileRequest, ReconcileResult, RemoteReplayStateRecord,
-    RemoteReplayStore, RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, SourceFileRecord,
-    SourceIngress, SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
-    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
-    SourceIngressImportRequest, SourceIngressImportResponse, SourceIngressRequest,
-    SourceIngressResponse, StatusSource, TaskState, TaskStore, TaskStoreAttachMessageLinkRequest,
-    TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
-    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
-    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
-    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
-    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreRequest,
-    TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
+    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
+    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, MailStoreMessageRecord,
+    MessageFingerprint, MessageKey, NotificationEvent, NotificationSink, ReconcileCoordinator,
+    ReconcileRequest, ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore,
+    RequestDispatcher, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState, TaskStore,
+    TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
+    TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
+    TaskStoreDetachMessageLinkResponse, TaskStoreDoctor, TaskStoreDoctorReport,
+    TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse, TaskStoreQueryTaskMetadataRequest,
+    TaskStoreQueryTaskMetadataResponse, TaskStoreRecordAckTransitionRequest,
+    TaskStoreRecordAckTransitionResponse, TaskStoreRequest, TaskStoreResponse,
+    TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
     TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };

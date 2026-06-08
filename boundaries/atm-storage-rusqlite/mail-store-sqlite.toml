@@ -4,11 +4,11 @@ owner_crate_path = "atm_storage_rusqlite"
 name = "SqliteMailStoreAdapter"
 
 [public]
-trait = "MailStore"
+trait = "MessageStore"
 
 [implementation]
-type = "SqliteMailStore"
-module = "atm_rusqlite"
+type = "SqliteMessageStore"
+module = "atm_storage_rusqlite"
 visibility = "private"
 constructor = "private"
 

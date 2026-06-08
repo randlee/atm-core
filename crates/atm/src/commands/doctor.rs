@@ -133,7 +133,9 @@ mod tests {
 
         assert_eq!(
             atm_error.primary_recovery(),
-            Some("Use `--team <team>` with a valid ATM team name when running `atm doctor`.")
+            Some(
+                "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target."
+            )
         );
     }
 

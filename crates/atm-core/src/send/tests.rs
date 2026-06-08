@@ -11,10 +11,10 @@ use super::{
     alert_state, build_send_delivery_plan, persist_message_and_seed_workflow,
     prepare_threaded_message,
 };
-use crate::boundary::NonClaudeOutboundDeliveryRequest;
 use crate::boundary::{
     MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
-    ProjectionAppendMode, RosterHarness, RosterMemberKind, RosterMemberRecord,
+    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterHarness, RosterMemberKind,
+    RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -870,9 +870,7 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     );
     assert_eq!(
         error.primary_recovery(),
-        Some(
-            "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
-        )
+        Some("Update the team membership or target a different recipient.")
     );
     assert!(
         runtime
