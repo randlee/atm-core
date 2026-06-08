@@ -160,7 +160,7 @@ fn mirror_message_to_store(
         return Ok(());
     };
     let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
-    runtime.persist_message_record(boundary::StoredMessageRecord {
+    runtime.persist_message_record(boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
         message_key: message_key.clone(),

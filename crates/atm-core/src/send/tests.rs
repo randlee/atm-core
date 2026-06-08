@@ -12,9 +12,9 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, StoredMessageRecord, MessageKey,
-    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterHarness, RosterMemberKind,
-    RosterEntry,
+    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
+    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterEntry, RosterHarness,
+    RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -339,11 +339,11 @@ impl RetainedMailboxRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
         _message_key: &MessageKey,
-    ) -> Result<Option<StoredMessageRecord>, AtmError> {
+    ) -> Result<Option<Message>, AtmError> {
         Ok(None)
     }
 
-    fn persist_message_record(&self, _record: StoredMessageRecord) -> Result<(), AtmError> {
+    fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
         Ok(())
     }
 

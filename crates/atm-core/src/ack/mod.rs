@@ -211,7 +211,7 @@ fn ack_mail_with_runtime_sqlite<
 #[derive(Clone)]
 struct LoadedAckSource {
     row: boundary::MailStoreMailboxMetadataRow,
-    record: boundary::StoredMessageRecord,
+    record: boundary::Message,
 }
 
 struct PersistedAckReply {
@@ -302,7 +302,7 @@ fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     team: &TeamName,
     actor: &AgentName,
     source_row: &boundary::MailStoreMailboxMetadataRow,
-) -> Result<boundary::StoredMessageRecord, AtmError> {
+) -> Result<boundary::Message, AtmError> {
     runtime
         .load_message_record(home_dir, team, actor, &source_row.message_key)?
         .ok_or_else(|| {
@@ -319,10 +319,7 @@ fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         })
 }
 
-fn ensure_ack_is_pending(
-    message_id: AtmMessageId,
-    source: &InboxMessage,
-) -> Result<(), AtmError> {
+fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Result<(), AtmError> {
     match state::derive_ack_state(source) {
         crate::types::AckState::PendingAck => Ok(()),
         crate::types::AckState::Acknowledged => Err(AtmError::validation(format!(
@@ -345,7 +342,7 @@ fn ensure_ack_is_pending(
 fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     home_dir: &std::path::Path,
-    source_record: &boundary::StoredMessageRecord,
+    source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
     let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
@@ -604,10 +601,7 @@ fn record_ack_telemetry(
     }
 }
 
-fn resolve_reply_target(
-    message: &InboxMessage,
-    current_team: &TeamName,
-) -> (AgentName, TeamName) {
+fn resolve_reply_target(message: &InboxMessage, current_team: &TeamName) -> (AgentName, TeamName) {
     let identity = canonical_sender_identity(message);
     let team = message
         .source_team
@@ -661,7 +655,7 @@ mod tests {
         roster_members: Vec<(TeamName, AgentName)>,
         inbox_path: PathBuf,
         source_row: boundary::MailStoreMailboxMetadataRow,
-        source_record: boundary::StoredMessageRecord,
+        source_record: boundary::Message,
         appended_messages: Mutex<Vec<InboxMessage>>,
     }
 
@@ -976,13 +970,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             message_key: &MessageKey,
-        ) -> Result<Option<boundary::StoredMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             Ok((message_key == &self.source_row.message_key).then(|| self.source_record.clone()))
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::StoredMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             Ok(())
         }
@@ -1012,13 +1006,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &MessageKey,
-        ) -> Result<Option<boundary::StoredMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             unreachable!("ack writer-path test does not load mailbox records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::StoredMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack writer-path test does not persist mailbox records")
         }
@@ -1212,7 +1206,7 @@ mod tests {
                 expires_at: None,
                 task_id: None,
             },
-            source_record: boundary::StoredMessageRecord {
+            source_record: boundary::Message {
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_SENDER.parse().expect("agent"),
                 message_key: MessageKey::new("atm:source").expect("message key"),
@@ -1281,7 +1275,7 @@ mod tests {
                 expires_at: None,
                 task_id: None,
             },
-            source_record: boundary::StoredMessageRecord {
+            source_record: boundary::Message {
                 team: team.clone(),
                 agent: actor.clone(),
                 message_key: source_key,

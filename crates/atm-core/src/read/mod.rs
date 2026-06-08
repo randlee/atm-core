@@ -1209,13 +1209,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &boundary::MessageKey,
-        ) -> Result<Option<boundary::StoredMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             unreachable!("read roster-truth tests do not load message records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::StoredMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not persist message records")
         }

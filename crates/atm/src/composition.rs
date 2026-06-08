@@ -736,7 +736,7 @@ mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::StoredMessageRecord {
+                    .upsert_message(boundary::Message {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),

@@ -1160,7 +1160,7 @@ impl Fixture {
                     .expect("message key")
             };
             mail_store
-                .upsert_message(atm_core::boundary::StoredMessageRecord {
+                .upsert_message(atm_core::boundary::Message {
                     team: team.clone(),
                     agent: agent_name.clone(),
                     message_key: message_key.clone(),

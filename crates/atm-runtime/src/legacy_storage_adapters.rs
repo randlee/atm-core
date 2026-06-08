@@ -9,15 +9,15 @@ use std::sync::{Arc, Mutex};
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
     MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, StoredMessageRecord,
-    ReplaySource, RosterStoreDoctor, RosterStoreDoctorReport, TaskStore,
-    TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
-    TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
-    TaskStoreDetachMessageLinkResponse, TaskStoreDoctor, TaskStoreDoctorReport,
-    TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse, TaskStoreQueryTaskMetadataRequest,
-    TaskStoreQueryTaskMetadataResponse, TaskStoreRecordAckTransitionRequest,
-    TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
-    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, ReplaySource,
+    RosterStoreDoctor, RosterStoreDoctorReport, TaskStore, TaskStoreAttachMessageLinkRequest,
+    TaskStoreAttachMessageLinkResponse, TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse,
+    TaskStoreDetachMessageLinkRequest, TaskStoreDetachMessageLinkResponse, TaskStoreDoctor,
+    TaskStoreDoctorReport, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
+    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
+    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreTaskRecord,
+    TaskStoreUpdateTaskRequest, TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
@@ -150,7 +150,7 @@ impl boundary::sealed::Sealed for DefaultRosterStoreDoctor {}
 impl boundary::sealed::Sealed for NoopTaskStoreDoctor {}
 
 impl MailStore for BoundaryMailStoreView {
-    fn upsert_message(&self, record: StoredMessageRecord) -> Result<(), AtmError> {
+    fn upsert_message(&self, record: Message) -> Result<(), AtmError> {
         self.store.save_message(&SharedMessage {
             team: record.team,
             agent: record.agent,
@@ -164,10 +164,10 @@ impl MailStore for BoundaryMailStoreView {
         team: &TeamName,
         agent: &AgentName,
         message_key: &atm_storage::MessageKey,
-    ) -> Result<Option<StoredMessageRecord>, AtmError> {
+    ) -> Result<Option<Message>, AtmError> {
         Ok(self
             .load_matching_message(team, agent, message_key)?
-            .map(|message| StoredMessageRecord {
+            .map(|message| Message {
                 team: message.team,
                 agent: message.agent,
                 message_key: message.message_key,

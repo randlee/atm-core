@@ -1,7 +1,7 @@
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{AtmMessageId, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use atm_storage::contract::MessageKey;
+use atm_storage::contract::{Message, MessageKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -45,14 +45,6 @@ impl From<ReplaySource> for String {
     fn from(value: ReplaySource) -> Self {
         value.0
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StoredMessageRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-    pub envelope: InboxMessage,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -210,7 +202,7 @@ pub trait MailStore: sealed::Sealed {
     ///
     /// Returns `AtmError` when the mailbox transaction cannot be started,
     /// executed, or committed safely.
-    fn upsert_message(&self, record: StoredMessageRecord) -> Result<(), AtmError>;
+    fn upsert_message(&self, record: Message) -> Result<(), AtmError>;
 
     /// # Errors
     ///
@@ -220,7 +212,7 @@ pub trait MailStore: sealed::Sealed {
         team: &TeamName,
         agent: &AgentName,
         message_key: &MessageKey,
-    ) -> Result<Option<StoredMessageRecord>, AtmError>;
+    ) -> Result<Option<Message>, AtmError>;
 
     /// # Errors
     ///
