@@ -230,6 +230,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-storage-claude"
+version = "1.2.1"
+dependencies = [
+ "atm-storage",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

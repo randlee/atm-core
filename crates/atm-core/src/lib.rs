@@ -88,14 +88,14 @@ pub use config::load_claude_team_config_document;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
+    AckTransition, AtmProtocol, ProjectionRosterMember, ProjectionRoster, ClientTransport,
     ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
-    DoctorFinding, InboxExport, InboxExportReexportMessageRequest,
-    InboxExportReexportMessageResponse, InboxExportRequest, InboxExportResponse, InboxIngress,
-    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-    InboxIngressImportRequest, InboxIngressImportResponse, InboxIngressRequest,
-    InboxIngressResponse, InboxSourceFileRecord, LoadMailMessageStateRequest,
+    DoctorFinding, ProjectionExport, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, ProjectionExportRequest, ProjectionExportResponse, SourceIngress,
+    SourceIngressDiagnosticsRequest, SourceIngressDiagnosticsResponse,
+    SourceIngressIdentityFingerprintRequest, SourceIngressIdentityFingerprintResponse,
+    SourceIngressImportRequest, SourceIngressImportResponse, SourceIngressRequest,
+    SourceIngressResponse, SourceFileRecord, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
     MailStoreBootstrapResponse, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreHealthSnapshotRequest, MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,

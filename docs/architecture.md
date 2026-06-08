@@ -821,7 +821,7 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn SourceIngress, exporter: &dyn ProjectionExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
 
 Current runtime note:
 - Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
@@ -2793,7 +2793,7 @@ Ownership rule:
   part of durable roster truth
 - `config.json` remains an ingress document, not a general runtime-read truth
 
-#### InboxIngress
+#### SourceIngress
 
 Dispatch model:
 - batch import from one changed inbox source
@@ -2807,7 +2807,7 @@ Minimum method set:
 - compute canonical imported identity/fingerprint
 - report degraded/skipped rows with structured diagnostics
 
-#### InboxExport
+#### ProjectionExport
 
 Dispatch model:
 - one-way export / re-export after durable commit

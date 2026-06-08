@@ -2,13 +2,13 @@
 //! adapters.
 
 use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, ConfigLoadRequest, ConfigLoadResponse,
-    InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
-    InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-    InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
-    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
-    InboxSourceFileRecord,
+    ProjectionAppendMode, ConfigLoadRequest, ConfigLoadResponse,
+    ProjectionExportAppendMessageSetRequest, ProjectionExportAppendMessageSetResponse,
+    ProjectionExportRecordRequest, ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
+    SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest, SourceIngressImportResponse,
+    SourceFileRecord,
 };
 use crate::config;
 use crate::error::AtmError;
@@ -16,14 +16,14 @@ use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use std::collections::HashSet;
 
-fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
-    InboxSourceFileRecord {
+fn to_boundary_source_file(source: SourceFile) -> SourceFileRecord {
+    SourceFileRecord {
         path: source.path,
         messages: source.messages,
     }
 }
 
-fn from_boundary_source_file(source: InboxSourceFileRecord) -> SourceFile {
+fn from_boundary_source_file(source: SourceFileRecord) -> SourceFile {
     SourceFile {
         path: source.path,
         messages: source.messages,
@@ -48,8 +48,8 @@ pub(crate) fn load_workspace_config(
 }
 
 pub(crate) fn import_inbox_source(
-    request: InboxIngressImportRequest,
-) -> Result<InboxIngressImportResponse, AtmError> {
+    request: SourceIngressImportRequest,
+) -> Result<SourceIngressImportResponse, AtmError> {
     let source_files =
         mailbox::import_source_projections(&request.home_dir, &request.team, &request.agent)
             .map_err(|error| {
@@ -64,7 +64,7 @@ pub(crate) fn import_inbox_source(
                 )
                 .with_source(error)
             })?;
-    Ok(InboxIngressImportResponse {
+    Ok(SourceIngressImportResponse {
         source_files: source_files
             .into_iter()
             .map(to_boundary_source_file)
@@ -73,8 +73,8 @@ pub(crate) fn import_inbox_source(
 }
 
 pub(crate) fn compute_identity_fingerprint(
-    request: InboxIngressIdentityFingerprintRequest,
-) -> InboxIngressIdentityFingerprintResponse {
+    request: SourceIngressIdentityFingerprintRequest,
+) -> SourceIngressIdentityFingerprintResponse {
     let fingerprint = request
         .message
         .message_id
@@ -86,12 +86,12 @@ pub(crate) fn compute_identity_fingerprint(
                 request.message.timestamp.into_inner().to_rfc3339()
             )))
         });
-    InboxIngressIdentityFingerprintResponse { fingerprint }
+    SourceIngressIdentityFingerprintResponse { fingerprint }
 }
 
 pub(crate) fn report_inbox_diagnostics(
-    request: InboxIngressDiagnosticsRequest,
-) -> InboxIngressDiagnosticsResponse {
+    request: SourceIngressDiagnosticsRequest,
+) -> SourceIngressDiagnosticsResponse {
     let mut seen = HashSet::new();
     let mut duplicate_message_ids = 0usize;
     let mut messages_without_ids = 0usize;
@@ -108,15 +108,15 @@ pub(crate) fn report_inbox_diagnostics(
         }
     }
 
-    InboxIngressDiagnosticsResponse {
+    SourceIngressDiagnosticsResponse {
         duplicate_message_ids,
         messages_without_ids,
     }
 }
 
 pub(crate) fn export_source_files(
-    request: InboxExportRecordRequest,
-) -> Result<InboxExportRecordResponse, AtmError> {
+    request: ProjectionExportRecordRequest,
+) -> Result<ProjectionExportRecordResponse, AtmError> {
     let committed_paths = request.source_files.len();
     let source_files = request
         .source_files
@@ -133,12 +133,12 @@ pub(crate) fn export_source_files(
         )
         .with_source(error)
     })?;
-    Ok(InboxExportRecordResponse { committed_paths })
+    Ok(ProjectionExportRecordResponse { committed_paths })
 }
 
 pub(crate) fn reexport_messages(
-    request: InboxExportReexportMessageRequest,
-) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    request: ProjectionExportReexportMessageRequest,
+) -> Result<ProjectionExportReexportMessageResponse, AtmError> {
     // This seam is rebuild-only after Yb Y.10. Runtime send/ack delivery must
     // not route through full mailbox rewrite.
     let wrote_messages = request.messages.len();
@@ -154,15 +154,15 @@ pub(crate) fn reexport_messages(
             .with_source(error)
         },
     )?;
-    Ok(InboxExportReexportMessageResponse { wrote_messages })
+    Ok(ProjectionExportReexportMessageResponse { wrote_messages })
 }
 
 pub(crate) fn append_message_set(
-    request: InboxExportAppendMessageSetRequest,
-) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    request: ProjectionExportAppendMessageSetRequest,
+) -> Result<ProjectionExportAppendMessageSetResponse, AtmError> {
     let wrote_messages = request.messages.len();
     match request.mode {
-        ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet => {
+        ProjectionAppendMode::RecoveredLogicalMessageSet => {
             let export_policy = mailbox::store::export_policy_for_path(&request.path).map_err(
                 |error| {
                     AtmError::daemon_unavailable(format!(
@@ -192,5 +192,5 @@ pub(crate) fn append_message_set(
             })?;
         }
     }
-    Ok(InboxExportAppendMessageSetResponse { wrote_messages })
+    Ok(ProjectionExportAppendMessageSetResponse { wrote_messages })
 }

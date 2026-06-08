@@ -112,7 +112,7 @@ Proof this sprint must leave behind:
 - `git diff --check`
 - `python3 scripts/lint_boundaries.py`
 - `rg -n "Request|Response" crates/atm-storage crates/atm-storage-claude crates/atm-storage-rusqlite -S`
-- `rg -n "SqliteObservability|SqliteBoundaryAssembly|ClaudeCodeRosterMember|ClaudeCodeTeamRoster" crates/atm-storage docs/plans/phase-AC -S`
+- `rg -n "SqliteObservability|SqliteBoundaryAssembly|ProjectionRosterMember|ProjectionRoster" crates/atm-storage docs/plans/phase-AC -S`
 
 ## Required Document Updates
 

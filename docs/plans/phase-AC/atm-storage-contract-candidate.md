@@ -69,8 +69,8 @@ Candidate source mapping from current shapes:
 | `Message` | `schema::MessageEnvelope`, `boundary::MailStoreMessageRecord`, logical delivery message layers |
 | `MessageKey` | `boundary::MessageKey` |
 | `MessageQuery` | mailbox metadata query wrappers, read/list/clear selection inputs |
-| `RosterMember` | `boundary::RosterMemberRecord`, `boundary::ClaudeCodeRosterMember` |
-| `RosterSnapshot` | `boundary::ClaudeCodeTeamRoster`, roster load/replace wrapper payloads |
+| `RosterMember` | `boundary::RosterMemberRecord`, `boundary::ProjectionRosterMember` |
+| `RosterSnapshot` | `boundary::ProjectionRoster`, roster load/replace wrapper payloads |
 
 ## Explicit Non-Goals For AC.1
 

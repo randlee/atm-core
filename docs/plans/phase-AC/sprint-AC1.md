@@ -209,7 +209,7 @@ Proof this sprint must leave behind:
   `AC.1`; any surviving legacy `MailStore` / `RosterStore` names are
   compile-bridge shims only and must be deleted by `AC.4`
 - no `*Request` / `*Response` storage wrapper families are recreated inside `crates/atm-storage`
-- `RosterMemberRecord`, `ClaudeCodeRosterMember`, and `ClaudeCodeTeamRoster` are not copied into `atm-storage` unchanged
+- `RosterMemberRecord`, `ProjectionRosterMember`, and `ProjectionRoster` are not copied into `atm-storage` unchanged
 - task mutations are intentionally notification-free in the initial contract;
   `StorageNotifier` does not silently grow a `task_changed` event in this sprint
 - `atm-storage` does not introduce `TaskStore`, `Task`, `TaskKey`, or
