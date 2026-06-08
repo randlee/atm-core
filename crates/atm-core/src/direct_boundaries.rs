@@ -14,7 +14,9 @@ use crate::boundary::{
 };
 use crate::error::AtmError;
 
-pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
+pub(crate) fn load_workspace_config(
+    request: ConfigLoadRequest,
+) -> Result<ConfigLoadResponse, AtmError> {
     crate::boundary_support::load_workspace_config(request)
 }
 

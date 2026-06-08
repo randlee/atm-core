@@ -21,6 +21,7 @@ test-utils = []
 
 [dependencies]
 atm-storage = { path = "../atm-storage", version = "1.2.1" }
+atm-storage-claude = { path = "../atm-storage-claude", version = "1.2.1" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

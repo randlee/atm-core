@@ -7,7 +7,7 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
-use atm_storage_claude::{
+use atm_storage_claude::compat::{
     SourceIngress, SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
     SourceIngressImportResponse,
 };

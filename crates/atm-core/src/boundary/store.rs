@@ -401,26 +401,13 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
-/// Imported source-file snapshot returned by inbox ingress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct SourceFileRecord {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-ingress request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct SourceIngressImportRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Stub inbox-ingress response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct SourceIngressImportResponse {
-    pub source_files: Vec<SourceFileRecord>,
-}
+pub(crate) use atm_storage_claude::compat::{
+    ProjectionAppendMode, ProjectionExportAppendMessageSetRequest,
+    ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
+    ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
+    ProjectionExportReexportMessageResponse, SourceIngressDiagnosticsRequest,
+    SourceIngressDiagnosticsResponse, SourceIngressImportRequest, SourceIngressImportResponse,
+};
 
 /// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -434,19 +421,6 @@ pub(crate) struct SourceIngressIdentityFingerprintResponse {
     pub fingerprint: Option<MessageFingerprint>,
 }
 
-/// Stub inbox-ingress diagnostics request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct SourceIngressDiagnosticsRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Stub inbox-ingress diagnostics response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct SourceIngressDiagnosticsResponse {
-    pub duplicate_message_ids: usize,
-    pub messages_without_ids: usize,
-}
-
 /// Canonical Phase R inbox-ingress request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SourceIngressRequest;
@@ -454,51 +428,6 @@ pub(crate) struct SourceIngressRequest;
 /// Canonical Phase R inbox-ingress response entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SourceIngressResponse;
-
-/// Stub inbox-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct ProjectionExportRecordRequest {
-    pub source_files: Vec<SourceFileRecord>,
-}
-
-/// Stub inbox-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ProjectionExportRecordResponse {
-    pub committed_paths: usize,
-}
-
-/// Stub inbox-export re-export request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct ProjectionExportReexportMessageRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-}
-
-/// Stub inbox-export re-export response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ProjectionExportReexportMessageResponse {
-    pub wrote_messages: usize,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum ProjectionAppendMode {
-    RecoveredLogicalMessageSet,
-}
-
-/// Explicit inbox-export append-message-set request for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct ProjectionExportAppendMessageSetRequest {
-    pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
-    pub mode: ProjectionAppendMode,
-}
-
-/// Explicit inbox-export append-message-set response for recovered Claude delivery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ProjectionExportAppendMessageSetResponse {
-    pub wrote_messages: usize,
-}
 
 /// Canonical Phase R inbox-export request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

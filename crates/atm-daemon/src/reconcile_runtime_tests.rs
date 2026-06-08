@@ -19,7 +19,7 @@ use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, MessageEnvelope};
 use atm_core::types::IsoTimestamp;
-use atm_storage_claude::{
+use atm_storage_claude::compat::{
     SourceFileRecord, SourceIngress, SourceIngressDiagnosticsRequest,
     SourceIngressDiagnosticsResponse, SourceIngressIdentityFingerprintRequest,
     SourceIngressIdentityFingerprintResponse, SourceIngressImportRequest,

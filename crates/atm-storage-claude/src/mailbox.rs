@@ -166,7 +166,7 @@ fn write_message_file(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
 
 fn key_for_message(message: &MessageEnvelope) -> MessageKey {
     message.message_id.map(MessageKey::from).unwrap_or_else(|| {
-        // PANIC: the derived fallback key always contains a sender plus an
+        // SAFETY: the derived fallback key always contains a sender plus an
         // RFC3339 timestamp, so it cannot be blank.
         MessageKey::new(format!(
             "{}:{}",

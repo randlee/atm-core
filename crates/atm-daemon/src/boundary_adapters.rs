@@ -5,7 +5,7 @@ use atm_core::{
     },
     error::AtmError,
 };
-use atm_storage_claude::{
+use atm_storage_claude::compat::{
     ProjectionExport, ProjectionExportAppendMessageSetRequest,
     ProjectionExportAppendMessageSetResponse, ProjectionExportRecordRequest,
     ProjectionExportRecordResponse, ProjectionExportReexportMessageRequest,
@@ -249,16 +249,14 @@ mod tests {
     use atm_core::boundary::NotificationSink;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
-    use atm_storage_claude::{
+    use atm_storage_claude::compat::{
         ProjectionExport, ProjectionExportReexportMessageRequest, SourceIngress,
         SourceIngressIdentityFingerprintRequest, SourceIngressImportRequest,
     };
     use std::sync::Arc;
     use tempfile::TempDir;
-
-    const TEST_LEAD: &str = "test-lead";
 
     #[test]
     fn notifier_delivery_stays_behind_boundary_trait() {
