@@ -12,8 +12,8 @@ mod validation;
 pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
     AckTransition, AgentType, MailMessageState, Message, MessageFingerprint, MessageKey,
-    MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent, RosterHarness,
-    RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, TaskState,
+    MessageQuery, MessageStore, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+    RosterStore, TaskState,
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;

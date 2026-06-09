@@ -5,7 +5,7 @@ use atm_storage::{
     AgentName, AtmError, AtmMessageId, Message, MessageEnvelope, MessageKey, MessageQuery, TeamName,
 };
 
-use crate::compat::{ProjectionAppendMode, SourceFileRecord};
+use crate::compat::SourceFileRecord;
 
 const DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: usize = 128 * 1024;
 
@@ -411,33 +411,7 @@ pub fn delete_message(home_dir: &Path, key: &MessageKey) -> Result<(), AtmError>
     Ok(())
 }
 
-pub(crate) fn export_source_projections(source_files: &[SourceFileRecord]) -> Result<(), AtmError> {
-    for source in source_files {
-        write_message_file(&source.path, &source.messages)?;
-    }
-    Ok(())
-}
-
 pub(crate) fn reexport_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
     let projected = projected_export_messages(path, messages)?;
     write_message_file(path, &projected)
-}
-
-pub(crate) fn append_message_set(
-    path: &Path,
-    mode: ProjectionAppendMode,
-    messages: &[MessageEnvelope],
-) -> Result<(), AtmError> {
-    match mode {
-        ProjectionAppendMode::RecoveredLogicalMessageSet => {
-            let projected = projected_export_messages(path, messages)?;
-            let mut existing = if path.exists() {
-                read_message_file(path)?
-            } else {
-                Vec::new()
-            };
-            existing.extend(projected);
-            write_message_file(path, &existing)
-        }
-    }
 }

@@ -23,6 +23,7 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
     u64::try_from(value).map_err(|error| {
         AtmError::validation(format!(
@@ -78,8 +79,9 @@ pub fn hold_sqlite_writer_lock_for_test(
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SqliteMessageStateRecord {
+pub(crate) struct SqliteMessageStateRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
@@ -92,16 +94,18 @@ pub struct SqliteMessageStateRecord {
     pub updated_at: Option<IsoTimestamp>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct SqliteStoredMessageRecord {
+pub(crate) struct SqliteStoredMessageRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct SqliteIngestReplayStateRecord {
+pub(crate) struct SqliteIngestReplayStateRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub source: String,
@@ -110,8 +114,9 @@ pub struct SqliteIngestReplayStateRecord {
     pub ingested_rows: u64,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SqliteMailHealthSnapshot {
+pub(crate) struct SqliteMailHealthSnapshot {
     pub team: TeamName,
     pub agent: AgentName,
     pub total_messages: u64,
@@ -120,8 +125,9 @@ pub struct SqliteMailHealthSnapshot {
     pub latest_message_timestamp: Option<IsoTimestamp>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SqliteMailboxMetadataRow {
+pub(crate) struct SqliteMailboxMetadataRow {
     pub message_key: MessageKey,
     pub message_id: Option<AtmMessageId>,
     pub parent_message_id: Option<AtmMessageId>,
@@ -136,15 +142,17 @@ pub struct SqliteMailboxMetadataRow {
     pub task_id: Option<atm_storage::types::TaskId>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SqliteMailboxMetadataCounts {
+pub(crate) struct SqliteMailboxMetadataCounts {
     pub total_messages: u64,
     pub unread_message_count: u64,
     pub pending_ack_messages: u64,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SqliteRosterHealthSnapshot {
+pub(crate) struct SqliteRosterHealthSnapshot {
     pub team: TeamName,
     pub member_count: u64,
     pub stale: bool,
@@ -161,6 +169,7 @@ struct SqliteRosterStore {
     db: Arc<SharedDb>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 struct StoredMailMessageState {
     read: bool,
@@ -463,7 +472,8 @@ impl SqliteStorageBackend {
         })
     }
 
-    pub fn load_message_record(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn load_message_record(
         &self,
         key: &MessageKey,
     ) -> Result<Option<SqliteStoredMessageRecord>, AtmError> {
@@ -514,7 +524,11 @@ impl SqliteStorageBackend {
         }
     }
 
-    pub fn upsert_message_state(&self, state: SqliteMessageStateRecord) -> Result<(), AtmError> {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn upsert_message_state(
+        &self,
+        state: SqliteMessageStateRecord,
+    ) -> Result<(), AtmError> {
         let updated_at = state
             .updated_at
             .unwrap_or_else(IsoTimestamp::now)
@@ -570,7 +584,8 @@ impl SqliteStorageBackend {
         })
     }
 
-    pub fn load_message_state(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn load_message_state(
         &self,
         team: &TeamName,
         agent: &AgentName,
@@ -599,7 +614,8 @@ impl SqliteStorageBackend {
             })
     }
 
-    pub fn query_mailbox_metadata(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn query_mailbox_metadata(
         &self,
         team: &TeamName,
         agent: &AgentName,
@@ -608,7 +624,8 @@ impl SqliteStorageBackend {
         query_mailbox_metadata_rows(&self.message_store.db, team, agent, limit)
     }
 
-    pub fn query_mailbox_metadata_counts(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn query_mailbox_metadata_counts(
         &self,
         team: &TeamName,
         agent: &AgentName,
@@ -616,7 +633,8 @@ impl SqliteStorageBackend {
         query_mailbox_metadata_counts(&self.message_store.db, team, agent)
     }
 
-    pub fn record_ingest_replay_state(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn record_ingest_replay_state(
         &self,
         state: &SqliteIngestReplayStateRecord,
     ) -> Result<(), AtmError> {
@@ -652,7 +670,8 @@ impl SqliteStorageBackend {
         })
     }
 
-    pub fn load_ingest_replay_state(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn load_ingest_replay_state(
         &self,
         team: &TeamName,
         agent: &AgentName,
@@ -690,7 +709,8 @@ impl SqliteStorageBackend {
             .transpose()
     }
 
-    pub fn mail_health_snapshot(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn mail_health_snapshot(
         &self,
         team: &TeamName,
         agent: &AgentName,
@@ -756,7 +776,8 @@ impl SqliteStorageBackend {
         self.message_store.db.with_connection(|_| Ok(()))
     }
 
-    pub fn roster_health_snapshot(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn roster_health_snapshot(
         &self,
         team: &TeamName,
     ) -> Result<SqliteRosterHealthSnapshot, AtmError> {

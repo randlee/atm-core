@@ -6,6 +6,7 @@ use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
 
+#[cfg_attr(not(test), allow(dead_code))]
 type MetadataQueryRow = (
     String,
     Option<String>,
@@ -21,6 +22,7 @@ type MetadataQueryRow = (
     Option<String>,
 );
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn parse_optional_timestamp(
     raw: Option<String>,
     field_name: &str,
@@ -39,6 +41,7 @@ fn parse_optional_timestamp(
         .map(|value| value.map(IsoTimestamp::from_datetime))
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MetadataQueryRow> {
     Ok((
         row.get::<_, String>(0)?,
@@ -56,6 +59,7 @@ fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Metada
     ))
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn parse_optional_message_id(
     raw: Option<String>,
     field_name: &str,
@@ -73,6 +77,7 @@ fn parse_optional_message_id(
     .transpose()
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError> {
     raw.map(|value| {
         serde_json::from_str::<ThreadMode>(&format!("\"{value}\"")).map_err(|error| {
@@ -87,6 +92,7 @@ fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError
     .transpose()
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId>, AtmError> {
     raw.map(|value| {
         value.parse::<TaskId>().map_err(|error| {
@@ -101,6 +107,7 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
     .transpose()
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
     u64::try_from(value).map_err(|error| {
         AtmError::validation(format!(
@@ -113,6 +120,7 @@ fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn decode_mailbox_metadata_row(
     row: MetadataQueryRow,
 ) -> Result<SqliteMailboxMetadataRow, AtmError> {
@@ -171,6 +179,7 @@ fn decode_mailbox_metadata_row(
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn query_mailbox_metadata_rows(
     db: &SharedDb,
     team: &TeamName,
@@ -232,6 +241,7 @@ pub(crate) fn query_mailbox_metadata_rows(
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn query_mailbox_metadata_counts(
     db: &SharedDb,
     team: &TeamName,
