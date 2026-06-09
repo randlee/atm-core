@@ -6,6 +6,10 @@ use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
 
+// This module shares the same mixed lib/test compatibility lane as lib.rs:
+// some helpers are only exercised via rusqlite tests on this branch, while the
+// rest stay dormant pending the SQL Server backend. `#[expect(dead_code)]`
+// therefore trips `unfulfilled_lint_expectations` under `--all-targets`.
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
 type MetadataQueryRow = (
     String,

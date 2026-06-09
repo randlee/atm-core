@@ -23,7 +23,6 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
     u64::try_from(value).map_err(|error| {
         AtmError::validation(format!(
@@ -79,6 +78,10 @@ pub fn hold_sqlite_writer_lock_for_test(
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
+// This compatibility lane mixes lib-only dormant items with helpers exercised only
+// from rusqlite tests. Under `--all-targets`, `#[expect(dead_code)]` becomes
+// `unfulfilled_lint_expectations` on the test-reachable subset before the SQL
+// Server backend lands, so this branch intentionally uses `allow(dead_code)`.
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMessageStateRecord {
@@ -103,6 +106,7 @@ pub(crate) struct SqliteStoredMessageRecord {
     pub envelope: MessageEnvelope,
 }
 
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SqliteIngestReplayStateRecord {
     pub team: TeamName,
