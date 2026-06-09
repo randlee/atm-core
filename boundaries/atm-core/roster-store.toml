@@ -19,9 +19,11 @@ io_owns = ["durable_roster_state", "member_routing_metadata"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon", "atm-runtime"]
+# `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge roster
+# consumers until the retained bootstrap/CLI cutover closes in phase-AD.
+allowed_dependents = ["atm-storage-rusqlite", "atm-daemon", "atm-runtime", "atm-daemon-bootstrap", "atm"]
 allowed_dependencies = []
-forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
@@ -41,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-REFERENCES"]
 review_gates = ["no_concrete_store_leakage"]
 
 [status]
-state = "active"
-notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "this boundary remains temporary compile-bridge surface until AC.4 completes consumer cutover", "concrete store implementation still lands in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]
+state = "retired"
+notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "compile-bridge explicitly kept on 2026-06-09; remaining consumer cutover is tracked in phase-AD", "concrete store implementation still lands in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]

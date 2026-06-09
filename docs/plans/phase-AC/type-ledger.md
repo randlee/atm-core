@@ -73,7 +73,7 @@ Grouped source counts:
 | `boundary/mail.rs` | `2` | `35` | `0` |
 | `boundary/store.rs` | `9` | `58` | `3` |
 | `boundary/runtime.rs` | `2` | `2` | `0` |
-| `atm-rusqlite` public support types | `1` | `4` | `1` |
+| `atm-storage-rusqlite` public support types | `1` | `4` | `1` |
 
 ## Expected Reduction Shape
 
@@ -196,10 +196,10 @@ The AC.6 branch closes the remaining cleanup families this way:
 | `MessageFingerprint` | struct | `retain-shared` | `move-to-atm-storage` | shared helper / newtype in `AC.1` | Candidate cross-backend helper if still needed. |
 | `MailStoreIngestReplayState` | struct | `capability-candidate` | `capability-review` | replay capability in `AC.3` | Keep out of base CRUD contract unless justified; `AC.1` only caps the shared contract surface. |
 | `MailStoreHealthSnapshot` | struct | `capability-candidate` | `capability-review` | storage health capability in `AC.3` | Health / doctor surface, not CRUD core; `AC.1` only caps the shared contract surface. |
-| `MailStoreMailboxMetadataRow` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` result helper in `AC.1` | Metadata must not remain a mail-store-only row type; `AC.5` only migrates remaining RPC/body consumers. |
+| `MailStoreMailboxMetadataRow` | struct | `merge-into-shared` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: live retained-mailbox consumers remain in `ack/mod.rs`, `read/mod.rs`, `clear/mod.rs`, `list.rs`, and `service_runtime_store.rs`; delete after phase-AD finishes the compile-bridge cutover. |
 | `MailStoreQueryMailboxMetadataRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreQueryMailboxMetadataResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
-| `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | `merge-and-delete` | `MessageQuery` count helper in `AC.1` | Keep only if semantics survive the query redesign. |
+| `MailStoreMailboxMetadataCounts` | struct | `merge-into-shared` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: the metadata-count shape survives only as part of the retained compile-bridge family still centered on `service_runtime_store.rs`; phase-AD must remove or replace it explicitly. |
 | `MailStoreQueryMailboxMetadataCountsRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreQueryMailboxMetadataCountsResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Wrapper family collapse; `AC.6` only verifies no stragglers survived. |
 | `MailStoreBootstrapRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.6` | Backend bootstrap did not survive the closeout sweep and is no longer part of the shared storage DTO surface. |
@@ -212,10 +212,10 @@ The AC.6 branch closes the remaining cleanup families this way:
 | `MailStoreLoadMessageResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | `load_message` absorbs this operation; `AC.6` only verifies no stragglers survived. |
 | `MailStoreLoadStoredMessageRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Stored-message distinction must be re-justified or removed; `AC.6` only verifies no stragglers survived. |
 | `MailStoreLoadStoredMessageResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Stored-message distinction must be re-justified or removed; `AC.6` only verifies no stragglers survived. |
-| `UpsertMailMessageStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | State mutation must be represented semantically; `AC.6` only verifies no stragglers survived. |
-| `UpsertMailMessageStateResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | State mutation must be represented semantically; `AC.6` only verifies no stragglers survived. |
-| `LoadMailMessageStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | State lookup must be represented semantically; `AC.6` only verifies no stragglers survived. |
-| `LoadMailMessageStateResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | State lookup must be represented semantically; `AC.6` only verifies no stragglers survived. |
+| `UpsertMailMessageStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: the legacy request/response DTO state-mutation family remains tied to the retained compile-bridge around `service_runtime_store.rs`; request/response DTO pattern is acknowledged tech debt and closes in phase-AD. |
+| `UpsertMailMessageStateResponse` | struct | `delete-wrapper` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: the legacy request/response DTO state-mutation family remains tied to the retained compile-bridge around `service_runtime_store.rs`; request/response DTO pattern is acknowledged tech debt and closes in phase-AD. |
+| `LoadMailMessageStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: the legacy request/response DTO state-lookup family remains tied to the retained compile-bridge around `service_runtime_store.rs`; request/response DTO pattern is acknowledged tech debt and closes in phase-AD. |
+| `LoadMailMessageStateResponse` | struct | `delete-wrapper` | `merge-and-delete` | phase-AD quarantine | quarantine-reason: the legacy request/response DTO state-lookup family remains tied to the retained compile-bridge around `service_runtime_store.rs`; request/response DTO pattern is acknowledged tech debt and closes in phase-AD. |
 | `MailStoreRecordIngestReplayStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Replay capability must not use RPC-style wrappers; `AC.6` only verifies no stragglers survived. |
 | `MailStoreRecordIngestReplayStateResponse` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Replay capability must not use RPC-style wrappers; `AC.6` only verifies no stragglers survived. |
 | `MailStoreLoadIngestReplayStateRequest` | struct | `delete-wrapper` | `merge-and-delete` | deleted in `AC.1` | Replay capability must not use RPC-style wrappers; `AC.6` only verifies no stragglers survived. |
@@ -318,7 +318,7 @@ The AC.6 branch closes the remaining cleanup families this way:
 | --- | --- | --- | --- | --- | --- |
 | `delivery_execution::ProjectionMailboxWriter` | `pub(crate)` trait | `replace-trait` | `internalize-claude` | move below `atm-storage-claude` in `AC.2` | Key proof that Claude storage is still an ad hoc `atm-core` seam instead of a backend crate; `AC.4` only removes remaining consumers. |
 
-## Public `atm-rusqlite` Support Types
+## Public `atm-storage-rusqlite` Support Types
 
 | Type | Kind | Disposition | Final Action | Target / Owning Sprint | Notes |
 | --- | --- | --- | --- | --- | --- |
