@@ -23,7 +23,7 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::Path;
 use std::sync::Arc;
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
     u64::try_from(value).map_err(|error| {
         AtmError::validation(format!(
@@ -79,7 +79,7 @@ pub fn hold_sqlite_writer_lock_for_test(
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMessageStateRecord {
     pub team: TeamName,
@@ -94,7 +94,7 @@ pub(crate) struct SqliteMessageStateRecord {
     pub updated_at: Option<IsoTimestamp>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SqliteStoredMessageRecord {
     pub team: TeamName,
@@ -103,7 +103,6 @@ pub(crate) struct SqliteStoredMessageRecord {
     pub envelope: MessageEnvelope,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SqliteIngestReplayStateRecord {
     pub team: TeamName,
@@ -114,7 +113,7 @@ pub(crate) struct SqliteIngestReplayStateRecord {
     pub ingested_rows: u64,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMailHealthSnapshot {
     pub team: TeamName,
@@ -125,7 +124,7 @@ pub(crate) struct SqliteMailHealthSnapshot {
     pub latest_message_timestamp: Option<IsoTimestamp>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMailboxMetadataRow {
     pub message_key: MessageKey,
@@ -142,7 +141,7 @@ pub(crate) struct SqliteMailboxMetadataRow {
     pub task_id: Option<atm_storage::types::TaskId>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMailboxMetadataCounts {
     pub total_messages: u64,
@@ -150,7 +149,7 @@ pub(crate) struct SqliteMailboxMetadataCounts {
     pub pending_ack_messages: u64,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteRosterHealthSnapshot {
     pub team: TeamName,
@@ -169,14 +168,15 @@ struct SqliteRosterStore {
     db: Arc<SharedDb>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 struct StoredMailMessageState {
     read: bool,
     pending_ack_at: Option<IsoTimestamp>,
     acknowledged_at: Option<IsoTimestamp>,
     expires_at: Option<IsoTimestamp>,
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     deleted_at: Option<IsoTimestamp>,
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     updated_at: Option<IsoTimestamp>,
 }
 
@@ -472,7 +472,7 @@ impl SqliteStorageBackend {
         })
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn load_message_record(
         &self,
         key: &MessageKey,
@@ -524,7 +524,7 @@ impl SqliteStorageBackend {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn upsert_message_state(
         &self,
         state: SqliteMessageStateRecord,
@@ -584,7 +584,7 @@ impl SqliteStorageBackend {
         })
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn load_message_state(
         &self,
         team: &TeamName,
@@ -614,7 +614,7 @@ impl SqliteStorageBackend {
             })
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn query_mailbox_metadata(
         &self,
         team: &TeamName,
@@ -624,7 +624,7 @@ impl SqliteStorageBackend {
         query_mailbox_metadata_rows(&self.message_store.db, team, agent, limit)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn query_mailbox_metadata_counts(
         &self,
         team: &TeamName,
@@ -633,7 +633,7 @@ impl SqliteStorageBackend {
         query_mailbox_metadata_counts(&self.message_store.db, team, agent)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn record_ingest_replay_state(
         &self,
         state: &SqliteIngestReplayStateRecord,
@@ -670,7 +670,7 @@ impl SqliteStorageBackend {
         })
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn load_ingest_replay_state(
         &self,
         team: &TeamName,
@@ -709,7 +709,7 @@ impl SqliteStorageBackend {
             .transpose()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn mail_health_snapshot(
         &self,
         team: &TeamName,
@@ -776,7 +776,7 @@ impl SqliteStorageBackend {
         self.message_store.db.with_connection(|_| Ok(()))
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn roster_health_snapshot(
         &self,
         team: &TeamName,
