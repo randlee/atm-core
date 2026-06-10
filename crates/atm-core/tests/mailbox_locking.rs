@@ -15,7 +15,7 @@ use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
-use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 #[cfg(unix)]
 use atm_core::test_support::EnvGuard;
@@ -974,11 +974,11 @@ impl Fixture {
         .expect("send request")
     }
 
-    fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
+    fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
         self.inbox_contents_for_team(PRIMARY_TEAM, agent)
     }
 
-    fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<MessageEnvelope> {
+    fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<InboxMessage> {
         read_jsonl(self.origin_inbox_path(agent, suffix))
     }
 
@@ -986,7 +986,7 @@ impl Fixture {
         self.workflow_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
-    fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<MessageEnvelope> {
+    fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<InboxMessage> {
         read_jsonl(self.primary_inbox_path_for_team(team, agent))
     }
 
@@ -1007,7 +1007,7 @@ impl Fixture {
         serde_json::from_str(&raw).map_err(|error| format!("parse {}: {error}", path.display()))
     }
 
-    fn wait_for_missing_config_notice(&self, team: &str) -> MessageEnvelope {
+    fn wait_for_missing_config_notice(&self, team: &str) -> InboxMessage {
         let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
         let mut attempts = 0usize;
         loop {
@@ -1037,7 +1037,7 @@ impl Fixture {
         &self,
         team: &str,
         agent: &str,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> serde_json::Value {
         let workflow_path = self.workflow_state_path_for_team(team, agent);
         let message_key = message_workflow_key(message);
@@ -1084,16 +1084,16 @@ impl Fixture {
             .expect("write workflow");
     }
 
-    fn write_primary_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
+    fn write_primary_inbox(&self, agent: &str, messages: &[InboxMessage]) {
         self.write_primary_inbox_for_team(PRIMARY_TEAM, agent, messages);
     }
 
-    fn write_primary_inbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
+    fn write_primary_inbox_for_team(&self, team: &str, agent: &str, messages: &[InboxMessage]) {
         write_inbox(&self.primary_inbox_path_for_team(team, agent), messages);
         self.seed_sqlite_mailbox_for_team(team, agent, messages);
     }
 
-    fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[MessageEnvelope]) {
+    fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[InboxMessage]) {
         write_inbox(&self.origin_inbox_path(agent, suffix), messages);
     }
 
@@ -1145,9 +1145,9 @@ impl Fixture {
         self.tempdir.path().join("runtime").join("mail.sqlite3")
     }
 
-    fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
+    fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[InboxMessage]) {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-        let mail_store = assembly.mail_store();
+        let mail_store = assembly.mail_store_arc();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -1160,13 +1160,11 @@ impl Fixture {
                     .expect("message key")
             };
             mail_store
-                .upsert_message(atm_core::boundary::MailStoreUpsertMessageRequest {
-                    record: atm_core::boundary::MailStoreMessageRecord {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        message_key: message_key.clone(),
-                        envelope: message.clone(),
-                    },
+                .upsert_message(atm_core::boundary::Message {
+                    team: team.clone(),
+                    agent: agent_name.clone(),
+                    message_key: message_key.clone(),
+                    envelope: message.clone(),
                 })
                 .expect("seed sqlite message");
             mail_store
@@ -1217,11 +1215,11 @@ fn create_team_with_config(
 
 fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
     let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
-    let roster_store = assembly.roster_store();
+    let roster_store = assembly.roster_store_arc();
     let team = team.parse::<TeamName>().expect("team");
     let members = members
         .iter()
-        .map(|name| atm_core::boundary::RosterMemberRecord {
+        .map(|name| atm_core::boundary::RosterEntry {
             team_name: team.clone(),
             agent_name: (*name).parse::<AgentName>().expect("agent"),
             member_kind: atm_core::boundary::RosterMemberKind::Permanent,
@@ -1231,24 +1229,24 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
             recipient_pane_id: None,
             metadata_json: serde_json::Map::new(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     roster_store
-        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team,
-            members,
-            source: Some(atm_core::boundary::ReplaySource::new("config.json").expect("source")),
-        })
+        .replace_roster(
+            &team,
+            &members,
+            Some(&atm_core::boundary::ReplaySource::new("config.json").expect("source")),
+        )
         .expect("seed sqlite roster");
 }
 
-fn message_workflow_key(message: &MessageEnvelope) -> String {
+fn message_workflow_key(message: &InboxMessage) -> String {
     message
         .message_id
         .map(|message_id| format!("atm:{message_id}"))
         .expect("message id")
 }
 
-fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
+fn read_jsonl(path: std::path::PathBuf) -> Vec<InboxMessage> {
     let raw = fs::read_to_string(path).expect("inbox contents");
     if raw.trim().is_empty() {
         return Vec::new();
@@ -1287,7 +1285,7 @@ fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
         .expect("matching inbox json line")
 }
 
-fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
+fn write_inbox(path: &std::path::Path, messages: &[InboxMessage]) {
     let mut raw = String::new();
     for message in messages {
         raw.push_str(&serde_json::to_string(message).expect("json line"));
@@ -1307,7 +1305,7 @@ fn pending_ack_message(
     text: &str,
     message_id: AtmMessageId,
     source_team: &str,
-) -> MessageEnvelope {
+) -> InboxMessage {
     pending_ack_message_at(from, text, message_id, source_team, Utc::now())
 }
 
@@ -1317,8 +1315,8 @@ fn pending_ack_message_at(
     message_id: AtmMessageId,
     source_team: &str,
     timestamp: chrono::DateTime<Utc>,
-) -> MessageEnvelope {
-    MessageEnvelope {
+) -> InboxMessage {
+    InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
@@ -1337,7 +1335,7 @@ fn pending_ack_message_at(
     }
 }
 
-fn read_message(from: &str, text: &str, message_id: AtmMessageId) -> MessageEnvelope {
+fn read_message(from: &str, text: &str, message_id: AtmMessageId) -> InboxMessage {
     read_message_at(from, text, message_id, Utc::now())
 }
 
@@ -1346,8 +1344,8 @@ fn read_message_at(
     text: &str,
     message_id: AtmMessageId,
     timestamp: chrono::DateTime<Utc>,
-) -> MessageEnvelope {
-    MessageEnvelope {
+) -> InboxMessage {
+    InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
@@ -1366,8 +1364,8 @@ fn read_message_at(
     }
 }
 
-fn unread_message(from: &str, text: &str, message_id: AtmMessageId) -> MessageEnvelope {
-    MessageEnvelope {
+fn unread_message(from: &str, text: &str, message_id: AtmMessageId) -> InboxMessage {
+    InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),

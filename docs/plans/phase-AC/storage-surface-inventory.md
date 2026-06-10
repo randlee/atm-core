@@ -18,7 +18,7 @@ rg -n "pub trait|pub struct|pub enum" \
   crates/atm-core/src/boundary \
   crates/atm-core/src/delivery_execution.rs -S
 
-rg -n "Request|Response|ClaudeInboxWriter|InboxIngress|MailStore|TaskStore|RosterStore" \
+rg -n "Request|Response|ProjectionMailboxWriter|SourceIngress|MailStore|TaskStore|RosterStore" \
   crates/atm-core/src/boundary \
   crates/atm-core/src/mailbox \
   crates/atm-core/src/delivery_execution.rs -S
@@ -90,8 +90,8 @@ Representative families:
 - `MailStore*Request` / `MailStore*Response`
 - `TaskStore*Request` / `TaskStore*Response`
 - `RosterStore*Request` / `RosterStore*Response`
-- `InboxIngress*Request` / `InboxIngress*Response`
-- `InboxExport*Request` / `InboxExport*Response`
+- `SourceIngress*Request` / `SourceIngress*Response`
+- `ProjectionExport*Request` / `ProjectionExport*Response`
 
 Measured baseline:
 
@@ -114,7 +114,7 @@ Planning consequence:
 
 Representative seams:
 
-- `ClaudeInboxWriter` in `delivery_execution.rs`
+- `ProjectionMailboxWriter` in `delivery_execution.rs`
 - mailbox file append / rewrite / salvage helpers
 - inbox ingress / export split around Claude-specific files
 

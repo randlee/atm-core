@@ -154,9 +154,8 @@ Task-storage rule:
 - task storage is explicitly out of scope for the initial Phase `AC` contract
 - current `TaskStore` code is treated as speculative, not as an approved
   baseline the shared contract must preserve
-- speculative task-store code should be deleted by default during `AC.6`;
-  quarantine is only a fallback if immediate removal is blocked by unrelated
-  stabilization work
+- speculative task-store code was deleted during `AC.6` rather than preserved
+  as compatibility scaffolding
 - if task storage is approved later, the first canonical implementation starts
   from Claude-code task schema plus Pydantic validation, with SQLite sync only
   afterward if still needed
@@ -218,6 +217,13 @@ Purpose:
 Execution branch:
 - `feature/pAC-s1-atm-storage-contract-and-canonical-types`
 
+Current status:
+- complete
+- `crates/atm-storage` now owns the canonical message/roster contract and
+  shared storage-facing types
+- `atm-core` retains only a temporary compile bridge for the legacy
+  `MailStore` / `RosterStore` consumer window
+
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s1-atm-storage-contract-and-canonical-types`
 
@@ -233,6 +239,13 @@ Purpose:
 
 Execution branch:
 - `feature/pAC-s2-atm-storage-claude-extraction`
+
+Current status:
+- complete
+- `crates/atm-storage-claude` now owns the concrete Claude inbox storage
+  backend behind `atm-storage::MessageStore` and `atm-storage::RosterStore`
+- `atm-core` retains only generic source/projection seam names during the
+  later consumer-cutover window
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s2-atm-storage-claude-extraction`
@@ -307,12 +320,20 @@ Purpose:
 - prove the resulting contract is small enough to audit and suitable for a
   future SQL Server backend
 - record the exact remaining backend-only work for `atm-storage-sqlserver`
+- land a compile-only `atm-storage-sqlserver-proof` crate that demonstrates the
+  final contract can be implemented without an `atm-core` dependency
 
 Execution branch:
 - `feature/pAC-s7-sqlserver-readiness-proof`
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof`
+
+Completion note:
+- `AC.7` is complete when `docs/plans/phase-AC/sqlserver-readiness-proof.md`
+  is written from the real post-`AC.6` code state and
+  `crates/atm-storage-sqlserver-proof` compiles against `atm-storage` without
+  an `atm-core` edge
 
 ## Immediate Planning Outputs
 
@@ -335,7 +356,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/plans/phase-AC/crate-graph-migration-map.md`
 - `docs/plans/phase-AC/implementation-ownership-map.md`
 - `docs/plans/phase-AC/atm-storage-contract-candidate.md`
-- `docs/plans/phase-AC/sqlserver-readiness-proof.md` reserved as the AC.7 proof artifact path
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md`
 
 ## Phase Exit Criteria
 
@@ -354,6 +375,11 @@ Phase `AC` is not complete until:
 - the resulting storage contract is explicitly documented as suitable for a future `atm-storage-sqlserver` implementation
 - speculative task-store code is not treated as an approved compatibility line
   inside the shared storage contract
+
+Phase `AC` closeout evidence now includes:
+
+- `docs/plans/phase-AC/readiness.md`
+- `docs/plans/phase-AC/sqlserver-readiness-proof.md`
 
 ## Phase Execution Guardrails
 

@@ -3,6 +3,7 @@
 //! storage-neutral at their own crate boundary.
 
 mod composition;
+mod legacy_storage_adapters;
 mod replay_store;
 mod sqlite_observability;
 

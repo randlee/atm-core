@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.3
 worktree: ../atm-core-worktrees/feature/pAC-s3-sqlite-backend-convergence
 branch: feature/pAC-s3-sqlite-backend-convergence
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -144,6 +144,30 @@ pub trait RuntimeStorageFinalizer { /* finalizer hook only if still justified */
 No additional capability trait may be invented in `AC.3` without updating the
 Phase AC ADR and the shared contract docs in the same change.
 
+## Capability Decisions
+
+`AC.3` resolves the current capability-candidate rows as follows:
+
+- `ReplaySource`: kept as an `atm-core` boundary helper only; not promoted into
+  `atm-storage`
+- `MailStoreIngestReplayState`: persisted by `atm-storage-rusqlite` as a
+  backend-only replay-state record and surfaced to `atm-core` only through the
+  runtime-owned `MailStore` adapter
+- `MailStoreHealthSnapshot`: remains a runtime-owned doctor/report shape backed
+  by `atm-storage-rusqlite` query helpers; not a shared capability trait
+- `RosterStoreHealthSnapshot`: remains a runtime-owned doctor/report shape
+  backed by `atm-storage-rusqlite` query helpers; not a shared capability trait
+- `MailStoreDoctorReport`: remains runtime-owned doctor projection; not a
+  shared storage contract surface
+- `RosterStoreDoctorReport`: remains runtime-owned doctor projection; not a
+  shared storage contract surface
+- `RemoteReplayStateRecord`: remains a runtime-owned replay DTO outside
+  `atm-storage`
+- `RemoteReplayStore`: retained as a runtime-owned capability boundary backed
+  by SQLite, not promoted into `atm-storage`
+- `RuntimeStorageFinalizer`: retained as a runtime-owned lifecycle capability,
+  not promoted into `atm-storage`
+
 ## Execution Checklist
 
 Implementation order for `AC.3`:
@@ -207,7 +231,7 @@ Proof this sprint must leave behind:
 - `cargo test -p atm-storage-rusqlite`
 - `cargo clippy -p atm-storage-rusqlite -- -D warnings`
 - `cargo tree -p atm-storage-rusqlite`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - verify the updated boundary TOMLs and `cargo tree` output both show `atm-storage`, not `atm-core`, as the shared storage dependency
 - `rg -n "SqliteBoundaryAssembly|SqliteObservability|RemoteReplayStore|RuntimeStorageFinalizer" crates/atm-storage-rusqlite crates/atm-runtime crates/atm-core -S`

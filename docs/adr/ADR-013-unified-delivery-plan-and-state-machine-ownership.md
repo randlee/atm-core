@@ -85,7 +85,7 @@ Shared executors consume that plan:
 
 Required boundary ownership:
 
-- Claude delivery uses `atm_core::boundary::InboxExport`
+- Claude delivery uses `atm_core::boundary::ProjectionExport`
 - non-Claude delivery uses `atm_core::boundary::NonClaudeOutbound`
 - notification side effects use `atm_core::boundary::NotificationSink`
 

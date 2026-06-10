@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
@@ -47,7 +47,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
             source_path: PathBuf::from(row.message_key.as_ref()),
             bucket: DisplayBucket::Unread,
             class: MessageClass::Unread,
-            envelope: MessageEnvelope {
+            envelope: InboxMessage {
                 from: row.from_agent.clone(),
                 text: row.summary.as_deref().unwrap_or_default().to_string(),
                 timestamp: row.message_at,
@@ -191,9 +191,9 @@ pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, lim
 }
 
 pub(crate) fn effective_display_envelope(
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
     thread_index: &ThreadIndex<'_>,
-) -> MessageEnvelope {
+) -> InboxMessage {
     let Some(message_id) = envelope.message_id else {
         return envelope.clone();
     };
@@ -207,12 +207,12 @@ pub(crate) fn effective_display_envelope(
     historical
 }
 
-fn hidden_from_normal_views(envelope: &MessageEnvelope) -> bool {
+fn hidden_from_normal_views(envelope: &InboxMessage) -> bool {
     let now = IsoTimestamp::now();
     is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
 }
 
-fn hidden_for_selection(envelope: &MessageEnvelope, selection_mode: ReadSelection) -> bool {
+fn hidden_for_selection(envelope: &InboxMessage, selection_mode: ReadSelection) -> bool {
     let now = IsoTimestamp::now();
     if is_expired_ephemeral(envelope, now) {
         return true;

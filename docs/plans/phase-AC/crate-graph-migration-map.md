@@ -26,6 +26,12 @@ Future extension:
 atm-storage-sqlserver -> atm-storage
 ```
 
+Phase `AC.7` compile proof:
+
+```text
+atm-storage-sqlserver-proof -> atm-storage
+```
+
 ## Forbidden Graph
 
 Forbidden edges and shapes:
@@ -99,3 +105,5 @@ Owns:
 - `AC.3` uses this map to decide what belongs in `atm-storage-rusqlite`
 - `AC.4` uses this map to decide what gets removed from `atm-core`
 - `AC.6` uses this map as the final backend-leakage delete checklist
+- `AC.7` uses this map to prove a future SQL Server backend can remain a peer
+  backend under `atm-storage` rather than reopening `atm-core` coupling

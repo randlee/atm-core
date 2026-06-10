@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use atm_core::boundary;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
@@ -11,6 +10,7 @@ use atm_core::protocol::{
     TeamMemberHeartbeatResponse,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::RosterStore;
 
 use crate::{DaemonSubsystem, SubsystemObservability};
 
@@ -314,12 +314,10 @@ fn finish_runtime_snapshot(
 
 pub(crate) fn build_runtime_status_cache_state(
     current_state: Option<&RuntimeStatusCacheState>,
-    roster_store: &dyn boundary::RosterStore,
+    roster_store: &dyn RosterStore,
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = build_empty_runtime_status_cache_state(current_state);
-    let teams = roster_store
-        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?
-        .teams;
+    let teams = roster_store.list_teams()?;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
             "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
@@ -346,11 +344,10 @@ fn build_empty_runtime_status_cache_state(
 fn hydrate_runtime_status_cache_team(
     next_state: &mut RuntimeStatusCacheState,
     current_state: Option<&RuntimeStatusCacheState>,
-    roster_store: &dyn boundary::RosterStore,
+    roster_store: &dyn RosterStore,
     team: TeamName,
 ) -> Result<(), AtmError> {
-    let roster = roster_store
-        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
+    let roster = roster_store.load_roster(&team)?;
     for member in roster.members {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(

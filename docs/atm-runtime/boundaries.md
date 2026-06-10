@@ -8,7 +8,7 @@ Canonical machine-readable boundary source:
 Purpose:
 - own concrete runtime/store composition for the CLI direct-doctor path and
   daemon startup without letting either caller depend directly on
-  `atm-rusqlite`
+  `atm-storage-rusqlite`
 
 Public assembly surface:
 - `RuntimeAssembly`
@@ -19,32 +19,31 @@ Public assembly surface:
 Allowed dependents:
 - `atm`
 - `atm-daemon`
+- `atm-daemon-bootstrap`
+- `atm-runtime-test-support`
 
 Allowed dependencies:
 - `atm-core`
-- `atm-rusqlite`
+- `atm-storage`
+- `atm-storage-rusqlite`
 
 Forbidden edges:
-- `atm-daemon -> atm-rusqlite`
-- `atm -> atm-rusqlite`
+- `atm-daemon -> atm-storage-rusqlite`
+- `atm -> atm-storage-rusqlite`
 - `atm-runtime -> atm-daemon`
 
 Notes:
 - `atm-runtime` is composition-only
 - direct local `ConfigDoctor` ownership lives here
 - direct local `atm doctor` assembly lives here
+- `StorageBackends<M, R>` is the approved composition seam for concrete shared
+  backend handles
+- `RuntimeDoctorPorts` replaces the older runtime-bundle doctor grouping
 - the replay-store contract keeps the richer retained-request shape
   (`team`/`agent`/`message_key`, endpoint, request envelope, retry metadata)
   rather than the original planning stub because daemon replay resume needs
   that identity and expiry data directly
 - runtime shutdown finalization is exported through the storage-neutral
   `RuntimeStorageFinalizer` seam
-- daemon startup remains fail-closed on any `RuntimeBundle` construction error
-- transition rule for `AA.2` through `AA.4`:
-  - this boundary record freezes the intended end-state edges early so code and
-    sprint scope can be built toward them
-  - the existing `atm-rusqlite` boundary TOMLs remain the authoritative lint
-    policy until `AA.5` relocks those files to remove `atm-daemon` from their
-    allowlists
-  - `AA.5` is the sprint that makes every machine-readable boundary record
-    agree again on the forbidden `atm-daemon -> atm-rusqlite` edge
+- daemon startup remains fail-closed on any `RuntimeAssembly` construction
+  error

@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::delivery_policy::DeliveryRecipientSnapshot;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
@@ -23,7 +23,7 @@ pub(crate) enum DeliveryPlanKind {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LogicalMessage {
     pub(crate) message_id: AtmMessageId,
-    pub(crate) envelope: MessageEnvelope,
+    pub(crate) envelope: InboxMessage,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
 }
@@ -45,7 +45,7 @@ impl fmt::Display for LogicalMessageError {
 
 impl LogicalMessage {
     pub(crate) fn new(
-        envelope: MessageEnvelope,
+        envelope: InboxMessage,
         requires_ack: bool,
         is_ack: bool,
     ) -> Result<Self, LogicalMessageError> {

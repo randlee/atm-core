@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
+use atm_storage_rusqlite::{
+    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
+    SqliteObservabilityOutcome,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeSqliteOutcome {
-    Ok,
     Failed,
     Timeout,
 }
@@ -13,7 +15,6 @@ pub enum RuntimeSqliteOutcome {
 impl RuntimeSqliteOutcome {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Ok => "ok",
             Self::Failed => "failed",
             Self::Timeout => "timeout",
         }
@@ -23,7 +24,6 @@ impl RuntimeSqliteOutcome {
 impl From<SqliteObservabilityOutcome> for RuntimeSqliteOutcome {
     fn from(value: SqliteObservabilityOutcome) -> Self {
         match value {
-            SqliteObservabilityOutcome::Ok => Self::Ok,
             SqliteObservabilityOutcome::Failed => Self::Failed,
             SqliteObservabilityOutcome::Timeout => Self::Timeout,
         }
@@ -32,10 +32,10 @@ impl From<SqliteObservabilityOutcome> for RuntimeSqliteOutcome {
 
 #[derive(Debug, Clone)]
 pub struct RuntimeSqliteEvent {
-    pub action: &'static str,
-    pub outcome: RuntimeSqliteOutcome,
-    pub message: String,
-    pub error_code: Option<AtmErrorCode>,
+    pub(crate) action: &'static str,
+    pub(crate) outcome: RuntimeSqliteOutcome,
+    pub(crate) message: String,
+    pub(crate) error_code: Option<AtmErrorCode>,
 }
 
 impl RuntimeSqliteEvent {
@@ -51,6 +51,22 @@ impl RuntimeSqliteEvent {
             message: message.into(),
             error_code,
         }
+    }
+
+    pub fn action(&self) -> &'static str {
+        self.action
+    }
+
+    pub fn outcome(&self) -> RuntimeSqliteOutcome {
+        self.outcome
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn error_code(&self) -> Option<AtmErrorCode> {
+        self.error_code
     }
 }
 
@@ -74,6 +90,10 @@ impl std::fmt::Debug for RuntimeSqliteObservability {
 impl RuntimeSqliteObservability {
     pub fn new(observer: Arc<dyn RuntimeSqliteObserver>) -> Self {
         Self { observer }
+    }
+
+    pub fn disabled() -> Arc<dyn SqliteObservability> {
+        Arc::new(NullSqliteObservability)
     }
 }
 

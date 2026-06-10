@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-StorageNotifier"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "StorageNotifier"
+
+[public]
+trait = "StorageNotifier"
+notes = "shared post-commit notification contract for message and roster changes only"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["message_received_notifications", "roster_changed_notifications"]
+io_forbidden = ["task_changed_notifications", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon", "atm-daemon-client", "atm-storage-claude", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["MessageReceivedEvent", "RosterChangedEvent"]
+response_types = []
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-STORAGENOTIFIER-REFERENCES"]
+review_gates = ["post_commit_notifications_only"]
+
+[status]
+state = "concrete_landed"
+notes = ["AC.1 created the shared notification trait in crates/atm-storage", "task notifications are intentionally out of scope for the initial contract"]

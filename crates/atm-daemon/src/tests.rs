@@ -315,24 +315,25 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
+    let roster = members
+        .iter()
+        .map(|name| {
+            atm_core::boundary::roster_member_record_from_claude_code_member(
+                test_team().clone(),
+                AgentMember::with_name((*name).parse().expect("member")),
+            )
+        })
+        .collect::<Vec<_>>();
     assembly
-        .roster_store()
-        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team: test_team().clone(),
-            members: members
-                .iter()
-                .map(|name| {
-                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
-                        test_team().clone(),
-                        AgentMember::with_name((*name).parse().expect("member")),
-                    )
-                })
-                .collect(),
-            source: Some(
-                atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
+        .roster_store_arc()
+        .replace_roster(
+            test_team(),
+            &roster,
+            Some(
+                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
                     .expect("replay source"),
             ),
-        })
+        )
         .expect("replace roster");
 }
 
@@ -392,9 +393,7 @@ fn production_runtime_installs_daemon_notification_sink() {
     sink.start().expect("start notification sink");
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
+        &assembly,
         Arc::new(DaemonNonClaudeOutbound::new()),
         Arc::new(sink.clone()),
     );

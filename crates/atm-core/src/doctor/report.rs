@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::boundary::{
-    ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport, TaskStoreDoctorReport,
-};
+use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::protocol::RuntimeStatusSnapshot;
@@ -106,7 +104,6 @@ pub struct DoctorReport {
     pub observability: AtmObservabilityHealth,
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
-    pub task_store: TaskStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_runtime: Option<DaemonRuntimeDoctorReport>,

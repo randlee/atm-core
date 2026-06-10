@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.4
 worktree: ../atm-core-worktrees/feature/pAC-s4-atm-core-storage-boundary-adoption
 branch: feature/pAC-s4-atm-core-storage-boundary-adoption
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -140,15 +140,16 @@ Proof this sprint must leave behind:
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "StorageBackends<|struct StorageBackends" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 - `rg -n "atm_rusqlite|atm_storage_claude" crates/atm-core crates/atm-daemon crates/atm-runtime -S`
-- `rg -n "ClaudeInboxWriter|RuntimeBundle|InboxIngress|InboxExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
+- `rg -n "ProjectionMailboxWriter|RuntimeBundle|SourceIngress|ProjectionExport" crates/atm-core crates/atm-runtime crates/atm-daemon -S`
 
 ## Required Document Updates
 
 - `docs/plans/phase-AC/sprint-AC4.md`
+- `docs/plans/phase-AC/notif-sink-vs-storage-notifier.md`
 - `docs/plans/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - core/runtime/daemon architecture docs

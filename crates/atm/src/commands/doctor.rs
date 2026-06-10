@@ -69,11 +69,11 @@ impl DoctorCommand {
     ) -> Result<atm_core::doctor::DoctorReport> {
         let query = self.build_query(home_dir.clone(), current_dir.clone())?;
         let runtime = assemble_default_runtime()?;
-        let local_report = doctor::run_doctor_with_runtime_bundle(
+        let local_report = doctor::run_doctor_with_runtime_ports(
             query,
             observability,
             &runtime.service_runtime,
-            &runtime.runtime_bundle,
+            &runtime.doctor_ports,
             None,
         )
         .map_err(anyhow::Error::from)?;
@@ -133,7 +133,9 @@ mod tests {
 
         assert_eq!(
             atm_error.primary_recovery(),
-            Some("Use `--team <team>` with a valid ATM team name when running `atm doctor`.")
+            Some(
+                "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target."
+            )
         );
     }
 

@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.5
 worktree: ../atm-core-worktrees/feature/pAC-s5-rpc-envelope-and-domain-type-unification
 branch: feature/pAC-s5-rpc-envelope-and-domain-type-unification
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -81,7 +81,7 @@ Message-family convergence targets:
 Roster-family convergence targets:
 
 - `RosterMemberRecord` usage sites -> canonical `RosterMember`
-- do not let `ClaudeCodeRosterMember` reappear above backend-internal projection code
+- do not let `ProjectionRosterMember` reappear above backend-internal projection code
 
 Must remain outside this sprint’s storage contract work:
 
@@ -123,9 +123,9 @@ Proof this sprint must leave behind:
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
-- `python3 scripts/lint_boundaries.py`
+- `python3 .just/lint_boundaries.py`
 - `rg -n "MailStore.*Request|MailStore.*Response|RosterStore.*Request|RosterStore.*Response" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
-- `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ClaudeCodeRosterMember" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
+- `rg -n "MessageEnvelope|MailStoreMessageRecord|RosterMemberRecord|ProjectionRosterMember" crates/atm-core crates/atm-daemon crates/atm-daemon-client -S`
 
 ## Required Document Updates
 

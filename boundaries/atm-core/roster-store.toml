@@ -5,7 +5,7 @@ name = "RosterStore"
 
 [public]
 trait = "RosterStore"
-notes = "trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore"
+notes = "legacy compile-bridge roster-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as RosterStore"
 
 [implementation]
 visibility = "trait_only"
@@ -19,9 +19,11 @@ io_owns = ["durable_roster_state", "member_routing_metadata"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon", "atm-runtime"]
+# `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge roster
+# consumers until the retained bootstrap/CLI cutover closes in phase-AD.
+allowed_dependents = ["atm-storage-rusqlite", "atm-daemon", "atm-runtime", "atm-daemon-bootstrap", "atm"]
 allowed_dependencies = []
-forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
@@ -41,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-REFERENCES"]
 review_gates = ["no_concrete_store_leakage"]
 
 [status]
-state = "concrete_landed"
-notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore", "live status belongs elsewhere; this boundary owns durable roster truth only", "canonical roster truth is explicit member rows rather than a TeamConfig snapshot document", "daemon-owned pid continuity is transient runtime state and is outside this boundary"]
+state = "retired"
+notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "retired 2026-06-09 — AC.4 consumer cutover complete", "concrete store implementation still lands in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]

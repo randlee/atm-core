@@ -1,0 +1,30 @@
+[package]
+name = "atm-storage-rusqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ATM SQLite storage backend implementing the shared atm-storage contract."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "atm_storage_rusqlite"
+
+[dependencies]
+atm-storage = { path = "../atm-storage", version = "1.2.2" }
+serde_json.workspace = true
+serde.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+tracing.workspace = true
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+rusqlite = { version = "0.33.0", features = ["bundled"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+rusqlite = { version = "0.33.0", features = ["bundled-windows", "modern_sqlite"] }
+
+[dev-dependencies]
+serde = { version = "1.0.140", features = ["derive"] }
+serde_json = "1.0.140"

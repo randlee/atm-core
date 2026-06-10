@@ -1,11 +1,11 @@
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
+use crate::schema::{AtmMessageId, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::contract::{Message, MessageKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::path::PathBuf;
 
-use super::{MessageKey, sealed};
+use super::sealed;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
@@ -47,14 +47,6 @@ impl From<ReplaySource> for String {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreMessageRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-    pub envelope: MessageEnvelope,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailMessageState {
     pub team: TeamName,
@@ -79,23 +71,33 @@ pub struct MailMessageState {
 /// incremental ingest workflows to resume without re-processing already-seen
 /// messages.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct MessageFingerprint(pub String);
+pub struct MessageFingerprint(String);
+
+impl MessageFingerprint {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl std::fmt::Display for MessageFingerprint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        f.write_str(self.as_str())
     }
 }
 
 impl From<String> for MessageFingerprint {
     fn from(s: String) -> Self {
-        Self(s)
+        Self::new(s)
     }
 }
 
 impl AsRef<str> for MessageFingerprint {
     fn as_ref(&self) -> &str {
-        &self.0
+        self.as_str()
     }
 }
 
@@ -150,111 +152,10 @@ pub struct MailStoreMailboxMetadataRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreQueryMailboxMetadataRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreQueryMailboxMetadataResponse {
-    pub rows: Vec<MailStoreMailboxMetadataRow>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailStoreMailboxMetadataCounts {
     pub total_messages: u64,
     pub unread_message_count: u64,
     pub pending_ack_messages: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreQueryMailboxMetadataCountsRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreQueryMailboxMetadataCountsResponse {
-    pub counts: MailStoreMailboxMetadataCounts,
-}
-
-/// Stub mail-store request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreBootstrapRequest {
-    pub team_dir: PathBuf,
-    pub team: TeamName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub team_config: Option<TeamConfig>,
-}
-
-/// Stub mail-store response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreBootstrapResponse {
-    pub team: TeamName,
-    pub bootstrapped: bool,
-    pub opened: bool,
-}
-
-/// Stub mail-store transaction request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreTransactionRequest {
-    pub team: TeamName,
-    pub requested_operations: Vec<String>,
-    #[serde(default)]
-    pub note: Option<String>,
-}
-
-/// Stub mail-store transaction response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreTransactionResponse {
-    pub team: TeamName,
-    pub committed: bool,
-    pub operations_executed: usize,
-}
-
-/// Stub mail-store upsert-message request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreUpsertMessageRequest {
-    pub record: MailStoreMessageRecord,
-}
-
-/// Stub mail-store upsert-message response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreUpsertMessageResponse {
-    pub record: MailStoreMessageRecord,
-    pub inserted: bool,
-}
-
-/// Stub mail-store load-message request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadMessageRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-}
-
-/// Stub mail-store load-message response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreLoadMessageResponse {
-    #[serde(default)]
-    pub record: Option<MailStoreMessageRecord>,
-}
-
-/// Stub mail-store load-stored-message request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadStoredMessageRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-}
-
-/// Stub mail-store load-stored-message response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MailStoreLoadStoredMessageResponse {
-    #[serde(default)]
-    pub record: Option<MailStoreMessageRecord>,
 }
 
 /// Stub mail-store upsert-message-state request for the Phase R skeleton.
@@ -288,70 +189,6 @@ pub struct LoadMailMessageStateResponse {
     pub state: Option<MailMessageState>,
 }
 
-/// Stub mail-store record-ingest-replay request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreRecordIngestReplayStateRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    /// Invariant: source identifies one concrete ingest origin and must never
-    /// be synthesized from an empty or whitespace-only string.
-    pub source: ReplaySource,
-    pub state: MailStoreIngestReplayState,
-}
-
-/// Stub mail-store record-ingest-replay response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreRecordIngestReplayStateResponse {
-    pub state: MailStoreIngestReplayState,
-}
-
-/// Stub mail-store load-ingest-replay request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadIngestReplayStateRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-    /// Invariant: source identifies one concrete ingest origin and must never
-    /// be synthesized from an empty or whitespace-only string.
-    pub source: ReplaySource,
-}
-
-/// Stub mail-store load-ingest-replay response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadIngestReplayStateResponse {
-    #[serde(default)]
-    pub state: Option<MailStoreIngestReplayState>,
-}
-
-/// Stub mail-store health-snapshot request for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreHealthSnapshotRequest {
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Stub mail-store health-snapshot response for the Phase R skeleton.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreHealthSnapshotResponse {
-    pub snapshot: MailStoreHealthSnapshot,
-}
-
-/// Canonical Phase R mail-store request entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreRequest {
-    pub team_dir: PathBuf,
-    pub team: TeamName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub team_config: Option<TeamConfig>,
-}
-
-/// Canonical Phase R mail-store response entrypoint payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreResponse {
-    pub team: TeamName,
-    pub bootstrapped: bool,
-    pub opened: bool,
-}
-
 pub type DoctorFinding = crate::doctor::DoctorFinding;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -363,61 +200,38 @@ pub struct MailStoreDoctorReport {
 pub trait MailStore: sealed::Sealed {
     /// # Errors
     ///
-    /// Returns `AtmError` when durable mailbox persistence, transaction
-    /// boundaries, or replay-state access cannot satisfy the contract.
-    fn bootstrap(
-        &self,
-        request: MailStoreBootstrapRequest,
-    ) -> Result<MailStoreBootstrapResponse, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a mailbox transaction cannot run.
-    fn run_transaction(
-        &self,
-        request: MailStoreTransactionRequest,
-    ) -> Result<MailStoreTransactionResponse, AtmError>;
-
-    /// # Errors
-    ///
     /// Returns `AtmError` when the mailbox transaction cannot be started,
     /// executed, or committed safely.
-    fn upsert_message(
-        &self,
-        request: MailStoreUpsertMessageRequest,
-    ) -> Result<MailStoreUpsertMessageResponse, AtmError>;
+    fn upsert_message(&self, record: Message) -> Result<(), AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when the requested message cannot be loaded.
     fn load_message(
         &self,
-        request: MailStoreLoadMessageRequest,
-    ) -> Result<MailStoreLoadMessageResponse, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the requested stored message cannot be loaded.
-    fn load_stored_message(
-        &self,
-        request: MailStoreLoadStoredMessageRequest,
-    ) -> Result<MailStoreLoadStoredMessageResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &MessageKey,
+    ) -> Result<Option<Message>, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when mailbox metadata rows cannot be queried.
     fn query_mailbox_metadata(
         &self,
-        request: MailStoreQueryMailboxMetadataRequest,
-    ) -> Result<MailStoreQueryMailboxMetadataResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when mailbox metadata counts cannot be queried.
     fn query_mailbox_metadata_counts(
         &self,
-        request: MailStoreQueryMailboxMetadataCountsRequest,
-    ) -> Result<MailStoreQueryMailboxMetadataCountsResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<MailStoreMailboxMetadataCounts, AtmError>;
 
     /// # Errors
     ///
@@ -440,24 +254,30 @@ pub trait MailStore: sealed::Sealed {
     /// Returns `AtmError` when ingest-replay state persistence fails.
     fn record_ingest_replay_state(
         &self,
-        request: MailStoreRecordIngestReplayStateRequest,
-    ) -> Result<MailStoreRecordIngestReplayStateResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+        source: &ReplaySource,
+        state: &MailStoreIngestReplayState,
+    ) -> Result<(), AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when ingest-replay state cannot be loaded.
     fn load_ingest_replay_state(
         &self,
-        request: MailStoreLoadIngestReplayStateRequest,
-    ) -> Result<MailStoreLoadIngestReplayStateResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+        source: &ReplaySource,
+    ) -> Result<Option<MailStoreIngestReplayState>, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when a mailbox health snapshot cannot be read.
     fn health_snapshot(
         &self,
-        request: MailStoreHealthSnapshotRequest,
-    ) -> Result<MailStoreHealthSnapshotResponse, AtmError>;
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<MailStoreHealthSnapshot, AtmError>;
 }
 
 /// BOUNDARY-MailStoreDoctor — see docs/atm-core/boundaries.md.

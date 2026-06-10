@@ -3,16 +3,22 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::boundary::{
-    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, NotificationSink, RosterStore,
-    RuntimeBundle, RuntimeStorageFinalizer,
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, NotificationSink,
+    RuntimeStorageFinalizer,
 };
+use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
+use atm_core::home::host_mail_db_path;
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::host_runtime_dir, load_atm_config,
 };
-use atm_rusqlite::{assemble_boundary_with_observability, assemble_default_boundary};
+use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
+use atm_storage_rusqlite::SqliteStorageBackend;
 
+use crate::legacy_storage_adapters::{
+    StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
+};
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
 use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
 
@@ -40,7 +46,12 @@ impl fmt::Debug for RuntimeAssemblyInputs {
 #[derive(Clone)]
 pub struct RuntimeAssembly {
     pub service_runtime: LocalServiceRuntime,
-    pub runtime_bundle: RuntimeBundle,
+    pub(crate) storage_backends: StorageBackends<
+        Arc<dyn SharedMessageStore + Send + Sync>,
+        Arc<dyn SharedRosterStore + Send + Sync>,
+    >,
+    pub doctor_ports: RuntimeDoctorPorts,
+    pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
 }
 
@@ -48,7 +59,9 @@ impl fmt::Debug for RuntimeAssembly {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeAssembly")
             .field("service_runtime", &self.service_runtime)
-            .field("runtime_bundle", &self.runtime_bundle)
+            .field("storage_backends", &self.storage_backends)
+            .field("doctor_ports", &self.doctor_ports)
+            .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
             .finish()
     }
@@ -88,32 +101,33 @@ fn assemble_sqlite_runtime_at_path(
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
     let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
-    let assembly = Arc::new(assemble_boundary_with_observability(
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
         sqlite_db_path,
         sqlite_observability,
     )?);
+    let shared_messages = sqlite_backend.message_store();
+    let shared_rosters = sqlite_backend.roster_store();
+    let storage_backends = StorageBackends {
+        messages: shared_messages.clone(),
+        rosters: shared_rosters.clone(),
+    };
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
+        storage_backends.messages.clone(),
+        storage_backends.rosters.clone(),
         non_claude_outbound,
         notification_sink,
     );
-    let runtime_bundle = RuntimeBundle {
-        mail_store: assembly.mail_store_arc(),
-        task_store: assembly.task_store_arc(),
-        roster_store: assembly.roster_store_arc(),
-        mail_store_doctor: assembly.mail_store_doctor_arc(),
-        task_store_doctor: assembly.task_store_doctor_arc(),
-        roster_store_doctor: assembly.roster_store_doctor_arc(),
-        config_doctor: Arc::new(RuntimeConfigDoctor { config_current_dir }),
-        remote_replay_store: Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&assembly))),
-    };
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(assembly));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
+    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
+        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
-        runtime_bundle,
+        storage_backends,
+        doctor_ports,
+        remote_replay_store,
         storage_finalizer,
     })
 }
@@ -126,7 +140,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             )
             .with_source(source)
     })?;
-    let boundary = Arc::new(assemble_default_boundary()?);
     let notification_path = host_runtime_dir()?.join("notifications.jsonl");
     if let Some(parent) = notification_path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| {
@@ -140,30 +153,53 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             .with_source(source)
         })?;
     }
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
+    let shared_messages = sqlite_backend.message_store();
+    let shared_rosters = sqlite_backend.roster_store();
+    let storage_backends = StorageBackends {
+        messages: shared_messages.clone(),
+        rosters: shared_rosters.clone(),
+    };
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        boundary.mail_store_arc(),
-        boundary.task_store_arc(),
-        boundary.roster_store_arc(),
+        storage_backends.messages.clone(),
+        storage_backends.rosters.clone(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
-    let runtime_bundle = RuntimeBundle {
-        mail_store: boundary.mail_store_arc(),
-        task_store: boundary.task_store_arc(),
-        roster_store: boundary.roster_store_arc(),
-        mail_store_doctor: boundary.mail_store_doctor_arc(),
-        task_store_doctor: boundary.task_store_doctor_arc(),
-        roster_store_doctor: boundary.roster_store_doctor_arc(),
-        config_doctor: Arc::new(RuntimeConfigDoctor { config_current_dir }),
-        remote_replay_store: Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&boundary))),
-    };
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
-        Arc::new(SqliteRuntimeStorageFinalizer::new(boundary));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
+    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
+        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
+    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
+        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
+    );
     Ok(RuntimeAssembly {
         service_runtime,
-        runtime_bundle,
+        storage_backends,
+        doctor_ports,
+        remote_replay_store,
         storage_finalizer,
     })
+}
+
+impl RuntimeAssembly {
+    pub fn message_store_arc(&self) -> Arc<dyn SharedMessageStore + Send + Sync> {
+        self.storage_backends.messages.clone()
+    }
+
+    pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
+        boundary_mail_store_view(self.storage_backends.messages.clone())
+    }
+
+    pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
+        boundary_roster_store_view(self.storage_backends.rosters.clone())
+    }
+
+    pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
+        self.storage_backends.rosters.clone()
+    }
 }
 
 pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
@@ -171,10 +207,11 @@ pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
 }
 
 pub fn with_default_roster_store<T>(
-    f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
+    f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     let assembly = assemble_default_runtime()?;
-    let result = f(assembly.runtime_bundle.roster_store.as_ref());
+    let roster_store = assembly.roster_store_arc();
+    let result = f(roster_store.as_ref());
     let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
     match (result, finalize_result) {
         (Ok(value), Ok(())) => Ok(value),

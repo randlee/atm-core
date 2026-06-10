@@ -16,15 +16,15 @@ Current concrete trait implementers found during `AC.0`:
 | --- | --- | --- | --- |
 | `MailStore` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
 | `MailStoreDoctor` | `SqliteMailStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
-| `TaskStore` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
-| `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.6` speculative deletion by default; quarantine only if blocked |
+| `TaskStore` | deleted speculative surface | former `crates/atm-core/src/boundary/store.rs` and runtime compile bridge | `AC.6` closed by deletion |
+| `TaskStoreDoctor` | deleted speculative surface | former `crates/atm-core/src/boundary/store.rs` and doctor bridge | `AC.6` closed by deletion |
 | `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
 | `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
 | `RemoteReplayStore` capability/internalization | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
 | `RemoteReplayStore` consumer seam deletion | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.4` |
 | `RuntimeStorageFinalizer` capability/internalization | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
 | `RuntimeStorageFinalizer` consumer seam deletion | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.4` |
-| Claude outbound write seam | `ClaudeInboxWriter` trait plus runtime adapters | `crates/atm-core/src/delivery_execution.rs` | `AC.2` and `AC.4` |
+| Claude outbound write seam | `ProjectionMailboxWriter` trait plus runtime adapters | `crates/atm-core/src/delivery_execution.rs` | `AC.2` and `AC.4` |
 | Non-Claude outbound | `DaemonNonClaudeOutbound` | `crates/atm-daemon/src/non_claude_outbound_runtime.rs` | outside core `AC` storage reset scope unless trait convergence requires touch-up |
 
 ## Claude Storage Module Ownership
@@ -52,7 +52,7 @@ Planned handling:
 Current high-pressure record families that later sprints must collapse:
 
 - `MailStoreMessageRecord` <-> `MessageEnvelope` / logical delivery records
-- `RosterMemberRecord` <-> `ClaudeCodeRosterMember` / `ClaudeCodeTeamRoster`
+- `RosterMemberRecord` <-> `ProjectionRosterMember` / `ProjectionRoster`
 - speculative task-store wrappers and records that should not be preserved as
   approved `AC` contract surface
 
@@ -131,3 +131,6 @@ Owns:
 Owns:
 
 - SQL Server readiness proof against the final post-cleanup contract
+- compile-only `atm-storage-sqlserver-proof` backend skeleton that proves the
+  existing `MessageStore` and `RosterStore` traits are implementable without an
+  `atm-core` dependency

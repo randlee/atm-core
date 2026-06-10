@@ -1,5 +1,10 @@
 //! Mailbox read/write helpers, compatibility parsing, and lock-scoped mutation.
 
+#![allow(
+    dead_code,
+    reason = "AC.2 retains internal compatibility readers and salvage helpers while Claude storage ownership finishes moving below the trait line."
+)]
+
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
@@ -14,7 +19,7 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::mailbox::source::SourceFile;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
@@ -22,7 +27,7 @@ const DEGRADED_RAW_FRAGMENT_MAX_CHARS: usize = 512;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum InboxReadItem {
-    Message(Box<MessageEnvelope>),
+    Message(Box<InboxMessage>),
     Degraded {
         summary: String,
         warning: String,
@@ -47,7 +52,7 @@ pub(crate) enum InboxReadItem {
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
 #[cfg(test)]
-pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
+pub fn append_message(path: &Path, envelope: &InboxMessage) -> Result<(), AtmError> {
     store::append_compat_mailbox_message(path, envelope)
 }
 
@@ -76,7 +81,7 @@ fn locked_read_modify_write<F>(
     mutate: F,
 ) -> Result<(), AtmError>
 where
-    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+    F: FnOnce(&mut Vec<InboxMessage>) -> Result<(), AtmError>,
 {
     let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = load_compat_mailbox_messages_strict(path)?;
@@ -94,7 +99,7 @@ where
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
 /// file cannot be opened or read.
-pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     Ok(load_compat_mailbox_items(path)?
         .into_iter()
         .filter_map(|item| match item {
@@ -163,7 +168,7 @@ pub(crate) fn load_compat_mailbox_items(path: &Path) -> Result<Vec<InboxReadItem
 
 pub(crate) fn load_compat_mailbox_messages_strict(
     path: &Path,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
+) -> Result<Vec<InboxMessage>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -222,7 +227,7 @@ pub(crate) fn export_compat_source_projections(
 
 pub(crate) fn export_compat_mailbox_projection(
     path: &Path,
-    messages: &[MessageEnvelope],
+    messages: &[InboxMessage],
 ) -> Result<(), AtmError> {
     // Repair/rebuild-only rewrite seam after Yb Y.10.
     store::write_compat_mailbox_projection(path, messages)
@@ -236,7 +241,7 @@ fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, 
     }
 }
 
-fn parse_mailbox_contents_strict(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+fn parse_mailbox_contents_strict(raw: &str, path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
         Some('[') => parse_mailbox_array_strict(raw, path),
@@ -261,7 +266,7 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, Atm
     }
 }
 
-fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
@@ -338,7 +343,7 @@ fn parse_mailbox_item(value: &mut Value, path: &Path, line_number: usize) -> Inb
     let raw_fragment = Some(truncate_raw_fragment(&value.to_string()));
     sanitize_message_id(value, path, line_number);
     strip_metadata_atm_namespace(value);
-    match serde_json::from_value::<MessageEnvelope>(value.take()) {
+    match serde_json::from_value::<InboxMessage>(value.take()) {
         Ok(message) => InboxReadItem::Message(Box::new(message)),
         Err(error) => InboxReadItem::Degraded {
             summary: format!(
@@ -568,7 +573,7 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::schema::MessageEnvelope;
+    use crate::schema::InboxMessage;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -975,10 +980,10 @@ mod tests {
         assert!(messages.iter().any(|message| message.text == "second"));
     }
 
-    fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
+    fn sample_message(message_id: Uuid, body: &str) -> InboxMessage {
         let atm_message_id = crate::schema::AtmMessageId::from(message_id);
 
-        MessageEnvelope {
+        InboxMessage {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(

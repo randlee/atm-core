@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -211,7 +211,7 @@ fn ack_mail_with_runtime_sqlite<
 #[derive(Clone)]
 struct LoadedAckSource {
     row: boundary::MailStoreMailboxMetadataRow,
-    record: boundary::MailStoreMessageRecord,
+    record: boundary::Message,
 }
 
 struct PersistedAckReply {
@@ -302,7 +302,7 @@ fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     team: &TeamName,
     actor: &AgentName,
     source_row: &boundary::MailStoreMailboxMetadataRow,
-) -> Result<boundary::MailStoreMessageRecord, AtmError> {
+) -> Result<boundary::Message, AtmError> {
     runtime
         .load_message_record(home_dir, team, actor, &source_row.message_key)?
         .ok_or_else(|| {
@@ -319,10 +319,7 @@ fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         })
 }
 
-fn ensure_ack_is_pending(
-    message_id: AtmMessageId,
-    source: &MessageEnvelope,
-) -> Result<(), AtmError> {
+fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Result<(), AtmError> {
     match state::derive_ack_state(source) {
         crate::types::AckState::PendingAck => Ok(()),
         crate::types::AckState::Acknowledged => Err(AtmError::validation(format!(
@@ -345,7 +342,7 @@ fn ensure_ack_is_pending(
 fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     home_dir: &std::path::Path,
-    source_record: &boundary::MailStoreMessageRecord,
+    source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
     let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
@@ -384,7 +381,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(context.request.reply_body.clone())?;
     let reply_message_id = AtmMessageId::new();
-    let reply_message = MessageEnvelope {
+    let reply_message = InboxMessage {
         from: context.actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
@@ -604,10 +601,7 @@ fn record_ack_telemetry(
     }
 }
 
-fn resolve_reply_target(
-    message: &MessageEnvelope,
-    current_team: &TeamName,
-) -> (AgentName, TeamName) {
+fn resolve_reply_target(message: &InboxMessage, current_team: &TeamName) -> (AgentName, TeamName) {
     let identity = canonical_sender_identity(message);
     let team = message
         .source_team
@@ -616,7 +610,7 @@ fn resolve_reply_target(
     (identity, team)
 }
 
-fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
+fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
     crate::threading::canonical_sender_identity(message)
 }
 
@@ -630,11 +624,11 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, MessageKey};
+    use crate::boundary::{self, MessageKey, ProjectionAppendMode};
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig};
+    use crate::schema::{AtmMessageId, InboxMessage, TeamConfig};
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -644,11 +638,11 @@ mod tests {
     use serde_json::Map;
 
     struct AckRuntime {
-        appended_messages: Mutex<Vec<MessageEnvelope>>,
+        appended_messages: Mutex<Vec<InboxMessage>>,
     }
 
     impl AckRuntime {
-        fn appended_messages(&self) -> Vec<MessageEnvelope> {
+        fn appended_messages(&self) -> Vec<InboxMessage> {
             self.appended_messages
                 .lock()
                 .expect("append captures lock")
@@ -661,8 +655,8 @@ mod tests {
         roster_members: Vec<(TeamName, AgentName)>,
         inbox_path: PathBuf,
         source_row: boundary::MailStoreMailboxMetadataRow,
-        source_record: boundary::MailStoreMessageRecord,
-        appended_messages: Mutex<Vec<MessageEnvelope>>,
+        source_record: boundary::Message,
+        appended_messages: Mutex<Vec<InboxMessage>>,
     }
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
@@ -756,7 +750,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            message: &MessageEnvelope,
+            message: &InboxMessage,
         ) -> Result<(), crate::error::AtmError> {
             self.appended_messages
                 .lock()
@@ -768,8 +762,8 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: ClaudeCompatibilityDeliveryMode,
-            _messages: &[MessageEnvelope],
+            _mode: ProjectionAppendMode,
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             panic!("ack writer-path test should use the single-message Claude inbox writer path")
         }
@@ -777,7 +771,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             panic!("ack writer-path test should not route through non-Claude delivery")
         }
@@ -786,14 +780,14 @@ mod tests {
             &self,
             _team: &TeamName,
             _agent: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(None)
         }
 
         fn load_team_roster(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
         }
 
@@ -886,7 +880,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            message: &MessageEnvelope,
+            message: &InboxMessage,
         ) -> Result<(), crate::error::AtmError> {
             self.appended_messages
                 .lock()
@@ -898,8 +892,8 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: ClaudeCompatibilityDeliveryMode,
-            _messages: &[MessageEnvelope],
+            _mode: ProjectionAppendMode,
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack roster-gate tests do not append compatibility inbox message sets")
         }
@@ -907,7 +901,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[MessageEnvelope],
+            _messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack roster-gate tests do not route non-Claude delivery")
         }
@@ -916,12 +910,12 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(self
                 .roster_members
                 .iter()
                 .any(|(member_team, member_agent)| member_team == team && member_agent == agent)
-                .then(|| boundary::RosterMemberRecord {
+                .then(|| boundary::RosterEntry {
                     team_name: team.clone(),
                     agent_name: agent.clone(),
                     member_kind: boundary::RosterMemberKind::Permanent,
@@ -936,7 +930,7 @@ mod tests {
         fn load_team_roster(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+        ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
         }
 
@@ -976,13 +970,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             message_key: &MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             Ok((message_key == &self.source_row.message_key).then(|| self.source_record.clone()))
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::MailStoreMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             Ok(())
         }
@@ -1012,13 +1006,13 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _message_key: &MessageKey,
-        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+        ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             unreachable!("ack writer-path test does not load mailbox records")
         }
 
         fn persist_message_record(
             &self,
-            _record: boundary::MailStoreMessageRecord,
+            _record: boundary::Message,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack writer-path test does not persist mailbox records")
         }
@@ -1031,8 +1025,8 @@ mod tests {
         }
     }
 
-    fn message_with_from(from: &str) -> MessageEnvelope {
-        MessageEnvelope {
+    fn message_with_from(from: &str) -> InboxMessage {
+        InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
@@ -1125,7 +1119,7 @@ mod tests {
         let reply_message_id = AtmMessageId::new();
         let request_message_id = AtmMessageId::new();
         let reply_text = "ack reply".to_string();
-        let reply_message = MessageEnvelope {
+        let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
             text: reply_text.clone(),
             timestamp: IsoTimestamp::now(),
@@ -1212,11 +1206,11 @@ mod tests {
                 expires_at: None,
                 task_id: None,
             },
-            source_record: boundary::MailStoreMessageRecord {
+            source_record: boundary::Message {
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_SENDER.parse().expect("agent"),
                 message_key: MessageKey::new("atm:source").expect("message key"),
-                envelope: MessageEnvelope {
+                envelope: InboxMessage {
                     from: TEST_SENDER.parse().expect("agent"),
                     text: "source".to_string(),
                     timestamp: IsoTimestamp::now(),
@@ -1281,11 +1275,11 @@ mod tests {
                 expires_at: None,
                 task_id: None,
             },
-            source_record: boundary::MailStoreMessageRecord {
+            source_record: boundary::Message {
                 team: team.clone(),
                 agent: actor.clone(),
                 message_key: source_key,
-                envelope: MessageEnvelope {
+                envelope: InboxMessage {
                     from: actor.clone(),
                     text: "source".to_string(),
                     timestamp: IsoTimestamp::now(),

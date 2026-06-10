@@ -20,7 +20,9 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
     AdvisoryStreamRequest, AtmGraftClient,
 };
-use atm_core::observability::NullObservability;
+use atm_core::observability::{
+    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
+};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
@@ -207,9 +209,25 @@ impl GraftClient {
         // traceability currently preserves typed caller-facing errors but intentionally drops the
         // retained bootstrap event stream until a shared graft-host observability sink exists.
         let observability = NullObservability;
+        let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
+            observability.emit(CommandEvent {
+                command: event.command,
+                action: action_name(event.action),
+                outcome: outcome_label(event.outcome),
+                team: event.team,
+                agent: event.agent.clone(),
+                sender: event.agent,
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: event.error_code,
+                error_message: event.error_message,
+            })
+        };
         let traceability = BootstrapTraceability::new(
             "graft_connect",
-            &observability,
+            &emit_bootstrap_event,
             parse_bootstrap_team()?,
             parse_bootstrap_agent()?,
         );

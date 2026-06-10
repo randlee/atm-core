@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::boundary::ClaudeCompatibilityDeliveryMode;
+use crate::boundary::ProjectionAppendMode;
 use crate::config::AtmConfig;
 use crate::delivery_plan::{
     DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage, NotificationTarget,
@@ -14,7 +14,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::WarningEntry;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
@@ -60,12 +60,12 @@ struct DeliveryNotificationDetail<'a> {
     recipient_pane_id: Option<&'a str>,
 }
 
-pub(crate) trait ClaudeInboxWriter: crate::boundary::sealed::Sealed {
+pub(crate) trait ClaudeCompatibilityMailboxWriter: crate::boundary::sealed::Sealed {
     fn append_claude_inbox_message(
         &self,
         inbox_path: &Path,
         recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError>;
     fn append_claude_message_set(
         &self,
@@ -76,7 +76,7 @@ pub(crate) trait ClaudeInboxWriter: crate::boundary::sealed::Sealed {
     ) -> Result<(), AtmError>;
 }
 
-impl<T> ClaudeInboxWriter for T
+impl<T> ClaudeCompatibilityMailboxWriter for T
 where
     T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
 {
@@ -84,7 +84,7 @@ where
         &self,
         inbox_path: &Path,
         _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError> {
         self.append_compat_inbox_message(inbox_path, message)
     }
@@ -177,7 +177,9 @@ pub(crate) fn execute_delivery_plan<R>(
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     execute_messages(
         runtime,
@@ -210,7 +212,9 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter
+        + NonClaudeOutboundDeliveryWriter
+        + crate::boundary::NotificationSink,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -359,7 +363,7 @@ fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
     }
 }
 
-fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
+fn execute_claude_delivery<R: ClaudeCompatibilityMailboxWriter + ?Sized>(
     runtime: &R,
     disposition: DeliveryPlanDisposition,
     inbox_path: &Path,
@@ -379,7 +383,7 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
     }
 }
 
-fn execute_persisted_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
+fn execute_persisted_claude_delivery<R: ClaudeCompatibilityMailboxWriter + ?Sized>(
     runtime: &R,
     inbox_path: &Path,
     recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -402,13 +406,13 @@ fn execute_persisted_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
 
 fn claude_compatibility_delivery_mode_for_disposition(
     disposition: DeliveryPlanDisposition,
-) -> ClaudeCompatibilityDeliveryMode {
+) -> ProjectionAppendMode {
     debug_assert_eq!(
         disposition,
         DeliveryPlanDisposition::SqliteFailedRecovered,
         "recovered Claude message-set seam only accepts SqliteFailedRecovered plans",
     );
-    ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet
+    ProjectionAppendMode::RecoveredLogicalMessageSet
 }
 
 fn build_append_warning(
@@ -449,7 +453,7 @@ mod tests {
     use serde_json::{Map, Value};
 
     use super::{
-        ClaudeInboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
+        ClaudeCompatibilityMailboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
         NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::delivery_plan::{
@@ -465,7 +469,7 @@ mod tests {
         CommandEvent, LogTailSession, ObservabilityPort,
     };
     use crate::protocol::{NotificationEvent, NotificationKind};
-    use crate::schema::{AtmMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -474,12 +478,12 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for NoopRuntime {}
 
-    impl ClaudeInboxWriter for NoopRuntime {
+    impl ClaudeCompatibilityMailboxWriter for NoopRuntime {
         fn append_claude_inbox_message(
             &self,
             _inbox_path: &Path,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _message: &MessageEnvelope,
+            _message: &InboxMessage,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -552,7 +556,7 @@ mod tests {
 
     fn logical_message_with_text(text: &str) -> LogicalMessage {
         LogicalMessage::new(
-            MessageEnvelope {
+            InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
@@ -618,12 +622,12 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for RecordingRuntime {}
 
-    impl ClaudeInboxWriter for RecordingRuntime {
+    impl ClaudeCompatibilityMailboxWriter for RecordingRuntime {
         fn append_claude_inbox_message(
             &self,
             _inbox_path: &Path,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            message: &MessageEnvelope,
+            message: &InboxMessage,
         ) -> Result<(), AtmError> {
             let mut call_count = self.single_append_calls.lock().expect("call count");
             let current_index = *call_count;
@@ -1075,10 +1079,13 @@ mod tests {
                 .message
                 .contains("warning: notification delivery failed for recipient@test-team")
         );
-        assert_eq!(
-            result.warnings[0].recovery.as_deref(),
-            Some("Restore the notification boundary before retrying retained-runtime delivery.")
-        );
+        let recovery = result.warnings[0]
+            .recovery
+            .as_deref()
+            .expect("notification recovery");
+        assert!(recovery.contains("atm-daemon binary is installed"));
+        assert!(recovery.contains("daemon socket path is reachable"));
+        assert!(recovery.contains("ATM_HOME are set correctly"));
         assert!(
             runtime
                 .notification_events

@@ -19,9 +19,9 @@ io_owns = ["roster_store_diagnostics"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependents = ["atm-storage-rusqlite", "atm-daemon"]
 allowed_dependencies = []
-forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
@@ -42,4 +42,4 @@ review_gates = ["no_concrete_store_leakage"]
 
 [status]
 state = "concrete_landed"
-notes = ["shared doctor-trait contract landed in atm_core::boundary", "roster-store diagnostic implementation is wired through the atm-rusqlite doctor adapter"]
+notes = ["shared doctor-trait contract landed in atm_core::boundary", "roster-store diagnostic implementation is wired through the atm-storage-rusqlite doctor adapter"]

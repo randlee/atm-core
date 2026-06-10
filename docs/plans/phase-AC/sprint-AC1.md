@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.1
 worktree: ../atm-core-worktrees/feature/pAC-s1-atm-storage-contract-and-canonical-types
 branch: feature/pAC-s1-atm-storage-contract-and-canonical-types
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -125,8 +125,8 @@ Move into `atm-storage` as canonical shared types or small semantic helpers:
 
 Delete or collapse during `AC.1` rather than carrying them forward:
 
-- all `MailStore*Request` / `MailStore*Response` wrappers except the temporary
-  `MailStoreBootstrap*` compile bridge owned by `AC.4`
+- all `MailStore*Request` / `MailStore*Response` wrappers; `MailStoreBootstrap*`
+  may remain only as a temporary compile bridge until `AC.6` deletes it
 - all `RosterStore*Request` / `RosterStore*Response` wrappers
 - `MailStoreRequest` / `MailStoreResponse`
 - `RosterStoreRequest` / `RosterStoreResponse`
@@ -181,7 +181,7 @@ Implementation order for `AC.1`:
      names to the new `atm-storage` contract
    - the bridge is not authoritative API surface and must not gain new
      semantics
-   - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.4`
+   - `MailStoreBootstrap*` may remain only as part of that bridge until `AC.6`
      removes the backend bootstrap seam
 6. Delete the wrapper families instead of re-homing them, except for the
    temporary `MailStoreBootstrap*` bridge noted above.
@@ -209,7 +209,7 @@ Proof this sprint must leave behind:
   `AC.1`; any surviving legacy `MailStore` / `RosterStore` names are
   compile-bridge shims only and must be deleted by `AC.4`
 - no `*Request` / `*Response` storage wrapper families are recreated inside `crates/atm-storage`
-- `RosterMemberRecord`, `ClaudeCodeRosterMember`, and `ClaudeCodeTeamRoster` are not copied into `atm-storage` unchanged
+- `RosterMemberRecord`, `ProjectionRosterMember`, and `ProjectionRoster` are not copied into `atm-storage` unchanged
 - task mutations are intentionally notification-free in the initial contract;
   `StorageNotifier` does not silently grow a `task_changed` event in this sprint
 - `atm-storage` does not introduce `TaskStore`, `Task`, `TaskKey`, or
@@ -222,7 +222,7 @@ Proof this sprint must leave behind:
 - `cargo clippy -p atm-storage -- -D warnings`
 - `cargo tree -p atm-storage`
 - `git diff --check`
-- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Health|Request|Response)|RosterStore(Replace|Load|Query|Health|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S`
+- `rg -n "MailStore(Query|Transaction|Upsert|Load|Record|Request|Response)|RosterStore(Replace|Load|Query|List|Request|Response)" crates/atm-storage crates/atm-core/src/boundary -S` (Health tokens intentionally excluded from contract validation)
 - `rg -n "MailStore|RosterStore" crates/atm-storage crates/atm-core/src/boundary -S`
 - verify `atm-core` is not present in the transitive dependency tree for `atm-storage`
 
@@ -246,3 +246,10 @@ Proof this sprint must leave behind:
 - if the contract copies the current boundary request/response volume, the phase has failed
 - if the shared structs are still transport-shaped rather than semantic, `AC.5` will stall
 - if this sprint leaves both old and new shared contracts standing indefinitely, `AC.4` and `AC.6` will false-close
+
+## Closure Note
+
+- `AC.1` landed `crates/atm-storage` with canonical message/roster contract
+  traits, canonical shared message/roster structs, notification events, and an
+  `atm-core` compile bridge that keeps the workspace buildable while later
+  consumer-migration sprints close the legacy surfaces

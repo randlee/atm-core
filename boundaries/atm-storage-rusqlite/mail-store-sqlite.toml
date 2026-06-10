@@ -1,0 +1,73 @@
+boundary_id = "BOUNDARY-MailStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteMailStoreAdapter"
+
+[public]
+trait = "MessageStore"
+
+[implementation]
+type = "SqliteMessageStore"
+module = "atm_storage_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = [
+  "sqlite",
+  "mailbox_state_persistence",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
+allowed_dependencies = [
+  "atm-storage",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
+  "atm-graft -> atm-storage-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SqliteMailStore",
+  "SqliteMailStore::open",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["MessageStore method inputs"]
+response_types = ["atm-storage message DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES",
+  "LINT-BOUNDARY-MAILSTORE-SQLITE-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_public_reexport",
+]
+
+[status]
+state = "active"
+notes = [
+  "SQLite message persistence is a backend-only implementation of the shared atm-storage MessageStore trait",
+  "notification semantics remain post-commit only",
+]

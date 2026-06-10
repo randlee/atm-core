@@ -12,9 +12,9 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, MailMessageState, MailStoreMailboxMetadataRow,
-    MailStoreMessageRecord, MessageKey, NonClaudeOutboundDeliveryRequest, RosterHarness,
-    RosterMemberKind, RosterMemberRecord,
+    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
+    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterEntry, RosterHarness,
+    RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -27,7 +27,7 @@ use crate::observability::{
 use crate::process::process_is_alive;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -40,8 +40,8 @@ fn message(
     message_id: AtmMessageId,
     parent_message_id: Option<AtmMessageId>,
     thread_mode: Option<ThreadMode>,
-) -> MessageEnvelope {
-    MessageEnvelope {
+) -> InboxMessage {
+    InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
@@ -65,8 +65,8 @@ fn notification_detail(event: &NotificationEvent) -> Value {
 }
 
 fn assert_recovered_payload_texts(
-    original: &MessageEnvelope,
-    companion: &MessageEnvelope,
+    original: &InboxMessage,
+    companion: &InboxMessage,
     expected_original: &str,
 ) {
     assert_eq!(original.text, expected_original);
@@ -87,7 +87,7 @@ struct TestRuntime {
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
     // Mutex required because concurrent send-path tests share the same runtime.
-    appended_messages: Mutex<Vec<MessageEnvelope>>,
+    appended_messages: Mutex<Vec<InboxMessage>>,
     // Mutex required because concurrent send-path tests share the same runtime.
     non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     // Mutex required because concurrent send-path tests share the same runtime.
@@ -187,7 +187,7 @@ impl RetainedServiceRuntime for TestRuntime {
     fn append_compat_inbox_message(
         &self,
         _inbox_path: &Path,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError> {
         if let Some(message) = self.append_error_message {
             return Err(AtmError::mailbox_write(message));
@@ -202,8 +202,8 @@ impl RetainedServiceRuntime for TestRuntime {
     fn append_compat_inbox_message_set(
         &self,
         _inbox_path: &Path,
-        _mode: ClaudeCompatibilityDeliveryMode,
-        messages: &[MessageEnvelope],
+        _mode: ProjectionAppendMode,
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
         if let Some(message) = self.append_error_message {
             return Err(AtmError::mailbox_write(message));
@@ -218,7 +218,7 @@ impl RetainedServiceRuntime for TestRuntime {
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
         self.non_claude_deliveries
             .lock()
@@ -236,11 +236,11 @@ impl RetainedServiceRuntime for TestRuntime {
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
         if self.roster_member_missing {
             return Ok(None);
         }
-        Ok(Some(RosterMemberRecord {
+        Ok(Some(RosterEntry {
             team_name: team.clone(),
             agent_name: agent.clone(),
             member_kind: RosterMemberKind::Permanent,
@@ -258,11 +258,11 @@ impl RetainedServiceRuntime for TestRuntime {
     fn load_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
         if self.roster_member_missing {
             return Ok(Vec::new());
         }
-        Ok(vec![RosterMemberRecord {
+        Ok(vec![RosterEntry {
             team_name: team.clone(),
             agent_name: AgentName::from_validated("recipient"),
             member_kind: RosterMemberKind::Permanent,
@@ -280,12 +280,12 @@ impl RetainedServiceRuntime for TestRuntime {
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
         let records = self
             .claude_roster_members
             .iter()
             .cloned()
-            .map(|agent_name| RosterMemberRecord {
+            .map(|agent_name| RosterEntry {
                 team_name: team.clone(),
                 agent_name,
                 member_kind: RosterMemberKind::Permanent,
@@ -296,7 +296,7 @@ impl RetainedServiceRuntime for TestRuntime {
                 metadata_json: Map::new(),
             })
             .collect::<Vec<_>>();
-        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
             team.clone(),
             &records,
         ))
@@ -339,11 +339,11 @@ impl RetainedMailboxRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
         _message_key: &MessageKey,
-    ) -> Result<Option<MailStoreMessageRecord>, AtmError> {
+    ) -> Result<Option<Message>, AtmError> {
         Ok(None)
     }
 
-    fn persist_message_record(&self, _record: MailStoreMessageRecord) -> Result<(), AtmError> {
+    fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
         Ok(())
     }
 
@@ -362,8 +362,8 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
     }
 }
 
-fn outbound_message() -> MessageEnvelope {
-    MessageEnvelope {
+fn outbound_message() -> InboxMessage {
+    InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
@@ -561,7 +561,7 @@ fn append_failure_after_sqlite_commit_is_execution_only() {
 fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let tempdir = tempdir().expect("tempdir");
     let original = outbound_message();
-    let companion = MessageEnvelope {
+    let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
         text: "sqlite failed".to_string(),
         timestamp: IsoTimestamp::now(),
@@ -870,9 +870,7 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     );
     assert_eq!(
         error.primary_recovery(),
-        Some(
-            "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
-        )
+        Some("Update the team membership or target a different recipient.")
     );
     assert!(
         runtime
