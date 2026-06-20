@@ -1,4 +1,8 @@
 #![forbid(unsafe_code)]
+#![allow(
+    deprecated,
+    reason = "Phase AC runtime composition still consumes the transitional shared storage traits while backend adoption settles"
+)]
 //! Concrete runtime/store composition for ATM callers that must stay
 //! storage-neutral at their own crate boundary.
 
@@ -13,6 +17,4 @@ pub use composition::{
 };
 #[cfg(any(test, feature = "test-utils"))]
 pub use replay_store::sqlite_remote_replay_store_for_test;
-pub use sqlite_observability::{
-    RuntimeSqliteEvent, RuntimeSqliteObservability, RuntimeSqliteObserver, RuntimeSqliteOutcome,
-};
+pub use sqlite_observability::{RuntimeSqliteEvent, RuntimeSqliteObserver, RuntimeSqliteOutcome};

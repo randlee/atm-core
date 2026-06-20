@@ -75,7 +75,7 @@ pub trait RuntimeSqliteObserver: Send + Sync {
 }
 
 #[derive(Clone)]
-pub struct RuntimeSqliteObservability {
+pub(crate) struct RuntimeSqliteObservability {
     observer: Arc<dyn RuntimeSqliteObserver>,
 }
 
@@ -88,11 +88,11 @@ impl std::fmt::Debug for RuntimeSqliteObservability {
 }
 
 impl RuntimeSqliteObservability {
-    pub fn new(observer: Arc<dyn RuntimeSqliteObserver>) -> Self {
+    pub(crate) fn new(observer: Arc<dyn RuntimeSqliteObserver>) -> Self {
         Self { observer }
     }
 
-    pub fn disabled() -> Arc<dyn SqliteObservability> {
+    pub(crate) fn disabled() -> Arc<dyn SqliteObservability> {
         Arc::new(NullSqliteObservability)
     }
 }

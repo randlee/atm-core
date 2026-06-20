@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
+)]
+
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -511,6 +516,10 @@ mod tests {
     #[derive(Debug)]
     struct NoopMessageStore;
 
+    #[allow(
+        deprecated,
+        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
+    )]
     impl atm_storage::MessageStore for NoopMessageStore {
         fn save_message(
             &self,
@@ -544,6 +553,10 @@ mod tests {
     #[derive(Debug)]
     struct NoopRosterStore;
 
+    #[allow(
+        deprecated,
+        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
+    )]
     impl atm_storage::RosterStore for NoopRosterStore {
         fn load_roster(
             &self,

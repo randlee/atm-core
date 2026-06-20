@@ -12,6 +12,9 @@ homepage.workspace = true
 [lib]
 name = "atm_storage_rusqlite"
 
+[features]
+test-support = []
+
 [dependencies]
 atm-storage = { path = "../atm-storage", version = "1.2.2" }
 serde_json.workspace = true

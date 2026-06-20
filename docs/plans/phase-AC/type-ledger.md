@@ -324,10 +324,10 @@ The AC.6 branch closes the remaining cleanup families this way:
 | --- | --- | --- | --- | --- | --- |
 | `SqliteWriterLockGuard` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | SQLite implementation detail, not shared contract. |
 | `SqliteBoundaryAssembly` | struct | `delete-bundle` | `replace-and-delete` | deleted or replaced in `AC.3` | Backend-shaped assembly helper must not survive above trait line; `AC.4` only removes remaining consumers. |
-| `SqliteObservabilityOutcome` | enum | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
-| `SqliteObservabilityEvent` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
-| `SqliteObservability` | trait | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
-| `NullSqliteObservability` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Verified `pub(crate)`-internal during `AC.6` cleanup. |
+| `SqliteObservabilityOutcome` | enum | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Backend-owned observability seam; intentionally public only for `atm-runtime` sqlite assembly, not shared-contract export. |
+| `SqliteObservabilityEvent` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Backend-owned observability seam; intentionally public only for `atm-runtime` sqlite assembly, not shared-contract export. |
+| `SqliteObservability` | trait | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Backend-owned observability seam; intentionally public only for `atm-runtime` sqlite assembly, not shared-contract export. |
+| `NullSqliteObservability` | struct | `backend-only` | `internalize-rusqlite` | `atm-storage-rusqlite` in `AC.3` | Backend-owned observability seam; intentionally public only for `atm-runtime` sqlite assembly, not shared-contract export. |
 
 ## Supporting Canonical Seed Types Already Present
 

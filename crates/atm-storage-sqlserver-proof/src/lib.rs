@@ -1,4 +1,8 @@
 #![forbid(unsafe_code)]
+#![allow(
+    deprecated,
+    reason = "the SQL Server proof crate intentionally compiles against the transitional shared storage traits"
+)]
 
 //! Compile-only proof crate for Phase AC.7.
 //!

@@ -364,6 +364,9 @@ pub struct RosterChangedEvent {
     pub timestamp: IsoTimestamp,
 }
 
+#[deprecated(
+    note = "Phase AC keeps this shared storage trait as a transitional contract; prefer backend-specific construction seams or atm-core boundary views where available."
+)]
 pub trait MessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
@@ -371,6 +374,9 @@ pub trait MessageStore {
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
+#[deprecated(
+    note = "Phase AC keeps this shared storage trait as a transitional contract; prefer backend-specific construction seams or atm-core boundary views where available."
+)]
 pub trait RosterStore {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
@@ -383,6 +389,10 @@ pub trait StorageNotifier {
 }
 
 #[cfg(test)]
+#[allow(
+    deprecated,
+    reason = "storage contract tests intentionally exercise the transitional shared traits directly"
+)]
 mod tests {
     use super::{
         Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent,

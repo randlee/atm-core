@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
+)]
+
 use std::path::Path;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;

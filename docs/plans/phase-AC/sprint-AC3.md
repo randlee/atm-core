@@ -114,6 +114,12 @@ SQLite-internal types that should stay below the trait line:
 - `SqliteObservability`
 - `NullSqliteObservability`
 
+The observability seam is backend-owned, but it remains a small public
+`atm-storage-rusqlite` surface because `atm-runtime` injects the concrete
+observer during sqlite runtime assembly. `AC.3` closes by proving that this
+surface does not leak into `atm-storage` or `atm-core`, not by forcing it to
+`pub(crate)`.
+
 Backend-shaped helpers that must not survive as shared storage abstractions:
 
 - `SqliteBoundaryAssembly`

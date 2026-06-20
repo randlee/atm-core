@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use super::sealed;
+pub use atm_storage::contract::{MailMessageState, MessageFingerprint};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
@@ -44,60 +45,6 @@ impl TryFrom<String> for ReplaySource {
 impl From<ReplaySource> for String {
     fn from(value: ReplaySource) -> Self {
         value.0
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailMessageState {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub actor: AgentName,
-    pub message_key: MessageKey,
-    pub read: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pending_ack_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub acknowledged_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deleted_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<IsoTimestamp>,
-}
-
-/// Opaque hash or content-addressable identifier that marks the last
-/// successfully ingested message boundary for a replay source. Used by
-/// incremental ingest workflows to resume without re-processing already-seen
-/// messages.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct MessageFingerprint(String);
-
-impl MessageFingerprint {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for MessageFingerprint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl From<String> for MessageFingerprint {
-    fn from(s: String) -> Self {
-        Self::new(s)
-    }
-}
-
-impl AsRef<str> for MessageFingerprint {
-    fn as_ref(&self) -> &str {
-        self.as_str()
     }
 }
 

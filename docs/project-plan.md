@@ -344,7 +344,8 @@ AC.6 closeout:
   surface and cut daemon consumers over to direct
   `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
 - removed `SqliteObservability*` from `atm-storage` and left that surface owned
-  by `atm-storage-rusqlite`
+  by `atm-storage-rusqlite` as the backend-owned sqlite observability seam used
+  during runtime assembly
 
 Acceptance:
 - Phase AC exit criteria are satisfied only through
