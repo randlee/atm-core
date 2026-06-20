@@ -144,6 +144,7 @@ pub struct MailStoreDoctorReport {
 }
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
+#[deprecated(note = "use canonical atm-storage types instead")]
 pub trait MailStore: sealed::Sealed {
     /// # Errors
     ///

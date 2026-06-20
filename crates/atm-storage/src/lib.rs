@@ -10,10 +10,6 @@ mod validation;
 
 // Protocol role identity for worker agents used in shared storage fixtures.
 pub const ROLE_WORKER: &str = "worker";
-#[allow(
-    deprecated,
-    reason = "crate root re-exports preserve the transitional shared storage contract during the Phase AC cleanup window"
-)]
 pub use contract::{
     AckTransition, AgentType, MailMessageState, Message, MessageFingerprint, MessageKey,
     MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent, RosterHarness,

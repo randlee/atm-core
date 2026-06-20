@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained CLI roster helper still forwards the legacy atm-core roster boundary during the Phase AC transition"
+)]
+
 use anyhow::Result;
 use atm_core::boundary::RosterStore;
 use atm_core::error::AtmError;

@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "daemon bootstrap still forwards the legacy atm-core roster boundary while retained callers migrate to canonical storage seams"
+)]
+
 use std::path::PathBuf;
 use std::sync::Once;
 

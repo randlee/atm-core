@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained CLI composition still seeds and bridges legacy atm-core boundary stores during the Phase AC transition"
+)]
+
 use std::fmt;
 use std::sync::{Arc, Once};
 

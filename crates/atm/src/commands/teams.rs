@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained CLI teams command still executes through the legacy atm-core roster boundary during the Phase AC transition"
+)]
+
 use std::path::PathBuf;
 
 use anyhow::Result;
