@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "team_admin restore still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
+)]
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};

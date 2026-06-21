@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "the retained CLI members command still executes through the legacy atm-core roster boundary during the Phase AC transition"
+)]
+
 use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{self, MembersQuery};

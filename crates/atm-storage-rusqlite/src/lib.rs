@@ -1,4 +1,8 @@
 #![forbid(unsafe_code)]
+#![allow(
+    deprecated,
+    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
+)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
@@ -47,6 +51,7 @@ impl Drop for SqliteWriterLockGuard {
 }
 
 #[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
 pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
 }
@@ -72,6 +77,7 @@ pub(crate) fn hold_sqlite_writer_lock(
 }
 
 #[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {

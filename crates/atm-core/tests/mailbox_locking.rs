@@ -1145,6 +1145,10 @@ impl Fixture {
         self.tempdir.path().join("runtime").join("mail.sqlite3")
     }
 
+    #[allow(
+        deprecated,
+        reason = "mailbox locking tests still seed the retained sqlite runtime through legacy core boundary shims"
+    )]
     fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[InboxMessage]) {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
         let mail_store = assembly.mail_store_arc();
@@ -1213,6 +1217,10 @@ fn create_team_with_config(
     seed_sqlite_roster(sqlite_db_path, team, members);
 }
 
+#[allow(
+    deprecated,
+    reason = "mailbox locking tests still seed the retained sqlite runtime through legacy core boundary shims"
+)]
 fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
     let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
     let roster_store = assembly.roster_store_arc();

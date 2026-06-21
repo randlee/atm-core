@@ -75,8 +75,9 @@ Primary closure rule:
   - `ProjectionRosterMember`
   - `ProjectionRoster`
   - `SourceFileRecord`
-- [x] confirm SQLite-only observability helpers remain internal to
-  `crates/atm-storage-rusqlite/`, including:
+- [x] confirm SQLite-only observability helpers remain owned by
+  `crates/atm-storage-rusqlite/` and do not leak into `atm-storage` or
+  `atm-core`, including:
   - `SqliteObservability`
   - `SqliteObservabilityEvent`
   - `SqliteObservabilityOutcome`

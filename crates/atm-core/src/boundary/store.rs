@@ -1,3 +1,9 @@
+// This Phase AC boundary file mixes seams that are dormant in the library
+// build with helpers still exercised by retained/test callers. Under
+// `--all-targets`, `#[expect(dead_code)]` turns into
+// `unfulfilled_lint_expectations` on the test-reachable subset before the
+// later cutover/deletion work lands, so this branch intentionally keeps
+// `allow(dead_code)` here.
 #![allow(
     dead_code,
     reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
@@ -149,6 +155,7 @@ pub struct NonClaudeOutboundDeliveryResponse {
 }
 
 /// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
+#[deprecated(note = "use canonical atm-storage types instead")]
 pub trait RosterStore: sealed::Sealed {
     /// # Errors
     ///
