@@ -42,7 +42,7 @@ jobs:
           echo "release_version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Run release gate
-        run: scripts/release_gate.sh
+        run: scripts/release_gate.sh origin/main origin/develop '${{ github.ref }}'
 
       - name: Ensure tag is correct or create it
         shell: bash

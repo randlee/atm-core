@@ -46,7 +46,6 @@ the full blocker set in one preflight pass rather than one blocker per cycle.
 - Gate script: `scripts/release_gate.sh`
 - Manifest helper: `scripts/release_artifacts.py`
 - Release inventory schema: `docs/release-inventory-schema.json`
-- Tag policy: `docs/release-tag-protection.md`
 - Release notes template: `release/RELEASE-NOTES-TEMPLATE.md`
 - `winget` setup note: `docs/WINGET_SETUP.md`
 - Homebrew tap: `randlee/homebrew-tap`

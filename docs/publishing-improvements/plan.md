@@ -88,7 +88,7 @@ Make publisher-driven releases predictable, low-churn, and self-contained:
 ### `GH #380` items
 
 - lineage gate friction:
-  - `RESOLVED` in current [scripts/release_gate.sh](/Users/randlee/Documents/github/atm-core-worktrees/feature/publishing-improvements/scripts/release_gate.sh)
+  - `RESOLVED` in current `scripts/release_gate.sh`
     because the old `develop ⊂ main` enforcement is already gone
 - publish from `main`, not from live `develop` ancestry:
   - `NOT FULLY DOCUMENTED` before this branch
@@ -289,11 +289,17 @@ Acceptance:
 
 ## Planning Branch Scope
 
-This branch is planning-only.
+This branch is the consolidated PI.1-PI.3 integration branch for release
+readiness.
 
-Allowed closeout artifacts on this branch:
-- `docs/publishing-improvements/plan.md`
-- `docs/project-plan.md`
+Retained implementation and planning artifacts on this branch include:
+- release validation / manifest / workflow changes from `PI.1`
+- publisher prompt and release-flow guidance from `PI.2`
+- closure proof and failure-ratchet documentation from `PI.3`
+- plan-state synchronization in:
+  - `docs/publishing-improvements/plan.md`
+  - `docs/project-plan.md`
 
-Everything else described in `PI.1` through `PI.3` is implementation work for
-later sprint branches after publisher reviews the plan.
+This branch intentionally carries both implementation and planning closeout so
+the release workflow, publisher guidance, and proof-of-coverage documentation
+can be validated together before merge to `develop`.
