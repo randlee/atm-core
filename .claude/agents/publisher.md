@@ -55,11 +55,21 @@ the full blocker set in one preflight pass rather than one blocker per cycle.
 ## Retained Release Surface
 
 ### crates.io
-- `agent-team-mail-core`
-- `agent-team-mail`
+- User-facing continuity packages:
+  - `agent-team-mail-core`
+  - `agent-team-mail`
+- Supporting public crates published as part of the retained dependency chain:
+  - `atm-storage`
+  - `atm-storage-claude`
+  - `atm-storage-rusqlite`
+  - `atm-runtime`
+  - `atm-daemon-client`
+  - `atm-daemon-bootstrap`
+  - `atm-daemon`
+  - `atm-graft`
 
 ### GitHub Releases
-- `atm` binary archives for:
+- `atm` + `atm-daemon` binary archives for:
   - `x86_64-unknown-linux-gnu`
   - `x86_64-apple-darwin`
   - `aarch64-apple-darwin`
@@ -77,10 +87,10 @@ the full blocker set in one preflight pass rather than one blocker per cycle.
   tooling or manual archive extraction.
 
 ## Excluded Legacy Surface
-Do not expect or verify release outputs beyond the retained CLI/core crates, the
-`atm` release archives, Homebrew formula updates, and the required `winget`
-submission path. Any instruction assuming additional retired crates/artifacts is
-out of date for this repo.
+Do not expect or verify release outputs beyond the manifest-declared crates.io
+publish plan, the retained `atm` / `atm-daemon` release archives, Homebrew
+formula updates, and the required `winget` submission path. Any instruction
+assuming additional retired crates/artifacts is out of date for this repo.
 
 ## Release Infrastructure Prerequisites
 - `HOMEBREW_TAP_TOKEN` must exist in `atm-core` GitHub repository secrets

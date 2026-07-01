@@ -72,7 +72,7 @@ Make publisher-driven releases predictable, low-churn, and self-contained:
   - `ALREADY PRESENT`
 - add `cargo package -p agent-team-mail-core --locked`:
   - `ALREADY PRESENT` in workflow, but not yet unified under `just validate`
-- add archive membership verification for `atm` + `atm-daemon`:
+- add archive membership verification for manifest-declared release binaries:
   - `MISSING` before this branch
 - aggregate all blockers into one preflight result set:
   - `MISSING`; current release validation flow does not yet require a single
@@ -130,7 +130,7 @@ Deliverables:
 - `scripts/release_artifacts.py`
   - release-binary validation helper(s)
 - `release/publish-artifacts.toml`
-  - retained release-binary SSOT includes both `atm` and `atm-daemon`
+  - retained release-binary SSOT remains manifest-driven
 - `release/RELEASE-NOTES-TEMPLATE.md`
   - real file exists in repo
 - `.github/workflows/release-preflight.yml`
@@ -158,7 +158,7 @@ Acceptance:
   the release window
 - `just validate` includes a version-currency check path, env-gated for CI
   noise control and capable of auto-filing a GitHub issue on stale results
-- release manifest declares both `atm` and `atm-daemon`
+- release manifest declares the retained release binaries explicitly
 - release archives are built from the manifest binary list and verified for
   expected membership
 - dependency version-pin × publish-flag mismatches are explicitly covered by the
@@ -278,7 +278,7 @@ Acceptance:
 |---|---|
 | internal dev-dependency version-pin leakage (`atm-runtime-test-support`) | `just lint` plus manifest/version SSOT validation plus `cargo package --locked` |
 | publish-surface manifest drift or wrong publish order | `validate-manifest`, `validate-preflight-checks`, `validate-publish-order` inside `just validate` |
-| release archives missing `atm-daemon` | manifest-declared release binaries plus archive membership verification inside `just validate` |
+| release archives missing required binaries | manifest-declared release binaries plus archive membership verification inside `just validate` |
 | `Cargo.lock` drift or silent release-window dependency bump | explicit `Cargo.lock` drift check against `origin/main` in `just validate` |
 | stale dependency currency discovered late | env-gated version-currency check plus auto-filed GitHub issue when stale |
 | publisher discovers blockers serially and opens multiple PRs | `release-findings.json` aggregation requirement so preflight returns the full blocker set in one pass |

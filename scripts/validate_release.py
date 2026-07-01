@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -129,13 +130,20 @@ def validate_support_files(root: Path, findings: list[Finding]) -> None:
 
 
 def validate_lint(root: Path, findings: list[Finding]) -> None:
-    completed = run_capture(["just", "lint"], cwd=root)
+    if shutil.which("just") is not None:
+        lint_cmd = ["just", "lint"]
+        failure_summary = "just lint failed"
+    else:
+        # CI images or minimal local environments may not have `just` installed.
+        lint_cmd = ["python3", ".just/run_lint.py", "all"]
+        failure_summary = "lint runner failed"
+    completed = run_capture(lint_cmd, cwd=root)
     append_completed_findings(
         findings,
         "lint",
         completed,
         "lint passed",
-        "just lint failed",
+        failure_summary,
     )
 
 
@@ -194,10 +202,7 @@ def validate_release_binaries(root: Path, findings: list[Finding]) -> None:
             "validate-release-binaries",
             "--manifest",
             "release/publish-artifacts.toml",
-            "--required",
-            "atm",
-            "--required",
-            "atm-daemon",
+            *sum((["--required", binary] for binary in REQUIRED_RELEASE_BINARIES), []),
         ],
         cwd=root,
     )
