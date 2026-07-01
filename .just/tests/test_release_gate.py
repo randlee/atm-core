@@ -51,7 +51,7 @@ class ReleaseGateTests(unittest.TestCase):
 
     def run_gate(self, trigger_ref: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [str(SCRIPT), "origin/main", "origin/develop", trigger_ref],
+            ["bash", str(SCRIPT), "origin/main", "origin/develop", trigger_ref],
             cwd=self.clone,
             check=False,
             capture_output=True,
