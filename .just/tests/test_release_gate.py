@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -21,6 +22,7 @@ def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+@unittest.skipIf(sys.platform == "win32", "release_gate.sh is exercised on Unix-like runners")
 class ReleaseGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
