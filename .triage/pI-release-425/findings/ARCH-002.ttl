@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-002" ;
+  triage:title "Planning Branch Scope documentation mismatch" ;
+  triage:description "docs/publishing-improvements/plan.md lines 290-299 claim planning-only scope, but branch carries full PI.1-PI.3 implementation (290+ files). Fix is to update documentation to match actual branch content, per team-lead confirmation." ;
+  triage:phaseId "pI-release-425" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/integrate-publish-release/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-publish-release/a6d5872> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-publish-release/a6d5872> .
+
+<urn:atm:triage:occurrence/ARCH-002/integrate-publish-release/1>
+  a triage:Occurrence ;
+  triage:file "docs/publishing-improvements/plan.md" ;
+  triage:line 290 ;
+  triage:endLine 299 ;
+  triage:snippet "## Planning Branch Scope\n\nThis branch is planning-only.\n\nAllowed closeout artifacts on this branch:\n- `docs/publishing-improvements/plan.md`\n- `docs/project-plan.md`\n\nEverything else described in `PI.1` through `PI.3` is implementation work for\nlater sprint branches after publisher reviews the plan." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d5872" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-publish-release/a6d5872> ;
+  triage:notes "Self-contradiction: plan.md claims planning-only scope, but branch carries implementation (PI.1-PI.3 crates, workflows, scripts, tooling). Team-lead confirmed intentional consolidation per arch-ctm release plan. Fix required: update 'Planning Branch Scope' section to accurately describe branch contents." .
+
+<urn:atm:triage:worktree/integrate-publish-release/a6d5872>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
+  triage:headSha "a6d5872" ;
+  triage:orderIndex 1 .

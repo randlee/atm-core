@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/REL-INT-425>
+  a triage:Finding ;
+  triage:findingId "REL-INT-425" ;
+  triage:title "Missing release-tag-protection documentation" ;
+  triage:description "Publisher.md references docs/release-tag-protection.md as a Source-Of-Truth at line 49, but the file does not exist. The tag policy rules are already inline in publisher.md (Hard Rules section, lines 20-22 and tag gate section, lines 212-214). The dangling reference should be removed; creating a separate doc would duplicate existing inline documentation." ;
+  triage:phaseId "pI-release-425" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-01T19:50:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REL-INT-425/int-pub-ready/1> ;
+  triage:openOn <urn:atm:triage:worktree/int-pub-ready/a6d58723> ;
+  triage:promoteTo <urn:atm:triage:worktree/int-pub-ready/a6d58723> .
+
+<urn:atm:triage:occurrence/REL-INT-425/int-pub-ready/1>
+  a triage:Occurrence ;
+  triage:file ".claude/agents/publisher.md" ;
+  triage:line 49 ;
+  triage:snippet "- Tag policy: docs/release-tag-protection.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723" ;
+  triage:occursIn <urn:atm:triage:worktree/int-pub-ready/a6d58723> .
+
+<urn:atm:triage:worktree/int-pub-ready/a6d58723>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723" ;
+  triage:orderIndex 1 .
