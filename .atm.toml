@@ -12,6 +12,13 @@ seconds = 60
 recipient = "arch-ctm"
 command = ["scripts/atm-nudge.py", "arch-ctm"]
 
+[[atm.post_send_hooks]]
+recipient = "quality-mgr"
+command = ["scripts/atm-nudge.py", "quality-mgr"]
+
+[[atm.post_send_hooks]]
+recipient = "team-lead"
+command = ["scripts/atm-nudge.py", "team-lead"]
 
 [plugins.atm-agent-mcp]
 codex_bin = "codex"
@@ -32,20 +39,20 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "team-lead"
-tmux_pane_id = "%0"
+tmux_pane_id = "%7"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "arch-ctm"
-tmux_pane_id = "%1"
+tmux_pane_id = "%8"
 command = "codex -c features.codex_hooks=true --yolo"
 env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "quality-mgr"
-tmux_pane_id = "%2"
+tmux_pane_id = "%9"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
