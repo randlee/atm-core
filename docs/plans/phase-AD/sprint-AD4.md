@@ -79,9 +79,12 @@ mapping and still expose only the ATM contract above.
   the ATM subset-wrapper contract
 - one repo-owned rule-map artifact
   `.triage/phase-AD/ad4-unix-gating-rule-map.md` records either:
-  - direct published `PORT-004` / `PORT-005` continuity
-  - or the explicit published-rule-id to ATM-rule-id mapping used by the
-    wrapper
+  - `## ATM Wrapper Rule Contract`
+  - `## Published Rule IDs`
+  - `## Mapping Decision`
+  - one explicit decision line:
+    - `Decision: direct-continuity`
+    - or `Decision: explicit-mapping`
 - one repo-owned review artifact
   `.triage/phase-AD/ad4-unix-path-prefixes-review.md` records whether the
   published `sc-lint-portability` surface exposes a direct equivalent for the
@@ -124,8 +127,8 @@ mapping and still expose only the ATM contract above.
 - `python3 .just/tests/test_lint_unix_gating.py`
 - `sc-lint-portability --help > .triage/phase-AD/ad4-sc-lint-portability-help.txt`
 - `test -f .triage/phase-AD/ad4-unix-gating-rule-map.md`
-- `rg -n 'direct continuity|published rule id|ATM rule id|PORT-004|PORT-005|mapping' .triage/phase-AD/ad4-unix-gating-rule-map.md -S`
+- `rg -n '^## ATM Wrapper Rule Contract$|^## Published Rule IDs$|^## Mapping Decision$|^Decision: (direct-continuity|explicit-mapping)$' .triage/phase-AD/ad4-unix-gating-rule-map.md -S`
 - `test -f .triage/phase-AD/ad4-unix-path-prefixes-review.md`
-- `rg -n 'direct equivalent|wrapper override|approved removal' .triage/phase-AD/ad4-unix-path-prefixes-review.md -S`
+- `rg -n '^## Published Surface$|^## Decision$|^Decision: (direct-equivalent|wrapper-override|approved-removal)$' .triage/phase-AD/ad4-unix-path-prefixes-review.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_unix_gating.py .just/tests/test_lint_unix_gating.py -S`
 - `git diff --check`

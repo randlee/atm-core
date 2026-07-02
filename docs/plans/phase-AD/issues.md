@@ -43,7 +43,8 @@ published `sc-lint` migration proposal.
 - owner: `AD.9`
 - summary: final phase closeout depends on an upstream published `sc-lint`
   `D.1` release that ATM does not control; the checkpoint policy prevents
-  silent indefinite carry-forward
+  silent indefinite carry-forward and caps the phase-local re-review loop at
+  two checkpoint cycles before mandatory re-scoping
 
 ### AD-ISSUE-005 Published Rule-Id Continuity For Consumer-Subset Wrappers
 

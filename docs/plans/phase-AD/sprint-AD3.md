@@ -80,9 +80,10 @@ Required command contract:
 - the parity summary artifact is produced by the same repo-local comparison
   helper introduced in `AD.2`, or an equivalently deterministic normalization
   command, and records:
-  - rule IDs present only in vendored output
-  - rule IDs present only in published output
-  - any per-rule finding-count drift that requires explanation
+  - `## Rule IDs Only In Vendored`
+  - `## Rule IDs Only In Published`
+  - `## Finding-Count Drift`
+  - `## Reviewer Sign-Off Required?`
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
 
@@ -112,5 +113,7 @@ Required command contract:
 - `cargo run -q -p sc-lint-boundary -- analyze --root . --rule portability --format json > .triage/phase-AD/ad3-vendored-sc-portability.json`
 - `sc-lint-portability analyze --root . --format json > .triage/phase-AD/ad3-published-sc-portability.json`
 - `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad3-vendored-sc-portability.json --published .triage/phase-AD/ad3-published-sc-portability.json --output .triage/phase-AD/ad3-sc-portability-parity.md`
+- `test -f .triage/phase-AD/ad3-sc-portability-parity.md`
+- `rg -n '^## Rule IDs Only In Vendored$|^## Rule IDs Only In Published$|^## Finding-Count Drift$|^## Reviewer Sign-Off Required\\?$' .triage/phase-AD/ad3-sc-portability-parity.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_sc_portability.py .just/tests/test_lint_sc_portability.py -S`
 - `git diff --check`

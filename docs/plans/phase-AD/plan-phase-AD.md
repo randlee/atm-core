@@ -227,11 +227,23 @@ not control. To avoid an unbounded silent stall:
 - if `AD.8` closes before a released `D.1` exists, `Phase AD` remains open
   with `AD.9` as the only blocked follow-on sprint
 - at each ATM release-planning checkpoint after `AD.8`, `team-lead` must
-  re-review the upstream published state and record one explicit outcome:
-  - keep `AD.9` open against a new checkpoint date
+  re-review the upstream published state and record one explicit outcome in
+  `.triage/phase-AD/ad9-checkpoint-log.md`
+- checkpoint records must carry an explicit cycle number:
+  - `Checkpoint cycle: 1/2`
+  - or `Checkpoint cycle: 2/2`
+- on checkpoint cycle `1/2`, the allowed outcomes are:
+  - keep `AD.9` open against one new checkpoint date
   - or, with explicit human sign-off, spin `AD.9` into a standalone follow-on
     phase if the upstream release slips or materially changes scope
-- silent indefinite carry-forward of `AD.9` is not allowed
+- checkpoint cycle `2/2` is the hard cap for this phase plan:
+  - `keep AD.9 open` is no longer an allowed default outcome
+  - explicit human re-scoping must choose either a standalone follow-on phase,
+    an approved replacement plan against the real upstream state, or an
+    explicit decision to stop carrying the unresolved dependency inside Phase
+    `AD`
+- silent indefinite carry-forward of `AD.9` is not allowed, and repeating
+  checkpoint cycles beyond `2/2` is not allowed
 
 ## Phase Issues Inventory
 
@@ -244,6 +256,8 @@ The current open planning and execution risks for this phase are tracked in:
 These surfaces are expected to remain ATM-owned after Phase `AD`:
 
 - `.just/run_lint.py`
+- `.just/lint_sc_boundary.py`
+- `.just/lint_sc_portability.py`
 - `.just/lint_unix_gating.py`
 - `.just/lint_runtime_waits.py`
 - the ATM-only portions of `.just/lint_boundaries.py`

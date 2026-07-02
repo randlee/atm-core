@@ -6,6 +6,7 @@
 | Status | **Proposed** |
 | Date | 2026-07-02 |
 | Deciders | TBD during `AD.9` |
+| Placeholder | `AD9-PLACEHOLDER-NOT-ACCEPTED` |
 | Relates to | Phase `AD`, `docs/plans/phase-AD/sprint-AD9.md` |
 | Supersedes | — |
 
@@ -46,6 +47,13 @@ The final `AD.9` implementation must update this ADR to record:
 ## Placeholder Decision
 
 This ADR number and file path are reserved now for the `AD.9` cutover.
+
+Placeholder marker: `AD9-PLACEHOLDER-NOT-ACCEPTED`
+
+The final `AD.9` implementation must remove that marker, replace `Status:
+**Proposed**` with an accepted decision status, replace the `Deciders` TBD
+text with the real decision owners, and add concrete `Decision`, `Ownership
+Boundary`, and `Rollback Posture` sections before the sprint can close.
 
 No architectural decision is accepted yet beyond this planning requirement:
 

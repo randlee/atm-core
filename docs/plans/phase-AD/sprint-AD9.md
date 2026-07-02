@@ -59,9 +59,18 @@ planning checkpoint after `AD.8`:
 
 - `team-lead` must record an explicit re-review date against the real upstream
   published state in `.triage/phase-AD/ad9-checkpoint-log.md`
-- and explicit human sign-off must decide whether to keep `AD.9` open or split
-  it into a standalone follow-on phase
-- indefinite carry-forward with no recorded checkpoint is not allowed
+- the checkpoint log must record one explicit cycle number:
+  - `Checkpoint cycle: 1/2`
+  - or `Checkpoint cycle: 2/2`
+- on cycle `1/2`, explicit human sign-off may either keep `AD.9` open against
+  one new checkpoint date or split it into a standalone follow-on phase
+- cycle `2/2` is the hard cap for this phase plan:
+  - `keep AD.9 open` is no longer an allowed default outcome
+  - explicit human re-scoping must choose a standalone follow-on phase, an
+    approved replacement plan against the real upstream state, or an explicit
+    decision to stop carrying the unresolved dependency inside Phase `AD`
+- indefinite carry-forward with no recorded checkpoint is not allowed, and
+  repeating checkpoint cycles beyond `2/2` is not allowed
 
 ## Out Of Scope
 
@@ -109,6 +118,9 @@ planning checkpoint after `AD.8`:
 - a repository ADR records the decision to retire in-repo duplication in favor
   of the published `sc-lint` dependency-policy surface, including rollback
   posture if the upstream release proves insufficient
+- ADR closure requires removal of the reserved placeholder marker, accepted
+  decision status, real deciders, and concrete `Decision`, `Ownership
+  Boundary`, and `Rollback Posture` sections
 
 ## Required Work
 
@@ -144,8 +156,10 @@ planning checkpoint after `AD.8`:
 - any residual dependency-policy logic left in `.just/lint_boundaries.py` is
   explicitly justified as ATM-only governance rather than silent duplication
 - if `D.1` is still unavailable at a release-planning checkpoint, the branch
-  records a new checkpoint date or an approved follow-on-phase split instead of
-  leaving the sprint in an unbounded implicit stall
+  records a bounded checkpoint outcome instead of leaving the sprint in an
+  unbounded implicit stall
+- after checkpoint cycle `2/2`, Phase `AD` cannot continue carrying `AD.9` as
+  an indefinitely open in-phase tail; explicit human re-scoping is mandatory
 
 ## Required Validation
 
@@ -153,10 +167,11 @@ planning checkpoint after `AD.8`:
 - `bash .triage/phase-AD/ad9-dependency-policy-command.sh`
 - `python3 .just/run_lint.py all`
 - `test -f .triage/phase-AD/ad9-dependency-policy-cutover.md`
-- `rg -n 'published version|exact command|touched boundary records|owning crate docs|residual ATM-only checks' .triage/phase-AD/ad9-dependency-policy-cutover.md -S`
+- `rg -n '^## Published Version$|^## Exact Command$|^## Touched Boundary Records$|^## Owning Crate Docs Updated$|^## Residual ATM-Only Checks$' .triage/phase-AD/ad9-dependency-policy-cutover.md -S`
 - `python3 .just/lint_boundaries.py`
 - `test -f .triage/phase-AD/ad9-checkpoint-log.md`
-- `rg -n 're-review date|follow-on phase|keep AD\\.9 open|human sign-off' .triage/phase-AD/ad9-checkpoint-log.md -S`
+- `rg -n '^Checkpoint cycle: [12]/2$|^Re-review date: |^Human sign-off decision: |^Escalation action: ' .triage/phase-AD/ad9-checkpoint-log.md -S`
 - `test -f docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
-- `rg -n 'dependency-policy|ownership|rollback posture|published sc-lint' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
+- `rg -n '^\\| Status \\| \\*\\*Accepted\\*\\* \\|$|^## Decision$|^## Ownership Boundary$|^## Rollback Posture$' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
+- `! rg -n 'AD9-PLACEHOLDER-NOT-ACCEPTED|^\\| Status \\| \\*\\*Proposed\\*\\* \\|$|TBD during `AD\\.9`' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
 - `git diff --check`

@@ -79,9 +79,12 @@ to-ATM mapping and still expose only the ATM contract above.
   preserve the ATM subset-wrapper contract
 - one repo-owned rule-map artifact
   `.triage/phase-AD/ad5-runtime-waits-rule-map.md` records either:
-  - direct published `SCB-RUNTIME-001` / `SCB-RUNTIME-002` continuity
-  - or the explicit published-rule-id to ATM-rule-id mapping used by the
-    wrapper
+  - `## ATM Wrapper Rule Contract`
+  - `## Published Rule IDs`
+  - `## Mapping Decision`
+  - one explicit decision line:
+    - `Decision: direct-continuity`
+    - or `Decision: explicit-mapping`
 
 ## Required Work
 
@@ -112,6 +115,6 @@ to-ATM mapping and still expose only the ATM contract above.
 - `python3 .just/run_lint.py runtime-waits`
 - `python3 .just/tests/test_lint_runtime_waits.py`
 - `test -f .triage/phase-AD/ad5-runtime-waits-rule-map.md`
-- `rg -n 'direct continuity|published rule id|ATM rule id|SCB-RUNTIME-001|SCB-RUNTIME-002|mapping' .triage/phase-AD/ad5-runtime-waits-rule-map.md -S`
+- `rg -n '^## ATM Wrapper Rule Contract$|^## Published Rule IDs$|^## Mapping Decision$|^Decision: (direct-continuity|explicit-mapping)$' .triage/phase-AD/ad5-runtime-waits-rule-map.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary|--rule boundaries' .just/lint_runtime_waits.py .just/tests/test_lint_runtime_waits.py -S`
 - `git diff --check`

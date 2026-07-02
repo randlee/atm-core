@@ -83,9 +83,10 @@ through `cargo run -q -p sc-lint-boundary`.
   - `.triage/phase-AD/ad2-sc-boundary-parity.md`
 - the parity summary artifact is produced by a repo-local comparison helper or
   equivalently deterministic normalization command that records:
-  - rule IDs present only in vendored output
-  - rule IDs present only in published output
-  - any per-rule finding-count drift that requires explanation
+  - `## Rule IDs Only In Vendored`
+  - `## Rule IDs Only In Published`
+  - `## Finding-Count Drift`
+  - `## Reviewer Sign-Off Required?`
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
 
@@ -114,5 +115,7 @@ through `cargo run -q -p sc-lint-boundary`.
 - `cargo run -q -p sc-lint-boundary -- analyze --root . --format json > .triage/phase-AD/ad2-vendored-sc-boundary.json`
 - `sc-lint-boundary analyze --root . --format json > .triage/phase-AD/ad2-published-sc-boundary.json`
 - `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad2-vendored-sc-boundary.json --published .triage/phase-AD/ad2-published-sc-boundary.json --output .triage/phase-AD/ad2-sc-boundary-parity.md`
+- `test -f .triage/phase-AD/ad2-sc-boundary-parity.md`
+- `rg -n '^## Rule IDs Only In Vendored$|^## Rule IDs Only In Published$|^## Finding-Count Drift$|^## Reviewer Sign-Off Required\\?$' .triage/phase-AD/ad2-sc-boundary-parity.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary' .just/lint_sc_boundary.py .just/tests/test_lint_sc_boundary.py -S`
 - `git diff --check`
