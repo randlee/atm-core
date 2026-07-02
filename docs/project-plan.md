@@ -640,3 +640,17 @@ Implementation Branches:
 
 Authoritative sprint plan:
 - `docs/publishing-improvements/plan.md`
+
+## sc-lint Published Release Migration [PLANNED]
+
+Planning Branch:
+- `plan/sc-lint-published-migration`
+
+Status:
+- planning only
+- `atm-core` still vendors `crates/sc-lint-*` support crates today
+- cutover is deferred until a published `sc-lint` release exists that covers
+  the current ATM proc-macro, analyzer, CI, and release-gate surface
+
+Authoritative migration plan:
+- `docs/plans/sc-lint-migration/plan.md`

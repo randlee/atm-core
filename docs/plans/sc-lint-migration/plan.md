@@ -129,6 +129,27 @@ release line. The migration therefore requires both:
 | portability config knob `unix_path_prefixes` | vendored `sc-lint-boundary/config/defaults.toml` | uncertain | must confirm whether the published portability crate exposes an equivalent config surface or bakes the defaults in |
 | release-preflight lint behavior | `scripts/validate_release.py` | not expected upstream | ATM-owned release gate must be retargeted |
 
+## Verified No-Change Areas
+
+The cutover does not currently require a `boundaries/*.toml` or
+`release/publish-artifacts.toml` edit.
+
+Verification method used for this planning line:
+
+- reviewed every current ATM boundary TOML with:
+  - `find . -path '*/boundaries/*.toml'`
+- confirmed the migration only changes:
+  - proc-macro dependency sourcing
+  - analyzer installation/invocation paths
+  - local wrapper scripts
+  - CI/release-preflight tool installation
+- confirmed `release/publish-artifacts.toml` governs ATM release artifacts,
+  not the repository-local lint backend choice, so the cutover does not add or
+  remove ATM release binaries or crate publish targets
+
+This assumption must be rechecked on the real cutover branch if the published
+`sc-lint` install story forces a release-packaging change inside ATM itself.
+
 ## Required Migration Decisions
 
 ### Decision 1: Keep ATM wrappers, change only their backends
@@ -248,6 +269,12 @@ Acceptance gate:
 - `cargo build --workspace` no longer depends on vendored `sc-lint-*` crates
 - the current `#[sc_lint(...)]` usage in `crates/atm-core/src/observability.rs`
   compiles cleanly
+- a targeted compile/behavior check covers the exact proc-macro usage at
+  `crates/atm-core/src/observability.rs:209` and `:309`
+  - if no focused test already exists, the cutover branch adds one
+  - the minimum acceptable proof is a dedicated test or compile check that
+    exercises `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]`
+    under the published proc-macro dependency, not only a whole-workspace build
 
 ### Step 5: Remove vendored workspace members
 
