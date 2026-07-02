@@ -20,16 +20,18 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
     AdvisoryStreamRequest, AtmGraftClient,
 };
-use atm_core::observability::NullObservability;
+use atm_core::observability::{
+    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
+};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
 };
 
 #[cfg(test)]
@@ -207,9 +209,25 @@ impl GraftClient {
         // traceability currently preserves typed caller-facing errors but intentionally drops the
         // retained bootstrap event stream until a shared graft-host observability sink exists.
         let observability = NullObservability;
+        let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
+            observability.emit(CommandEvent {
+                command: event.command,
+                action: action_name(event.action),
+                outcome: outcome_label(event.outcome),
+                team: event.team,
+                agent: event.agent.clone(),
+                sender: event.agent,
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: event.error_code,
+                error_message: event.error_message,
+            })
+        };
         let traceability = BootstrapTraceability::new(
             "graft_connect",
-            &observability,
+            &emit_bootstrap_event,
             parse_bootstrap_team()?,
             parse_bootstrap_agent()?,
         );
@@ -269,7 +287,7 @@ impl AtmGraftClient for GraftClient {
 
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
-            ResponseEnvelope::Receive(outcome) => Ok(outcome),
+            ResponseEnvelope::Receive(outcome) => Ok(*outcome),
             other => Err(unexpected_response("read", other)),
         }
     }
@@ -1098,23 +1116,25 @@ mod tests {
                     dry_run: false,
                 })),
             ),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(ReadOutcome {
-                action: CommandAction::Read,
-                team: query.team_override().cloned().expect("team"),
-                agent: "agent-b".parse().expect("agent"),
-                selection_mode: query.selection_mode(),
-                mutation_applied: false,
-                count: 1,
-                message: None,
-                selected_message_id: Some(read_message_id),
-                match_count: 1,
-                additional_match_count: 0,
-                bucket_counts: BucketCounts {
-                    unread: 1,
-                    pending_ack: 0,
-                    history: 0,
-                },
-            })),
+            RequestEnvelope::Receive(query) => {
+                Ok(ResponseEnvelope::Receive(Box::new(ReadOutcome {
+                    action: CommandAction::Read,
+                    team: query.team_override().cloned().expect("team"),
+                    agent: "agent-b".parse().expect("agent"),
+                    selection_mode: query.selection_mode(),
+                    mutation_applied: false,
+                    count: 1,
+                    message: None,
+                    selected_message_id: Some(read_message_id),
+                    match_count: 1,
+                    additional_match_count: 0,
+                    bucket_counts: BucketCounts {
+                        unread: 1,
+                        pending_ack: 0,
+                        history: 0,
+                    },
+                })))
+            }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => Ok(
                 ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(AckOutcome {
                     action: CommandAction::Ack,

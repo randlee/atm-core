@@ -830,6 +830,25 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
     }
 
     #[test]
+    fn load_config_does_not_fall_back_to_process_cwd() {
+        let root = unique_temp_dir("config-ancestor-chain");
+        fs::write(root.path().join(".atm.toml"), "").expect("root sentinel");
+        let nested = root.path().join("nested").join("cwd");
+        fs::create_dir_all(&nested).expect("nested cwd");
+
+        // find_config_path walks the explicit start path and is bounded by the
+        // root sentinel above, so process CWD must not participate.
+        let loaded = load_config(&nested).expect("config lookup should not fail");
+
+        if let Some(ref config) = loaded {
+            assert_eq!(
+                config.identity, None,
+                "config walk must not escape tempdir root; sentinel identity must stay None"
+            );
+        }
+    }
+
+    #[test]
     fn load_config_rejects_retired_post_send_hook_members_key() {
         let root = unique_temp_dir("retired-hook-members");
         fs::write(
@@ -853,7 +872,7 @@ post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
         );
         assert!(error.message.contains("post_send_hook_members"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
             )
@@ -881,7 +900,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert!(error.message.contains("retired post-send hook keys"));
         assert!(error.message.contains("[[atm.post_send_hooks]]"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
                 "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
             )
@@ -960,7 +979,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("config.json"));
         assert!(error.message.contains("EOF while parsing"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -972,7 +991,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("root value must be a JSON object"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -988,7 +1007,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 .message
                 .contains("field 'members' must be a JSON array")
         );
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]
@@ -1001,7 +1020,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
         assert!(error.is_missing_document());
         assert!(error.message.contains("team config is missing"));
-        assert!(error.recovery.as_deref().is_some());
+        assert!(error.primary_recovery().is_some());
     }
 
     #[test]

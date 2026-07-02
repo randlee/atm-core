@@ -1,3 +1,7 @@
+---
+title: ADR Index
+---
+
 # ADR Index
 
 This index lists the repository-wide ADRs in `docs/adr/` and the accepted
@@ -21,9 +25,12 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-014 — Runtime Health Projection And Liveness Signal Ownership](./ADR-014-runtime-health-projection-and-liveness-signal-ownership.md)
 - [ADR-015 — Daemon Runtime Snapshot Publication And Worker Ownership](./ADR-015-daemon-runtime-snapshot-and-worker-ownership.md)
 - [ADR-016 — Claude Config Ingress And Roster Projection Ownership](./ADR-016-claude-config-ingress-and-roster-projection-ownership.md)
+- [ADR-017 — Claude Inbox Fail-Soft Read Policy](./ADR-017-claude-inbox-fail-soft-read-policy.md)
+- [ADR-018 — Storage Contract Reset And Backend Interchangeability](./ADR-018-storage-contract-reset-and-backend-interchangeability.md)
 
 ## Extracted Crate-Local ADRs
 
+- [ADR-ATM-RUNTIME-001 — `atm-runtime` As Concrete Composition Root](./ADR-ATM-RUNTIME-001.md)
 - [ADR-ATM-RUSQLITE-002 — Single In-Process SQLite Write Worker](./ADR-ATM-RUSQLITE-002.md)
 
 ## Embedded Crate-Local ADR Records

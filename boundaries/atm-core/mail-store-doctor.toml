@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-MailStoreDoctor"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "MailStoreDoctor"
+
+[public]
+trait = "MailStoreDoctor"
+notes = "paired subsystem-owned diagnostics boundary for the MailStore capability"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["mail_store_diagnostics"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-storage-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["MailStoreDoctor method inputs"]
+response_types = ["MailStoreDoctorReport", "DoctorFinding"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MAILSTOREDOCTOR-REFERENCES"]
+review_gates = ["no_concrete_store_leakage"]
+
+[status]
+state = "concrete_landed"
+notes = ["shared doctor-trait contract landed in atm_core::boundary", "mail-store diagnostic implementation is wired through the atm-storage-rusqlite doctor adapter"]

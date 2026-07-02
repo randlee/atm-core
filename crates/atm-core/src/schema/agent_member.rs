@@ -1,83 +1,10 @@
-use std::fmt;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use tracing::warn;
 
-use crate::types::{AgentName, ModelName, PaneId};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AgentType {
-    GeneralPurpose,
-    Plan,
-    Lead,
-    Qa,
-    Worker,
-    Unknown(String),
-}
-
-impl Default for AgentType {
-    fn default() -> Self {
-        Self::Unknown(String::new())
-    }
-}
-
-impl From<String> for AgentType {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "general-purpose" => Self::GeneralPurpose,
-            "plan" => Self::Plan,
-            "lead" => Self::Lead,
-            "qa" => Self::Qa,
-            "worker" => Self::Worker,
-            _ if value.trim().is_empty() => Self::Unknown(value),
-            _ => {
-                warn!(
-                    raw_agent_type = %value,
-                    "unknown agent_type preserved as opaque compatibility value"
-                );
-                Self::Unknown(value)
-            }
-        }
-    }
-}
-
-impl From<AgentType> for String {
-    fn from(value: AgentType) -> Self {
-        match value {
-            AgentType::GeneralPurpose => "general-purpose".to_string(),
-            AgentType::Plan => "plan".to_string(),
-            AgentType::Lead => "lead".to_string(),
-            AgentType::Qa => "qa".to_string(),
-            AgentType::Worker => "worker".to_string(),
-            AgentType::Unknown(value) => value,
-        }
-    }
-}
-
-impl Serialize for AgentType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&String::from(self.clone()))
-    }
-}
-
-impl<'de> Deserialize<'de> for AgentType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(Self::from(String::deserialize(deserializer)?))
-    }
-}
-
-impl fmt::Display for AgentType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&String::from(self.clone()))
-    }
-}
+use crate::types::{AgentId, AgentName, ModelName, PaneId};
+pub use atm_storage::contract::AgentType;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,8 +14,8 @@ pub struct AgentMember {
     /// Compound `agent@team` address as supplied by the external Claude Code
     /// agent-team API. Opaque passthrough — format is owned externally and not
     /// validated as an ATM path segment.
-    #[serde(default)]
-    pub agent_id: String,
+    #[serde(default, skip_serializing_if = "AgentId::is_empty")]
+    pub agent_id: AgentId,
 
     /// Agent type as deserialized from Claude Code agent-team config. ATM
     /// reads but does not write config.json — no round-trip concern.
@@ -108,7 +35,7 @@ pub struct AgentMember {
 
     /// Retained working directory path for the agent process, copied from `config.json` roster state.
     #[serde(default)]
-    pub cwd: String,
+    pub cwd: PathBuf,
 
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -118,12 +45,12 @@ impl AgentMember {
     pub fn with_name(name: AgentName) -> Self {
         Self {
             name,
-            agent_id: String::new(),
+            agent_id: AgentId::default(),
             agent_type: AgentType::default(),
             model: ModelName::default(),
             joined_at: None,
             tmux_pane_id: None,
-            cwd: String::new(),
+            cwd: PathBuf::new(),
             extra: Map::new(),
         }
     }
@@ -131,6 +58,8 @@ impl AgentMember {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::{AgentMember, AgentType};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
@@ -146,7 +75,7 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert!(member.cwd.is_empty());
+        assert_eq!(member.cwd, PathBuf::new());
         assert!(member.extra.is_empty());
     }
 
@@ -166,13 +95,16 @@ mod tests {
         );
 
         let member: AgentMember = serde_json::from_str(&raw).expect("member");
-        assert_eq!(member.agent_id, format!("{TEST_SENDER}@{TEST_TEAM}"));
+        assert_eq!(
+            member.agent_id.as_str(),
+            format!("{TEST_SENDER}@{TEST_TEAM}")
+        );
         assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::GeneralPurpose);
         assert_eq!(member.model.as_str(), "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
-        assert_eq!(member.cwd, "/workspace");
+        assert_eq!(member.cwd, PathBuf::from("/workspace"));
         assert_eq!(member.extra["color"], serde_json::json!("blue"));
 
         let encoded = serde_json::to_string(&member).expect("encode");
@@ -192,6 +124,6 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert!(member.cwd.is_empty());
+        assert_eq!(member.cwd, PathBuf::new());
     }
 }

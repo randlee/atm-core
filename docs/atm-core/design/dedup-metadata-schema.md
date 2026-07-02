@@ -15,5 +15,5 @@ Use instead:
 - `docs/atm-message-schema.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
-- `docs/phase-U/sprint-U1.md`
-- `docs/phase-U/sprint-U2.md`
+- `docs/plans/phase-U/sprint-U1.md`
+- `docs/plans/phase-U/sprint-U2.md`

@@ -49,4 +49,4 @@ Use this skill for the repo-native smoke harness and its report artifacts.
   - `normal` uses `z20-team`
 - current daemon shutdown handling in the smoke runner is POSIX-only; fail
   closed on non-POSIX hosts instead of pretending Windows support exists
-- major findings promote into `docs/phase-Z/smoke-findings-review.md`
+- major findings promote into `docs/plans/phase-Z/smoke-findings-review.md`

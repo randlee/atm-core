@@ -1,19 +1,21 @@
+#![allow(
+    deprecated,
+    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
+)]
+
 use std::fmt;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, InboxExportAppendMessageSetRequest,
-    InboxExportReexportMessageRequest, MessageKey,
-};
+use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
+
+use crate::boundary::ProjectionAppendMode;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::{InboxMessage, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
@@ -25,7 +27,9 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
 }
 
-pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
+pub(crate) trait RetainedServiceRuntime:
+    crate::boundary::NotificationSink + crate::boundary::sealed::Sealed
+{
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
@@ -62,34 +66,34 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError>;
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
-        messages: &[MessageEnvelope],
+        mode: ProjectionAppendMode,
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn load_roster_member(
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError>;
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError>;
     fn load_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError>;
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError>;
     fn load_claude_code_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
         let records = self.load_team_roster(team)?;
-        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
             team.clone(),
             &records,
         ))
@@ -111,9 +115,8 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
 
 #[derive(Clone)]
 pub struct LocalServiceRuntime {
-    pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
-    pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
-    pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+    pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
+    pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
     pub(crate) notification_sink:
@@ -122,15 +125,13 @@ pub struct LocalServiceRuntime {
 
 impl LocalServiceRuntime {
     pub fn new_with_delivery_boundaries(
-        mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
-        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
-        roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+        message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
+        roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
         notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
-            mail_store,
-            task_store,
+            message_store,
             roster_store,
             non_claude_outbound,
             notification_sink,
@@ -141,8 +142,10 @@ impl LocalServiceRuntime {
 impl fmt::Debug for LocalServiceRuntime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalServiceRuntime")
-            .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
-            .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
+            .field(
+                "message_store",
+                &std::sync::Arc::as_ptr(&self.message_store),
+            )
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "non_claude_outbound",
@@ -342,71 +345,74 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<(), AtmError> {
         let messages = load_store_backed_mailbox_projection(self, team, agent)?;
-
-        crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
-            path: inbox_path.to_path_buf(),
-            messages,
-        })
-        .map(|_| ())
+        crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        message: &MessageEnvelope,
+        message: &InboxMessage,
     ) -> Result<(), AtmError> {
-        if compat_inbox_uses_legacy_array_format(inbox_path)? {
-            return Err(AtmError::validation(format!(
-                "append-only compatibility delivery does not support legacy array inbox {}",
-                inbox_path.display()
-            ))
-            .with_recovery(
-                "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; ATM no longer rewrites legacy array inboxes from the append-only runtime path.",
-            ));
-        }
-        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message)
+        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
+            if current_claude_inbox_requires_repair(inbox_path).unwrap_or(false) {
+                AtmError::validation(format!(
+                    "compatibility inbox {} is malformed or unsupported for the primary Claude delivery path",
+                    inbox_path.display()
+                ))
+                .with_recovery(
+                    "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; healthy current Claude inbox files should not require this path.",
+                )
+                .with_source(error)
+            } else {
+                error
+            }
+        })
     }
 
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
-        mode: ClaudeCompatibilityDeliveryMode,
-        messages: &[MessageEnvelope],
+        mode: ProjectionAppendMode,
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
-        crate::direct_boundaries::append_message_set(InboxExportAppendMessageSetRequest {
-            path: inbox_path.to_path_buf(),
-            messages: messages.to_vec(),
-            mode,
-        })
-        .map(|_| ())
+        match mode {
+            ProjectionAppendMode::RecoveredLogicalMessageSet => {
+                let export_policy = crate::mailbox::store::export_policy_for_path(inbox_path)?;
+                crate::mailbox::store::append_compat_mailbox_message_set(
+                    inbox_path,
+                    export_policy,
+                    messages,
+                )
+            }
+        }
     }
 
     fn load_roster_member(
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
-        self.roster_store
-            .query_membership(crate::boundary::RosterStoreQueryMembershipRequest {
-                team: team.clone(),
-                member: agent.clone(),
-            })
-            .map(|response| response.member)
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
+        Ok(self
+            .roster_store
+            .load_roster(team)?
+            .members
+            .into_iter()
+            .find(|member| &member.agent_name == agent))
     }
 
     fn load_team_roster(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
         self.roster_store
-            .load_roster(crate::boundary::RosterStoreLoadRosterRequest { team: team.clone() })
-            .map(|response| response.members)
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
     }
 
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
-        messages: &[MessageEnvelope],
+        messages: &[InboxMessage],
     ) -> Result<(), AtmError> {
         self.non_claude_outbound
             .deliver_payloads(crate::boundary::NonClaudeOutboundDeliveryRequest {
@@ -443,85 +449,51 @@ fn load_store_backed_mailbox_projection(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
     agent: &AgentName,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
-    let mut metadata_rows = runtime
-        .mail_store
-        .query_mailbox_metadata(crate::boundary::MailStoreQueryMailboxMetadataRequest {
-            team: team.clone(),
-            agent: agent.clone(),
-            limit: None,
-        })?
-        .rows;
+) -> Result<Vec<InboxMessage>, AtmError> {
+    let mut metadata_rows =
+        crate::service_runtime_store::RetainedMailboxRuntime::query_mailbox_metadata_rows(
+            runtime,
+            Path::new(""),
+            team,
+            agent,
+            None,
+        )?;
     metadata_rows.sort_by(|left, right| {
         left.message_at
             .cmp(&right.message_at)
             .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
     });
 
-    metadata_rows
-        .into_iter()
-        .map(|row| load_projection_message(runtime, team, agent, &row.message_key))
-        .collect()
+    let mut messages = Vec::with_capacity(metadata_rows.len());
+    for row in metadata_rows {
+        // Keep the repair/rebuild projection consistent with the live send
+        // export path: a row deleted between metadata enumeration and reload is
+        // a legal concurrent-clear race, not a fatal rebuild error.
+        let Some(record) =
+            crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
+                runtime,
+                Path::new(""),
+                team,
+                agent,
+                &row.message_key,
+            )?
+        else {
+            continue;
+        };
+        messages.push(record.envelope);
+    }
+    Ok(messages)
 }
 
-#[allow(
-    dead_code,
-    reason = "Called only from load_store_backed_mailbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
-)]
-fn load_projection_message(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &AgentName,
-    message_key: &MessageKey,
-) -> Result<MessageEnvelope, AtmError> {
-    runtime
-        .mail_store
-        .load_message(crate::boundary::MailStoreLoadMessageRequest {
-            team: team.clone(),
-            agent: agent.clone(),
-            message_key: message_key.clone(),
-        })?
-        .record
-        .map(|record| record.envelope)
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-                message_key
-            ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-            )
-        })
-}
-
-fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> {
-    if !path.exists() {
+fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
+    if !path.exists()
+        || crate::mailbox::store::inbox_file_format(path)
+            != crate::mailbox::store::InboxFileFormat::ClaudeJsonArray
+    {
         return Ok(false);
     }
 
-    let mut file = File::open(path).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to inspect compatibility inbox {} before append: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the inbox file is readable before retrying the append-only compatibility write.",
-        )
-        .with_source(error)
-    })?;
-    let mut prefix = [0_u8; 256];
-    let bytes_read = file.read(&mut prefix).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to read compatibility inbox {} before append: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the inbox file is readable before retrying the append-only compatibility write.",
-        )
-        .with_source(error)
-    })?;
-    let visible = String::from_utf8_lossy(&prefix[..bytes_read]);
-    Ok(visible.trim_start().starts_with('['))
+    Ok(crate::mailbox::load_compat_mailbox_messages_strict(path).is_err())
 }
 
 #[cfg(test)]
@@ -530,10 +502,9 @@ mod tests {
         LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
         MAX_NON_CLAUDE_PAYLOAD_BYTES, RetainedServiceRuntime,
     };
-    use crate::boundary;
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
-    use crate::schema::MessageEnvelope;
+    use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
     use serde_json::Value;
@@ -543,153 +514,38 @@ mod tests {
     use tempfile::tempdir;
 
     #[derive(Debug)]
-    struct NoopMailStore;
+    struct NoopMessageStore;
 
-    impl boundary::sealed::Sealed for NoopMailStore {}
-
-    impl boundary::MailStore for NoopMailStore {
-        fn bootstrap(
+    #[allow(
+        deprecated,
+        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
+    )]
+    impl atm_storage::MessageStore for NoopMessageStore {
+        fn save_message(
             &self,
-            _request: boundary::MailStoreBootstrapRequest,
-        ) -> Result<boundary::MailStoreBootstrapResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn run_transaction(
-            &self,
-            _request: boundary::MailStoreTransactionRequest,
-        ) -> Result<boundary::MailStoreTransactionResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn upsert_message(
-            &self,
-            _request: boundary::MailStoreUpsertMessageRequest,
-        ) -> Result<boundary::MailStoreUpsertMessageResponse, crate::error::AtmError> {
+            _message: &atm_storage::Message,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
         fn load_message(
             &self,
-            _request: boundary::MailStoreLoadMessageRequest,
-        ) -> Result<boundary::MailStoreLoadMessageResponse, crate::error::AtmError> {
+            _key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
-        fn load_stored_message(
+        fn list_messages(
             &self,
-            _request: boundary::MailStoreLoadStoredMessageRequest,
-        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, crate::error::AtmError> {
+            Ok(Vec::new())
         }
 
-        fn query_mailbox_metadata(
+        fn delete_message(
             &self,
-            _request: boundary::MailStoreQueryMailboxMetadataRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, crate::error::AtmError>
-        {
-            Ok(boundary::MailStoreQueryMailboxMetadataResponse { rows: Vec::new() })
-        }
-
-        fn query_mailbox_metadata_counts(
-            &self,
-            _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn upsert_message_state(
-            &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_message_state(
-            &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn record_ingest_replay_state(
-            &self,
-            _request: boundary::MailStoreRecordIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn load_ingest_replay_state(
-            &self,
-            _request: boundary::MailStoreLoadIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn health_snapshot(
-            &self,
-            _request: boundary::MailStoreHealthSnapshotRequest,
-        ) -> Result<boundary::MailStoreHealthSnapshotResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopTaskStore;
-
-    impl boundary::sealed::Sealed for NoopTaskStore {}
-
-    impl boundary::TaskStore for NoopTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, crate::error::AtmError>
-        {
-            unimplemented!("test stub")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, crate::error::AtmError> {
+            _key: &atm_storage::MessageKey,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }
@@ -697,47 +553,36 @@ mod tests {
     #[derive(Debug)]
     struct NoopRosterStore;
 
-    impl boundary::sealed::Sealed for NoopRosterStore {}
-
-    impl boundary::RosterStore for NoopRosterStore {
-        fn replace_roster(
-            &self,
-            _request: boundary::RosterStoreReplaceRosterRequest,
-        ) -> Result<boundary::RosterStoreReplaceRosterResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
+    #[allow(
+        deprecated,
+        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
+    )]
+    impl atm_storage::RosterStore for NoopRosterStore {
         fn load_roster(
             &self,
-            _request: boundary::RosterStoreLoadRosterRequest,
-        ) -> Result<boundary::RosterStoreLoadRosterResponse, crate::error::AtmError> {
+            _team: &TeamName,
+        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: _team.clone(),
+                members: Vec::new(),
+                refreshed_at: None,
+            })
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
             unimplemented!("test stub")
         }
 
-        fn query_membership(
+        fn save_roster(
             &self,
-            _request: boundary::RosterStoreQueryMembershipRequest,
-        ) -> Result<boundary::RosterStoreQueryMembershipResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn list_teams(
-            &self,
-            _request: boundary::RosterStoreListTeamsRequest,
-        ) -> Result<boundary::RosterStoreListTeamsResponse, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn health_snapshot(
-            &self,
-            _request: boundary::RosterStoreHealthSnapshotRequest,
-        ) -> Result<boundary::RosterStoreHealthSnapshotResponse, crate::error::AtmError> {
+            _roster: &atm_storage::RosterSnapshot,
+        ) -> Result<(), crate::error::AtmError> {
             unimplemented!("test stub")
         }
     }
 
-    fn message() -> MessageEnvelope {
-        MessageEnvelope {
+    fn message() -> InboxMessage {
+        InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
@@ -765,21 +610,48 @@ mod tests {
     }
 
     #[test]
-    fn append_compat_inbox_message_rejects_legacy_array_mailbox_from_runtime_path() {
+    fn append_compat_inbox_message_accepts_current_claude_json_array_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.json");
+        let first = message();
+        let second = message();
         std::fs::write(
             &inbox_path,
             format!(
                 "{}\n",
-                serde_json::to_string_pretty(&vec![message()]).expect("mailbox array")
+                serde_json::to_string_pretty(&vec![first.clone()]).expect("mailbox array")
             ),
         )
         .expect("write mailbox");
 
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
+            Arc::new(NoopMessageStore),
+            Arc::new(NoopRosterStore),
+            Arc::new(LocalFileNonClaudeOutbound::new()),
+            Arc::new(LocalFileNotificationSink::at_path(
+                tempdir.path().join("notifications.jsonl"),
+            )),
+        );
+
+        runtime
+            .append_compat_inbox_message(&inbox_path, &second)
+            .expect("current Claude array path should succeed");
+
+        let raw = std::fs::read_to_string(&inbox_path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 2);
+        assert_eq!(encoded[0]["text"], serde_json::Value::String(first.text));
+        assert_eq!(encoded[1]["text"], serde_json::Value::String(second.text));
+    }
+
+    #[test]
+    fn append_compat_inbox_message_rejects_malformed_current_claude_json_array_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.json");
+        std::fs::write(&inbox_path, "[{ not-json }\n").expect("write malformed mailbox");
+
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -789,14 +661,13 @@ mod tests {
 
         let error = runtime
             .append_compat_inbox_message(&inbox_path, &message())
-            .expect_err("legacy array path must fail closed");
+            .expect_err("malformed Claude array path must fail closed");
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(
             error
                 .recovery
-                .as_deref()
-                .unwrap_or_default()
-                .contains("explicit repair/rebuild inbox projection path"),
+                .iter()
+                .any(|recovery| recovery.contains("explicit repair/rebuild inbox projection path")),
             "unexpected recovery: {error:?}"
         );
     }
@@ -806,8 +677,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
+            Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -833,8 +703,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let notification_path = tempdir.path().join("notifications.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMailStore),
-            Arc::new(NoopTaskStore),
+            Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
             Arc::new(LocalFileNotificationSink::at_path(
@@ -898,7 +767,7 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 agent: AgentName::from_validated("recipient"),
                 recipient_pane_id: None,
-                messages: vec![MessageEnvelope {
+                messages: vec![InboxMessage {
                     text: oversized_body,
                     ..message()
                 }],
@@ -909,9 +778,9 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
         assert!(error.message.contains("exceeded"));
         assert_eq!(
-            error.recovery.as_deref(),
+            error.primary_recovery(),
             Some(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
+                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
             )
         );
         assert!(!output_path.exists());

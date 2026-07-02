@@ -89,6 +89,8 @@ Consequences:
 - CLI runtime wiring stays thin.
 - Thin extension crates can mirror the same client shape without importing CLI
   internals.
+- Thin extension crates can also version-skew from the primary `atm` install as
+  long as they remain compatible with the documented same-host RPC surface.
 
 Alternatives considered:
 - Let CLI call daemon internals directly.
@@ -134,6 +136,14 @@ Follow-up work:
   effect of transport object construction
 - the client-side launch path must acquire the documented pre-spawn launch gate
   before daemon fork/exec
+- the CLI standard same-host bootstrap path must be the canonical thin-client
+  convenience wrapper for endpoint resolution, daemon-binary resolution, probe,
+  and supervised auto-start through the shared `atm-daemon-client` bootstrap
+  seam; other first-party thin clients may mirror that path, but they must not
+  depend on CLI internals to do so
+- the canonical thin-client bootstrap seam must stay free of runtime/storage
+  composition ownership so convenience auto-start never forces `atm-runtime` or
+  concrete backend crates into thin-client dependency graphs
 - `atm` must preserve typed runtime error identity until the rendering
   boundary instead of collapsing failures into panic/unwrap control flow
 

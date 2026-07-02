@@ -1,34 +1,34 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp};
 
 const MAX_LOGICAL_THREAD_TEXT_BYTES: usize = 256 * 1024;
 const TRUNCATED_THREAD_CONTEXT_SENTINEL: &str = "\n\n[ATM thread context truncated]";
 
-pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
+pub(crate) fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
     message.from.clone()
 }
 
-pub(crate) fn is_ephemeral(message: &MessageEnvelope) -> bool {
+pub(crate) fn is_ephemeral(message: &InboxMessage) -> bool {
     message.expires_at.is_some()
 }
 
-pub(crate) fn is_expired_ephemeral(message: &MessageEnvelope, now: IsoTimestamp) -> bool {
+pub(crate) fn is_expired_ephemeral(message: &InboxMessage, now: IsoTimestamp) -> bool {
     message
         .expires_at
         .is_some_and(|expires_at| expires_at <= now)
 }
 
 pub(crate) struct ThreadIndex<'a> {
-    by_id: HashMap<AtmMessageId, &'a MessageEnvelope>,
-    children: HashMap<AtmMessageId, Vec<&'a MessageEnvelope>>,
+    by_id: HashMap<AtmMessageId, &'a InboxMessage>,
+    children: HashMap<AtmMessageId, Vec<&'a InboxMessage>>,
 }
 
 impl<'a> ThreadIndex<'a> {
-    pub(crate) fn new(messages: &'a [MessageEnvelope]) -> Self {
+    pub(crate) fn new(messages: &'a [InboxMessage]) -> Self {
         let mut by_id = HashMap::new();
-        let mut children: HashMap<AtmMessageId, Vec<&MessageEnvelope>> = HashMap::new();
+        let mut children: HashMap<AtmMessageId, Vec<&InboxMessage>> = HashMap::new();
 
         for message in messages {
             if let Some(message_id) = message.message_id {
@@ -45,7 +45,7 @@ impl<'a> ThreadIndex<'a> {
         Self { by_id, children }
     }
 
-    pub(crate) fn message(&self, message_id: AtmMessageId) -> Option<&'a MessageEnvelope> {
+    pub(crate) fn message(&self, message_id: AtmMessageId) -> Option<&'a InboxMessage> {
         self.by_id.get(&message_id).copied()
     }
 
@@ -96,7 +96,7 @@ impl<'a> ThreadIndex<'a> {
     pub(crate) fn logical_current_envelope(
         &self,
         message_id: AtmMessageId,
-    ) -> Option<MessageEnvelope> {
+    ) -> Option<InboxMessage> {
         let terminal_id = self.terminal_id(message_id)?;
         let terminal = self.message(terminal_id)?.clone();
         if terminal.thread_mode != Some(ThreadMode::AddDetails) {
@@ -139,7 +139,7 @@ impl<'a> ThreadIndex<'a> {
             .any(|message| message.pending_ack_at.is_some() || message.acknowledged_at.is_some())
     }
 
-    pub(crate) fn chain_messages(&self, message_id: AtmMessageId) -> Vec<&'a MessageEnvelope> {
+    pub(crate) fn chain_messages(&self, message_id: AtmMessageId) -> Vec<&'a InboxMessage> {
         let Some(root_id) = self.root_id(message_id) else {
             return Vec::new();
         };
@@ -163,7 +163,7 @@ impl<'a> ThreadIndex<'a> {
         chain
     }
 
-    fn primary_successor(&self, parent_id: AtmMessageId) -> Option<&'a MessageEnvelope> {
+    fn primary_successor(&self, parent_id: AtmMessageId) -> Option<&'a InboxMessage> {
         let successors = self.children.get(&parent_id)?;
         successors.iter().copied().max_by(|left, right| {
             left.timestamp
@@ -181,7 +181,7 @@ mod tests {
         MAX_LOGICAL_THREAD_TEXT_BYTES, TRUNCATED_THREAD_CONTEXT_SENTINEL, ThreadIndex,
         canonical_sender_identity, is_ephemeral, is_expired_ephemeral,
     };
-    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -190,8 +190,8 @@ mod tests {
         message_id: AtmMessageId,
         parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
-    ) -> MessageEnvelope {
-        MessageEnvelope {
+    ) -> InboxMessage {
+        InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
@@ -242,11 +242,11 @@ mod tests {
         let root_id = AtmMessageId::new();
         let detail_id = AtmMessageId::new();
         let messages = vec![
-            MessageEnvelope {
+            InboxMessage {
                 text: "root context".to_string(),
                 ..message(TEST_SENDER, root_id, None, None)
             },
-            MessageEnvelope {
+            InboxMessage {
                 text: "follow-up detail".to_string(),
                 ..message(
                     TEST_SENDER,
@@ -272,11 +272,11 @@ mod tests {
         let supersede_id = AtmMessageId::new();
         let detail_id = AtmMessageId::new();
         let messages = vec![
-            MessageEnvelope {
+            InboxMessage {
                 text: "root context".to_string(),
                 ..message(TEST_SENDER, root_id, None, None)
             },
-            MessageEnvelope {
+            InboxMessage {
                 text: "replacement instruction".to_string(),
                 ..message(
                     TEST_SENDER,
@@ -285,7 +285,7 @@ mod tests {
                     Some(ThreadMode::Supersede),
                 )
             },
-            MessageEnvelope {
+            InboxMessage {
                 text: "follow-up detail".to_string(),
                 ..message(
                     TEST_SENDER,
@@ -310,11 +310,11 @@ mod tests {
         let root_id = AtmMessageId::new();
         let detail_id = AtmMessageId::new();
         let messages = vec![
-            MessageEnvelope {
+            InboxMessage {
                 text: "a".repeat(200_000),
                 ..message(TEST_SENDER, root_id, None, None)
             },
-            MessageEnvelope {
+            InboxMessage {
                 text: "b".repeat(200_000),
                 ..message(
                     TEST_SENDER,

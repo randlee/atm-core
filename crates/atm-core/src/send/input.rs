@@ -100,11 +100,11 @@ mod tests {
 
         assert!(error.is_validation());
         assert!(error.message.contains("stdin message exceeds"));
-        assert!(
-            error
-                .recovery
-                .as_deref()
-                .is_some_and(|value| value.contains("--file"))
+        assert_eq!(
+            error.primary_recovery(),
+            Some(
+                "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument."
+            )
         );
     }
 

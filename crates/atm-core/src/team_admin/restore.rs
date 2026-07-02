@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "team_admin restore still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
+)]
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,7 +11,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tracing::warn;
 
-use crate::boundary::{RosterMemberRecord, RosterStore};
+use crate::boundary::{RosterEntry, RosterStore};
 use crate::config::load_claude_team_config_document;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
@@ -196,7 +201,7 @@ fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShell
 
 fn build_restored_team_config(
     recreated_shell: &RecreatedLeadShellState,
-    canonical_roster: &[RosterMemberRecord],
+    canonical_roster: &[RosterEntry],
 ) -> crate::schema::TeamConfig {
     let non_lead_roster = canonical_roster
         .iter()
@@ -635,27 +640,23 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
-        RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
-        RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest,
-        RosterStoreListTeamsResponse, RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse,
-        RosterStoreQueryMembershipRequest, RosterStoreQueryMembershipResponse,
-        RosterStoreReplaceRosterRequest, RosterStoreReplaceRosterResponse,
+        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
+        RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::TeamConfig;
     use crate::team_admin::{RestoreRequest, RestoreResult};
     use crate::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use crate::types::TeamName;
+    use crate::types::{AgentName, TeamName};
 
     #[derive(Default)]
     struct RecordingRosterStore {
-        teams: Mutex<BTreeMap<TeamName, Vec<RosterMemberRecord>>>,
+        teams: Mutex<BTreeMap<TeamName, Vec<RosterEntry>>>,
     }
 
     impl RecordingRosterStore {
-        fn seed_team(&self, team: &str, members: Vec<RosterMemberRecord>) {
+        fn seed_team(&self, team: &str, members: Vec<RosterEntry>) {
             self.teams
                 .lock()
                 .expect("roster store lock")
@@ -668,101 +669,74 @@ mod tests {
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(
             &self,
-            request: RosterStoreReplaceRosterRequest,
-        ) -> Result<RosterStoreReplaceRosterResponse, AtmError> {
-            let previous_member_count = self
-                .teams
+            team: &TeamName,
+            members: &[RosterEntry],
+            _source: Option<&ReplaySource>,
+        ) -> Result<(), AtmError> {
+            self.teams
                 .lock()
                 .expect("roster store lock")
-                .insert(request.team.clone(), request.members.clone())
-                .map(|members| members.len() as u64)
-                .unwrap_or_default();
-            Ok(RosterStoreReplaceRosterResponse {
-                team: request.team,
-                previous_member_count,
-                current_member_count: request.members.len() as u64,
-                replaced: true,
-            })
+                .insert(team.clone(), members.to_vec());
+            Ok(())
         }
 
-        fn load_roster(
-            &self,
-            request: RosterStoreLoadRosterRequest,
-        ) -> Result<RosterStoreLoadRosterResponse, AtmError> {
-            let members = self
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .cloned()
-                .unwrap_or_default();
-            Ok(RosterStoreLoadRosterResponse {
-                team: request.team,
-                members,
-            })
+                .unwrap_or_default())
         }
 
         fn query_membership(
             &self,
-            request: RosterStoreQueryMembershipRequest,
-        ) -> Result<RosterStoreQueryMembershipResponse, AtmError> {
-            let member = self
+            team: &TeamName,
+            member: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .and_then(|members| {
                     members
                         .iter()
-                        .find(|member| member.agent_name == request.member)
+                        .find(|existing| existing.agent_name == *member)
                         .cloned()
-                });
-            Ok(RosterStoreQueryMembershipResponse {
-                team: request.team,
-                is_member: member.is_some(),
-                member,
-            })
+                }))
         }
 
-        fn list_teams(
-            &self,
-            _request: RosterStoreListTeamsRequest,
-        ) -> Result<RosterStoreListTeamsResponse, AtmError> {
-            Ok(RosterStoreListTeamsResponse {
-                teams: self
-                    .teams
-                    .lock()
-                    .expect("roster store lock")
-                    .keys()
-                    .cloned()
-                    .collect(),
-            })
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
+            Ok(self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .keys()
+                .cloned()
+                .collect())
         }
 
-        fn health_snapshot(
-            &self,
-            request: RosterStoreHealthSnapshotRequest,
-        ) -> Result<RosterStoreHealthSnapshotResponse, AtmError> {
+        fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError> {
             let member_count = self
                 .teams
                 .lock()
                 .expect("roster store lock")
-                .get(&request.team)
+                .get(team)
                 .map(|members| members.len() as u64)
                 .unwrap_or_default();
-            Ok(RosterStoreHealthSnapshotResponse {
-                snapshot: RosterStoreHealthSnapshot {
-                    team: request.team,
-                    member_count,
-                    stale: false,
-                    refreshed_at: None,
-                },
+            Ok(RosterStoreHealthSnapshot {
+                team: team.clone(),
+                member_count,
+                stale: false,
+                refreshed_at: None,
             })
         }
     }
 
-    fn roster_member(team: &str, agent: &str) -> RosterMemberRecord {
-        RosterMemberRecord {
+    fn roster_member(team: &str, agent: &str) -> RosterEntry {
+        RosterEntry {
             team_name: team.parse().expect("team"),
             agent_name: agent.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
@@ -800,7 +774,7 @@ mod tests {
     }
 
     fn write_inbox(path: &Path, text: &str) {
-        let envelope = crate::schema::MessageEnvelope {
+        let envelope = crate::schema::InboxMessage {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
@@ -1201,7 +1175,7 @@ mod tests {
             .find(|member| member.name == TEST_RECIPIENT)
             .expect("recipient");
         assert_eq!(recipient.tmux_pane_id.as_deref(), Some("%12"));
-        assert_eq!(recipient.cwd, "/repo/recipient");
+        assert_eq!(recipient.cwd, std::path::PathBuf::from("/repo/recipient"));
         assert_eq!(config.extra["leadSessionId"], json!("lead-current"));
     }
 

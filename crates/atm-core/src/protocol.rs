@@ -65,9 +65,9 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
-    Receive(ReadOutcome),
+    Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
-    Doctor(DoctorReport),
+    Doctor(Box<DoctorReport>),
     AdvisoryRegister(AdvisorySessionRegistrationResponse),
     AdvisoryUnregister(AdvisorySessionUnregistrationResponse),
     AdvisoryFetch(AdvisoryFetchResponse),
@@ -81,8 +81,8 @@ pub enum ResponseEnvelope {
 pub struct ProtocolErrorEnvelope {
     pub code: AtmErrorCode,
     pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recovery: Vec<String>,
 }
 
 impl ProtocolErrorEnvelope {
@@ -95,12 +95,12 @@ impl ProtocolErrorEnvelope {
     }
 
     pub fn into_atm_error(self) -> AtmError {
-        let error =
+        let mut error =
             AtmError::new_with_code(self.code, error_kind_for_code(self.code), self.message);
-        match self.recovery {
-            Some(recovery) => error.with_recovery(recovery),
-            None => error,
+        for recovery in self.recovery {
+            error = error.with_recovery(recovery);
         }
+        error
     }
 }
 
@@ -152,6 +152,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::WarningSqliteHealthDegraded => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
@@ -785,8 +786,6 @@ pub struct RuntimeStatusSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub singleton_owner_pid: Option<u32>,
     #[serde(default)]
-    pub sqlite_ready: bool,
-    #[serde(default)]
     pub degraded_ingest: bool,
     #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
@@ -895,7 +894,6 @@ mod tests {
             readiness: RuntimeReadinessState::Ready,
             detail: Some("runtime cache ready".to_string()),
             singleton_owner_pid: Some(777),
-            sqlite_ready: true,
             degraded_ingest: false,
             member_counts: RuntimeStatusCounts {
                 active_members: 2,

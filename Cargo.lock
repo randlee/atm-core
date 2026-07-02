@@ -4,12 +4,13 @@ version = 4
 
 [[package]]
 name = "agent-team-mail"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
+ "atm-runtime",
  "atm-runtime-test-support",
  "chrono",
  "clap",
@@ -27,9 +28,10 @@ dependencies = [
 
 [[package]]
 name = "agent-team-mail-core"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "atm-runtime-test-support",
+ "atm-storage",
  "chrono",
  "fs2",
  "interprocess",
@@ -42,7 +44,6 @@ dependencies = [
  "tempfile",
  "toml",
  "tracing",
- "ulid",
  "uuid",
  "windows-sys 0.59.0",
 ]
@@ -108,9 +109,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "arc-swap"
@@ -122,13 +123,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-architecture"
+version = "1.2.2"
+dependencies = [
+ "cargo_metadata",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "atm-daemon"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
+ "atm-runtime",
  "atm-runtime-test-support",
- "atm-rusqlite",
+ "atm-storage",
+ "atm-storage-claude",
  "chrono",
  "fs2",
  "interprocess",
@@ -143,30 +155,32 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-bootstrap"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-daemon-client",
- "atm-rusqlite",
+ "atm-runtime",
 ]
 
 [[package]]
 name = "atm-daemon-client"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
+ "atm-storage",
+ "bytes",
  "fs2",
  "interprocess",
+ "serde",
+ "serde_json",
  "tempfile",
  "tracing",
 ]
 
 [[package]]
 name = "atm-graft"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-daemon-bootstrap",
  "atm-daemon-client",
  "interprocess",
  "serde_json",
@@ -175,26 +189,64 @@ dependencies = [
 ]
 
 [[package]]
-name = "atm-runtime-test-support"
-version = "1.2.0"
+name = "atm-runtime"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-rusqlite",
+ "atm-storage",
+ "atm-storage-rusqlite",
+ "serde_json",
 ]
 
 [[package]]
-name = "atm-rusqlite"
-version = "1.2.0"
+name = "atm-runtime-test-support"
+version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-runtime-test-support",
+ "atm-runtime",
+ "atm-storage-rusqlite",
+]
+
+[[package]]
+name = "atm-storage"
+version = "1.2.2"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "toml",
+ "ulid",
+ "uuid",
+]
+
+[[package]]
+name = "atm-storage-claude"
+version = "1.2.2"
+dependencies = [
+ "atm-storage",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "atm-storage-rusqlite"
+version = "1.2.2"
+dependencies = [
+ "atm-storage",
  "chrono",
  "rusqlite",
  "serde",
  "serde_json",
- "serial_test",
- "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "atm-storage-sqlserver-proof"
+version = "1.2.2"
+dependencies = [
+ "atm-storage",
 ]
 
 [[package]]
@@ -214,6 +266,12 @@ name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
+
+[[package]]
+name = "bytes"
+version = "1.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "camino"
@@ -874,21 +932,22 @@ dependencies = [
 
 [[package]]
 name = "sc-observability"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e885e135bd6d6330b18528f3d25b812c354ffde1fc7bca49de56cf90dbbf61f"
+checksum = "2055d92ac115dce2a139b182f9f7c716351a4f93c4449f9693a2a3c4493b345d"
 dependencies = [
  "sc-observability-types",
  "serde",
  "serde_json",
+ "thiserror",
  "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "sc-observability-types"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b43c59f93ca2bf8416d5e0c12b2fcb6de58913543aa4c0b62cddbb9e25b430"
+checksum = "b3ddd83dc10e65f4fda4c8b392fb9cfb520c4007c5ee5d0cde3af75c463b98ab"
 dependencies = [
  "serde",
  "serde_json",

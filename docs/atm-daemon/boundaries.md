@@ -7,6 +7,10 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
+- after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
+  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
+  boundary violation guarded by both the boundary TOMLs and
+  `cargo test --package atm-architecture`
 - Runtime test doubles now exist for the watch/reconcile/notifier lanes so
   boundary tests can exercise the daemon-owned runtimes without bypassing the
   declared contracts.
@@ -326,7 +330,7 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the daemon runtime adapter behind the InboxIngress contract.
+- Owns the daemon runtime adapter behind the SourceIngress contract.
 
 Notes:
 - This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
@@ -338,7 +342,7 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the daemon runtime adapter behind the InboxExport contract.
+- Owns the daemon runtime adapter behind the ProjectionExport contract.
 
 Notes:
 - This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
@@ -353,10 +357,10 @@ Notes:
 - `Phase Yc` adds one final recovered-Claude seam requirement:
   - `Y.12` must document the daemon-side adapter behavior for the recovered
     logical-message-set seam through
-    `InboxExport::append_message_set(...)` rather than treating
+    `ProjectionExport::append_message_set(...)` rather than treating
     `DaemonInboxExportAdapter` as append-only by implication
   - the daemon adapter must expose the recovered Claude message-set export as
-    one owned `InboxExport` operation, not as repeated single-message appends
+    one owned `ProjectionExport` operation, not as repeated single-message appends
 
 ## Policy Placement
 
@@ -369,11 +373,11 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
   the ATM roster store and its immutable projections.
 - repository-local lint / later `sc-lint` extraction should gate generic
   `load_claude_team_config_document(...)` use outside the explicit allowlist.
-- `InboxIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
-- `InboxIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
-- `InboxExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
-- `InboxExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
-- one delivery-policy coordinator above `InboxExport` must decide:
+- `SourceIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
+- `SourceIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
+- `ProjectionExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
+- `ProjectionExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
+- one delivery-policy coordinator above `ProjectionExport` must decide:
   - whether a given event may use compatibility export
   - which harness path applies
   - which event-family state machine owns the transition

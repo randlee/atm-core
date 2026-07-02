@@ -2,12 +2,15 @@ mod notification_fingerprints;
 
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, RosterStore,
+    self, MessageFingerprint, NotificationSink, ReconcileRequest, ReconcileResult,
     WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
+use atm_storage::RosterStore;
+use atm_storage_claude::compat::SourceFileRecord;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
@@ -73,7 +76,13 @@ struct ReconcileRuntimeInner {
     worker: Arc<JoinHandleOwner>,
     // Production writes begin recording projection journal entries in Z.11 when
     // the team-admin path becomes the canonical config projection writer.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "AC.2 carries the projection journal field until daemon-owned config projection suppression is wired through the live reconcile path."
+        )
+    )]
     projection_write_journal: ProjectionWriteJournal,
     queue_capacity: usize,
     debounce: Duration,
@@ -82,6 +91,20 @@ struct ReconcileRuntimeInner {
     shutdown_deadline: Duration,
     observability: SubsystemObservability,
     start_claimed: AtomicBool,
+}
+
+pub(crate) trait InboxIngressPort: boundary::sealed::Sealed {
+    fn import_inbox_source(
+        &self,
+        home_dir: &Path,
+        team: &atm_storage::TeamName,
+        agent: &atm_storage::AgentName,
+    ) -> Result<Vec<SourceFileRecord>, AtmError>;
+
+    fn compute_identity_fingerprint(
+        &self,
+        message: &atm_storage::MessageEnvelope,
+    ) -> Option<MessageFingerprint>;
 }
 
 type ReconcileExecutor =
@@ -138,7 +161,7 @@ impl ReconcileWorkerState {
 struct ReconcileReplyErrorSnapshot {
     code: atm_core::error_codes::AtmErrorCode,
     message: String,
-    recovery: Option<String>,
+    recovery: Vec<String>,
 }
 
 impl From<&AtmError> for ReconcileReplyErrorSnapshot {
@@ -176,7 +199,7 @@ impl ReconcileRuntime {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
-        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        inbox_ingress: Arc<dyn InboxIngressPort + Send + Sync>,
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
@@ -191,7 +214,7 @@ impl ReconcileRuntime {
 
     pub(crate) fn new_with_observability(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
-        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        inbox_ingress: Arc<dyn InboxIngressPort + Send + Sync>,
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
@@ -212,16 +235,14 @@ impl ReconcileRuntime {
                     &projection_write_journal_for_executor,
                 )?;
                 let import = inbox_ingress.import_inbox_source(
-                    atm_core::boundary::InboxIngressImportRequest {
-                        home_dir: request.home_dir.clone(),
-                        team: request.team.clone(),
-                        agent: request.agent.clone(),
-                    },
+                    &request.home_dir,
+                    &request.team,
+                    &request.agent,
                 )?;
                 Ok(ReconcileExecution {
                     result: ReconcileResult {
                         observed_paths: batch.paths.len(),
-                        imported_sources: import.source_files.len(),
+                        imported_sources: import.len(),
                     },
                     current_fingerprints: compute_reconcile_notification_fingerprints(
                         &import,
@@ -672,21 +693,15 @@ impl ReconcileRuntimeInner {
 }
 
 fn compute_reconcile_notification_fingerprints(
-    import: &atm_core::boundary::InboxIngressImportResponse,
-    inbox_ingress: &dyn InboxIngress,
+    import: &[SourceFileRecord],
+    inbox_ingress: &dyn InboxIngressPort,
 ) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
-    for source in &import.source_files {
+    for source in import {
         for message in &source.messages {
-            let fingerprint = inbox_ingress
-                .compute_identity_fingerprint(
-                    atm_core::boundary::InboxIngressIdentityFingerprintRequest {
-                        message: message.clone(),
-                    },
-                )
-                .fingerprint;
+            let fingerprint = inbox_ingress.compute_identity_fingerprint(message);
             let fingerprint = fingerprint?;
-            current_fingerprints.insert(NotificationFingerprint::new(fingerprint)?);
+            current_fingerprints.insert(NotificationFingerprint::new(fingerprint.to_string())?);
         }
     }
     Some(current_fingerprints)

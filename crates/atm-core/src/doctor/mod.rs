@@ -6,7 +6,7 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::boundary::RosterMemberRecord;
+use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterEntry, RosterStoreDoctor};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -16,11 +16,12 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
+use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity,
-    DoctorStatus, DoctorSummary,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
+    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -28,6 +29,23 @@ pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+}
+
+#[derive(Clone)]
+pub struct RuntimeDoctorPorts {
+    pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
+    pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
+    pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
+}
+
+impl std::fmt::Debug for RuntimeDoctorPorts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeDoctorPorts")
+            .field("config_doctor", &"dyn ConfigDoctor")
+            .field("mail_store_doctor", &"dyn MailStoreDoctor")
+            .field("roster_store_doctor", &"dyn RosterStoreDoctor")
+            .finish()
+    }
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -92,9 +110,155 @@ pub fn run_doctor_with_runtime(
         environment,
         member_roster,
         observability: observability_health,
+        config: crate::boundary::ConfigDoctorReport::default(),
+        mail_store: crate::boundary::MailStoreDoctorReport::default(),
+        roster_store: crate::boundary::RosterStoreDoctorReport::default(),
+        daemon_runtime: None,
+        drift_findings: Vec::new(),
         runtime_status: None,
         bootstrap_trace: None,
     })
+}
+
+pub fn run_doctor_with_runtime_ports(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    runtime_doctors: &RuntimeDoctorPorts,
+    daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
+    let home_dir = query.home_dir.clone();
+    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
+    let resolved_team = resolved_doctor_team(&query, config.as_ref());
+    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let (observability_health, observability_finding) = doctor_observability_status(observability);
+    let mut general_findings = Vec::new();
+    let mut drift_findings = Vec::new();
+    let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
+    push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
+    let member_roster = resolved_team.as_ref().and_then(|team| {
+        load_member_roster(
+            runtime,
+            &home_dir,
+            team,
+            config.as_ref(),
+            &mut drift_findings,
+        )
+    });
+    push_stale_mailbox_lock_findings(
+        &initial_lock_snapshot,
+        &snapshot_mailbox_lock_paths(&home_dir),
+        &mut drift_findings,
+    );
+    let findings = collect_doctor_findings(
+        &reports,
+        &drift_findings,
+        &general_findings,
+        observability_finding,
+        daemon_runtime.as_ref(),
+    );
+    let summary = summarize_doctor_findings(&findings);
+    let recommendations = collect_recommendations(&findings);
+
+    Ok(DoctorReport {
+        summary,
+        findings,
+        recommendations,
+        environment,
+        member_roster,
+        observability: observability_health,
+        config: reports.config,
+        mail_store: reports.mail_store,
+        roster_store: reports.roster_store,
+        daemon_runtime,
+        drift_findings,
+        runtime_status: None,
+        bootstrap_trace: None,
+    })
+}
+
+struct DoctorSectionReports {
+    config: crate::boundary::ConfigDoctorReport,
+    mail_store: crate::boundary::MailStoreDoctorReport,
+    roster_store: crate::boundary::RosterStoreDoctorReport,
+}
+
+fn inspect_runtime_doctor_sections(
+    runtime_doctors: &RuntimeDoctorPorts,
+    findings: &mut Vec<DoctorFinding>,
+) -> DoctorSectionReports {
+    DoctorSectionReports {
+        config: inspect_doctor_section(runtime_doctors.config_doctor.inspect_config(), findings),
+        mail_store: inspect_doctor_section(
+            runtime_doctors.mail_store_doctor.inspect_mail_store(),
+            findings,
+        ),
+        roster_store: inspect_doctor_section(
+            runtime_doctors.roster_store_doctor.inspect_roster_store(),
+            findings,
+        ),
+    }
+}
+
+fn push_obsolete_identity_finding(
+    config: Option<&config::AtmConfig>,
+    config_report: &mut crate::boundary::ConfigDoctorReport,
+) {
+    if config.is_some_and(|config| config.obsolete_identity_present) {
+        config_report.findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningIdentityDrift,
+            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            remediation: Some(
+                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                    .to_string(),
+            ),
+        });
+    }
+}
+
+fn collect_doctor_findings(
+    reports: &DoctorSectionReports,
+    drift_findings: &[DoctorFinding],
+    general_findings: &[DoctorFinding],
+    observability_finding: DoctorFinding,
+    daemon_runtime: Option<&report::DaemonRuntimeDoctorReport>,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+    findings.extend(reports.config.findings.iter().cloned());
+    findings.extend(reports.mail_store.findings.iter().cloned());
+    findings.extend(reports.roster_store.findings.iter().cloned());
+    findings.extend(drift_findings.iter().cloned());
+    findings.extend(general_findings.iter().cloned());
+    findings.push(observability_finding);
+    if let Some(runtime_report) = daemon_runtime {
+        findings.extend(runtime_report.findings.iter().cloned());
+    }
+    findings
+}
+
+fn collect_recommendations(findings: &[DoctorFinding]) -> Vec<String> {
+    findings
+        .iter()
+        .filter_map(|finding| finding.remediation.clone())
+        .collect()
+}
+
+fn inspect_doctor_section<T>(
+    result: Result<T, crate::error::AtmError>,
+    findings: &mut Vec<DoctorFinding>,
+) -> T
+where
+    T: Default,
+{
+    match result {
+        Ok(report) => report,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            T::default()
+        }
+    }
 }
 
 fn resolved_doctor_team(
@@ -206,7 +370,7 @@ fn load_doctor_roster_compare_inputs(
     team: &TeamName,
     team_dir: &Path,
     findings: &mut Vec<DoctorFinding>,
-) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterMemberRecord>>)> {
+) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterEntry>>)> {
     let team_config = match runtime.load_team_config_for_doctor_compare(team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
@@ -227,7 +391,7 @@ fn load_doctor_roster_compare_inputs(
 fn record_doctor_roster_drift(
     team: &TeamName,
     team_config: &crate::schema::TeamConfig,
-    atm_roster: Option<Vec<RosterMemberRecord>>,
+    atm_roster: Option<Vec<RosterEntry>>,
     findings: &mut Vec<DoctorFinding>,
 ) {
     let present = team_config
@@ -275,11 +439,12 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
+    let remediation = error.primary_recovery().map(str::to_owned);
     findings.push(DoctorFinding {
         severity,
         code: error.code,
         message: error.message,
-        remediation: error.recovery,
+        remediation,
     });
 }
 
@@ -447,12 +612,12 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
-        agent_id: member.agent_id.clone(),
+        agent_id: member.agent_id.to_string(),
         agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.clone(),
+        cwd: member.cwd.display().to_string(),
         extra: member.extra.clone(),
     }
 }
@@ -462,7 +627,6 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    use crate::boundary;
     use crate::doctor::{
         DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
     };
@@ -476,7 +640,7 @@ mod tests {
     use crate::schema::{AgentMember, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::AgentName;
+    use crate::types::{AgentName, TeamName};
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -515,188 +679,56 @@ mod tests {
     }
 
     struct UnusedMailStore;
-    struct UnusedTaskStore;
     struct TestRosterStore {
-        members: Vec<boundary::RosterMemberRecord>,
+        members: Vec<atm_storage::RosterMember>,
     }
 
-    impl crate::boundary::sealed::Sealed for UnusedMailStore {}
-    impl crate::boundary::sealed::Sealed for UnusedTaskStore {}
-    impl crate::boundary::sealed::Sealed for TestRosterStore {}
-
-    impl boundary::MailStore for UnusedMailStore {
-        fn bootstrap(
-            &self,
-            _request: boundary::MailStoreBootstrapRequest,
-        ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn run_transaction(
-            &self,
-            _request: boundary::MailStoreTransactionRequest,
-        ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn upsert_message(
-            &self,
-            _request: boundary::MailStoreUpsertMessageRequest,
-        ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
+    #[allow(
+        deprecated,
+        reason = "doctor tests intentionally exercise the transitional shared storage traits"
+    )]
+    impl atm_storage::MessageStore for UnusedMailStore {
+        fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
         fn load_message(
             &self,
-            _request: boundary::MailStoreLoadMessageRequest,
-        ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
+            _message_key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn load_stored_message(
+        fn list_messages(
             &self,
-            _request: boundary::MailStoreLoadStoredMessageRequest,
-        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn query_mailbox_metadata(
-            &self,
-            _request: boundary::MailStoreQueryMailboxMetadataRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn query_mailbox_metadata_counts(
-            &self,
-            _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
-        ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn upsert_message_state(
-            &self,
-            _request: boundary::UpsertMailMessageStateRequest,
-        ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn load_message_state(
-            &self,
-            _request: boundary::LoadMailMessageStateRequest,
-        ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn record_ingest_replay_state(
-            &self,
-            _request: boundary::MailStoreRecordIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn load_ingest_replay_state(
-            &self,
-            _request: boundary::MailStoreLoadIngestReplayStateRequest,
-        ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
-        fn health_snapshot(
-            &self,
-            _request: boundary::MailStoreHealthSnapshotRequest,
-        ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
+        fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
     }
 
-    impl boundary::TaskStore for UnusedTaskStore {
-        fn create_task(
-            &self,
-            _request: boundary::TaskStoreCreateTaskRequest,
-        ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn load_task(
-            &self,
-            _request: boundary::TaskStoreLoadTaskRequest,
-        ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn update_task(
-            &self,
-            _request: boundary::TaskStoreUpdateTaskRequest,
-        ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn attach_message_link(
-            &self,
-            _request: boundary::TaskStoreAttachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn detach_message_link(
-            &self,
-            _request: boundary::TaskStoreDetachMessageLinkRequest,
-        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn record_ack_transition(
-            &self,
-            _request: boundary::TaskStoreRecordAckTransitionRequest,
-        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-
-        fn query_task_metadata(
-            &self,
-            _request: boundary::TaskStoreQueryTaskMetadataRequest,
-        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
-            unreachable!("doctor tests do not touch the task store boundary")
-        }
-    }
-
-    impl boundary::RosterStore for TestRosterStore {
-        fn replace_roster(
-            &self,
-            _request: boundary::RosterStoreReplaceRosterRequest,
-        ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
-        }
-
-        fn load_roster(
-            &self,
-            request: boundary::RosterStoreLoadRosterRequest,
-        ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-            Ok(boundary::RosterStoreLoadRosterResponse {
-                team: request.team,
+    #[allow(
+        deprecated,
+        reason = "doctor tests intentionally exercise the transitional shared storage traits"
+    )]
+    impl atm_storage::RosterStore for TestRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
                 members: self.members.clone(),
+                refreshed_at: None,
             })
         }
 
-        fn query_membership(
-            &self,
-            _request: boundary::RosterStoreQueryMembershipRequest,
-        ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
+        fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
-        fn list_teams(
-            &self,
-            _request: boundary::RosterStoreListTeamsRequest,
-        ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
-        }
-
-        fn health_snapshot(
-            &self,
-            _request: boundary::RosterStoreHealthSnapshotRequest,
-        ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
+        fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
     }
@@ -705,13 +737,13 @@ mod tests {
         TestRosterStore {
             members: members
                 .iter()
-                .map(|member| boundary::RosterMemberRecord {
+                .map(|member| atm_storage::RosterMember {
                     team_name: TEST_TEAM.parse().expect("team"),
                     agent_name: AgentName::from_validated(*member),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: crate::schema::AgentType::default(),
-                    model: crate::types::ModelName::default(),
+                    member_kind: atm_storage::RosterMemberKind::Permanent,
+                    harness: atm_storage::RosterHarness::ClaudeCode,
+                    agent_type: atm_storage::contract::AgentType::default(),
+                    model: atm_storage::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 })
@@ -725,7 +757,6 @@ mod tests {
     ) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(UnusedTaskStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
             Arc::new(crate::LocalFileNotificationSink::at_path(
@@ -761,6 +792,7 @@ mod tests {
             let root = tempdir.path().to_path_buf();
             let home_dir = root.join("atm-home");
             let current_dir = root.join("workspace");
+            std::fs::write(root.join(".atm.toml"), "[atm]\n").expect("root sentinel");
             std::fs::create_dir_all(&home_dir).expect("home dir");
             std::fs::create_dir_all(&current_dir).expect("workspace dir");
             Self {

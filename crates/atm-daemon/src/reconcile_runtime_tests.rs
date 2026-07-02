@@ -7,20 +7,16 @@ use crate::worker_support::{
     retained_join_helper_count_for_test,
 };
 use atm_core::boundary::{
-    self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-    InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, NotificationSink,
-    ReconcileRequest, RosterStore, RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
-    RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest, RosterStoreListTeamsResponse,
-    RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
-    RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
-    RosterStoreReplaceRosterResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    self, NotificationEvent, NotificationSink, ReconcileRequest, WatchEventBatch, WatchEventSource,
+    WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
 use atm_core::roles::ROLE_TEAM_LEAD;
-use atm_core::schema::{AtmMessageId, MessageEnvelope};
+use atm_core::schema::{AtmMessageId, InboxMessage};
 use atm_core::types::IsoTimestamp;
+use atm_storage::{RosterMember, RosterSnapshot, RosterStore};
+use atm_storage_claude::compat::SourceFileRecord;
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -509,11 +505,16 @@ impl WatchEventSource for FakeWatchSource {
 
 #[derive(Clone)]
 struct FakeInboxIngress {
-    imports: Arc<Mutex<Vec<InboxIngressImportResponse>>>,
+    imports: Arc<Mutex<Vec<SourceImportResponse>>>,
+}
+
+#[derive(Clone)]
+struct SourceImportResponse {
+    source_files: Vec<SourceFileRecord>,
 }
 
 impl FakeInboxIngress {
-    fn new(imports: Vec<InboxIngressImportResponse>) -> Self {
+    fn new(imports: Vec<SourceImportResponse>) -> Self {
         Self {
             imports: Arc::new(Mutex::new(imports)),
         }
@@ -522,40 +523,27 @@ impl FakeInboxIngress {
 
 impl boundary::sealed::Sealed for FakeInboxIngress {}
 
-impl InboxIngress for FakeInboxIngress {
+impl super::InboxIngressPort for FakeInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: InboxIngressImportRequest,
-    ) -> Result<InboxIngressImportResponse, atm_core::error::AtmError> {
+        _home_dir: &Path,
+        _team: &atm_core::types::TeamName,
+        _agent: &atm_core::types::AgentName,
+    ) -> Result<Vec<SourceFileRecord>, atm_core::error::AtmError> {
         let mut imports = self.imports.lock().expect("imports");
         if imports.is_empty() {
-            return Ok(InboxIngressImportResponse {
-                source_files: Vec::new(),
-            });
+            return Ok(Vec::new());
         }
-        Ok(imports.remove(0))
+        Ok(imports.remove(0).source_files)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        request: InboxIngressIdentityFingerprintRequest,
-    ) -> InboxIngressIdentityFingerprintResponse {
-        InboxIngressIdentityFingerprintResponse {
-            fingerprint: request
-                .message
-                .message_id
-                .map(|message_id| message_id.to_string()),
-        }
-    }
-
-    fn report_diagnostics(
-        &self,
-        _request: InboxIngressDiagnosticsRequest,
-    ) -> InboxIngressDiagnosticsResponse {
-        InboxIngressDiagnosticsResponse {
-            duplicate_message_ids: 0,
-            messages_without_ids: 0,
-        }
+        message: &atm_storage::MessageEnvelope,
+    ) -> Option<atm_core::boundary::MessageFingerprint> {
+        message
+            .message_id
+            .map(|message_id| atm_core::boundary::MessageFingerprint::from(message_id.to_string()))
     }
 }
 
@@ -580,7 +568,7 @@ struct RecordingRosterStore {
 
 #[derive(Default)]
 struct RecordingRosterState {
-    rosters: HashMap<atm_core::types::TeamName, Vec<boundary::RosterMemberRecord>>,
+    rosters: HashMap<atm_core::types::TeamName, Vec<RosterMember>>,
     replace_count: u64,
 }
 
@@ -589,7 +577,7 @@ impl RecordingRosterStore {
         self.state.lock().expect("roster state").replace_count
     }
 
-    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<boundary::RosterMemberRecord> {
+    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<RosterMember> {
         self.state
             .lock()
             .expect("roster state")
@@ -603,79 +591,32 @@ impl RecordingRosterStore {
 impl boundary::sealed::Sealed for RecordingRosterStore {}
 
 impl RosterStore for RecordingRosterStore {
-    fn replace_roster(
-        &self,
-        request: RosterStoreReplaceRosterRequest,
-    ) -> Result<RosterStoreReplaceRosterResponse, AtmError> {
+    fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError> {
         let mut state = self.state.lock().expect("roster state");
-        let previous_member_count = state
+        state
             .rosters
-            .get(&request.team)
-            .map_or(0, |members| members.len() as u64);
-        let current_member_count = request.members.len() as u64;
-        state.rosters.insert(request.team.clone(), request.members);
+            .insert(roster.team_name.clone(), roster.members.clone());
         state.replace_count += 1;
-        Ok(RosterStoreReplaceRosterResponse {
-            team: request.team,
-            previous_member_count,
-            current_member_count,
-            replaced: true,
+        Ok(())
+    }
+
+    fn load_roster(&self, team: &atm_core::types::TeamName) -> Result<RosterSnapshot, AtmError> {
+        Ok(RosterSnapshot {
+            team_name: team.clone(),
+            members: self.members_for(team),
+            refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
         })
     }
 
-    fn load_roster(
-        &self,
-        request: RosterStoreLoadRosterRequest,
-    ) -> Result<RosterStoreLoadRosterResponse, AtmError> {
-        Ok(RosterStoreLoadRosterResponse {
-            team: request.team.clone(),
-            members: self.members_for(&request.team),
-        })
-    }
-
-    fn query_membership(
-        &self,
-        request: RosterStoreQueryMembershipRequest,
-    ) -> Result<RosterStoreQueryMembershipResponse, AtmError> {
-        let member = self
-            .members_for(&request.team)
-            .into_iter()
-            .find(|record| record.agent_name == request.member);
-        Ok(RosterStoreQueryMembershipResponse {
-            team: request.team,
-            is_member: member.is_some(),
-            member,
-        })
-    }
-
-    fn list_teams(
-        &self,
-        _request: RosterStoreListTeamsRequest,
-    ) -> Result<RosterStoreListTeamsResponse, AtmError> {
-        Ok(RosterStoreListTeamsResponse {
-            teams: self
-                .state
-                .lock()
-                .expect("roster state")
-                .rosters
-                .keys()
-                .cloned()
-                .collect(),
-        })
-    }
-
-    fn health_snapshot(
-        &self,
-        request: RosterStoreHealthSnapshotRequest,
-    ) -> Result<RosterStoreHealthSnapshotResponse, AtmError> {
-        Ok(RosterStoreHealthSnapshotResponse {
-            snapshot: RosterStoreHealthSnapshot {
-                team: request.team.clone(),
-                member_count: self.members_for(&request.team).len() as u64,
-                stale: false,
-                refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
-            },
-        })
+    fn list_teams(&self) -> Result<Vec<atm_core::types::TeamName>, AtmError> {
+        Ok(self
+            .state
+            .lock()
+            .expect("roster state")
+            .rosters
+            .keys()
+            .cloned()
+            .collect())
     }
 }
 
@@ -834,7 +775,7 @@ fn z8_deletes_startup_only_config_bootstrap_helper() {
 #[test]
 fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let ingress = FakeInboxIngress::new(vec![InboxIngressImportResponse {
+    let ingress = FakeInboxIngress::new(vec![SourceImportResponse {
         source_files: vec![inbox_source_with_message(sample_message(
             "projected message",
         ))],
@@ -899,10 +840,10 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
             calls: Arc::new(AtomicU64::new(0)),
         }),
         Arc::new(FakeInboxIngress::new(vec![
-            InboxIngressImportResponse {
+            SourceImportResponse {
                 source_files: vec![repeated_source.clone()],
             },
-            InboxIngressImportResponse {
+            SourceImportResponse {
                 source_files: vec![repeated_source],
             },
         ])),
@@ -933,7 +874,7 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
 fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after_eviction() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
     let imports = (0..=MAX_RECONCILE_FINGERPRINT_KEYS)
-        .map(|index| InboxIngressImportResponse {
+        .map(|index| SourceImportResponse {
             source_files: vec![inbox_source_with_message(sample_message(&format!(
                 "message-{index}"
             )))],
@@ -971,7 +912,7 @@ fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after
 #[test]
 fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
-    let repeated_import = InboxIngressImportResponse {
+    let repeated_import = SourceImportResponse {
         source_files: (0..=MAX_RECONCILE_FINGERPRINTS_PER_KEY)
             .map(|index| inbox_source_with_message(sample_message(&format!("message-{index}"))))
             .collect(),
@@ -1014,19 +955,17 @@ impl WatchEventSource for CountingWatchSource {
     }
 }
 
-fn inbox_source_with_message(
-    message: MessageEnvelope,
-) -> atm_core::boundary::InboxSourceFileRecord {
-    atm_core::boundary::InboxSourceFileRecord {
+fn inbox_source_with_message(message: InboxMessage) -> SourceFileRecord {
+    SourceFileRecord {
         path: std::env::temp_dir().join("watch.json"),
         messages: vec![message],
     }
 }
 
-fn sample_message(text: &str) -> MessageEnvelope {
+fn sample_message(text: &str) -> InboxMessage {
     let message_id = AtmMessageId::new();
 
-    MessageEnvelope {
+    InboxMessage {
         from: ROLE_TEAM_LEAD.parse().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),

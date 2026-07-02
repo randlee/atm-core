@@ -18,6 +18,11 @@ the pre-daemon workspace.
   in-process so ATM nudges can be injected without terminal automation layers.
 - `atm-graft` depends on `atm-core` semantic types, request/result contracts,
   config semantics, and error vocabulary.
+- `atm-graft` may depend on the shared thin-client same-host bootstrap seam
+  owned by `atm-daemon-client` for canonical endpoint resolution,
+  daemon-binary resolution, probe, and supervised auto-start convenience, but
+  it must not depend on `atm-daemon-bootstrap` or on runtime/storage
+  composition crates to obtain that behavior.
 - `atm-graft` must not depend on `atm-daemon` as a Rust crate; it talks to the
   daemon over the documented same-host protocol only.
 - `atm-graft` must not depend on `atm-rusqlite`; direct store access is outside
@@ -73,6 +78,10 @@ Architectural rules:
 - first-party Rust host agents must not invent a parallel transport or
   alternate daemon contract outside the `atm-core` client models consumed by
   `atm-graft`
+- first-party Rust host agents may expose a standard convenience `connect()`
+  path that resolves ATM environment/config inputs and starts the daemon when
+  launch conditions are met, but that path must remain a thin-client wrapper
+  over the shared bootstrap seam rather than a second composition root
 - all structs, enums, and traits needed by `atm-graft` must live in
   `atm-core`, even when the daemon is the concrete runtime peer
 - concrete socket/runtime code may remain outside `atm-core`, but it must bind
@@ -103,6 +112,10 @@ Boundary correction note:
   is not part of the target architecture
 - follow-up refactor work must keep daemon-owned protocol and runtime naming
   generic so `atm-graft` is only an external client crate
+- version skew between `atm-graft` and the primary `atm` install is acceptable
+  as long as both sides remain compatible with the documented same-host RPC
+  surface; `atm-graft` must not rely on lockstep crate-version equality as an
+  architectural requirement
 
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
@@ -122,6 +135,11 @@ Architectural rules:
 - if `.atm.toml` is absent, `atm-graft` remains inert
 - runtime identity comes from `ATM_IDENTITY`; graft mode does not add a second
   identity-resolution scheme
+- if graft mode is active and identity/team resolution succeeds, the standard
+  convenience connection path may resolve the canonical same-host daemon
+  endpoint and attempt supervised daemon auto-start; the presence of
+  `.atm.toml`, `ATM_IDENTITY`, and `ATM_TEAM` is a valid launch precondition,
+  not a reason to forbid daemon startup
 - optional graft-specific config remains ATM-owned config semantics rather than
   host-private settings
 - the initial graft config surface must stay small:
@@ -132,6 +150,10 @@ Architectural consequence:
   `atm-graft` activation logic can be implemented cleanly
 - the concrete `atm-graft` crate consumes the public `atm_core::load_atm_config`
   helper rather than reparsing `.atm.toml` privately
+- the standard convenience path must collect those ATM-owned inputs and pass
+  them into a shared thin-client bootstrap helper seam rather than binding
+  `atm-graft` directly to `atm-daemon-bootstrap`, `atm-runtime`, or concrete
+  storage backends
 
 ## 2.5 Graft Session
 

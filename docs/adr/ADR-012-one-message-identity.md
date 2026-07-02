@@ -17,7 +17,7 @@ ATM had accumulated multiple message-identity representations:
 - Claude Code `message_id` at the shared inbox boundary
 - `metadata.atm.messageId` inside the compatibility envelope
 - `legacy_message_id` / `LegacyMessageId` compatibility naming in the earlier
-  SQLite line
+  pre-production SQLite line
 
 That shape created duplicated storage, ambiguous query paths, and confusing
 ownership. Phase U resolves that by keeping one logical ATM identity and
@@ -36,8 +36,9 @@ Rules:
 - ATM must not persist or query a second ATM-owned message-id field for the
   same logical message.
 - `metadata.atm.messageId` is removed from the design and implementation.
-- `LegacyMessageId` and `legacy_*` naming are removed or narrowed away from the
-  active identity model.
+- `LegacyMessageId` and `legacy_*` naming are removed from the active identity
+  model. Remaining references may survive only as historical planning or
+  removal-ledger context, not as runtime compatibility.
 - CLI and service addressing may accept either ULID text or UUID wire text, but
   both resolve to the same `AtmMessageId`.
 
@@ -53,6 +54,7 @@ Required implementation consequences:
   logic
 - `metadata.atm.messageId` is deleted
 - `legacy_*` identity naming is removed from the active implementation path
+  and from normal 1.2 SQLite bootstrap/migration support
 - `crates/atm-core/src/workflow.rs` may continue to accept `legacy:` workflow
   sidecar keys as a read-compatibility shim only; all new writes use `atm:`,
   and the shim can be removed once older workflow-state files no longer need
@@ -61,3 +63,10 @@ Required implementation consequences:
   UUID-wire boundary cast
 - future ATM features must use `AtmMessageId` as the only ATM-owned message
   identity
+
+Implementation status:
+- `AA.11` closes the SQLite-side `legacy_*` consequence on
+  `feature/pAA-s11-delete-sqlite-legacy-compat`.
+- No `legacy_message_id` code paths remain under `crates/atm-rusqlite/`; any
+  surviving `legacy_*` references are historical planning or removal-ledger
+  context only.

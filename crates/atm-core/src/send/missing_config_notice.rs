@@ -11,7 +11,7 @@ use crate::delivery_plan::{
 use crate::delivery_policy::{DeliveryPolicyCoordinator, DeliveryRecipientSnapshot};
 use crate::error::{AtmError, AtmErrorCode};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -78,7 +78,7 @@ fn missing_config_warning(recipient: &ResolvedRecipient, team_dir: &Path) -> War
 }
 
 fn notify_team_lead_missing_config(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -139,8 +139,8 @@ fn build_missing_config_notice(
     recipient: &AgentName,
     config_path: &Path,
     timestamp: IsoTimestamp,
-) -> MessageEnvelope {
-    MessageEnvelope {
+) -> InboxMessage {
+    InboxMessage {
         from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
@@ -176,11 +176,11 @@ fn resolve_team_lead_snapshot(
 }
 
 fn persist_missing_config_notice(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     snapshot: &DeliveryRecipientSnapshot,
     team_lead_inbox: &Path,
-    notice: &MessageEnvelope,
+    notice: &InboxMessage,
 ) -> Result<(), AtmError> {
     let persistence = persist_message_and_seed_workflow(
         runtime,

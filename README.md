@@ -224,8 +224,21 @@ Useful docs in this repo:
 
 ## Development
 
+Windows first-run prerequisites on a new machine:
+- install Rust `1.94.1` with the MSVC toolchain
+- install Visual Studio C++ build tools
+- install `just` (`winget install Casey.Just`)
+- ensure `python` resolves on `PATH` for repo scripts and helpers
+
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+```
+
+Windows CI parity command:
+
+```powershell
+$env:ATM_TEST_RECV_TIMEOUT_SECS="60"
+cargo test --workspace --verbose
 ```

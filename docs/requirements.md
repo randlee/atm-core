@@ -20,6 +20,50 @@ mail routing, native agent notification, and cross-host transport need one
 coordinating process, while ATM command behavior remains the user-facing
 surface.
 
+Phase-AA simplification direction:
+- the daemon remains part of the product, but it must return to the original
+  thin-router role
+- concrete SQLite construction moves to a dedicated `atm-runtime` crate
+- `AA.2` lands that composition root and moves production runtime/store
+  assembly there; later AA sprints finish the doctor split, delete remaining
+  daemon SQLite leaks, and relock the boundary permanently
+- the daemon must not know that the current durable adapter is SQLite
+- direct local diagnostics such as store-openability and baseline SQLite
+  health may be answered without routing through the daemon
+- the supported 1.2 SQLite bootstrap/migration contract is the current
+  `message_id`-based durable schema only; abandoned pre-production identity
+  scaffolding such as `legacy_message_id` is not an accepted runtime shape
+- no repair path is offered for abandoned pre-production databases carrying
+  only a `legacy_message_id` column; operators with such databases must
+  discard them and allow ATM to initialize a fresh schema
+- `atm doctor` now uses that direct local path for config/store diagnostics
+  through `atm-runtime`; daemon routing remains only for daemon-owned runtime
+  state
+- each subsystem owns its own diagnostic trait and backend-specific diagnosis
+- top-level doctor code aggregates subsystem findings and daemon-owned runtime
+  state, but must not reimplement backend-specific diagnosis logic
+- `MailStore` and `RosterStore` remain the primary storage-neutral capability
+  traits during this simplification line
+- `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the explicit
+  subsystem doctor traits used by that aggregate-only health model
+- later SQLite-backed and Claude-JSON-backed implementations may satisfy that
+  same behavior-named trait family rather than forcing backend-shaped parallel
+  trait trees
+
+Phase-AC supersession note:
+- the Phase `AA` simplification-line store traits above are transitional only
+- Phase `AC` replaces `MailStore` with canonical `MessageStore`, converges the
+  roster seam into `RosterStore`, and leaves task storage out of scope for the
+  initial shared `atm-storage` contract
+- speculative task-store code was deleted in `AC.6` rather than preserved as a
+  compatibility line
+- if task storage is approved later, the first canonical implementation starts
+  from Claude-code task schema plus Pydantic validation; SQLite may only sync
+  to that canonical model afterward
+- after Phase `AC`, `MailStore` / `RosterStore` are historical transition
+  names; a later approved task-storage phase would reintroduce a fresh
+  canonical design instead of reviving speculative transition scaffolding
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -73,10 +117,13 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-runtime/requirements.md`](./atm-runtime/requirements.md)
+- [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-runtime/boundaries.md`](./atm-runtime/boundaries.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
@@ -439,6 +486,19 @@ Per-team layout:
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
+Current shared inbox file-container rule:
+- the supported current Claude inbox container at
+  `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json` is one top-level JSON
+  array of inbox messages
+- that current `.json` array shape is the primary supported ATM compatibility
+  path, not a legacy/degraded fallback
+- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
+  unsupported mailbox content rather than for the legal current Claude
+  JSON-array shape
+- current Claude inbox reads must salvage segmentable valid message objects
+  from malformed `.json` arrays and emit explicit degraded warnings for
+  localized bad fragments instead of failing the whole inbox by default
+
 ### 3.2.1 Message Schema Ownership And Compatibility
 
 Product requirement ID:
@@ -457,7 +517,8 @@ Required rules:
 - ATM must not redefine Claude-native fields as if ATM owned them
 - ATM read must accept:
   - Claude Code-native messages
-  - ATM top-level additive compatibility messages
+  - legal ATM additive derivative messages, including historical top-level
+    additive compatibility records and tolerated `metadata.atm` derivatives
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
 - no `metadata.atm` namespace may survive in active compatibility output
@@ -603,8 +664,11 @@ Required handling policy:
   deterministic defaults
 - malformed records inside a larger persisted collection should be skipped or
   quarantined individually when the rest of the document remains trustworthy
-- malformed root documents or invalid root structure must fail with structured
-  errors rather than guessed repairs
+- malformed current-Claude root arrays must salvage segmentable valid message
+  objects and emit explicit degraded warnings whenever localized recovery is
+  possible
+- malformed root documents or invalid root structure with no segmentable valid
+  message units must fail with structured errors rather than guessed repairs
 - missing persisted team config is a distinct `missing-document` condition and
   must not be collapsed into generic parse corruption
 - identity and routing semantics must never be fabricated to keep a command
@@ -1564,6 +1628,14 @@ Run local ATM diagnostics for the retained ATM runtime.
 architecture it must also report daemon/runtime availability because normal ATM
 mail behavior depends on the singleton daemon being present.
 
+Phase-AA target direction:
+- `atm doctor` keeps daemon/runtime reporting, but daemon routing is not the
+  only legal path for diagnostics
+- checks that are inherently local and store-backed may run directly from the
+  CLI
+- daemon-routed doctor data is additive and exists for daemon-owned runtime
+  state or faster asynchronous answers when the daemon is already live
+
 ### 11.2 Supported Flags
 
 - `--team <name>`
@@ -2014,12 +2086,20 @@ Required retained-log maintenance behavior:
   handoff on the synchronous path; it must not reopen, append, flush, rotate,
   or prune retained files inline before returning control to the active daemon
   request/lifecycle path
+- blocking retained-log admission must use the queue-backed
+  `sc-observability` logger admission path (`Logger::log()`); any future
+  non-blocking admission path must use `Logger::try_log()` and handle explicit
+  queue-full degradation
+- `flush()` / `shutdown()` are the only durability barriers for retained-log
+  writes; queue admission alone must not be treated as immediate persistence
 - retained-log file append, rotation, and pruning must run on background
   maintenance machinery instead
 - if retained-log maintenance falls behind, ATM must degrade explicitly with
   structured diagnostics rather than silently blocking the daemon success path
 - retained-log pruning must use a bounded work budget per maintenance tick and
   must not rely on an unbounded wall-clock scan
+- the retained-log shutdown threshold is configured through
+  `RetainedLogPolicy.writer_shutdown_timeout`
 - actor identity when known
 - target identity when known
 - task id when known
@@ -2984,13 +3064,18 @@ mail correctness.
   replay, backpressure, and degradation.
 
   Required behavior:
-  - ingest must be idempotent
-  - parseable external rows must not be silently dropped
-  - malformed external rows must emit structured diagnostics rather than panic
-  - backlog/slow-ingest conditions must surface through structured diagnostics
-    or health findings rather than dropping records silently
-  - roster/config ingest must apply one deterministic last-write-wins policy
-    for replacing roster truth in SQLite
+- ingest must be idempotent
+- ingest must accept the legal current Claude inbox container shape: one
+  top-level JSON array document for each shared `.json` inbox file
+- parseable external rows must not be silently dropped
+- malformed external rows must emit structured diagnostics rather than panic
+- legal current Claude JSON-array inbox files must stay on the normal
+  supported ingest path; repair/rebuild is reserved for malformed or
+  unsupported mailbox state
+- backlog/slow-ingest conditions must surface through structured diagnostics
+  or health findings rather than dropping records silently
+- roster/config ingest must apply one deterministic last-write-wins policy
+  for replacing roster truth in SQLite
 
 - `REQ-CORE-RUNTIME-003` Crash recovery and replay must preserve the durable
   ordering rule for daemon-managed export work.
@@ -3294,13 +3379,20 @@ mail correctness.
 
 ### 22.5 Claude Compatibility And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Claude inbox JSONL remains the required compatibility
-  path for Claude context injection.
+- `REQ-CORE-COMPAT-001` Current Claude inbox JSON-array files are the required
+  primary compatibility path for Claude context injection, while JSONL remains
+  a supported append-style compatibility surface only where ATM explicitly
+  owns that projection.
 
   Required behavior:
+  - healthy current Claude `.json` inbox files must be accepted on the normal
+    primary write path rather than surfaced as degraded rebuild-only state
   - ATM-authored Claude inbox exports must remain Claude-native at the top
     level with only the limited additive compatibility fields ATM still
     requires
+  - ATM may continue to use JSONL append semantics only for explicit `.jsonl`
+    compatibility projections it owns; that append surface must not redefine
+    the current Claude inbox contract
   - Claude-native external writes must be importable into SQLite through one
     owned ingress boundary
   - once team roster and pane mapping truth move to SQLite, ATM-owned
@@ -3309,8 +3401,8 @@ mail correctness.
 - post-send hooks must be able to rely on that payload field instead of
     rediscovering pane mappings from local files once roster migration is
     complete
-  - ATM-authored JSONL exports must remain valid JSONL records
-  - the default ATM-authored JSONL body export cap is `128 KiB`
+  - ATM-authored `.jsonl` exports must remain valid JSONL records
+  - the default ATM-authored `.jsonl` body export cap is `128 KiB`
   - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
     means stub-only ATM-authored export
   - when an ATM-authored body exceeds the configured export cap, the exported

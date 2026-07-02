@@ -1,0 +1,74 @@
+boundary_id = "BOUNDARY-SharedDb-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SharedDbStateRoot"
+
+[public]
+facade = "SharedDbStateRoot"
+
+[implementation]
+type = "SharedDb"
+module = "atm_storage_rusqlite"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = [
+  "sqlite_connection_bootstrap",
+  "shared_host_scoped_database_root",
+  "sqlite_transaction_policy",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
+allowed_dependencies = [
+  "atm-storage",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-storage-rusqlite",
+  "atm-daemon -> atm-storage-rusqlite",
+  "atm-graft -> atm-storage-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SharedDb",
+  "SharedDb::open",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["sqlite bootstrap and transaction inputs"]
+response_types = ["typed sqlite operation results"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-SHARED-DB-EDGES",
+  "LINT-BOUNDARY-SHARED-DB-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_cross_crate_shared_db_dependency",
+]
+
+[status]
+state = "unix_implemented_windows_pending"
+notes = [
+  "crate-private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
+  "shared database root is host-scoped under the ADR-005 durable-state model",
+  "daemon callers must reach sqlite bootstrap and transaction policy only through atm-runtime-owned composition",
+]

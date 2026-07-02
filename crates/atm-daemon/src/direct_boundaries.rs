@@ -1,53 +1,31 @@
 use atm_core::{
-    boundary::{
-        ConfigLoadRequest, ConfigLoadResponse, InboxExportAppendMessageSetRequest,
-        InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
-        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
-        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse,
-    },
+    boundary::MessageFingerprint,
+    boundary::{ConfigLoadRequest, ConfigLoadResponse},
     error::AtmError,
+    load_atm_config,
 };
+use atm_storage::{AgentName, MessageEnvelope, TeamName};
+use atm_storage_claude::compat::SourceFileRecord;
+use std::path::Path;
 
 pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
-    atm_core::direct_boundaries::load_workspace_config(request)
+    Ok(ConfigLoadResponse {
+        config: load_atm_config(&request.current_dir)?,
+    })
 }
 
 pub(crate) fn import_inbox_source(
-    request: InboxIngressImportRequest,
-) -> Result<InboxIngressImportResponse, AtmError> {
-    atm_core::direct_boundaries::import_inbox_source(request)
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<SourceFileRecord>, AtmError> {
+    atm_storage_claude::compat::import_inbox_source(home_dir, team, agent)
 }
 
 pub(crate) fn compute_identity_fingerprint(
-    request: InboxIngressIdentityFingerprintRequest,
-) -> InboxIngressIdentityFingerprintResponse {
-    atm_core::direct_boundaries::compute_identity_fingerprint(request)
-}
-
-pub(crate) fn report_inbox_diagnostics(
-    request: InboxIngressDiagnosticsRequest,
-) -> InboxIngressDiagnosticsResponse {
-    atm_core::direct_boundaries::report_inbox_diagnostics(request)
-}
-
-pub(crate) fn export_source_files(
-    request: InboxExportRecordRequest,
-) -> Result<InboxExportRecordResponse, AtmError> {
-    atm_core::direct_boundaries::export_source_files(request)
-}
-
-pub(crate) fn reexport_messages(
-    request: InboxExportReexportMessageRequest,
-) -> Result<InboxExportReexportMessageResponse, AtmError> {
-    atm_core::direct_boundaries::reexport_messages(request)
-}
-
-pub(crate) fn append_message_set(
-    request: InboxExportAppendMessageSetRequest,
-) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
-    atm_core::direct_boundaries::append_message_set(request)
+    message: &MessageEnvelope,
+) -> Option<MessageFingerprint> {
+    atm_storage_claude::compat::compute_identity_fingerprint(message).map(MessageFingerprint::from)
 }

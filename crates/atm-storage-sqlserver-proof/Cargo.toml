@@ -1,0 +1,17 @@
+[package]
+name = "atm-storage-sqlserver-proof"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Compile-only proof crate showing the atm-storage contract can support a future SQL Server backend."
+publish = false
+
+[lib]
+name = "atm_storage_sqlserver_proof"
+
+[dependencies]
+atm-storage = { path = "../atm-storage", version = "1.2.2" }

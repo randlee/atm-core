@@ -6,22 +6,81 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
-use atm_core::doctor::{
-    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport,
-};
-use atm_core::error::AtmError;
-use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::protocol;
+use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
+mod rpc;
+mod wire;
+
+#[doc(inline)]
+pub use rpc::{RpcEnvelope, RpcHeader};
+pub use wire::{FramePayload, MessageKind, RequestId};
+
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+#[cfg(windows)]
+const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapConnectOutcome {
+    Connected,
+    NotFound,
+    Timeout,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapLaunchGateOutcome {
+    Launched,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapAutoStartOutcome {
+    AutoStarted,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct BootstrapTraceReport {
+    pub daemon_connect: BootstrapConnectOutcome,
+    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
+    pub daemon_auto_start: BootstrapAutoStartOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_gate_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootstrapCommandEvent {
+    pub command: &'static str,
+    pub action: &'static str,
+    pub outcome: &'static str,
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub error_code: Option<AtmErrorCode>,
+    pub error_message: Option<String>,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalIpcDeadlineSupport {
+    Applied,
+    Unsupported,
+}
 
 #[derive(Debug, Clone)]
 pub struct DaemonLocalIpcEndpoint(PathBuf);
@@ -80,6 +139,36 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
+/// # Errors
+///
+/// Returns [`AtmError`] when the canonical same-host daemon socket path cannot
+/// be resolved into a local IPC endpoint.
+pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
+    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path()?)
+}
+
+/// # Errors
+///
+/// Returns [`AtmError`] when the current host executable path cannot be
+/// resolved into the sibling `atm-daemon` binary path.
+///
+/// `ATM_DAEMON_BIN` is fully trusted process-owner input and intentionally
+/// bypasses additional path validation.
+pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, AtmError> {
+    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
+        return DaemonBinaryPath::new(PathBuf::from(path));
+    }
+    let current = std::env::current_exe().map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to resolve the current {current_host_label} executable path"
+        ))
+        .with_source(source)
+    })?;
+    DaemonBinaryPath::new(
+        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
+    )
+}
+
 pub fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
     std::env::var("ATM_IDENTITY")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -106,24 +195,24 @@ pub struct DaemonSupervisor {
 
 pub struct BootstrapTraceability<'a> {
     command: &'static str,
-    observability: &'a (dyn ObservabilityPort + Send + Sync),
+    emit_event: &'a (dyn Fn(BootstrapCommandEvent) -> Result<(), AtmError> + Send + Sync),
     team: TeamName,
     agent: AgentName,
-    // Mutex required: BootstrapTraceability must be Sync (holds
-    // &'a dyn ObservabilityPort + Send + Sync); RefCell would be unsound.
+    // Mutex required: BootstrapTraceability must be Sync; RefCell would be
+    // unsound once callers share the helper across bootstrap retries.
     state: Mutex<BootstrapTraceState>,
 }
 
 impl<'a> BootstrapTraceability<'a> {
     pub fn new(
         command: &'static str,
-        observability: &'a (dyn ObservabilityPort + Send + Sync),
+        emit_event: &'a (dyn Fn(BootstrapCommandEvent) -> Result<(), AtmError> + Send + Sync),
         team: TeamName,
         agent: AgentName,
     ) -> Self {
         Self {
             command,
-            observability,
+            emit_event,
             team,
             agent,
             state: Mutex::new(BootstrapTraceState::default()),
@@ -132,21 +221,16 @@ impl<'a> BootstrapTraceability<'a> {
 
     fn emit(&self, action: &'static str, outcome: &'static str, error: Option<&AtmError>) {
         self.record(action, outcome, error);
-        let event = CommandEvent {
+        let event = BootstrapCommandEvent {
             command: self.command,
-            action: action_name(action),
-            outcome: outcome_label(outcome),
+            action,
+            outcome,
             team: self.team.clone(),
             agent: self.agent.clone(),
-            sender: self.agent.clone(),
-            message_id: None,
-            requires_ack: false,
-            dry_run: false,
-            task_id: None,
             error_code: error.map(|error| error.code),
             error_message: error.map(ToString::to_string),
         };
-        if let Err(emit_error) = self.observability.emit(event) {
+        if let Err(emit_error) = (self.emit_event)(event) {
             tracing::warn!(
                 command = self.command,
                 action,
@@ -264,14 +348,32 @@ impl BootstrapTraceState {
 }
 
 fn format_bootstrap_error_detail(error: &AtmError) -> String {
-    match &error.recovery {
+    match error.primary_recovery() {
         Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
         None => error.message.clone(),
     }
 }
 
+fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(resolve_user_home()?
+        .join(".atm")
+        .join("daemon")
+        .join(file_name))
+}
+
+fn resolve_user_home() -> Result<PathBuf, AtmError> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable("failed to resolve user home directory").with_recovery(
+                "Set HOME or USERPROFILE before invoking the same-host ATM daemon client.",
+            )
+        })
+}
+
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
+    let ipc_name = wire::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("daemon-local-ipc-connect".to_string())
@@ -315,32 +417,109 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStrea
 
 /// This function performs blocking IPC I/O. Callers in async contexts must
 /// wrap this in `tokio::task::spawn_blocking`.
-pub fn exchange(
+pub fn exchange_envelope(
     endpoint: &DaemonLocalIpcEndpoint,
-    request: RequestEnvelope,
+    request: RpcEnvelope,
     request_deadline: Duration,
-) -> Result<ResponseEnvelope, AtmError> {
+) -> Result<RpcEnvelope, AtmError> {
     let mut stream = try_connect(endpoint)?;
-    stream
-        .set_send_timeout(Some(request_deadline))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to configure daemon local IPC write timeout")
-                .with_source(source)
-        })?;
-    stream
-        .set_recv_timeout(Some(request_deadline))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to configure daemon local IPC read timeout")
-                .with_source(source)
-        })?;
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
-    atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
+    let _send_deadline_support = apply_local_ipc_deadline(
+        stream.set_send_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC write timeout",
+    )?;
+    let recv_deadline_support = apply_local_ipc_deadline(
+        stream.set_recv_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC read timeout",
+    )?;
+    let request_id = request.header.request_id();
+    let frame = request.into_frame_payload();
+    wire::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
     })?;
-    let response_frame = atm_core::protocol::read_frame(
-        &mut stream,
+    let response_frame =
+        read_response_frame_with_deadline(stream, request_deadline, recv_deadline_support)?;
+    let response = RpcEnvelope::from_frame_payload(response_frame);
+    if response.header.request_id() != request_id {
+        return Err(AtmError::daemon_unavailable(format!(
+            "daemon response request_id {} did not match request_id {}",
+            response.header.request_id(),
+            request_id
+        ))
+        .with_recovery(
+            "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
+        ));
+    }
+    Ok(response)
+}
+
+fn read_response_frame_with_deadline(
+    mut stream: LocalSocketStream,
+    _request_deadline: Duration,
+    _recv_deadline_support: LocalIpcDeadlineSupport,
+) -> Result<FramePayload, AtmError> {
+    #[cfg(windows)]
+    if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
+        return read_response_frame_with_helper(stream, _request_deadline);
+    }
+
+    read_response_frame(&mut stream)
+}
+
+#[cfg(windows)]
+fn read_response_frame_with_helper(
+    mut stream: LocalSocketStream,
+    request_deadline: Duration,
+) -> Result<FramePayload, AtmError> {
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("local-ipc-response-read-helper".to_string())
+        .spawn(move || {
+            let result = read_response_frame(&mut stream);
+            if result_tx.send(result).is_err() {
+                tracing::debug!(
+                    "daemon local IPC response-read helper dropped its result because the caller timed out first"
+                );
+            }
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
+                .with_recovery(
+                    "Retry the request after the same-host daemon read helper can be created again.",
+                )
+                .with_source(source)
+        })?;
+
+    let started = Instant::now();
+    loop {
+        let remaining = request_deadline.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            return Err(AtmError::daemon_unavailable(
+                "timed out reading daemon response frame",
+            )
+            .with_recovery(
+                "Retry the request after atm-daemon reaches serving state. If the same-host read path remains stuck, inspect daemon and local IPC health before retrying again.",
+            ));
+        }
+        let poll = std::cmp::min(remaining, LOCAL_IPC_READ_HELPER_POLL_INTERVAL);
+        match result_rx.recv_timeout(poll) {
+            Ok(result) => return result,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(AtmError::daemon_unavailable(
+                    "daemon local IPC read helper disconnected unexpectedly",
+                )
+                .with_recovery(
+                    "Retry the request after the same-host daemon read helper can be created again.",
+                ));
+            }
+        }
+    }
+}
+
+fn read_response_frame(stream: &mut LocalSocketStream) -> Result<FramePayload, AtmError> {
+    wire::read_frame(
+        stream,
         "failed to read daemon response frame",
         "daemon response frame exceeded the maximum supported size",
     )?
@@ -351,21 +530,24 @@ pub fn exchange(
         .with_recovery(
             "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
         )
-    })?;
-    let (response_id, response) = atm_core::protocol::response_from_frame_payload(response_frame)?;
-    if response_id != request_id {
-        return Err(AtmError::daemon_unavailable(format!(
-            "daemon response request_id {} did not match request_id {}",
-            response_id, request_id
-        ))
-        .with_recovery(
-            "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
-        ));
-    }
-    Ok(response)
+    })
 }
 
-pub fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
+fn apply_local_ipc_deadline(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<LocalIpcDeadlineSupport, AtmError> {
+    match result {
+        Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            Ok(LocalIpcDeadlineSupport::Unsupported)
+        }
+        Err(source) => Err(AtmError::daemon_unavailable(message).with_source(source)),
+    }
+}
+
+pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
@@ -459,7 +641,7 @@ impl DaemonSupervisor {
             try_connect,
             publish_timeout,
             poll_interval,
-            atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
             traceability,
         )
     }
@@ -760,7 +942,9 @@ impl LaunchGateGuard {
 
 impl Drop for LaunchGateGuard {
     fn drop(&mut self) {
-        let _ = self.file.unlock();
+        if let Err(error) = self.file.unlock() {
+            eprintln!("warning: failed to release daemon launch gate: {error}");
+        }
     }
 }
 
@@ -782,63 +966,35 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use atm_core::doctor::{
-        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport,
-    };
-    use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::observability::{
-        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort,
-    };
+    use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
     use super::{
-        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        BootstrapAutoStartOutcome, BootstrapCommandEvent, BootstrapConnectOutcome,
+        BootstrapLaunchGateOutcome, BootstrapTraceReport, BootstrapTraceability, DaemonBinaryPath,
+        DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        apply_local_ipc_deadline,
     };
 
     #[derive(Debug, Default)]
-    struct RecordingObservability {
-        events: Mutex<Vec<CommandEvent>>,
+    struct RecordingEvents {
+        events: Mutex<Vec<BootstrapCommandEvent>>,
     }
 
-    impl RecordingObservability {
-        fn events(&self) -> Vec<CommandEvent> {
-            self.events.lock().expect("events lock").clone()
-        }
-    }
-
-    impl atm_core::boundary::sealed::Sealed for RecordingObservability {}
-
-    impl ObservabilityPort for RecordingObservability {
-        fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
+    impl RecordingEvents {
+        fn emit(&self, event: BootstrapCommandEvent) -> Result<(), AtmError> {
             self.events.lock().expect("events lock").push(event);
             Ok(())
         }
 
-        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-            Ok(AtmLogSnapshot::default())
-        }
-
-        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-            Ok(LogTailSession::empty())
-        }
-
-        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-            Ok(AtmObservabilityHealth {
-                active_log_path: None,
-                logging_state: AtmObservabilityHealthState::Healthy,
-                query_state: Some(AtmObservabilityHealthState::Healthy),
-                maintenance: None,
-                diagnostic: None,
-                detail: None,
-            })
+        fn events(&self) -> Vec<BootstrapCommandEvent> {
+            self.events.lock().expect("events lock").clone()
         }
     }
 
@@ -855,10 +1011,11 @@ mod tests {
 
     #[test]
     fn bootstrap_traceability_preserves_explicit_identity() {
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "send",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -871,12 +1028,13 @@ mod tests {
     fn traceability_emits_pending_and_connected_for_retry_success() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
         let attempts = Arc::new(AtomicUsize::new(0));
         let try_connect_attempts = Arc::clone(&attempts);
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "send",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -897,17 +1055,17 @@ mod tests {
             )
             .expect("daemon available");
 
-        let events = observability.events();
-        assert_eq!(events.len(), 3);
-        assert_eq!(events[0].command, "send");
-        assert_eq!(events[0].action.as_str(), "daemon_connect");
-        assert_eq!(events[0].outcome.as_str(), "initial_miss");
-        assert_eq!(events[1].action.as_str(), "daemon_connect");
-        assert_eq!(events[1].outcome.as_str(), "retry_attempt");
-        assert_eq!(events[2].action.as_str(), "daemon_connect");
-        assert_eq!(events[2].outcome.as_str(), "connected");
-        assert_eq!(events[2].team.as_str(), "trace-team");
-        assert_eq!(events[2].agent.as_str(), "trace-agent");
+        let recorded = events.events();
+        assert_eq!(recorded.len(), 3);
+        assert_eq!(recorded[0].command, "send");
+        assert_eq!(recorded[0].action, "daemon_connect");
+        assert_eq!(recorded[0].outcome, "initial_miss");
+        assert_eq!(recorded[1].action, "daemon_connect");
+        assert_eq!(recorded[1].outcome, "retry_attempt");
+        assert_eq!(recorded[2].action, "daemon_connect");
+        assert_eq!(recorded[2].outcome, "connected");
+        assert_eq!(recorded[2].team.as_str(), "trace-team");
+        assert_eq!(recorded[2].agent.as_str(), "trace-agent");
         assert_eq!(
             traceability.snapshot(),
             BootstrapTraceReport {
@@ -925,10 +1083,11 @@ mod tests {
     fn traceability_emits_spawn_failure_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
-        let observability = RecordingObservability::default();
+        let events = RecordingEvents::default();
+        let emit = |event| events.emit(event);
         let traceability = BootstrapTraceability::new(
             "doctor",
-            &observability,
+            &emit,
             "trace-team".parse().expect("team"),
             "trace-agent".parse().expect("agent"),
         );
@@ -944,16 +1103,13 @@ mod tests {
             .expect_err("spawn failure");
 
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        let events = observability.events();
-        assert!(events.iter().any(|event| {
-            event.action.as_str() == "daemon_auto_start"
-                && event.outcome.as_str() == "spawn_requested"
+        let recorded = events.events();
+        assert!(recorded.iter().any(|event| {
+            event.action == "daemon_auto_start" && event.outcome == "spawn_requested"
         }));
-        let error_event = events
+        let error_event = recorded
             .iter()
-            .find(|event| {
-                event.action.as_str() == "daemon_auto_start" && event.outcome.as_str() == "error"
-            })
+            .find(|event| event.action == "daemon_auto_start" && event.outcome == "error")
             .expect("error event");
         assert_eq!(error_event.command, "doctor");
         assert_eq!(
@@ -977,7 +1133,7 @@ mod tests {
                 .auto_start_detail
                 .as_deref()
                 .expect("auto-start detail")
-                .contains("Build or install atm-daemon")
+                .contains("atm-daemon binary is installed")
         );
     }
 
@@ -989,5 +1145,51 @@ mod tests {
 
         let error = LaunchGateGuard::rejected_error(&endpoint);
         assert_eq!(error.code, AtmErrorCode::DaemonLaunchGateRejected);
+    }
+
+    #[test]
+    fn local_ipc_deadline_handles_unsupported_timeout_per_platform_contract() {
+        let result = apply_local_ipc_deadline(
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "named pipes do not support I/O timeouts",
+            )),
+            "failed to configure daemon local IPC write timeout",
+        );
+
+        #[cfg(windows)]
+        assert!(result.is_ok());
+
+        #[cfg(not(windows))]
+        {
+            let error = result.expect_err(
+                "non-Windows local IPC transports should keep unsupported deadline setup as an error",
+            );
+            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+            assert!(
+                error
+                    .message
+                    .contains("failed to configure daemon local IPC write timeout")
+            );
+        }
+    }
+
+    #[test]
+    fn local_ipc_deadline_preserves_non_unsupported_errors() {
+        let result = apply_local_ipc_deadline(
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "synthetic local IPC failure",
+            )),
+            "failed to configure daemon local IPC write timeout",
+        )
+        .expect_err("non-unsupported timeout errors should remain failures");
+
+        assert_eq!(result.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            result
+                .message
+                .contains("failed to configure daemon local IPC write timeout")
+        );
     }
 }

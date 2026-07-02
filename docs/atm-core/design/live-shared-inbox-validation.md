@@ -15,4 +15,4 @@ Use instead:
 - `docs/atm-message-schema.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
-- `docs/plan-phase-U.md`
+- `docs/plans/phase-U/plan-phase-U.md`

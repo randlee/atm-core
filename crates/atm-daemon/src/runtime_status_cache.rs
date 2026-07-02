@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use atm_core::boundary;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
@@ -11,6 +10,7 @@ use atm_core::protocol::{
     TeamMemberHeartbeatResponse,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::RosterStore;
 
 use crate::{DaemonSubsystem, SubsystemObservability};
 
@@ -33,8 +33,6 @@ struct RuntimeMemberRecord {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RuntimeStatusCacheState {
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
-    sqlite_ready: bool,
-    sqlite_detail: Option<String>,
     degraded_ingest: bool,
 }
 
@@ -67,8 +65,6 @@ impl RuntimeStatusCache {
         Self {
             state: Arc::new(ArcSwap::from_pointee(RuntimeStatusCacheState {
                 members: HashMap::new(),
-                sqlite_ready: true,
-                sqlite_detail: None,
                 degraded_ingest: false,
             })),
             observability,
@@ -164,30 +160,6 @@ impl RuntimeStatusCache {
                 member: member.clone(),
             })
             .and_then(|record| record.pid)
-    }
-
-    pub(crate) fn mark_sqlite_unavailable(&self) {
-        let mut cache = self.state.load().as_ref().clone();
-        cache.sqlite_ready = false;
-        self.publish_state(cache);
-        // Emit failure is intentionally best-effort here because the in-memory sqlite
-        // readiness downgrade is the source of truth for doctor/status consumers.
-        self.observability.emit_or_warn(
-            "mark_sqlite_unavailable",
-            "degraded",
-            "runtime status cache marked sqlite unavailable",
-        );
-    }
-
-    /// Record SQLite degradation detail after the caller has decided which
-    /// higher-level subsystem event to emit. Callers must emit the associated
-    /// observability event independently; this helper only updates the cached
-    /// doctor/runtime-health projection state.
-    pub(crate) fn mark_sqlite_unavailable_with_detail(&self, detail: impl Into<String>) {
-        let mut cache = self.state.load().as_ref().clone();
-        cache.sqlite_ready = false;
-        cache.sqlite_detail = Some(detail.into());
-        self.publish_state(cache);
     }
 
     pub(crate) fn snapshot(&self) -> RuntimeStatusSnapshot {
@@ -312,18 +284,12 @@ fn finish_runtime_snapshot(
         && counts.offline_members > 0;
     let readiness = if all_tracked_members_offline {
         RuntimeReadinessState::Unavailable
-    } else if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {
+    } else if cache.degraded_ingest || conflict_count > 0 {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
     };
     let mut details = Vec::new();
-    if !cache.sqlite_ready {
-        details.push(cache.sqlite_detail.clone().unwrap_or_else(|| {
-            "sqlite-backed roster truth is unavailable; runtime cache updates are degraded"
-                .to_string()
-        }));
-    }
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
     }
@@ -341,7 +307,6 @@ fn finish_runtime_snapshot(
         readiness,
         detail,
         singleton_owner_pid: Some(std::process::id()),
-        sqlite_ready: cache.sqlite_ready,
         degraded_ingest: cache.degraded_ingest,
         member_counts: counts,
     }
@@ -349,15 +314,13 @@ fn finish_runtime_snapshot(
 
 pub(crate) fn build_runtime_status_cache_state(
     current_state: Option<&RuntimeStatusCacheState>,
-    roster_store: &dyn boundary::RosterStore,
+    roster_store: &dyn RosterStore,
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = build_empty_runtime_status_cache_state(current_state);
-    let teams = roster_store
-        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?
-        .teams;
+    let teams = roster_store.list_teams()?;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
-            "daemon runtime reload rejected because sqlite-backed roster truth contains more than {MAX_RELOAD_TEAMS} teams"
+            "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
         ))
         .with_recovery(
             "Reduce the number of persisted ATM teams or raise the documented reload cap before retrying SIGHUP.",
@@ -374,11 +337,6 @@ fn build_empty_runtime_status_cache_state(
 ) -> RuntimeStatusCacheState {
     RuntimeStatusCacheState {
         members: HashMap::new(),
-        // This constructor always resets SQLite readiness to the optimistic
-        // baseline; callers that detect assembly/open failure afterward own
-        // re-applying mark_sqlite_unavailable(...) before publishing state.
-        sqlite_ready: true,
-        sqlite_detail: None,
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
     }
 }
@@ -386,11 +344,10 @@ fn build_empty_runtime_status_cache_state(
 fn hydrate_runtime_status_cache_team(
     next_state: &mut RuntimeStatusCacheState,
     current_state: Option<&RuntimeStatusCacheState>,
-    roster_store: &dyn boundary::RosterStore,
+    roster_store: &dyn RosterStore,
     team: TeamName,
 ) -> Result<(), AtmError> {
-    let roster = roster_store
-        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
+    let roster = roster_store.load_roster(&team)?;
     for member in roster.members {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(
@@ -423,11 +380,10 @@ fn hydrate_runtime_status_cache_team(
 
 pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
     let summary = format!(
-        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; sqlite_ready={}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
+        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
         snapshot.liveness,
         snapshot.readiness,
         snapshot.singleton_owner_pid,
-        snapshot.sqlite_ready,
         snapshot.degraded_ingest,
         snapshot.member_counts.active_members,
         snapshot.member_counts.idle_members,
@@ -443,13 +399,7 @@ pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> Doctor
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
-            // SQLite readiness takes priority over ingest degradation in the combined case so
-            // doctor surfaces the most actionable operator code first.
-            code: if !snapshot.sqlite_ready {
-                atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
-            } else {
-                atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
-            },
+            code: atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded,
             message: summary,
             remediation: snapshot.detail.clone().or(Some(
                 "Restore daemon runtime backing services and rerun `atm doctor`.".to_string(),
@@ -564,7 +514,6 @@ mod tests {
 
         let snapshot = status_cache.snapshot();
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
-        assert!(snapshot.sqlite_ready);
         assert!(!snapshot.degraded_ingest);
         assert_eq!(snapshot.member_counts.active_members, 1);
         assert_eq!(snapshot.member_counts.idle_members, 0);
@@ -613,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_status_cache_sqlite_readiness_flip_publishes_one_coherent_snapshot() {
+    fn runtime_status_cache_all_tracked_members_offline_are_unavailable() {
         let status_cache = RuntimeStatusCache::new();
         let team = test_team();
         let member: AgentName = TEST_SENDER.parse().expect("member");
@@ -622,22 +571,18 @@ mod tests {
             team,
             member,
             Some(200),
-            RuntimeMemberState::Active,
+            RuntimeMemberState::Offline,
             Some(IsoTimestamp::now()),
         );
 
-        status_cache.mark_sqlite_unavailable_with_detail("sqlite writer submit failed");
-
         let snapshot = status_cache.snapshot();
-        assert!(!snapshot.sqlite_ready);
-        assert_eq!(snapshot.readiness, RuntimeReadinessState::Degraded);
-        assert_eq!(snapshot.member_counts.active_members, 1);
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Unavailable);
+        assert_eq!(snapshot.member_counts.active_members, 0);
+        assert_eq!(snapshot.member_counts.offline_members, 1);
         assert_eq!(snapshot.member_counts.unknown_members, 0);
-        assert!(
-            snapshot
-                .detail
-                .as_ref()
-                .is_some_and(|detail: &String| detail.contains("sqlite writer submit failed"))
+        assert_eq!(
+            snapshot.detail.as_deref(),
+            Some("all tracked daemon members are offline")
         );
     }
 }

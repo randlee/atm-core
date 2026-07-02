@@ -20,7 +20,7 @@ io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
 [dependencies]
 allowed_dependents = ["atm-daemon"]
 allowed_dependencies = []
-forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"

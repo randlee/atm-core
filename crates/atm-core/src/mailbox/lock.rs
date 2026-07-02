@@ -66,7 +66,7 @@ impl std::fmt::Display for LockOperation {
 struct CanonicalLockKey(String);
 
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn default_lock_timeout() -> Duration {
+fn default_lock_timeout() -> Duration {
     if let Some(timeout) = debug_timeout_override() {
         return timeout;
     }

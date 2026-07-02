@@ -8,7 +8,7 @@ use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::IsoTimestamp;
-use atm_rusqlite::assemble_boundary;
+use atm_runtime_test_support::open_sqlite_boundary;
 use tempfile::TempDir;
 
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
@@ -20,22 +20,26 @@ fn replay_source_static(label: &'static str) -> ReplaySource {
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
-    let assembly = assemble_boundary(db_path).expect("assemble boundary");
-    let roster_store = assembly.roster_store();
-    roster_store
-        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team: TEST_TEAM.parse().expect("team"),
-            members: members
-                .iter()
-                .map(|name| {
-                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
-                        TEST_TEAM.parse().expect("team"),
-                        AgentMember::with_name((*name).parse().expect("member")),
-                    )
-                })
-                .collect(),
-            source: Some(replay_source_static("daemon-graft-test")),
+    let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
+    let roster_store = assembly.roster_store_arc();
+    let team = TEST_TEAM
+        .parse::<atm_core::types::TeamName>()
+        .expect("team");
+    let members = members
+        .iter()
+        .map(|name| {
+            atm_core::boundary::roster_member_record_from_claude_code_member(
+                team.clone(),
+                AgentMember::with_name((*name).parse().expect("member")),
+            )
         })
+        .collect::<Vec<_>>();
+    roster_store
+        .replace_roster(
+            &team,
+            &members,
+            Some(&replay_source_static("daemon-graft-test")),
+        )
         .expect("replace roster");
 }
 

@@ -1,4 +1,4 @@
-use crate::boundary::{RosterHarness, RosterMemberRecord};
+use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
@@ -56,7 +56,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
-    fn from_roster(member: RosterMemberRecord) -> Self {
+    fn from_roster(member: RosterEntry) -> Self {
         Self {
             agent: member.agent_name,
             team: member.team_name,
@@ -583,7 +583,7 @@ mod tests {
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow::WorkflowStateFile;
-    use crate::{boundary::RosterMemberRecord, config::AtmConfig, schema::TeamConfig};
+    use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
@@ -659,7 +659,7 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            _message: &crate::schema::MessageEnvelope,
+            _message: &crate::schema::InboxMessage,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -667,8 +667,8 @@ mod tests {
         fn append_compat_inbox_message_set(
             &self,
             _inbox_path: &Path,
-            _mode: crate::boundary::ClaudeCompatibilityDeliveryMode,
-            _messages: &[crate::schema::MessageEnvelope],
+            _mode: crate::boundary::ProjectionAppendMode,
+            _messages: &[crate::schema::InboxMessage],
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -676,7 +676,7 @@ mod tests {
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &DeliveryRecipientSnapshot,
-            _messages: &[crate::schema::MessageEnvelope],
+            _messages: &[crate::schema::InboxMessage],
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -685,11 +685,11 @@ mod tests {
             &self,
             _team: &TeamName,
             _agent: &AgentName,
-        ) -> Result<Option<RosterMemberRecord>, AtmError> {
+        ) -> Result<Option<RosterEntry>, AtmError> {
             Ok(None)
         }
 
-        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError> {
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
         }
 
@@ -882,10 +882,8 @@ mod tests {
             "agent 'recipient' was not found in team 'test-team'"
         );
         assert_eq!(
-            error.recovery.as_deref(),
-            Some(
-                "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
-            )
+            error.primary_recovery(),
+            Some("Update the team membership or target a different recipient.")
         );
     }
 }

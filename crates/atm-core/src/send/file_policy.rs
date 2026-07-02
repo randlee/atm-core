@@ -163,11 +163,11 @@ mod tests {
 
         assert!(error.is_file_policy());
         assert!(error.message.contains("exceeds"));
-        assert!(
-            error
-                .recovery
-                .as_deref()
-                .is_some_and(|value| value.contains("10 MiB"))
+        assert_eq!(
+            error.primary_recovery(),
+            Some(
+                "Update the referenced file, path, or policy inputs so they satisfy ATM file-policy rules before retrying the command."
+            )
         );
         assert!(
             fs::read_dir(

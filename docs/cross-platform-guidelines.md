@@ -41,6 +41,124 @@ Mechanical-enforcement rule:
 - if a prohibited pattern is cheap and deterministic to detect, it belongs in
   `just lint` rather than review-only guidance
 
+## Windows Same-Host Runtime Contracts
+
+### Host-Ownership Sidecar Recovery
+
+Windows host-ownership recovery uses a same-directory sidecar shadow file:
+- lock file: `owner.lock`
+- shadow file: `owner.lock.meta`
+
+Required behavior:
+- write the canonical `pid:token` owner record to the locked file
+- mirror the same record to `owner.lock.meta` with temp-file-plus-rename replacement
+- when reading the locked file fails with a Windows lock/sharing violation during stale-owner
+  recovery, fall back to `owner.lock.meta`
+- reject recovery if the pid/token changes between the first stale-owner observation and the
+  eventual retry lock acquisition
+
+This sidecar is a recovery aid only. It does not replace the locked file as the source of truth
+while the lock handle remains readable.
+
+### `ErrorKind::Unsupported` Is Not a Timeout Exemption
+
+Windows named pipes report `ErrorKind::Unsupported` for `set_recv_timeout()` and
+`set_send_timeout()`. Code may tolerate that result only when it immediately installs a bounded
+fallback contract.
+
+Required fallback shapes:
+- request reads: a watchdog or equivalent bounded fallback that prevents blocked Windows
+  named-pipe reads from pinning the connection slot or shutdown drain past the documented deadline
+- shutdown wake connections: no unbounded `flush()`/drain after the `Unsupported` bypass; the wake
+  path must still return within the same bounded deadline
+- shutdown drain: unsupported socket deadlines must not leave `active_connections` pinned past the
+  forced-cancel window
+
+Forbidden shape:
+- swallowing `ErrorKind::Unsupported` and then proceeding to an unbounded read, write, flush, or
+  shutdown wait
+
+## Windows Smoke Test
+
+Use this procedure on a fresh Windows checkout of `feature/windows-test-parity`. The Windows
+machine should treat Git as the handoff channel: pull this branch first, then run the steps below
+from Windows PowerShell in the repository root.
+
+Observed result on the first Windows machine for this branch:
+- `PASS` after pulling `feature/windows-test-parity` and running the same-host daemon smoke flow
+- verified outcomes: `doctor --json` reached ready, the named pipe was published, `send` succeeded,
+  and `read --all --json` returned the delivered body
+- one environment caveat: stale local daemon/test processes can hold the host owner lock and must
+  be cleared before rerunning the smoke
+
+1. Prerequisites
+   - Install the Rust MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc` or equivalent).
+   - Clone `atm-core`, then pull the branch under test:
+   ```powershell
+   git fetch origin
+   git switch feature/windows-test-parity
+   git pull --ff-only origin feature/windows-test-parity
+   ```
+
+2. Create a disposable ATM environment
+   ```powershell
+   $SmokeRoot = Join-Path $env:TEMP "atm-win-smoke"
+   Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+   New-Item -ItemType Directory -Force -Path $SmokeRoot | Out-Null
+   New-Item -ItemType Directory -Force -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\inboxes") | Out-Null
+   Set-Content -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\config.json") -Value '{"members":[{"name":"smoke-user"}]}'
+   Set-Content -Path (Join-Path (Get-Location) ".atm.toml") -Value "[atm]`ndefault_team = `"smoke-team`"`n"
+   $env:ATM_HOME = $SmokeRoot
+   $env:ATM_CONFIG_HOME = $SmokeRoot
+   $env:ATM_TEAM = "smoke-team"
+   $env:ATM_IDENTITY = "smoke-user"
+   $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
+   ```
+
+3. Build the workspace
+   ```powershell
+   just build
+   ```
+   Pass indicator:
+   - workspace build exits zero
+   - `target\debug\atm-daemon.exe` and `target\debug\atm.exe` exist
+   Fail indicator:
+   - `just build` exits non-zero or the binaries are missing
+
+4. Run `atm doctor` and confirm the daemon reaches ready state
+   ```powershell
+   $Doctor = .\target\debug\atm.exe doctor --json | ConvertFrom-Json
+   $Doctor.summary.status
+   $Doctor.runtime_status.readiness
+   ```
+   Pass indicator:
+   - `summary.status` is `healthy` or `warning`
+   - `runtime_status.readiness` is `ready`
+   Fail indicator:
+   - `doctor` exits non-zero
+   - `runtime_status.readiness` is absent or not `ready`
+
+5. Verify the named-pipe IPC endpoint is published
+   ```powershell
+   Get-ChildItem \\.\pipe\ | Where-Object { $_.Name -eq "atm-win-smoke" }
+   ```
+   Pass indicator:
+   - the command returns one pipe entry named `atm-win-smoke`
+   Fail indicator:
+   - no matching pipe appears after the `doctor` step
+
+6. Confirm the daemon accepts a connection and a round-trip mailbox operation
+   ```powershell
+   .\target\debug\atm.exe send smoke-user "windows smoke hello" --json
+   .\target\debug\atm.exe read --all --json
+   ```
+   Pass indicator:
+   - `send` returns a normal sent result
+   - `read --all --json` includes the `windows smoke hello` body for `smoke-user@smoke-team`
+   Fail indicator:
+   - `send` reports daemon unavailable / connection refused
+   - `read` does not show the just-sent message
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.
@@ -103,7 +221,7 @@ Deferred analyzer families:
 
 ## Clippy Compliance
 
-CI runs Rust 1.93 clippy with `-D warnings`. Local toolchains may be older and miss lints.
+CI runs Rust 1.94.1 clippy with `-D warnings`. Local toolchains may be older and miss lints.
 
 ### Known Strict Lints
 

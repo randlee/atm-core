@@ -84,7 +84,6 @@ tags:
   - protocol
 related_boundaries:
   - BOUNDARY-AtmProtocol
-  - BOUNDARY-TaskStore
 code_references:
   - docs/atm-core/boundaries.md
   - docs/requirements.md
@@ -121,7 +120,6 @@ Alternatives considered:
 - Preserve a first-class top-level `ack` protocol method family.
 
 Follow-up work:
-- Keep task-state ownership explicit in `TaskStore`.
 - Align thin-client docs with the `send` / `receive` shape.
 - Align successor-chain and ephemeral-retention rules with the retained
   product requirements before the SQLite sprint closes.
@@ -172,15 +170,27 @@ Required subsystem boundaries:
 - `ServerTransport` boundary
 - `RequestDispatcher` boundary
 - `MailStore` boundary
-- `TaskStore` boundary
+- `MailStoreDoctor` boundary
 - `RosterStore` boundary
+- `RosterStoreDoctor` boundary
 - inbox-ingress boundary
 - inbox-export boundary
 - config-ingress boundary
+- `ConfigDoctor` boundary
 - `WatchEventSource` boundary
 - `ReconcileCoordinator` boundary
 - `NotificationSink` boundary
 - `StatusSource` boundary
+- `RemoteReplayStore` boundary
+- `RuntimeStorageFinalizer` boundary
+
+Phase AA shared runtime-composition contracts:
+- `RuntimeDoctorPorts` is the `atm-core` DTO that groups the storage-neutral
+  doctor handles consumed by daemon and direct-doctor callers
+- `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
+  trait family
+- replay persistence ownership crosses the crate boundary through
+  `RemoteReplayStore`, not through daemon-private or SQLite-private helpers
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -196,11 +206,13 @@ Required architectural rules:
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default
-- `TaskStore`: sealed by default
+- `MailStoreDoctor`: sealed by default
 - `RosterStore`: sealed by default
-- `InboxIngress`: sealed by default
-- `InboxExport`: sealed by default
+- `RosterStoreDoctor`: sealed by default
+- `SourceIngress`: sealed by default
+- `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
+- `ConfigDoctor`: sealed by default
 - watcher/reconcile adapters: sealed by default
 - notifier-facing service adapters: sealed by default unless an ADR explicitly
   opens the boundary
@@ -229,13 +241,28 @@ Phase R redesign notes:
 - `atm-core` owns the ATM frame schema used by both same-host local IPC and
   cross-host daemon transport
 - `atm-core` owns the immutable public runtime roster projection
-  `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
+  `ProjectionRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
+- `atm-core` owns the shared subsystem doctor DTO family:
+  - `DoctorFinding`
+  - `MailStoreDoctorReport`
+  - `RosterStoreDoctorReport`
+  - `ConfigDoctorReport`
+  - `DaemonRuntimeDoctorReport`
+- the daemon may aggregate those subsystem reports and compare them for drift,
+  but it must not reimplement backend-specific diagnosis logic
+
+Phase AC supersession note:
+- `AC.2` moved the concrete Claude inbox storage backend into
+  `crates/atm-storage-claude`
+- `atm-core` still owns generic source/projection boundary traits and helper
+  request/response shapes during the cutover window, but it no longer owns the
+  concrete Claude file-backed backend implementation
 - `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
   and member truth; retained Claude `config.json` remains projection/output
   state plus explicit `doctor` comparison input, not a second team-admin
   authority
-- the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
+- the `Z.6` Claude send warning path must build `ProjectionRoster` from
   store-backed ATM roster rows after the durable write succeeds; it must not
   reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
@@ -267,7 +294,7 @@ Config-ingress ownership rules:
 - `ConfigIngress` must not remain a generic retained-command/runtime roster
   lookup surface
 - normal retained runtime membership decisions belong to ATM roster truth and
-  `ClaudeCodeTeamRoster`
+  `ProjectionRoster`
 - the only approved retained send-path file-state exception before `Z.8`
   watcher ownership is the post-write missing-config existing-inbox fallback
   warning; that exception does not restore generic file-backed membership
@@ -321,8 +348,10 @@ Architectural rule:
 
 Store-family rule:
 - `MailStore` owns message lifecycle state
-- `TaskStore` owns task-domain state and task metadata
 - `RosterStore` owns durable team/member roster state only
+- task storage is currently out of scope; any future task storage line starts
+  from canonical Claude-code schema rather than from preserved transition
+  scaffolding
 - daemon-owned live `pid` state and other session-transient runtime data stay
   outside `RosterStore`
 - `TeamConfig` / `config.json` stays a config-ingress document, not the durable
@@ -511,6 +540,13 @@ Architectural rules:
   - read/clear visibility state
   - team roster
 - daemon memory is the live source of truth for agent status
+- current Claude-native inbox schema (`from`, `text`, `timestamp`, `read`,
+  `summary`, `color`) is the primary forward-write contract for ATM 1.2
+- historical ATM additive derivatives (`message_id`, `source_team`,
+  `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `atmAlertKind`,
+  `missingConfigPath`, `metadata.atm.*`) remain read-compatible only
+- derivative fields above must parse without read-time failure, but no new ATM
+  1.2 code may emit them as the primary contract for current Claude inboxes
 - Claude inbox JSONL is ingress/egress compatibility only
 - ATM-authored JSONL export is a bounded compatibility projection over the full
   durable message body

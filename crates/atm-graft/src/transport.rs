@@ -1,9 +1,10 @@
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
-use atm_core::protocol::{RequestEnvelope, RequestId, ResponseEnvelope};
+use atm_core::protocol::{self, RequestEnvelope, RequestId, ResponseEnvelope};
 use atm_daemon_client::{
-    DaemonLocalIpcEndpoint, exchange as daemon_exchange, try_connect as daemon_try_connect,
+    DaemonLocalIpcEndpoint, FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
+    exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -38,7 +39,10 @@ impl GraftLocalIpcClientTransport {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
+        let (_, envelope) = encode_request_envelope(request)?;
+        let response =
+            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?;
+        decode_response_envelope(response)
     }
 
     pub(crate) fn open_advisory_stream(
@@ -54,12 +58,11 @@ impl GraftLocalIpcClientTransport {
                 )
                 .with_source(source)
             })?;
-        let request_id = atm_core::protocol::next_request_id();
-        let frame = atm_core::protocol::request_to_frame_payload(
-            request_id,
-            RequestEnvelope::AdvisoryStream(request),
-        )?;
-        atm_core::protocol::write_frame(
+        let (request_id, envelope) =
+            encode_request_envelope(RequestEnvelope::AdvisoryStream(request))?;
+        let frame = envelope.into_frame_payload();
+        let frame = decode_daemon_frame(frame)?;
+        protocol::write_frame(
             &mut stream,
             &frame,
             "failed to write graft advisory-stream request frame",
@@ -86,6 +89,39 @@ impl GraftLocalIpcClientTransport {
             })?;
         Ok(ActiveAdvisoryStream { stream, request_id })
     }
+}
+
+fn encode_request_envelope(request: RequestEnvelope) -> Result<(RequestId, RpcEnvelope), AtmError> {
+    let request_id = protocol::next_request_id();
+    let frame = protocol::request_to_frame_payload(request_id, request)?;
+    Ok((
+        request_id,
+        RpcEnvelope::from_frame_payload(encode_daemon_frame(frame)?),
+    ))
+}
+
+fn decode_response_envelope(envelope: RpcEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    let frame = decode_daemon_frame(envelope.into_frame_payload())?;
+    let (_, response) = protocol::response_from_frame_payload(frame)?;
+    Ok(response)
+}
+
+fn encode_daemon_frame(frame: protocol::FramePayload) -> Result<FramePayload, AtmError> {
+    Ok(FramePayload {
+        request_id: DaemonRequestId::new(frame.request_id.into_inner())?,
+        message_kind: MessageKind::try_from(frame.message_kind.code())?,
+        flags: frame.flags,
+        bytes: frame.bytes,
+    })
+}
+
+fn decode_daemon_frame(frame: FramePayload) -> Result<protocol::FramePayload, AtmError> {
+    Ok(protocol::FramePayload {
+        request_id: RequestId::new(frame.request_id.into_inner())?,
+        message_kind: protocol::MessageKind::try_from(frame.message_kind.code())?,
+        flags: frame.flags,
+        bytes: frame.bytes,
+    })
 }
 
 impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}

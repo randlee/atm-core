@@ -37,6 +37,8 @@ The canonical daemon packet contract lives in:
 - singleton daemon lifecycle
 - direct SQLite access
 - direct inbox JSONL parsing or writes
+- the requirement that all first-party thin clients ship at the exact same
+  crate version
 
 ## 3. Requirement Namespace
 
@@ -186,6 +188,9 @@ Required Phase R rules:
 - the CLI-side auto-start path must acquire the documented pre-spawn launch
   gate before daemon fork/exec so concurrent CLIs cannot race into second-daemon
   startup attempts
+- the CLI standard same-host bootstrap path must reuse the shared
+  `atm-daemon-client` endpoint/bin helper seam rather than owning a
+  CLI-private bootstrap helper surface
 - CLI tests must not rely on `warm_daemon`, `ATM_DAEMON_BIN`, or other daemon
   spawn helpers to exercise normal command behavior
 - `CliComposition::from_transport(...)` remains the primary seam for injected
@@ -196,6 +201,17 @@ Required Phase R rules:
   - attempt the one documented daemon auto-start path
   - retry connection once
   - fail clearly with recovery guidance rather than silently bypassing the daemon
+- the documented daemon auto-start path is also the canonical first-party
+  thin-client convenience path:
+  - it may be reused by crates such as `atm-graft`
+  - it resolves ATM-owned environment/config inputs into the canonical
+    same-host endpoint and daemon binary
+  - it is allowed to start the daemon when launch conditions are met
+  - it must not require a compile-time dependency on `atm-runtime`,
+    `atm-storage-rusqlite`, or other concrete backend composition crates
+- compatibility between first-party thin clients and the primary `atm` install
+  is governed by the documented same-host RPC surface rather than lockstep
+  crate-version equality
 - `atm doctor` remains a CLI command, but its production runtime checks may
   query daemon state through the runtime boundary
 - CLI runtime failures must preserve typed error identity until the rendering

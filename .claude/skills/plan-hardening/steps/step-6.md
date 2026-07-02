@@ -22,7 +22,7 @@ Expected `/tmp/plan-hardening-qa-vars.json` shape:
 {
   "task_id": "phase-x-plan-qa",
   "sprint": "phase-X",
-  "sprint_doc": "docs/phase-X/plan-phase-X.md",
+  "sprint_doc": "docs/plans/phase-X/plan-phase-X.md",
   "review_mode": "plan",
   "description": "Focused plan QA for phase-X after consistency hardening",
   "pr_number": "",
@@ -30,9 +30,9 @@ Expected `/tmp/plan-hardening-qa-vars.json` shape:
   "worktree_path": "/absolute/path/to/worktree",
   "commits": "HEAD",
   "review_targets": [
-    "docs/phase-X/plan-phase-X.md",
-    "docs/phase-X/sprint-X1.md",
-    "docs/phase-X/sprint-X2.md"
+    "docs/plans/phase-X/plan-phase-X.md",
+    "docs/plans/phase-X/sprint-X1.md",
+    "docs/plans/phase-X/sprint-X2.md"
   ],
   "references": [
     "docs/project-plan.md"

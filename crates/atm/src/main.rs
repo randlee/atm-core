@@ -84,6 +84,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
         | AtmErrorCode::HelpTopicNotFound
@@ -432,12 +433,12 @@ impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
+        // The CLI is a short-lived synchronous caller, so per-command flush is
+        // the explicit durability barrier here. Do not reuse this adapter as a
+        // daemon or async runtime logger without revisiting that contract.
         let event = map_command_event(&self.service_name, &self.target_category, event)?;
-        self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
-            AtmError::observability_emit(format!("shared observability emit failed ({code})"))
-                .with_source(source)
-        })
+        self.logger.log(event).map_err(map_log_error)?;
+        self.logger.flush().map_err(map_flush_error)
     }
 
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
@@ -472,29 +473,10 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .and_then(|query| query.last_error.clone().map(map_diagnostic_summary));
         let diagnostic = report
             .last_error
+            .clone()
             .map(map_diagnostic_summary)
             .or(query_diagnostic);
-        let detail = diagnostic
-            .as_ref()
-            .map(|diagnostic| diagnostic.message.clone())
-            .or_else(|| {
-                report.maintenance.as_ref().map(|maintenance| {
-                    format!(
-                        "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={}",
-                        match maintenance.state {
-                            sc_observability_types::MaintenanceWorkerState::Running => "running",
-                            sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
-                            sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
-                        },
-                        maintenance.rotated_files_total,
-                        maintenance.pruned_files_total,
-                        maintenance
-                            .last_pass_at
-                            .map(|timestamp| timestamp.into_inner().to_string())
-                            .unwrap_or_else(|| "never".to_string())
-                    )
-                })
-            });
+        let detail = Some(build_logging_health_detail(&report, diagnostic.as_ref()));
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
@@ -503,6 +485,75 @@ impl ObservabilityPort for ScObservabilityAdapter {
             diagnostic,
             detail,
         })
+    }
+}
+
+fn map_log_error(source: sc_observability::LogError) -> AtmError {
+    let code = match &source {
+        sc_observability::LogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
+        sc_observability::LogError::WriterDegraded(context)
+        | sc_observability::LogError::ShutdownTimedOut(context) => {
+            context.diagnostic().code.as_str()
+        }
+    };
+    AtmError::observability_emit(format!(
+        "shared observability log admission failed ({code})"
+    ))
+    .with_source(source)
+}
+
+fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
+    let code = source.diagnostic().code.as_str();
+    AtmError::observability_emit(format!(
+        "shared observability durability flush failed ({code})"
+    ))
+    .with_source(source)
+}
+
+fn build_logging_health_detail(
+    report: &sc_observability_types::LoggingHealthReport,
+    diagnostic: Option<&AtmObservabilityDiagnostic>,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(diagnostic) = diagnostic {
+        parts.push(diagnostic.message.clone());
+    }
+    parts.push(format!(
+        "writer_state={} queue_depth={} queue_capacity={} queue_high_water_mark={} queue_full_drops_total={}",
+        writer_state_label(report.writer_state),
+        report.queue_depth,
+        report.queue_capacity,
+        report.queue_high_water_mark,
+        report.queue_full_drops_total,
+    ));
+    if let Some(maintenance) = &report.maintenance {
+        parts.push(format!(
+            "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={}",
+            maintenance_state_label(maintenance.state),
+            maintenance.rotated_files_total,
+            maintenance.pruned_files_total,
+            maintenance
+                .last_pass_at
+                .map(|timestamp| timestamp.into_inner().to_string())
+                .unwrap_or_else(|| "never".to_string())
+        ));
+    }
+    parts.join(" | ")
+}
+
+fn writer_state_label(state: sc_observability_types::WriterState) -> &'static str {
+    match state {
+        sc_observability_types::WriterState::Running => "running",
+        sc_observability_types::WriterState::Degraded => "degraded",
+        sc_observability_types::WriterState::Stopped => "stopped",
+    }
+}
+
+fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+    match state {
+        sc_observability_types::MaintenanceWorkerState::Running => "running",
+        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
     }
 }
 

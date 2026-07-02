@@ -27,12 +27,9 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
-use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
-use atm_rusqlite::assemble_boundary;
-#[cfg(windows)]
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -40,7 +37,11 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::test_support::connect_daemon_local_ipc_until_ready;
+#[cfg(windows)]
+use crate::test_support::connect_local_ipc_with_timeout;
+use crate::test_support::{
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+};
 
 const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
@@ -72,6 +73,10 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
         (
             SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
@@ -121,12 +126,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    stream
-        .set_send_timeout(Some(Duration::from_secs(5)))
-        .expect("set send timeout");
-    stream
-        .set_recv_timeout(Some(Duration::from_secs(5)))
-        .expect("set recv timeout");
+    configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: tempdir.path().join("home"),
         current_dir: tempdir.path().join("cwd"),
@@ -170,6 +170,10 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        (
             SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
@@ -199,12 +203,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    stream
-        .set_send_timeout(Some(Duration::from_secs(5)))
-        .expect("set send timeout");
-    stream
-        .set_recv_timeout(Some(Duration::from_secs(5)))
-        .expect("set recv timeout");
+    configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),
         current_dir: atm_home.clone(),
@@ -249,6 +248,17 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
 #[serial_test::serial(env)]
 fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
@@ -287,7 +297,9 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let local_ipc_name =
         atm_core::protocol::daemon_local_ipc_name_from_path(&tempdir.path().join("daemon.sock"))
             .expect("ipc name");
-    ready_rx.recv().expect("daemon ready");
+    ready_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("daemon ready within deadline");
     lifecycle.set_terminate_for_test(true);
 
     serve_result_rx
@@ -296,31 +308,32 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
         .expect("serve runtime result");
     join.join().expect("join serve thread");
     assert!(
-        LocalSocketStream::connect(local_ipc_name).is_err(),
+        connect_local_ipc_with_timeout(local_ipc_name, Duration::from_millis(250)).is_err(),
         "windows same-host runtime should reject new local IPC connections after shutdown",
     );
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
-    let assembly = assemble_boundary(db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
+    let roster = members
+        .iter()
+        .map(|name| {
+            atm_core::boundary::roster_member_record_from_claude_code_member(
+                test_team().clone(),
+                AgentMember::with_name((*name).parse().expect("member")),
+            )
+        })
+        .collect::<Vec<_>>();
     assembly
-        .roster_store()
-        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team: test_team().clone(),
-            members: members
-                .iter()
-                .map(|name| {
-                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
-                        test_team().clone(),
-                        AgentMember::with_name((*name).parse().expect("member")),
-                    )
-                })
-                .collect(),
-            source: Some(
-                atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
+        .roster_store_arc()
+        .replace_roster(
+            test_team(),
+            &roster,
+            Some(
+                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
                     .expect("replay source"),
             ),
-        })
+        )
         .expect("replace roster");
 }
 
@@ -364,6 +377,10 @@ fn production_runtime_installs_daemon_notification_sink() {
 
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
@@ -374,11 +391,9 @@ fn production_runtime_installs_daemon_notification_sink() {
         SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
     ));
     sink.start().expect("start notification sink");
-    let assembly = assemble_boundary(&db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
+        &assembly,
         Arc::new(DaemonNonClaudeOutbound::new()),
         Arc::new(sink.clone()),
     );
@@ -847,7 +862,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 
 #[test]
 #[serial_test::serial(env)]
-fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
+fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -864,7 +879,13 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    status_cache.mark_sqlite_unavailable();
+    status_cache.insert_member_for_test(
+        test_team().clone(),
+        ROLE_TEAM_LEAD.parse().expect("member"),
+        Some(std::process::id()),
+        RuntimeMemberState::IdentityConflict,
+        Some(IsoTimestamp::now()),
+    );
 
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
@@ -883,10 +904,12 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
                 .findings
                 .iter()
                 .find(|finding| {
-                    finding.code == atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
+                    finding.code
+                        == atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded
                 })
                 .expect("runtime finding");
-            assert!(finding.message.contains("sqlite_ready=false"));
+            assert!(finding.message.contains("owner_pid="));
+            assert!(finding.message.contains("unknown=1"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }
@@ -944,7 +967,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 })
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));
-            assert!(finding.message.contains("sqlite_ready=true"));
+            assert!(finding.message.contains("degraded_ingest=false"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

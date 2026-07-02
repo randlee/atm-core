@@ -216,7 +216,8 @@ routing.
 
 Required mapping rules:
 
-- ATM command events emit through `Logger::emit(...)`
+- ATM command events use queue-backed logger admission through `Logger::log()`
+  or `Logger::try_log()` at the concrete adapter layer
 - ATM command events use shared `LogEvent` fields for:
   - `service = "atm"`
   - `target` for ATM subsystem grouping
@@ -234,6 +235,9 @@ Required mapping rules:
   line-by-line ATM parsing
 - `atm doctor` must project shared `LoggingHealthReport` and
   `QueryHealthReport` into ATM findings
+- ATM-owned health detail must intentionally summarize the shared queue depth,
+  queue high-water mark, queue-full drops, writer state, and maintenance state
+  rather than silently discarding the additional `1.2.0` logger runtime data
 
 ## 8. Sink Policy
 

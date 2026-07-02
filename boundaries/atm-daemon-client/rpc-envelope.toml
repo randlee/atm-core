@@ -1,0 +1,71 @@
+boundary_id = "BOUNDARY-RpcEnvelopeTransport"
+owner_package = "atm-daemon-client"
+owner_crate_path = "atm_daemon_client"
+name = "RpcEnvelope"
+
+[public]
+facade = "RpcEnvelope"
+
+[implementation]
+type = "RpcEnvelope"
+module = "atm_daemon_client::rpc"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = [
+  "atm::composition::LocalIpcClientTransportAdapter::round_trip",
+  "atm_graft::transport::round_trip",
+  "atm_graft::transport::open_advisory_stream",
+]
+
+[ownership]
+io_owns = [
+  "rpc_header_transport_metadata",
+  "canonical_domain_body_encoding",
+  "request_response_frame_wrapping",
+]
+io_forbidden = [
+  "sqlite",
+  "backend_specific_storage",
+  "daemon_runtime_dispatch",
+]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-graft"]
+allowed_dependencies = ["atm-storage"]
+forbidden_edges = [
+  "atm-daemon-client -> atm-storage-rusqlite",
+  "atm-daemon-client -> atm-storage-claude",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["RpcEnvelope", "RpcHeader"]
+response_types = ["RpcEnvelope"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-RPC-ENVELOPE-DEPENDENCIES",
+  "LINT-BOUNDARY-RPC-ENVELOPE-REFERENCES",
+]
+review_gates = [
+  "no_daemon_client_to_sqlite_backend_edge",
+  "no_daemon_client_to_claude_backend_edge",
+  "transport_metadata_stays_in_header",
+]
+
+[status]
+state = "active"
+notes = [
+  "AC.5 makes atm-daemon-client the owner of the generic transport envelope while canonical message and roster bodies come from atm-storage",
+  "the current wire format still encodes RequestEnvelope and ResponseEnvelope inside RpcEnvelope body bytes for protocol v1",
+]

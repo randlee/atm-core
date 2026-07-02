@@ -24,6 +24,7 @@ The crate-local machine-readable boundary inventory lives in:
 - list/send/read/ack/clear service behavior
 - log query/follow service behavior over the observability boundary
 - doctor service behavior
+- subsystem doctor trait contracts and shared doctor report DTOs
 - structured core errors
 
 `atm-core` does not own:
@@ -100,19 +101,17 @@ Initial crate requirement IDs:
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
   Phase-U note: active compatibility reads no longer depend on `metadata.atm`;
-  inbound shared-inbox records strip that namespace through
-  `strip_metadata_atm_namespace()` in
-  `crates/atm-core/src/schema/inbox_message.rs`.
+  inbound shared-inbox records may still carry it as a tolerated derivative,
+  but the read path ignores that namespace for active machine-state semantics.
 - `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility
   projection contract for ATM-authored exports and inbound compatibility
   ingestion, including the bounded export cap, retrieval-stub rule, and
   idempotent watcher/reconcile projection handling for the same logical
   message. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
-  Phase-U note: the active compatibility contract strips inbound
-  `metadata.atm` rather than preserving it as a live schema surface; the
-  production enforcement point is `strip_metadata_atm_namespace()` in
-  `crates/atm-core/src/schema/inbox_message.rs`.
+  Phase-U note: the active compatibility contract accepts historical
+  `metadata.atm` only as read-compatible additive input and does not preserve
+  it as a live machine-state surface.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
@@ -137,6 +136,12 @@ Initial crate requirement IDs:
 - `REQ-CORE-DOCTOR-001` `atm-core` owns local doctor diagnostics and readiness
   evaluation. Satisfies the diagnostic evaluation aspects of:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+  Phase-AA note:
+  - `MailStore` and `RosterStore` remain the primary storage-neutral
+    capability surfaces in the historical Phase-AA line
+  - `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the
+    subsystem-owned doctor traits that freeze the aggregate-only daemon doctor
+    model
 - `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
@@ -299,12 +304,10 @@ Requirement IDs:
 Required `atm-core` crate rules:
 - `atm-core` owns the service-layer API for:
   - message persistence
-  - ack/task persistence
   - read/clear visibility persistence
   - team roster persistence
 - `atm-core` owns the trait boundaries for:
   - `MailStore`
-  - `TaskStore`
   - `RosterStore`
   - inbox ingress
   - inbox export
@@ -369,7 +372,7 @@ Required `atm-core` crate rules:
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
   explicit-transaction policy through the owning store boundary
 - `atm-core` defines the store contracts; the first concrete SQLite
-  implementation lives in `atm-rusqlite`
+  implementation now lives in `atm-storage-rusqlite`
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line
@@ -620,12 +623,12 @@ Requirement ID:
 Required service rules:
 - ATM roster state in SQLite is the canonical roster truth for runtime
   membership decisions
-- the immutable public runtime roster surface is `ClaudeCodeTeamRoster`
+- the immutable public runtime roster surface is `ProjectionRoster`
 - retained runtime commands (`list`, `read`, `clear`, `ack`) must validate
   membership through ATM roster truth only
 - Claude send must not use `config.json` as a pre-write membership gate
 - the post-write Claude roster warning path must build
-  `ClaudeCodeTeamRoster` from canonical ATM roster rows through `RosterStore` /
+  `ProjectionRoster` from canonical ATM roster rows through `RosterStore` /
   SQLite rather than through a direct `config.json` read
 - `doctor` may read `config.json` only as a comparison surface against
   canonical ATM roster truth

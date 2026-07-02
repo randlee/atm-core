@@ -66,7 +66,6 @@ Exact module and type ownership:
   - `atm_core::delivery_plan::NotificationTarget`
   - `atm_core::delivery_plan::DeliveryPlanDisposition`
   - `atm_core::delivery_plan::DeliveryPlan`
-  - `atm_core::delivery_plan::ReplyDeliveryPlan`
 - `crates/atm-core/src/delivery_execution.rs`
   - `atm_core::delivery_execution::execute_delivery_plan(...)`
   - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
@@ -86,7 +85,7 @@ Shared executors consume that plan:
 
 Required boundary ownership:
 
-- Claude delivery uses `atm_core::boundary::InboxExport`
+- Claude delivery uses `atm_core::boundary::ProjectionExport`
 - non-Claude delivery uses `atm_core::boundary::NonClaudeOutbound`
 - notification side effects use `atm_core::boundary::NotificationSink`
 
@@ -125,17 +124,13 @@ The documented lintable boundary plan must forbid direct calls from:
 
 ## Required Follow-On
 
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/sprint-Y7.md`
-- `docs/phase-Yb/sprint-Y8.md`
-- `docs/phase-Yb/sprint-Y9.md`
-- `docs/phase-Yb/sprint-Y10.md`
+- [`docs/plans/phase-Yb/removal-ledger.md`](../plans/phase-Yb/removal-ledger.md)
+- [`docs/plans/phase-Yb/message-path-call-stacks.md`](../plans/phase-Yb/message-path-call-stacks.md)
+- [`docs/plans/phase-Yb/lintable-boundary-plan.md`](../plans/phase-Yb/lintable-boundary-plan.md)
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/phase-Yc/plan-phase-Yc.md`
-- `docs/phase-Yc/issues.md`
-- `docs/phase-Yc/readiness.md`
-- `docs/phase-Yc/sprint-Y12.md`
-- `docs/phase-Yc/sprint-Y13.md`
+
+Historical note:
+- later implementation sequencing ran through Phase Yb/Yc sprint artifacts, but
+  those sprint and phase-plan docs record execution order only and are not part
+  of this ADR's rationale or durable follow-on contract

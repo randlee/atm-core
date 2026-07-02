@@ -1,0 +1,225 @@
+# AC.2 `atm-storage-claude` Extraction
+
+```yaml
+plan_type: sprint_plan
+phase: AC
+sprint: AC.2
+worktree: ../atm-core-worktrees/feature/pAC-s2-atm-storage-claude-extraction
+branch: feature/pAC-s2-atm-storage-claude-extraction
+status: complete
+estimated_scope: large
+```
+
+## Goal
+
+Extract the Claude inbox storage implementation into `crates/atm-storage-claude`
+behind the shared `atm-storage` contract.
+
+## Scope Summary
+
+This sprint moves Claude inbox file-backed storage behavior out of `atm-core`
+and behind the new traits. JSON salvage, source discovery, file locking, and
+atomic rewrite remain internal implementation details of the Claude backend.
+
+Production-ready commitment:
+- every deliverable listed in this sprint is expected to land at a
+  production-ready level for the Claude-backend extraction scope this sprint
+  claims; a docs-only backend split or partial trait claim is not accepted
+
+Primary closure rule:
+- `AC.2` is the primary closure sprint for Claude-backend-only projection,
+  import/export, repair, and writer seams
+- later sprints may cut consumers over or verify no public leakage remains,
+  but they do not own the Claude internalization decision
+
+## Governing Sources
+
+- `docs/plans/phase-AC/plan-phase-AC.md`
+- `docs/plans/phase-AC/sprint-AC1.md`
+- `crates/atm-core/src/mailbox/`
+- `crates/atm-core/src/read/`
+- `crates/atm-core/src/list/`
+- `crates/atm-core/src/clear/`
+
+## Prerequisites
+
+- `AC.1`
+
+## Out Of Scope
+
+- no SQLite backend convergence yet
+- no daemon/runtime composition refactor yet
+- no new legal schema expansion beyond existing accepted Claude contract work
+
+## AC.2 / AC.3 Parallel Ownership Protocol
+
+`AC.2` and `AC.3` may execute in parallel only while they respect this
+non-overlapping ownership split inside `atm-core`:
+
+- `AC.2` may touch:
+  - `crates/atm-core/src/mailbox/`
+  - `crates/atm-core/src/read/`
+  - `crates/atm-core/src/list/`
+  - `crates/atm-core/src/clear/`
+  - `crates/atm-core/src/delivery_execution.rs`
+- `AC.3` may touch:
+  - `crates/atm-core/src/boundary/`
+  - `crates/atm-runtime/`
+  - `crates/atm-rusqlite/` or `crates/atm-storage-rusqlite/`
+
+Merge-forward rule:
+- if either sprint needs to touch a file outside its declared surface, `AC.2`
+  must merge first and `AC.3` must rebase / merge-forward from the updated
+  branch before continuing
+- no sprint may silently co-own an `atm-core` file with the other sprint
+
+## Deliverables
+
+- `crates/atm-storage-claude` exists as a concrete backend crate
+- the Claude backend implements the shared storage traits it can satisfy
+- deferred task-storage policy is explicit:
+  - `ClaudeStorageBackend` implements `MessageStore` and `RosterStore`
+  - task storage is not part of the approved Phase `AC` backend contract
+  - future task storage must start from canonical Claude-code schema plus
+    Pydantic validation rather than from speculative partial-CRUD placeholders
+- backend-specific behavior remains internal:
+  - JSON parsing and fail-soft salvage
+  - file locking
+  - source discovery
+  - projection rewrite
+
+- Claude storage consumes the shared canonical structs. It does not define a parallel domain model just for file-backed storage.
+
+- Unsupported ATM-only fields may be ignored or degraded by implementation policy, but the shared contract types remain the same.
+
+- The backend-facing implementation shape is explicit and small:
+
+  ```rust
+  struct ClaudeStorageBackend {
+      // private backend fields only
+  }
+
+  impl MessageStore for ClaudeStorageBackend { /* ... */ }
+  impl RosterStore for ClaudeStorageBackend { /* ... */ }
+  ```
+
+- `TaskStore` is not part of the approved Phase `AC` Claude backend scope.
+  The backend must not silently claim task persistence support, and Phase `AC`
+  does not introduce a null/degraded placeholder that would fossilize a
+  speculative task-storage contract.
+
+- Claude-specific roster and inbox projection helpers do not become shared
+  public API. If they survive, they survive as private or backend-local types
+  inside `atm-storage-claude`.
+
+## Ledger-Driven Type Work
+
+`AC.2` owns every type the `AC.0` ledger marked as Claude-backend-only or as a
+Claude seam that must move below the trait line.
+
+These must become internal `atm-storage-claude` concerns rather than shared
+contract types:
+
+- `ProjectionRosterMember`
+- `ProjectionRoster`
+- `SourceFileRecord`
+- `ProjectionAppendMode`
+- the `SourceIngress*` wrapper family
+- the `ProjectionExport*` wrapper family
+- the `delivery_execution::ProjectionMailboxWriter` seam
+
+The canonical shared contract must remain above these projections:
+
+- `RosterMember`
+- `RosterSnapshot`
+- `Message`
+- `MessageQuery`
+
+Required scope-reduction rule:
+
+- if a Claude type exists only to project canonical data into `.json` inbox
+  layout, that type must be backend-internal or deleted, not promoted into
+  `atm-storage`
+
+## Execution Checklist
+
+Implementation order for `AC.2`:
+
+1. Create `crates/atm-storage-claude` and make it depend on `atm-storage`, not `atm-core`.
+2. Move Claude inbox read/write/repair ownership out of `atm-core` module seams.
+3. Rework roster projection so:
+   - canonical `RosterMember` / `RosterSnapshot` stay shared
+   - `ProjectionRosterMember` / `ProjectionRoster` become backend-internal translation helpers or disappear entirely
+4. Rework inbox import/export ownership so:
+   - `SourceIngress*` and `ProjectionExport*` wrappers no longer define the shared contract
+   - Claude-specific compatibility machinery lives behind backend-internal functions or private helper structs
+5. Delete or internalize `delivery_execution::ProjectionMailboxWriter`.
+6. Update boundary TOMLs to make `atm-storage-claude -> atm-storage` explicit and `atm-storage-claude -X-> atm-core` explicit.
+
+Proof this sprint must leave behind:
+
+- the Claude backend owns its own projection and repair logic
+- `atm-core` no longer exposes Claude-specific public storage types as if they were shared domain types
+- the shared contract remains clean even if the backend still has rich internal helpers
+- any `SourceIngress*` / `ProjectionExport*` / `ProjectionMailboxWriter` cleanup left for
+  `AC.6` is verification-only, not deferred ownership
+
+## Acceptance Criteria
+
+- `atm-core` no longer owns Claude inbox storage internals that belong in the backend crate
+- Claude storage implements the shared contract without widening it to path/file-specific APIs
+- deferred task-storage policy is explicit and reviewable:
+  Phase `AC` does not treat Claude task persistence as part of the approved
+  backend contract, and future task work must start from canonical
+  Claude-schema behavior plus Pydantic validation
+- malformed-ingress and file-lock behavior remain below the trait line
+- `ProjectionRosterMember` and `ProjectionRoster` do not survive as shared public contract types
+- the `SourceIngress*` and `ProjectionExport*` wrapper families are not promoted into `atm-storage`
+
+## Required Validation
+
+- `cargo test -p atm-storage-claude`
+- `cargo clippy -p atm-storage-claude -- -D warnings`
+- `cargo tree -p atm-storage-claude`
+- `cargo test --manifest-path crates/atm-core/Cargo.toml`
+- `git diff --check`
+- `rg -n "ProjectionRosterMember|ProjectionRoster|SourceIngress|ProjectionExport|ProjectionMailboxWriter" crates/atm-storage crates/atm-storage-claude crates/atm-core -S`
+- verify `atm-core` is not present in the transitive dependency tree for `atm-storage-claude`
+
+## Required Document Updates
+
+- `docs/plans/phase-AC/sprint-AC2.md`
+- `docs/plans/phase-AC/readiness.md`
+- `docs/project-plan.md`
+- storage architecture docs that currently treat Claude inbox logic as `atm-core` internals
+- create `boundaries/atm-storage-claude/` TOML records covering the Claude backend implementation of the shared contracts
+- each `boundaries/atm-storage-claude/` TOML record must include `allowed_dependents = ["atm-runtime", "atm-daemon"]` via composition only; `atm-core` must NOT appear in `allowed_dependents`
+- that `allowed_dependents` direction is intentional here because the boundary
+  records live under `atm-storage-claude` and describe which crates may depend
+  on the backend crate
+- document the forbidden edge `atm-storage-claude -> atm-core` in those boundary records and the owning boundary notes
+
+## Closure Note
+
+`AC.2` closed with the concrete Claude backend extracted into
+`crates/atm-storage-claude`, private `ClaudeStorageBackend` implementations for
+`MessageStore` and `RosterStore`, and boundary TOMLs that make the
+`atm-storage-claude -> atm-storage` / `atm-storage-claude -X-> atm-core`
+contract machine-checkable.
+
+This sprint also removed the old Claude-specific seam names from the active
+`atm-core` storage surface:
+
+- `ClaudeCodeRosterMember` -> `ProjectionRosterMember`
+- `ClaudeCodeTeamRoster` -> `ProjectionRoster`
+- `InboxSourceFileRecord` -> `SourceFileRecord`
+- `ClaudeCompatibilityDeliveryMode` -> `ProjectionAppendMode`
+- `InboxIngress*` -> `SourceIngress*`
+- `InboxExport*` -> `ProjectionExport*`
+- `ClaudeInboxWriter` -> `ProjectionMailboxWriter`
+
+## Risks And Watchouts
+
+- if file paths or lock semantics leak into the shared trait surface, the backend extraction has widened the contract incorrectly
+- if Claude storage introduces a backend-specific `Message` variant, interchangeability is already lost
+- if Claude-specific public types remain visible outside the backend crate only because tests or compatibility code still use them, the extraction is incomplete

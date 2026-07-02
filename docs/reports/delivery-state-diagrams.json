@@ -16,7 +16,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/ack-reply.mmd",
+      "ssot_path": "docs/plans/phase-Y/ack-reply.mmd",
       "fragment_path": "docs/reports/panels/ack-reply.html",
       "sets": [
         "delivery"
@@ -34,7 +34,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/delivery-policy-coordinator.mmd",
+      "ssot_path": "docs/plans/phase-Y/delivery-policy-coordinator.mmd",
       "fragment_path": "docs/reports/panels/delivery-policy-coordinator.html",
       "sets": [
         "delivery"
@@ -52,7 +52,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/inbox-repair.mmd",
+      "ssot_path": "docs/plans/phase-Y/inbox-repair.mmd",
       "fragment_path": "docs/reports/panels/inbox-repair.html",
       "sets": [
         "delivery"
@@ -70,7 +70,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/new-message-claude.mmd",
+      "ssot_path": "docs/plans/phase-Y/new-message-claude.mmd",
       "fragment_path": "docs/reports/panels/new-message-claude.html",
       "sets": [
         "delivery"
@@ -88,7 +88,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/new-message-non-claude.mmd",
+      "ssot_path": "docs/plans/phase-Y/new-message-non-claude.mmd",
       "fragment_path": "docs/reports/panels/new-message-non-claude.html",
       "sets": [
         "delivery"
@@ -106,7 +106,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/restore-inbox-rebuild.mmd",
+      "ssot_path": "docs/plans/phase-Y/restore-inbox-rebuild.mmd",
       "fragment_path": "docs/reports/panels/restore-inbox-rebuild.html",
       "sets": [
         "delivery"
@@ -124,7 +124,7 @@
       ],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/phase-Y/thread-update.mmd",
+      "ssot_path": "docs/plans/phase-Y/thread-update.mmd",
       "fragment_path": "docs/reports/panels/thread-update.html",
       "sets": [
         "delivery"

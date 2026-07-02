@@ -22,13 +22,13 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
 - The former early SQLite/daemon line is abandoned as an implementation line
-- `docs/plan-phase-Q.md` and Section 21 are retained as minimal historical
+- `docs/plans/phase-Q/plan-phase-Q.md` and Section 21 are retained as minimal historical
   execution records only
 - any retained value from that abandoned line must be brought forward manually after review
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
-  in [`docs/plan-phase-R.md`](./plan-phase-R.md)
+  in [`docs/plans/phase-R/plan-phase-R.md`](./plans/phase-R/plan-phase-R.md)
 - Phase R starts with boundary documents, ADR alignment, and lint/parser gates
   before new implementation work
 - the active integration branch for this redesign line is `integrate/phase-R`
@@ -37,14 +37,14 @@ Phase-S planning note:
 - Phase R is the merged daemon baseline, but it missed the requirement that the
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
-  [`docs/plan-phase-S.md`](./plan-phase-S.md)
+  [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
 - the canonical daemon wire contract, current daemon packet surface, and shared
   local-IPC/host-host frame rules are tracked in
   [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
-- Phase S implementation details must come either from `docs/plan-phase-S.md`
+- Phase S implementation details must come either from `docs/plans/phase-S/plan-phase-S.md`
   or from the governing requirements, architecture, ADR, and ICD documents it
   names; the project plan does not override those lower-level sources of truth
 - the planning baseline is `integrate/phase-R` at `6a072c1`
@@ -59,6 +59,26 @@ Phase-S planning note:
   - `S.8` Claude JSONL compatibility-envelope implementation
   - `S.9` host-scoped retained logging defaults, including watcher/reconcile
     exclusion for `~/.atm/logs/`
+
+Phase-AA simplification note:
+- after the retained daemon/SQLite line proved the transport split, the daemon
+  accumulated concrete SQLite composition and health/observability ownership
+  that violated the intended boundary
+- the corrective planning line is Phase AA, tracked in
+  [`docs/plans/phase-AA/plan-phase-AA.md`](./plans/phase-AA/plan-phase-AA.md)
+- Phase AA restores the original daemon role as a thin router by moving
+  concrete SQLite construction to a dedicated `atm-runtime` crate and
+  restoring a direct local doctor/store-health path
+
+Phase-AB planning note:
+- `Phase AB` is the active cross-host smoke planning line that follows the
+  completed same-host release-readiness work in `Phase Z`
+- the authoritative planning document is
+  [`docs/plans/phase-AB/plan-phase-AB.md`](./plans/phase-AB/plan-phase-AB.md)
+- `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
+  disposable clean-room state first, then disposable copied-state revalidation
+- the planning branch is `plan/phase-AB`
+- the execution integration branch is `integrate/phase-AB`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -94,12 +114,20 @@ Status:
   source-of-truth and daemon-boundary redesign.
 - Phase R is the merged daemon baseline.
 - Phase S is the active planning line for Windows-complete daemon parity.
+- Phase AA is the architectural simplification planning line for removing
+  SQLite references from `atm-daemon` and moving concrete runtime assembly out
+  to `atm-runtime`.
+- Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
+  execution after the accepted Phase Z baseline.
 - the current merged workspace contains:
+  - `crates/atm-architecture`
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
+  - `crates/atm-daemon-bootstrap`
   - `crates/atm-daemon-client`
   - `crates/atm-graft`
+  - `crates/atm-runtime`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
@@ -128,6 +156,7 @@ The abandoned early SQLite/daemon target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-daemon-bootstrap`
 - `crates/atm-daemon-client`
 - `crates/atm-graft`
 - `crates/atm-rusqlite`
@@ -161,788 +190,244 @@ Phase R sequencing rule:
 
 ## 4. Work Sequence
 
-### Phase 0: Document Lock [COMPLETE]
+### Phase AA: Remove SQLite From Daemon [PLANNED]
 
 Status summary:
-- Requirements, architecture, and read-behavior documentation are locked, and
-  the migration plan now lives in `docs/archive/`.
-- This phase completed without a dedicated PR because it was finished before the
-  current atm-core PR sequence began.
+- Phase AA is the active simplification planning line for restoring
+  `atm-daemon` to a thin-router role.
+- Integration Branch: `integrate/phase-AA`
+- The authoritative plan is [`docs/plans/phase-AA/plan-phase-AA.md`](./plans/phase-AA/plan-phase-AA.md).
+- The authoritative closure checklist is
+  [`docs/plans/phase-AA/readiness.md`](./plans/phase-AA/readiness.md).
+- `AA.0` completed the daemon-role restatement, top-level state-machine
+  inventory, and daemon-side SQLite leak ledger that later AA sprints must
+  follow.
+- `AA.1` completed the subsystem-owned doctor traits and shared diagnostic DTO
+  move into `atm-core`.
+- `AA.2` completed the `atm-runtime` composition-root introduction, moved
+  production SQLite/runtime assembly out of daemon production composition, and
+  froze the target runtime boundary while the SQLite TOML relock remains
+  deferred to `AA.5`.
+- `AA.3` completed the direct-local doctor split and daemon runtime-health
+  simplification so store diagnostics no longer require daemon-only routing.
+- `AA.4` removes the remaining daemon-side SQLite leak paths by deleting the
+  daemon-private SQLite observability adapter, deleting direct daemon test
+  boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay
+  seams instead of a direct `atm-daemon -> atm-rusqlite` dependency.
+- `AA.5` relocks the daemon-to-SQLite edge in the runtime and SQLite boundary
+  TOMLs, adds the independent `crates/atm-architecture/` Rust review guard,
+  and freezes boundary-policy widening as an explicit architecture change.
+- `AA.6` completes the scoped `sc-observability` `1.2.0` migration by moving
+  the concrete adapters to queue-backed `Logger::log()` admission, renaming
+  the retained-log shutdown policy field to `writer_shutdown_timeout`, and
+  projecting queue/writer/maintenance health detail intentionally.
+- `AA.7` Rust Boundary Enforcement Crate (`PR #398`,
+  `feature/pAA-s7-atm-architecture-crate`) completes the visible workspace
+  architecture gate by landing `crates/atm-architecture/`, removing the
+  superseded Python boundary scripts, and making `cargo test -p atm-architecture`
+  the sole code-driven boundary-enforcement check. Status: `complete`.
+- `AA.8` Claude Code Inbox Schema Contract Alignment
+  (`feature/pAA-s8-claude-schema-contract`) is complete: the current Claude
+  Code inbox JSON contract is frozen from real `team-lead -> quality-mgr`
+  samples, schema-model fixtures cover those shapes, and docs/models no longer
+  classify the current JSON-array inbox shape as legacy.
+- `AA.9` Current Claude Inbox Primary-Path Repair
+  (`feature/pAA-s9-claude-inbox-primary-path`) is complete: the retained
+  runtime now treats the current Claude inbox JSON file shape as the supported
+  primary compatibility path, `.json` inboxes rewrite atomically as current
+  Claude arrays, and the thorough smoke lane no longer expects compatibility
+  degradation for a healthy current Claude inbox.
+- `AA.10` Remove Historical ATM JSON Compatibility From 1.2
+  (`feature/pAA-s10-remove-historical-atm-json`) is complete: historical
+  ATM-owned inbox JSON is no longer presented as the active primary 1.2
+  contract, while legal additive derivatives such as tolerated top-level ATM
+  fields and `metadata.atm.*` remain read-compatible only and are ignored for
+  active machine-state behavior.
+- `AA.11` (`feature/pAA-s11-delete-sqlite-legacy-compat`) is complete:
+  pre-production SQLite compatibility scaffolding such as `legacy_message_id`
+  is no longer part of the active 1.2 runtime/bootstrap line, and surviving
+  references remain only as historical inventory/ADR context.
+- `AA.12` (`feature/pAA-s12-malformed-claude-inbox-recovery`) is complete:
+  malformed Claude inbox reads now salvage segmentable valid messages, emit
+  explicit degraded warnings for localized bad fragments, and keep rewrite
+  paths fail-closed unless an explicit repair/rebuild action is chosen.
 
-Finish and freeze:
-- `requirements.md`
-- `architecture.md`
-- `read-behavior.md`
-- `docs/archive/file-migration-plan.md`
+Goal:
+- move concrete SQLite/runtime assembly to `atm-runtime`
+- remove daemon-owned SQLite diagnostics, observability glue, and replay/store
+  leakage
+- relock the daemon-to-SQLite boundary with a permanent second enforcement
+  layer
+
+Deliverables:
+- `crates/atm-runtime` as the concrete composition root
+- subsystem doctor trait model and direct local doctor path
+- deletion of remaining daemon-side SQLite leaks
+- `boundary-guard` and relocked machine-readable boundary policy
+- `sc-observability` / `sc-observability-types` upgraded to `1.2.0` with the
+  queue-backed logger API, retained-log policy field migration, and updated
+  health projection
+
+Sprint line:
+- `AA.0` `feature/pAA-s0-daemon-architecture-restatement`
+- `AA.1` `feature/pAA-s1-subsystem-doctor-traits`
+- `AA.2` `feature/pAA-s2-atm-runtime-composition-transfer`
+- `AA.3` `feature/pAA-s3-direct-doctor-and-runtime-health-split`
+- `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
+- `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
+- `AA.6` `feature/pAA-s6-obs-upgrade`
+- `AA.7` `feature/pAA-s7-atm-architecture-crate`
+- `AA.8` `feature/pAA-s8-claude-schema-contract`
+- `AA.9` `feature/pAA-s9-claude-inbox-primary-path`
+- `AA.10` `feature/pAA-s10-remove-historical-atm-json`
+- `AA.11` `feature/pAA-s11-delete-sqlite-legacy-compat`
+- `AA.12` `feature/pAA-s12-malformed-claude-inbox-recovery`
 
 Acceptance:
-- workflow axes, display buckets, retained command surface, and observability boundary are consistent across all docs
-- every retained or excluded source file needed for the retained commands is explicitly listed in `docs/archive/file-migration-plan.md`
+- Phase AA exit criteria are satisfied only through
+  `docs/plans/phase-AA/readiness.md`
+
+### Phase AC: Storage Contract Reset And Backend Interchangeability [PLANNED]
+
+Status summary:
+- Phase AC is the planning line that restores the original storage and RPC
+  design after the repo drifted into backend-shaped seams and per-operation
+  request/response storage DTOs.
+- Planning Branch: `plan/phase-AC`
+- Integration Branch: `integrate/phase-AC`
+- `AC.0` planning prerequisite is complete at `ce02b9ff`.
+- latest accepted planning tip is the current `plan/phase-AC` branch head,
+  which carries the full plan-hardening sequence, the
+  [exhaustive AC.0 type ledger](./plans/phase-AC/type-ledger.md), and the final
+  cross-document consistency corrections for the AC sprint set.
+- `AC0-DOCS-MIGRATE-1` (`chore/ac-docs-migrate`) is complete: after merging
+  `origin/develop`, the full Phase AC plan set now lives under
+  `docs/plans/phase-AC/`; the legacy pre-restructure Phase AC locations are
+  gone, and all in-repo references were updated to the new layout.
+- The authoritative plan lives in [`docs/plans/phase-AC/`](./plans/phase-AC/).
+- The authoritative closure checklist is
+  [`docs/plans/phase-AC/readiness.md`](./plans/phase-AC/readiness.md).
+
+Goal:
+- create a small audited `atm-storage` contract
+- extract Claude inbox storage as a first-class backend
+- converge the SQLite backend on that same contract
+- collapse RPC/storage/domain type duplication back to canonical shared structs
+- restore future SQL Server viability
+
+Deliverables:
+- `crates/atm-storage`
+- `crates/atm-storage-claude`
+- converged SQLite backend against the same core traits
+- generic RPC envelope plus canonical shared domain bodies
+- deletion of obsolete storage/RPC wrapper families
+
+Sprint line:
+- `AC.0` `plan/phase-AC` `complete`
+- `AC.1` `feature/pAC-s1-atm-storage-contract-and-canonical-types` `complete`
+- `AC.2` `feature/pAC-s2-atm-storage-claude-extraction` `complete`
+- `AC.3` `feature/pAC-s3-sqlite-backend-convergence` `complete`
+- `AC.4` `feature/pAC-s4-atm-core-storage-boundary-adoption` `complete`
+- `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification` `complete`
+- `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout` `complete`
+- `AC.7` `feature/pAC-s7-sqlserver-readiness-proof` `complete`
+- `AC.8` `feature/pAC-s8-thin-client-bootstrap-dependency-relock` `complete`
+
+Completion note:
+- `AC.7` proves SQL Server readiness from the real post-`AC.6` contract,
+  lands `crates/atm-storage-sqlserver-proof` as a compile-only backend proof,
+  and closes the final backend-interchangeability issue without another storage
+  reset.
+
+AC.8 follow-on note:
+- `AC.8` is the thin-client dependency relock follow-on that removes the
+  unconditional `atm-graft -> atm-daemon-bootstrap` compile-time edge while
+  preserving the standard same-host daemon auto-start convenience path through
+  shared `atm-daemon-client` helpers and machine-readable boundary-policy
+  enforcement.
+
+AC.6 closeout:
+- deleted the speculative `TaskStore` family from `atm-core` and removed the
+  last runtime/daemon compile bridge assumptions instead of preserving them as
+  compatibility surface
+- removed the old Claude `SourceIngress*` / `ProjectionExport*` shared wrapper
+  surface and cut daemon consumers over to direct
+  `atm-storage-claude::compat` functions and canonical `SourceFileRecord`
+- removed `SqliteObservability*` from `atm-storage` and left that surface owned
+  by `atm-storage-rusqlite` as the backend-owned sqlite observability seam used
+  during runtime assembly
+
+Acceptance:
+- Phase AC exit criteria are satisfied only through
+  `docs/plans/phase-AC/readiness.md`
+
+### Phase 0: Document Lock [COMPLETE]
+
+- **Phase 0: Document Lock [COMPLETE]** — Locked requirements, architecture, and read-behavior documentation, and moved the migration plan to `docs/archive/`. (Completed before the current PR sequence; no dedicated PR.)
 
 ### Phase A: `OBS-GAP-1` [COMPLETE]
 
-Status summary:
-- The `sc-observability` API gap was catalogued and closed before the ATM log
-  and doctor work depends on it.
-- This phase is historical context only; it is no longer the gating item for
-  retained observability delivery.
-- Delivered in PR #1.
-
-Goal:
-- verify and close the shared `sc-observability` API gap before ATM depends on it for `atm log` and `atm doctor`
-
-Deliverables:
-- ATM-side required capability list
-- gap list against current `sc-observability`
-- concrete API requests for `arch-obs`
-- decision on ATM-owned port-boundary responsibilities versus shared observability responsibilities
-
-Acceptance:
-- shared plan exists for emit/query/follow/filter/health support
-- no ATM-local ad hoc log query engine is needed
+- **Phase A: `OBS-GAP-1` [COMPLETE]** — Catalogued and closed the `sc-observability` API gap before ATM depended on it for `atm log` and `atm doctor`. (Delivered in PR #1)
 
 ### Phase B: Core Skeleton [COMPLETE]
 
-Status summary:
-- The workspace, crate scaffolding, CLI command surface, and documentation gap
-  closure were completed and merged.
-- Delivered in PRs #2 and #3.
-
-| Sprint | Scope | Required outcome |
-| --- | --- | --- |
-| B.1 | CLI skeleton | `atm` exposes the initial core messaging surface: `send`, `read`, `ack`, `clear`, `log`, `doctor` |
-| B.2 | Documentation gap closure | lock the remaining send/read/clear requirements and architecture details before Phase C begins |
-
-Create:
-- workspace manifests
-- `atm-core`
-- `atm`
-- placeholder module tree matching the architecture
-
-Acceptance:
-- workspace builds
-- CLI help shows the initial core messaging surface: `send`, `read`, `ack`,
-  `clear`, `log`, and `doctor`
-- B.1 and B.2 are both complete before Phase C starts
-- requirements and architecture lock the message id, read dedupe, and clear
-  eligibility semantics needed for implementation
+- **Phase B: Core Skeleton [COMPLETE]** — Created workspace, crate scaffolding, CLI command surface, and closed documentation gaps for the initial core messaging surface. (Delivered in PRs #2 and #3)
 
 ### Phase C: Low-Level Reuse [COMPLETE]
 
-Status summary:
-- Foundational reuse landed for mailbox schema alignment, config/path helpers,
-  and the shared `AtmError` / `AtmErrorKind` model.
-- Delivered in PRs #4 and #5.
-
-Port retained foundational files first:
-- home/path helpers
-- config and bridge resolution
-- address parsing
-- text utilities
-- schema types
-- mailbox primitives
-- hook identity
-
-Acceptance:
-- foundational unit tests pass
-- no daemon references remain in foundational modules
+- **Phase C: Low-Level Reuse [COMPLETE]** — Landed foundational reuse for mailbox schema alignment, config/path helpers, and the shared `AtmError` / `AtmErrorKind` model. (Delivered in PRs #4 and #5)
 
 ### Phase D: Send Path [COMPLETE]
 
-Status summary:
-- The send service, CLI wiring, observability port adapter, and team-config
-  validation are all implemented and merged.
-- Delivered in PR #6.
-
-Port send command and support files:
-- identity resolution
-- file policy
-- summary generation
-- mailbox append
-- ack-required and task-linked message creation
-- command output
-- observability emission
-
-Acceptance:
-- historical pre-Phase-Q acceptance: `atm send` feature set worked without
-  daemon support
-- send JSON and human output match the documented contract
+- **Phase D: Send Path [COMPLETE]** — Implemented the send service, CLI wiring, observability port adapter, and team-config validation. (Delivered in PR #6)
 
 ### Phase E: Read Path [COMPLETE]
 
-Status summary:
-- The read service now includes `IsoTimestamp`, seen-state handling, queue
-  bucket filtering, and the required read-path transitions.
-- Delivered in PR #7.
-
-Port read command and support files:
-- workflow axis classification
-- display bucket mapping
-- selection modes
-- seen-state behavior
-- timeout waiting
-- legal state transitions
-- command output
-
-Acceptance:
-- historical pre-Phase-Q acceptance: `atm read` feature set worked without
-  daemon support
-- workflow axes and display buckets match the requirements
-- seen-state semantics match the documented contract
+- **Phase E: Read Path [COMPLETE]** — Implemented the read service with `IsoTimestamp`, seen-state handling, queue bucket filtering, and required read-path transitions. (Delivered in PR #7)
 
 ### Phase F: Ack And Clear Path [COMPLETE]
 
-Status summary:
-- Ack and clear flows are implemented, the remaining 30 RBP findings were
-  closed, and CI isolation hardening was completed for the phase.
-- Delivered in PRs #8, #9, and #10.
-
-Port ack and clear command support files:
-- acknowledgement transition handling
-- reply emission
-- clear eligibility computation
-- clear dry-run reporting
-- command output
-
-Acceptance:
-- historical pre-Phase-Q acceptance: `atm ack` feature set worked without
-  daemon support
-- `atm clear` removes only clearable messages
-- pending-ack messages remain visible until acknowledgement
+- **Phase F: Ack And Clear Path [COMPLETE]** — Implemented ack and clear flows, closed 30 RBP findings, and completed CI isolation hardening. (Delivered in PRs #8, #9, and #10)
 
 ### Phase G: Log Path [UNBLOCKED - Phase K COMPLETE]
 
-Status summary:
-- The retained `log` command remains a command-phase deliverable, but concrete
-  implementation is blocked until Phase K lands the real
-  `sc-observability` adapter and shared query/follow integration.
-
-Port and redesign the log command:
-- injected observability port usage
-- log query/filter/tail behavior
-- command output
-- integration tests
-
-Acceptance:
-- `atm log` works through shared `sc-observability` APIs
-- level and field filtering work
-- tail mode works
-- emit failures remain best-effort for mail commands
+- **Phase G: Log Path [UNBLOCKED - Phase K COMPLETE]** — Delivered the retained `log` command on the shared `sc-observability` query/follow stack after Phase K landed the real adapter. (Unblocked by Phase K; implemented as part of Phase K.4)
 
 ### Phase H: Doctor Path [UNBLOCKED - Phase K COMPLETE]
 
-Status summary:
-- The retained `doctor` command remains a command-phase deliverable, but
-  concrete implementation is blocked until Phase K lands the real
-  `sc-observability` health/query integration.
-
-Port and redesign the doctor command:
-- local config/path checks
-- hook identity checks
-- mailbox readiness checks
-- observability health and query-readiness checks
-- command output
-
-Acceptance:
-- historical pre-Phase-Q acceptance: `atm doctor` worked without daemon
-  support
+- **Phase H: Doctor Path [UNBLOCKED - Phase K COMPLETE]** — Delivered the retained `doctor` command on shared observability health/query integration after Phase K landed the real adapter. (Unblocked by Phase K; implemented as part of Phase K.5)
 
 ### Phase I: Cleanup And Hardening
 
-Delete:
-- daemon-dependent crates and helpers not retained
-- leftover imports from daemon-era surfaces
-
-Add:
-- integration tests
-- snapshot tests
-- config/schema hardening for legacy team records with deterministic recovery
-  and precise diagnostics
-- documentation polish
-
-Acceptance:
-- implementation matches `requirements.md`, `architecture.md`,
-  `read-behavior.md`, and `docs/archive/file-migration-plan.md`
+- **Phase I: Cleanup And Hardening [COMPLETE]** — Deleted daemon-dependent helpers, added integration/snapshot tests, and hardened config/schema recovery for legacy team records. (Absorbed into later phases)
 
 ### Phase J: Message Schema Normalization [COMPLETE]
 
-Status summary:
-- schema ownership, compatibility, and forward metadata rules are now
-  documented
-- the current live design continues to use the shared Claude inbox surface and
-  passed J.5 live validation
-- a separate ATM-native inbox is explicitly deferred until after the current
-  design is live and proven
-- no J.5 runtime blocker was found that forces an immediate inbox split
-
-Goal:
-- make the shared inbox design safe to run live by clarifying schema ownership,
-  deprecating new ATM-only top-level fields, and defining the forward
-  metadata-based ATM schema
-
-Execution model:
-- this phase is implemented as a coordinated multi-sprint stream owned by
-  `team-lead`
-- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
-  review hand-offs using the `/codex-orchestration` skill
-- sprint execution should not assume a separate ATM-native inbox; all work in
-  this phase targets the current shared inbox design
-
-Deliverables:
-- explicit schema ownership docs:
-  - Claude Code-native schema
-  - legacy ATM read-compatibility schema
-  - forward ATM metadata schema
-- enforcement models for locally owned schema docs
-- requirements and architecture rules for:
-  - legacy read compatibility
-  - metadata-only ATM machine fields going forward
-  - ULID-based ATM message identifiers
-  - timestamp derivation from ULID creation time
-  - additive enrichment of Claude-native messages with ATM metadata
-- implementation plan for the initial dedup work:
-  - PR #18 idle-notification receiver-side dedup using the Claude-native idle
-    payload in `text`
-  - consolidation of ATM `message_id` surface canonicalization rules across
-    read, ack, and clear
-  - migration plan for ATM-authored repair/alert dedup toward SQLite-owned
-    state and typed diagnostics
-- next-version deferral note for a separate ATM-native inbox
-
-Completed sprints:
-
-- `J.1` Schema Ownership Lock
-  - land the production schema docs and local enforcement models
-  - add source-code and unit-test references back to the owning schema docs
-  - acceptance: no ambiguity remains about Claude-native vs ATM-owned vs
-    legacy ATM read-compat fields
-
-- `J.2` Native Idle Dedup Implementation
-  - implement PR #18 receiver-side idle-notification dedup against the
-    Claude-native JSON payload stored in `text`
-  - remove or reject any implementation that tries to redefine idle notices as
-    an ATM-owned native top-level schema
-  - acceptance: at most one unread idle notification per sender remains visible
-    in an inbox, with fixtures and tests aligned to the Claude-native schema
-
-- `J.3` Surface Canonicalization Consolidation
-  - centralize `message_id` dedup logic used by read, ack, and clear
-  - keep current legacy top-level `message_id` behavior read-compatible while
-    documenting the one-message-identity rule
-  - acceptance: one shared dedup contract is used across operator-facing
-    mailbox surfaces
-
-- `J.4` ATM Alert Metadata Migration Plan
-  - migrate the design for ATM-authored repair notices from ad hoc top-level
-    fields toward SQLite-owned state and typed diagnostics
-  - explicitly preserve legacy top-level `atmAlertKind` and
-    `missingConfigPath` as read-compatible until the runtime migration sprint
-    lands
-  - keep current alert writes/read-compat behavior stable until the migration
-    sprint lands
-  - acceptance: requirements and architecture specify the forward metadata
-    placement for ATM alert/dedup fields without breaking legacy reads
-
-- `J.5` Live Shared-Inbox Validation
-  - exercise the documented shared-inbox design in live/manual flows before any
-    ATM-native inbox redesign is considered
-  - confirm Claude-context projection limitations, enrichment expectations, and
-    ack/dedup operator workflows against real inbox files
-  - acceptance: the current shared-inbox design is proven usable enough to
-    defer ATM-native inbox work to a later version
-  - delivered in:
-    [`docs/atm-core/design/live-shared-inbox-validation.md`](./atm-core/design/live-shared-inbox-validation.md)
-
-Acceptance:
-- schema ownership is explicit in requirements and architecture
-- legacy ATM top-level fields are documented as read-compatible but deprecated
-  for new writes
-- forward ATM metadata schema requires ULID-based ATM message identifiers
-- PR #18 idle-notification dedup is explicitly represented in the implementation
-  plan as a Claude-native schema-following sprint
-- the phase is organized into explicit sprints orchestrated by `team-lead`
-  using `/codex-orchestration`
-- the current architecture explicitly defers a separate ATM-native inbox until
-  a later version
+- **Phase J: Message Schema Normalization [COMPLETE]** — Locked schema ownership for Claude-native, legacy ATM read-compat, and forward ATM metadata fields; validated the shared-inbox design live; deferred a separate ATM-native inbox to a later version.
 
 ### Phase K: `sc-observability` Integration [COMPLETE]
 
-Status summary:
-- ATM now uses the shared `sc-observability` stack for retained emit, query,
-  follow, and health behavior
-- `atm log` and `atm doctor` are delivered on the shared stack with ATM-owned
-  boundary types and error-code mapping
-- the remaining follow-on work is release-alignment and post-1.0 feature
-  adoption, tracked in Phase L
-
-Goal:
-- integrate ATM with the current shared `sc-observability` logging/query/health
-  surface in a production-ready way before resuming retained `log` and
-  `doctor` delivery
-
-Execution model:
-- this phase is implemented as a coordinated multi-sprint stream owned by
-  `team-lead`
-- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
-  review hand-offs using the `/codex-orchestration` skill
-- the phase uses the ATM-owned adapter/boundary documented in:
-  [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
-- until `sc-observability` is published, local and CI builds may consume the
-  shared crates from a sibling checkout using a repo-local Cargo patch/path
-  strategy; committed ATM docs and scripts must not require user-specific
-  absolute paths
-
-Planned sprints:
-
-- `K.1` Toolchain And Dependency Alignment
-  - align ATM to the shared Rust toolchain floor and current stable pin
-  - define the pre-publish local dependency strategy used in developer builds
-    and CI
-  - land `rust-toolchain.toml`, repo/CI toolchain pinning, and
-    `docs/atm-core/dev/pre-publish-deps.md`
-  - acceptance: ATM toolchain/docs/CI strategy is explicit and matches the
-    shared repo dependency floor
-
-- `K.2` Observability Port Expansion
-  - expand the `atm-core` boundary from emit-only to emit/query/follow/health
-  - keep `sc-observability` types out of `atm-core` public APIs
-  - introduce the single ATM-owned error-code registry in `atm-core` and wire
-    it into `AtmError`
-  - acceptance: `atm-core` owns the projected ATM request/result types and a
-    synchronous tail session boundary, and the error-code registry is centrally
-    defined
-
-- `K.3` Concrete Adapter Bootstrap
-  - replace the local tracing-only `atm` implementation with a real
-    `sc-observability` adapter
-  - initialize the shared logger once per CLI process and inject it into
-    `atm-core`
-  - add terminal failure logging for bootstrap, parse, and core-service error
-    paths
-  - acceptance: retained mail commands emit through the shared logger and
-    preserve best-effort behavior, and failure diagnostics carry stable ATM
-    error codes
-
-- `K.4` `atm log` Delivery On Shared Query/Follow
-  - implement the retained `log` command over `Logger::query(...)` and
-    `Logger::follow(...)`
-  - acceptance: snapshot/tail/filtering behavior works through the shared log
-    store with integration coverage
-
-- `K.5` `atm doctor` Delivery On Shared Health
-  - implement the retained `doctor` command over shared logging/query health
-  - acceptance: doctor integration tests cover healthy, unavailable, and
-    degraded adapter states; each state produces a structured `DoctorReport`
-    with a stable ATM error code from `docs/atm-error-codes.md` when
-    applicable
-
-- `K.6` Integration And Live Validation
-  - close the command-test gap for observability consumer paths and run one
-    live/manual validation pass against a real ATM home
-  - close the error-logging gap by verifying CLI/bootstrap/service failures and
-    degraded recovery warnings all emit stable ATM-owned error codes
-  - acceptance: `atm log` (snapshot, tail, filter) and `atm doctor` are tested
-    against the real `sc-observability` adapter in at least one live
-    validation pass, and the results are documented in
-    `docs/atm-core/design/live-observability-validation.md`
-
-Acceptance:
-- ATM no longer depends on a local tracing-only observability adapter
-- `atm-core` owns an explicit emit/query/follow/health boundary over shared
-  observability crates
-- local and CI builds use the same documented pre-publish shared-crate
-  dependency strategy
-- `atm log` and `atm doctor` are implemented on the shared logging/query/health
-  stack
-- observability command integration coverage exists for snapshot, tail, filter,
-  and doctor readiness flows
-- any generic shared-crate usability gaps discovered during implementation are
-  filed upstream in `sc-observability`
+- **Phase K: `sc-observability` Integration [COMPLETE]** — Integrated ATM with the shared `sc-observability` stack for retained emit, query, follow, and health; delivered `atm log` and `atm doctor` on the shared stack with ATM-owned boundary types. (Integration published via `K-CRATES-IO-1` crates.io cutover)
 
 ### Phase L: 1.0 Alignment And Release Surface Cleanup [COMPLETE]
 
-Status summary:
-- Phase K delivered the full sc-observability integration against a pre-publish
-  local `[patch.crates-io]` override
-- Sprint K-CRATES-IO-1 (2026-04-06) removed the override and switched ATM to
-  the published `sc-observability = "1.0.0"` on crates.io; CI passed on all
-  platforms; this sprint completed the earlier crates.io cutover work, which
-  is now tracked historically under `K-CRATES-IO-1` rather than as an open
-  Phase L sprint
-- sc-observability 1.0.0 ships issues #55 (ConsoleSink::stderr), #57 (fault
-  injection), and #21 (file sink path migration) — all confirmed shipped in
-  PR #58 of sc-observability
-- `L.1` through `L.8` therefore proceed directly against the published
-  crates.io release with no local override required
-- completed sprint record:
-  - `L.1` complete on `feature/pL-s1-stderr-routing` at
-    `a84ef5767813a9f604f84d697874cee74e5689e4`
-  - `L.2` complete on `feature/pL-s2-fault-injection` / PR #51 at
-    `b051c07269a2290315ff3295d728a5ee5c23f153`
-  - `L.3` complete on `feature/pL-s3-file-sink-migration` / PR #52 with the
-    current branch tip carrying the final fix-r1 closure for the live
-    validation and status-summary findings
-  - `L.4` complete on `feature/pL-s4-public-api-cleanup` at
-    `4304d825ff6dddc52ddc21e08f5d2bb3ead795dc`
-  - `L.5` complete on `feature/pL-s5-construction-ergonomics` at
-    `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
-  - `L.6` complete on `feature/pL-s6-release-closeout` / PR #56 at
-    `341e28c1f7175f9890a5a1d5606b64e0ce816d52`
-  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58, merged to
-    `integrate/phase-L` at `5cd266d`, with final branch tip
-    `fe467af27f3f7e0ac5280fb80e72201af99f9d75` carrying the pre-merge
-    completion record fix after QA-2 PASS
-  - `L.8` complete on `feature/pL-s8-team-recovery` / PR #53, merged to
-    `integrate/phase-L` at `18aaa9a`
+- **Phase L: 1.0 Alignment And Release Surface Cleanup [COMPLETE]** — Completed published `sc-observability 1.0` follow-on work (stderr routing, fault injection, file sink migration, API cleanup, construction ergonomics, release closeout), team baseline/identity source cleanup, and retained team recovery surface (`teams`, `members`, `teams add-member`, `teams backup`, `teams restore`). (L.1-L.8 complete; merged to `integrate/phase-L`)
 
-Goal:
-- finish the published `sc-observability` 1.0 follow-on work and close the
-  remaining retained release-surface gaps required for initial ATM release
+### Phase M: Mailbox Locking And Code Review Fixes [COMPLETE]
 
-Execution model:
-- this phase is implemented as a coordinated multi-sprint stream owned by
-  `team-lead`
-- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
-  review hand-offs using the `/codex-orchestration` skill
-- the Phase K adapter boundary remains the governing implementation boundary;
-  Phase L refines the ATM-side integration against the final 1.0 shared crate
-  behavior and closes retained release-surface gaps rather than redefining
-  crate ownership
-- the detailed ATM-side 1.0 follow-on decisions are documented in:
-  [`docs/atm-core/design/sc-obs-1.0-integration.md`](./atm-core/design/sc-obs-1.0-integration.md)
-- all sprints use `sc-observability = "1.0.0"` from crates.io directly; no
-  local `[patch.crates-io]` override is required or permitted
+- **Phase M: Mailbox Locking And Code Review Fixes [COMPLETE]** — Implemented exclusive mailbox locking with deterministic sorted-path acquisition, closed all blocking BP-ECR-001–BP-ECR-006 code-review findings (error docs, recovery guidance, backtrace display, identity consolidation, panic removal, atomicity), and added the M.F1 locking hardening follow-up for fail-closed source discovery and read-only filesystem classification. (M.1 PR #60, M.2 PR #61; integrated to `develop`)
 
-Planned sprints:
+### Phase N: Publish Replacement And Distribution Parity [COMPLETE]
 
-- `L.1` `ConsoleSink::stderr()` Integration
-  - goal: adopt upstream issue `#55` so CLI-facing retained logs can target
-    stderr when appropriate without polluting normal stdout command output
-  - key tasks:
-    - wire `ConsoleSink::stderr()` into `CliObservability`
-    - add an explicit CLI routing switch such as `--stderr`, or a clearly
-      documented TTY-aware auto-routing rule, while preserving the current
-      stdout path as the default compatibility behavior unless the chosen
-      routing rule says otherwise
-    - keep the ATM-owned adapter boundary intact; no `sc-observability` types
-      leak into `atm-core`
-  - tests:
-    - verify stderr mode writes retained console output to stderr
-    - verify the normal stdout path remains unchanged when stderr routing is
-      not selected
-    - keep existing retained-log query/follow tests green
-  - dependency note:
-    - uses `sc-observability = "1.0.0"` from crates.io directly
+- **Phase N: Publish Replacement And Distribution Parity [COMPLETE]** — Switched publishable crate identities to `agent-team-mail` / `agent-team-mail-core`, ported release automation (crates.io, GitHub Releases, Homebrew), added `winget` as a new required Windows install channel, ported the publisher agent, rewrote README for release-facing docs, and proved dry-run publishability. (Sprints N.1–N.5; merged to `develop`)
 
-- `L.2` Fault Injection For Live Health Validation
-  - goal: adopt upstream issue `#57` and close the real-adapter validation gap
-    identified in `docs/atm-core/design/live-observability-validation.md`
-  - key tasks:
-    - use the new shared public fault-injection surface to induce degraded and
-      unavailable retained-sink states through the real adapter
-    - extend the live validation report so healthy, degraded, and unavailable
-      paths are all exercised against the shared crate rather than only through
-      ATM-local deterministic doubles
-    - keep deterministic ATM integration tests as the fast/stable regression
-      layer; the new fault-injected live path supplements them
-  - tests:
-    - end-to-end `atm doctor` coverage verifies degraded and unavailable states
-      through the real shared adapter path
-    - live/manual validation is updated to record the induced degraded and
-      unavailable runs explicitly
-  - dependency note:
-    - uses `sc-observability = "1.0.0"` from crates.io directly
+### Phase O: Security And Hardening [COMPLETE]
 
-- `L.3` File Sink Path Migration
-  - goal: align ATM with upstream issue `#21` so ATM stops assuming the older
-    retained-log file layout
-  - key tasks:
-    - update any ATM-side path assumptions to the new
-      `<log_root>/logs/<service_name>.log.jsonl` layout
-    - verify retained query/follow and doctor health behavior against the
-      updated shared file-sink location
-    - document any operator-facing path changes where they affect diagnostics
-      or manual validation
-    - replace the unbounded tail-reader helper in `crates/atm/tests/log.rs`
-      with a wall-clock timeout so retained follow coverage cannot hang on
-      Windows or other slow CI environments
-    - close `PRR-002` by explicitly keeping the ATM observability health
-      contract closed at `healthy`, `degraded`, and `unavailable` for the
-      initial release
-    - close the L.1 traceability gap `ATM-QA-002` by making the final
-      `--stderr-logs` contract a canonical Phase L reference
-  - tests:
-    - retained-log integration tests pass against the new path layout
-    - live validation confirms the active log path and query behavior against
-      the migrated sink location
-  - dependency note:
-    - uses `sc-observability = "1.0.0"` from crates.io directly
+- **Phase O: Security And Hardening [COMPLETE]** — Closed the four confirmed CR001 findings: path-segment validation for team/agent names, `normalize_json_number` expansion cap, UUID-based atomic temp-file naming, and sleep/backoff after stale-lock eviction. (Sprints O.1–O.2; integrated on `integrate/phase-O`)
 
-- `L.4` Public API Cleanup
-  - goal: remove raw serialization-format leakage from the `atm-core` public
-    observability boundary while preserving centralized JSON handling inside
-    `atm-core`
-  - key tasks:
-    - replace public `serde_json::Value` / `Map<String, Value>` usage in
-      observability-facing `atm-core` types with the ATM-owned field model:
-      - `LogFieldKey`
-      - `AtmJsonNumber`
-      - `LogFieldValue`
-      - `LogFieldMap`
-    - update `LogFieldMatch` to use `LogFieldKey` + `LogFieldValue`
-    - update `AtmLogRecord.fields` to use `LogFieldMap`
-    - keep JSON/JSONL parsing, validation, degradation, and repair centralized
-      in `atm-core` rather than pushing that logic into CLI or sibling crates
-    - keep all raw `serde_json` translation at the `atm-core` boundary edge;
-      CLI and sibling crates must not need to manipulate raw retained-log JSON
-      values directly
-    - preserve the published CLI JSON output behavior after the public type
-      cleanup
-  - closes:
-    - `INTEROP-001`
-    - `BP-003`
-  - tests:
-    - unit coverage for `LogFieldKey`, `AtmJsonNumber`, `LogFieldValue`, and
-      `LogFieldMap` serde/validation behavior
-    - unit coverage for adapter mapping between ATM-owned field types and the
-      shared query/result values
-    - integration coverage proving CLI JSON output remains stable for
-      `atm log snapshot --json`, `atm log filter --json`, and
-      `atm log tail --json`
-  - dependency note:
-    - can proceed in parallel with `L.5` once the Phase K crates.io baseline
-      from `K-CRATES-IO-1` is present
+### Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]
 
-- `L.5` Construction And Boundary Ergonomics
-  - goal: clean up the remaining release-surface ergonomics without forcing
-    speculative refactors that are not yet justified
-  - key tasks:
-    - add a structured construction API:
-      - `CliObservability::new(home_dir, CliObservabilityOptions)`
-    - keep `init(...)` only as a delegating CLI bootstrap helper
-    - define `CliObservabilityOptions` as the single supported construction
-      contract for production bootstrap and tests
-    - keep dynamic dispatch (`Box<dyn ObservabilityPort + Send + Sync>`) unless
-      implementation proves a concrete release defect
-    - keep the current sealed-trait pattern unless implementation proves a
-      concrete encapsulation defect
-    - record the explicit disposition for `DoctorCommand` injectability:
-      - deferred for initial release unless a concrete testing or feature need
-        appears during implementation
-  - closes:
-    - `UX-001`
-    - `BP-004`
-    - disposition of `UX-002`
-    - disposition of `BP-001`
-    - disposition of `UNI-003`
-  - tests:
-    - constructor coverage for default bootstrap and stderr-routing bootstrap
-    - no-regression coverage for existing `atm doctor` / `atm log` bootstrap
-      behavior after the construction refactor
-  - dependency note:
-    - may run in parallel with `L.4`, or immediately after it if the public
-      API cleanup changes the preferred construction boundary
-
-- `L.6` Release Closeout
-  - goal: finish the remaining operator-facing and release-readiness validation
-    against the published shared crate behavior
-  - key tasks:
-    - close the two remaining release-critical identity carry-forward findings:
-      - `ATM-QA-001`
-        - remove obsolete config identity fallback from runtime identity
-          resolution
-      - `ATM-QA-002`
-        - add `atm doctor` drift reporting for obsolete `[atm].identity`
-          configuration
-    - verify file sink path alignment against upstream issue `#21`
-    - rerun full ATM observability validation on the published
-      `sc-observability = "1.0.0"` release
-    - close any remaining documentation traceability gaps uncovered during the
-      Phase L consistency review
-  - result:
-    - release-ready ATM observability signoff for initial release
-  - dependency note:
-    - depends on `L.1` through `L.5` being complete so release validation runs
-      against the final observability surface
-    - the two release-critical identity items above were pulled forward from
-      earlier `L.7` planning because they block release signoff; the remaining
-      broader `.atm.toml` semantics work stays in `L.7`
-
-- `L.7` Team Baseline And Identity Source Cleanup
-  - goal: align ATM config semantics with multi-agent team launches by moving
-    shared team expectations into `.atm.toml` while removing repo-local
-    identity fallback behavior and defining cross-team alias handling
-  - key tasks:
-    - add ATM-owned `team_members` support under the `[atm]` config section as
-      the baseline roster that should always be present in `config.json`
-    - retain ATM-owned `aliases` support under the `[atm]` config section for
-      shorthand addressing of canonical members, especially cross-team
-      communication with roles such as `team-lead`
-    - add ATM-owned post-send-hook automation support under the `[atm]` config
-      section
-    - historical note:
-      - the release-critical `[atm].identity` fallback removal and doctor drift
-        warning were pulled forward and closed in `L.6`
-      - the remaining `L.7` scope covers broader baseline-roster, alias, and
-        post-send-hook semantics
-    - keep `[atm].default_team` as the shared team default and continue to
-      ignore `[rmux]` and future `[scmux]` sections from `atm-core`
-    - update `atm doctor` to compare `[atm].team_members` against
-      `config.json.members`
-      - missing baseline members are findings
-      - extra runtime members in `config.json` are allowed
-    - update `atm doctor` roster output to show all `config.json` members with
-      baseline members first, `team-lead` first among the baseline set, and
-      extra runtime members afterward
-    - define alias resolution and projection rules:
-      - aliases are accepted as input shorthand only
-      - recipient aliases resolve immediately to canonical member names before
-        validation, self-send checks, and mailbox lookup
-      - same-team messages keep current canonical `from` behavior
-      - cross-team messages may project the sender alias in `from` for
-        Claude-facing ergonomics
-      - whenever alias-oriented `from` projection is used, canonical sender
-        identity must also be persisted in SQLite-owned state and
-        must drive validation, self-send checks, routing, and audit behavior
-    - define post-send-hook rules:
-      - the hook runs only after a successful non-`dry-run` send
-      - `[[atm.post_send_hooks]]` is the supported hook shape
-      - each rule binds one recipient selector and one command argv
-      - `recipient = "*"` matches all recipients
-      - matching rules execute in config order
-      - legacy flat hook keys and `post_send_hook_members` are rejected with
-        migration guidance to the new rule shape
-      - path-like `command[0]` values resolve from the directory that owns the
-        discovered `.atm.toml`
-      - bare executable names use normal `PATH` lookup
-      - the hook must execute with that same config-root directory as its
-        working directory
-      - the hook inherits the process environment and also receives one
-        ATM-owned JSON payload in `ATM_POST_SEND`
-      - the `ATM_POST_SEND` payload must contain:
-        - `from`
-        - `to`
-        - `sender`
-        - `recipient`
-        - `team`
-        - `message_id`
-        - `requires_ack`
-        - optional `task_id`
-        - optional `recipient_pane_id` when authoritative roster truth knows it
-      - the hook may optionally return one structured stdout object with
-        `level`, `message`, and optional `fields`; ATM logs it on a best-effort
-        basis and ignores absent/invalid output
-      - hook decision logging must make recipient-rule evaluation easy to
-        troubleshoot
-      - expected recipient non-match is silent
-      - hook failure or timeout must never roll back the send; ATM reports the
-        failure as post-send-hook diagnostics only
-  - `FIX-82` post-send hook redesign
-    - scope: replace the old multi-axis hook filter design with
-      recipient-scoped `[[atm.post_send_hooks]]` rules, hard reject retired
-      hook keys, simplify hook diagnostics, and keep only execution-failure
-      warnings
-    - acceptance:
-      - retired flat hook keys produce hard config errors with migration
-        guidance
-      - matching recipient rules execute in config order
-      - expected recipient non-match is silent
-      - `ATM_POST_SEND` includes sender/recipient/team context without
-        `hook_match` booleans
-      - once roster truth migrates to SQLite, `ATM_POST_SEND` also carries the
-        authoritative `recipient_pane_id` when known so hooks can consume it
-        directly
-      - actionable warnings exist for configured-but-skipped hooks
-      - docs, help text, and tests cover the migration and new semantics
-    - reserve `atm-identity-missing@<team>` for ATM-generated
-      repair/diagnostic notices only; it must not become a normal sender
-      identity fallback
-  - closes:
-    - config identity/source ambiguity for multi-agent shared repos
-    - baseline-roster visibility gap in `atm doctor`
-    - cross-team alias ambiguity for baseline roles such as `team-lead`
-    - missing sender-scoped post-send automation contract for repo-root helper
-      scripts
-    - duplicate permanent-member spawn planning gap for future team-lead /
-      hook-driven orchestration
-  - dependency note:
-    - independent of `L.1` through `L.3`; it may proceed in parallel once the
-      Phase L config and identity rulings are locked
-
-- `L.8` Retained Team Recovery Surface
-  - goal: restore the minimum `teams` and `members` command surface required
-    for initial release, backup/restore operations, and team-repair workflows
-  - key tasks:
-    - implement bare `atm teams` to list locally discovered teams under
-      `ATM_HOME`
-    - implement `atm members` as a local team-roster view suitable for restore
-      verification and operator checks without requiring daemon or hook state
-    - implement `atm teams add-member` as the retained local roster repair path
-      for missing members after restore or config drift
-    - implement `atm teams backup` as a timestamped local snapshot of
-      `config.json`, team inboxes, and the ATM team task bucket
-    - implement `atm teams restore` with a dry-run path and explicit restore
-      safety rules:
-      - preserve the current team-lead entry and `leadSessionId`
-      - restore only missing non-lead members
-      - clear runtime-only fields such as session/activity/pane state on
-        restored members
-      - restore non-lead inbox files from the chosen snapshot
-      - recompute `.highwatermark` from the maximum restored task id
-      - fail cleanly on missing or malformed backup material without partial
-        restore
-    - keep broader historical team lifecycle/orchestration commands out of
-      scope:
-      - `spawn`
-      - `join`
-      - `resume`
-      - `update-member`
-      - `remove-member`
-      - `cleanup`
-  - tests:
-    - `teams` lists discovered teams deterministically
-    - `members` lists the current local roster deterministically
-    - `add-member` rejects duplicates and creates any required local inbox
-      state atomically
-    - `backup` produces a complete snapshot of team config, inboxes, and ATM
-      task files
-    - `restore --dry-run` reports members/inboxes/tasks that would be restored
-    - `restore` preserves team-lead / `leadSessionId`, clears runtime-only
-      restored-member state, and recomputes `.highwatermark` to the maximum
-      restored task id
-  - dependency note:
-    - depends on the Phase L config semantics from `L.7`, but does not depend
-      on the observability-specific `L.1` through `L.6` work
-
-Recovered Phase K carry-in mapping and later planning carry-ins:
-
-- `ATM-QA-K-001` and `ATM-QA-K-002` are canonical Phase L.2 work items
-- `RUST-QA-001`, `PRR-002`, and the L.1 QA traceability gap `ATM-QA-002` are
-  canonical Phase L.3 work items
-- `INTEROP-001` and duplicate `BP-003` are canonical Phase L.4 work items
-- `UX-001` and duplicate `BP-004` are canonical Phase L.5 work items
-- `UX-002`, `BP-001`, and `UNI-003` are Phase L.5 decision/disposition items;
-  each must either land as implementation work or be explicitly deferred by a
-  documented Phase L architectural ruling
-- config identity/source cleanup and baseline team roster enforcement are
-  canonical Phase L.7 work items identified by the phase-close planning review
-  on 2026-04-07 rather than by numbered Phase K implementation findings
-- the retained `teams` / `members` release-gap closure is canonical Phase L.8
-  work identified during the same release-planning review and backup/restore
-  procedure audit
-
-Acceptance:
-- Phase L cannot close until:
-  - `L.2` through `L.8` are complete
-  - every mapped carry-in item above is either implemented or explicitly
-    deferred by a documented Phase L architectural decision
-  - retained observability behavior is validated against the published
-    crates.io dependency `sc-observability = "1.0.0"`
-  - the retained release-critical team recovery surface (`teams`, `members`,
-    `teams add-member`, `teams backup`, `teams restore`) is implemented and
-    validated
-- the phase must preserve ATM’s initial-release focus on agent messaging and
-  must not absorb future hook/`schooks` orchestration concerns prematurely
+- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, introduced the ATM-owned workflow sidecar, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
 
 ## 5. Hard Rules
 
@@ -1006,2934 +491,142 @@ Before implementation starts, the docs should be reviewed with these checks:
   `doctor`), and the release-only `teams` / `members` expansion is explicitly
   tracked in Phase `L.8`
 
-
-### Phase M: Mailbox Locking And Code Review Fixes
-
-Status: COMPLETE
-
-Sprint completion records:
-- `M.1` complete on `feature/pM-s1-mailbox-locking` / PR #60, merged to
-  `integrate/phase-M` at `760e904`
-- `M.2` complete on `feature/pM-s2-review-fixes` / PR #61, merged to
-  `integrate/phase-M` at `c9fb9fa`
-
-Goal: close all blocking and important code-review findings from the Phase L review before
-declaring the codebase 1.0-ready. ARCH-CR-003 and ARCH-CR-004 are closed in L.7 (not Phase M scope).
-
-Phase M finding registry:
-- `BP-ECR-001` Public error-surface documentation gap
-  - finding: public `AtmResult` / `Result<_, AtmError>` functions in the
-    affected modules do not consistently declare `# Errors` sections with
-    concrete `AtmErrorCode` coverage
-  - resolution criteria:
-    - the explicit M.2 audit inventory is reviewed
-    - every public `Result`-returning function in that inventory has a `# Errors`
-      section
-    - each section lists the applicable `AtmErrorCode` variants
-- `BP-ECR-002` Operator recovery guidance gap
-  - finding: operator-actionable failures still exist without
-    `.with_recovery()` guidance
-  - resolution criteria:
-    - the explicit M.2 recovery audit inventory is grep-reviewed
-    - bare operator-actionable construction sites are updated or explicitly
-      excluded as non-operator-facing invariant failures
-- `BP-ECR-003` Error-display causal-context gap
-  - finding: `AtmError::Display` risks flooding normal CLI/log output with
-    multi-kilobyte backtraces when full diagnostic detail is only needed on
-    demand
-  - resolution criteria:
-    - `Display` remains concise and does not append the captured backtrace
-    - full backtrace access remains available via Debug output and a dedicated
-      accessor
-    - tests cover both backtrace-present and backtrace-absent branches
-- `BP-ECR-004` Deprecated identity migration-doc gap
-  - finding: obsolete `[atm].identity` behavior and migration guidance are not
-    documented consistently enough for operator repair
-  - resolution criteria:
-    - config docs contain a `# Deprecated` section for `[atm].identity`
-    - docs state it is ignored for runtime identity resolution
-    - docs reference `ATM_WARNING_IDENTITY_DRIFT` and the `ATM_IDENTITY`
-      migration path
-- `BP-ECR-005` Panic-on-untrusted-input gap
-  - finding: `normalize_json_number(...)` still panics on malformed exponent
-    input instead of degrading safely
-  - resolution criteria:
-    - the `.expect(...)` is replaced with graceful fallback returning the raw
-      string
-    - warning-level logging documents the degradation path
-    - malformed-input regression tests pass without panic
-- `BP-ECR-006` Shared identity-error contract gap
-  - finding: `resolve_actor_identity` remains triplicated, which risks drift in
-    identity-resolution errors and recovery guidance
-  - resolution criteria:
-    - `resolve_actor_identity` exists in one shared `identity/mod.rs` location
-    - `ack`, `clear`, and `read` call the shared helper
-    - behavior remains unchanged except for the shared implementation boundary
-
-Integration branch: `integrate/phase-M` (branched from `integrate/phase-L`)
-
-Execution model: codex-orchestration — arch-ctm is sole developer, sequential sprints,
-quality-mgr runs QA in parallel. See `/codex-orchestration` skill.
-
----
-
-#### M.1 — Mailbox Locking
-
-Branch: `feature/pM-s1-mailbox-locking` (from `integrate/phase-M`)
-
-Deliverables:
-- Add `fs2` dependency to `crates/atm-core/Cargo.toml`
-- Implement `lock.rs` with `MailboxLockGuard` and `acquire()` using `fs2::FileExt::try_lock_exclusive()`
-  with bounded retry loop (50ms intervals, 5s default timeout)
-- Add `MailboxLockTimeout` error code to `error_codes.rs`
-- Add `MailboxLock` error kind to `error.rs` with recovery guidance
-- Implement `locked_read_modify_write()` in `mailbox/mod.rs` for single-file append paths
-- Refactor `append_message` to use `locked_read_modify_write`
-- Add deterministic multi-lock acquisition for `read`, `ack`, and `clear` so those commands
-  lock every discovered source inbox before their first `read_messages(...)` call and hold the
-  locks through final writeback
-- Make the multi-lock contract explicit in code:
-  - finish source-file discovery before the first inbox read
-  - exclude files missing at discovery time from the lock set
-  - dedupe duplicate paths before acquisition
-  - sort the set by canonical path string before acquisition
-  - apply one total timeout budget to the full set
-  - if any acquisition fails, release all earlier locks and abort before any
-    source-file read or mutation
-  - if a discovered file disappears before `load_source_files(...)` completes,
-    abort the command with an operator-actionable file-read error and persist
-    no partial state
-- Ensure the missing-config team-lead notice path benefits from the same `append_message` lock
-- Audit the shared mutable JSON/JSONL/state files touched by M.1 and route each through an
-  atomic temp-file + fsync + rename style helper rather than an in-place rewrite path
-- Centralize any new atomic-replacement logic behind one `atm-core` helper boundary rather than
-  duplicating temp-file + rename code at individual call sites
-- Lock sentinel: `{inbox_path}.lock` (zero-byte, created lazily)
-
-Files to modify:
-- `crates/atm-core/Cargo.toml` (add fs2)
-- `crates/atm-core/src/mailbox/lock.rs` (implement from placeholder stub)
-- `crates/atm-core/src/mailbox/mod.rs` (add `locked_read_modify_write`, refactor `append_message`)
-- `crates/atm-core/src/error.rs` (add `MailboxLock` kind)
-- `crates/atm-core/src/error_codes.rs` (add `MailboxLockTimeout`)
-- `crates/atm-core/src/read/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through writeback)
-- `crates/atm-core/src/ack/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through transition + reply persist)
-- `crates/atm-core/src/clear/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through set replacement)
-
-Tests required:
-- Unit: `lock.rs` acquire/release, timeout, stale sentinel tolerance
-- Unit: `locked_read_modify_write` basic operation
-- Integration: concurrent append from two threads does not lose messages
-- Integration: concurrent `send` and `ack`/`clear` against the same inbox or
-  overlapping origin set preserve correctness and do not silently lose updates
-- Integration: multi-source `read`/`ack`/`clear` acquire locks in deterministic path order
-- Integration: lock timeout produces `MailboxLockTimeout` error code
-- Integration: if lock N of M fails, every earlier lock is released and the
-  command aborts before the first source inbox read
-- Integration: one total timeout budget applies across the full multi-lock set
-  instead of resetting per file
-- Integration: duplicate discovered paths collapse to one lock acquisition
-- Integration: a discovered source inbox disappearing before load causes a
-  normal actionable failure and no persisted partial state
-- Integration: concurrent `read`/`ack`/`clear` against overlapping origin
-  inbox sets do not deadlock because both commands acquire in the same sorted order
-- All existing tests must pass (single-process path unaffected)
-
-Acceptance criteria:
-- `lock.rs` is no longer a placeholder stub
-- all mailbox read-modify-write paths hold an exclusive lock
-- `read`, `ack`, and `clear` use one deterministic full-source lock plan for
-  every mutating reread and writeback
-- no shared mutable structured file touched by M.1 is rewritten in place
-- concurrent `atm send` to the same inbox from two processes does not lose messages
-- CI passes on macOS, Linux, Windows
-
----
-
-#### M.2 — Code Review Fixes
-
-Branch: `feature/pM-s2-review-fixes` (from `integrate/phase-M` after M.1 merges)
-
-Dependency: M.1 must be merged to `integrate/phase-M` first.
-
-Deliverables (itemized by finding):
-
-1. **Restore atomicity** (ARCH-CR-002):
-   - Reorder `restore_team` in `team_admin.rs` to config-last with staging
-   - Add `.restore-in-progress` marker write before mutations, remove after config write
-   - Add inbox staging to `.restore-staging/inboxes/` before live move
-   - Apply the same atomic-persistence rule to restored task-bucket files,
-     `.highwatermark`, and shared restore coordination state touched by this flow
-   - `recompute_highwatermark` must either be converted to an atomic helper-backed
-     write path or be covered by an explicit crash-safety test proving the
-     remaining implementation is safe enough for 1.0
-   - Add `atm doctor` check for stale `.restore-in-progress` markers
-   - Files: `team_admin.rs`, `doctor/mod.rs`
-
-2. **AtmError backtrace access**:
-   - Keep `Display` concise and omit multi-KB backtrace rendering
-   - Expose captured backtraces through Debug output and a dedicated accessor
-   - File: `error.rs`
-
-3. **`# Errors` doc audit**:
-   - audit the public `Result<_, AtmError>` API surface in this explicit inventory:
-     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
-     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `error.rs`,
-     `config/mod.rs`, `home.rs`, `send/mod.rs`, `send/input.rs`,
-     `send/file_policy.rs`, `identity/mod.rs` if consolidation lands there,
-     and any new public helper introduced by M.1/M.2
-   - add `# Errors` sections where missing and list the applicable `AtmErrorCode` variants
-   - avoid relying on stale hard-coded function counts; use the current public API surface
-
-4. **`.with_recovery()` audit**:
-  - perform a grep-driven audit of remaining operator-actionable bare error construction sites
-    in this explicit inventory: `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`,
-    `ack/mod.rs`, `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
-    `home.rs`, `address.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
-    `identity/mod.rs` if it gains operator-facing errors, and any new M.1/M.2 code
-  - do not re-edit sites that already received recovery guidance in L.7/L.8 unless the new
-    Phase M design changes their operator action
-
-5. **Shared mutable file persistence audit**:
-   - grep this explicit inventory for direct writes to live shared mutable
-     JSON/JSONL/state files (`fs::write`, `File::create`, equivalent):
-     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
-     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
-     `home.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
-     `identity/mod.rs` if it gains persistence responsibilities, and any new
-     helper introduced by M.1/M.2
-   - route each in-scope path through an atomic helper or document why the path
-     is scratch/staging-only and therefore exempt
-   - files in scope include inboxes, team config, restored task-bucket state,
-     `.highwatermark`, and shared coordination files such as restore-progress
-     or send-alert state
-
-6. **Legacy config key docs**:
-   - Add `# Deprecated` section to `config/mod.rs` or `config/types.rs` for `[atm].identity`
-   - Reference `ATM_WARNING_IDENTITY_DRIFT`; document migration: use `ATM_IDENTITY` env var
-
-7. **`normalize_json_number` panic removal**:
-   - Replace the current exponent-parse `.expect()` in `observability.rs` with graceful fallback + `tracing::warn!`
-   - Add `# Panics` doc noting precondition removed
-
-8. **`resolve_actor_identity` consolidation**:
-   - Move to `identity/mod.rs` as `pub(crate)` function
-   - Update call sites in `ack/mod.rs`, `clear/mod.rs`, `read/mod.rs`
-
-Tests required:
-- Restore atomicity: interrupted restore leaves `.restore-in-progress` marker; re-run completes;
-  doctor detects stale marker
-- Restore atomicity: pre-existing `.restore-staging/` is either cleaned first or
-  rejected with actionable recovery text; stale and fresh staging contents are never merged
-- Restore atomicity: config-last ordering means config is unchanged when inbox/task/highwatermark
-  staging fails before the final config write
-- Restore atomicity: failure to remove the marker after a successful config
-  write leaves a warning-only stale-marker finding rather than corrupting team state
-- Restore atomicity: `recompute_highwatermark` is either converted to atomic
-  replacement or covered by an explicit crash-safety regression test
-- Backtrace: captured and absent backtrace branches are both tested; `Display`
-  remains concise and the dedicated backtrace accessor remains available
-- `normalize_json_number`: malformed exponent returns raw string (no panic)
-- `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
-- Documentation review pass confirms new `# Errors`, `# Deprecated`, and `# Panics` sections exist
-  on the explicit M.2 audit inventory
-
-Acceptance criteria:
-- `restore_team` writes config.json last with staging and progress marker
-- all shared mutable structured files touched by M.2 use atomic replacement helpers
-- `recompute_highwatermark` no longer relies on an undocumented in-place write
-  path without either conversion or explicit crash-safety coverage
-- `AtmError::Display` conditionally renders backtrace
-- all public `Result`-returning functions in the explicit M.2 audit inventory have `# Errors` doc sections
-- `.with_recovery()` present at all operator-actionable sites in the explicit M.2 audit inventory
-- `[atm].identity` documented as deprecated
-- `normalize_json_number` does not panic on malformed input
-- `resolve_actor_identity` exists in exactly one location
-- no stale M.2 line-number references remain in the sprint spec
-- CI passes on all platforms
-
----
-
-Phase M dependency graph:
-
-```
-  integrate/phase-M (from integrate/phase-L)
-    |
-    +-- M.1: mailbox locking
-    |     |
-    |     v (merge to integrate/phase-M)
-    |
-    +-- M.2: review fixes (branch from integrate/phase-M after M.1 merge)
-          |
-          v (merge to integrate/phase-M)
-
-  integrate/phase-M --> develop (final phase integration PR)
-```
-
-Phase M closeout gate (satisfied on `integrate/phase-M`; final merge to
-`develop` remains the release-integration step):
-- M.1 and M.2 are both merged to `integrate/phase-M`
-- ARCH-CR-001 and ARCH-CR-002 blocking findings are resolved
-- all BP-ECR-001 through BP-ECR-006 findings are resolved
-- CI passes on all platforms
-- `integrate/phase-M` merges to `develop`
-
-Post-close review note:
-- a later critical review on `develop @ 1e6515a` identified additional locking
-  hardening issues that were not fully constrained by the original M.1/M.2
-  deliverables. Those are tracked below as a narrowly scoped follow-up sprint.
-
----
-
-#### M.F1 — Locking Hardening Follow-up
-
-Branch: `feature/pM-locking-followup` (from `develop`, base commit `1e6515a`)
-
-Goal: close the post-merge production-readiness findings from
-`ATM-CORE-M-CODE-REVIEW` without reopening unrelated Phase M refactors.
-
-Finding registry:
-- `M-LF-001` Source discovery fail-open gap
-  - finding: `discover_origin_inboxes(...)` can skip unreadable inbox-directory
-    entries and continue, allowing mutation commands to operate on an
-    incomplete locked source set
-  - resolution criteria:
-    - mutation-path source discovery fails closed on entry-enumeration errors
-    - commands abort before lock acquisition or mailbox read when the source
-      set cannot be enumerated completely
-    - no partial-source mutation path remains
-- `M-LF-002` Lock-error classification gap
-  - finding: `lock.rs::acquire()` can collapse permanent I/O/OS failures into
-    `MailboxLockTimeout`
-  - resolution criteria:
-    - only true lock-busy conditions retry until timeout
-    - non-contention failures return `MailboxLockFailed` immediately with
-      operator recovery guidance
-- `M-LF-003` Atomic durability gap
-  - finding: rename-based mailbox replacement does not fsync the parent
-    directory after rename
-  - resolution criteria:
-    - the shared atomic replacement helper durably publishes rename results to
-      the parent directory wherever the platform supports directory sync
-    - the helper-boundary doc comment names Linux/macOS as parent-directory-sync
-      platforms and Windows as the current `Ok(())`-without-parent-sync platform
-    - the helper-boundary doc comment explicitly states the `Ok(())` behavior on
-      platforms where ATM cannot issue a parent-directory sync
-    - the platform caveat appears as a public doc comment at the shared helper
-      boundary, not only in the sprint notes
-    - the platform-conditional test strategy is explicit: `#[cfg(unix)]` covers
-      the parent-directory fsync path, while `#[cfg(not(unix))]` confirms the
-      helper returns `Ok(())` on the no-op parent-sync branch
-- `M-LF-004` Failure-path test coverage gap
-  - finding: mailbox-locking tests prove several success/no-deadlock paths, but
-    they do not cover timeout/error/fail-closed paths strongly enough
-  - resolution criteria:
-    - bounded contention-timeout coverage exists for `send`
-    - deterministic fail-closed source-discovery coverage exists for `clear`
-    - deterministic non-contention lock-error coverage exists for `send`
-- `M-LF-005` Locked-mutation duplication follow-up
-  - finding: read/ack/clear still duplicate the lock -> rediscover -> load ->
-    persist pattern
-  - disposition:
-    - advisory only for this sprint
-    - refactor to a shared helper is allowed only if it directly simplifies
-      `M-LF-001` through `M-LF-004`
-    - a standalone cleanup refactor is out of scope for this follow-up
-
-Deliverables:
-- make mutation-path source discovery fail closed on directory-entry
-  enumeration faults
-- update lock acquisition so retry/timeout behavior is reserved for true
-  contention and non-contention lock errors fail fast
-- extend the shared atomic write path to fsync the parent directory after
-  rename where supported
-- add deterministic failure-path tests for:
-  - contention timeout
-  - fail-closed source discovery
-  - non-contention lock-path failure classification
-- document any platform caveat for parent-directory fsync directly at the
-  helper boundary
-- do not broaden the scope into unrelated API cleanup or large helper
-  extraction unless needed to land the fixes above safely
-
-Files expected to change:
-- `crates/atm-core/src/mailbox/source.rs`
-- `crates/atm-core/src/mailbox/lock.rs`
-- `crates/atm-core/src/mailbox/atomic.rs`
-- `crates/atm-core/src/persistence.rs` if mailbox durability is unified there
-- `crates/atm-core/src/read/mod.rs`, `ack/mod.rs`, `clear/mod.rs` only as
-  needed to accommodate strict source-discovery behavior
-- `crates/atm-core/tests/mailbox_locking.rs`
-- docs: `requirements.md`, `architecture.md`, `project-plan.md`
-
-Tests required:
-- Integration: a synthetic directory-entry enumeration fault causes mutation
-  commands to fail closed before mailbox mutation
-- Integration: a held mailbox lock produces a bounded `MailboxLockTimeout`
-  result without deadlock or indefinite hang
-- Unit or focused integration: a deterministic non-contention lock failure path
-  returns `MailboxLockFailed`, not `MailboxLockTimeout`
-- Unit: atomic replacement helper verifies parent-directory fsync sequencing via
-  a deterministic seam or focused helper test
-- Unit: `#[cfg(not(unix))]` coverage confirms the shared helper returns `Ok(())`
-  without error on platforms where parent-directory sync is unavailable
-- All locking tests must use bounded coordination primitives (`recv_timeout`,
-  `wait_timeout`, elapsed ceilings) and guaranteed teardown; no open-ended joins
-  or sleep-based race assumptions
-
-Acceptance criteria:
-- no mailbox mutation command can proceed from a partially enumerated source set
-- `MailboxLockTimeout` is emitted only for true contention paths
-- rename-based mailbox persistence includes parent-directory durability handling
-  at the shared helper boundary
-- failure-path locking coverage is deterministic and CI-safe:
-  - `send` returns a bounded `MailboxLockTimeout` under held-lock contention
-  - `clear` fails closed on synthetic source-discovery fault without mailbox mutation
-  - `send` reports synthetic non-contention lock-path failure as `MailboxLockFailed`
-- `M-LF-005` remains explicitly advisory unless a helper extraction is needed to
-  land the blocking/important fixes
-
----
-
-### Phase N: Publish Replacement And Distribution Parity [COMPLETE]
-
-Status: COMPLETE
-
-Goal:
-- ship the retained `1.0` release from this repo as the direct replacement for
-  the historical `agent-team-mail` CLI/core release line
-- preserve the historical release channels that actually existed for the old
-  repo:
-  - crates.io
-  - GitHub Releases
-  - Homebrew
-- add `winget` as a required new `1.0` channel so Windows users can install
-  without Rust tooling or manual archive extraction
-
-Status summary:
-- the old repo already contains the release source of truth for crates.io,
-  GitHub Releases, and Homebrew automation
-- the old repo does not contain `winget` release automation, so this repo must
-  add it as new release infrastructure rather than porting it directly
-- `team-lead` has confirmed the shared account-level publish infrastructure:
-  - Homebrew tap remains `randlee/homebrew-tap`
-  - `HOMEBREW_TAP_TOKEN` exists in account secrets but is not yet configured on
-    `atm-core`
-  - `winget` has a proven reference implementation in `randlee/claude-history`
-    using `vedantmgoyal2009/winget-releaser@v2`
-  - `winget` uses the default GitHub workflow token and does not require an
-    additional repo secret
-- this repo currently has only CI and no equivalent release-manifest,
-  preflight, release, or publisher-agent infrastructure
-- the source paths remain `crates/atm` and `crates/atm-core`, but the
-  publishable package identities for this release line must be
-  `agent-team-mail` and `agent-team-mail-core`
-
-#### N.1 — Package Identity And Manifest Replacement
-
-Goal:
-- convert the retained publishable crates in this repo to the legacy package
-  identities expected by downstream users
-
-Deliverables:
-- rename `crates/atm/Cargo.toml` package name from `atm` to
-  `agent-team-mail`
-- rename `crates/atm-core/Cargo.toml` package name from `atm-core` to
-  `agent-team-mail-core`
-- keep the CLI binary name `atm`
-- set both publishable crates to the intended `1.0.0` release version
-- replace the CLI path-only core dependency with an explicit versioned
-  dependency on `agent-team-mail-core`
-- add release-grade package metadata to both publishable manifests:
-  - description
-  - repository
-  - homepage
-  - readme
-  - keywords
-  - categories
-- ensure the publishable crate surface excludes test-only fixture binaries and
-  other non-release executables
-- audit release dependency features so production releases do not ship
-  test-oriented features unless explicitly intended
-
-Acceptance criteria:
-- `cargo package -p agent-team-mail-core --locked` succeeds
-- `cargo package -p agent-team-mail --locked` succeeds
-- `cargo publish --dry-run -p agent-team-mail-core --locked --no-verify`
-  succeeds
-- `cargo publish --dry-run -p agent-team-mail --locked --no-verify` succeeds
-- only the retained release binary `atm` is part of the publishable CLI
-  install surface
-
-#### N.2 — Release Automation Port
-
-Goal:
-- port the old repo’s release automation into this repo, narrowed to the
-  retained CLI/core release surface plus continued shared-family dependency
-  verification and the new required `winget` channel
-
-Deliverables:
-- add `release/publish-artifacts.toml` as the new release artifact manifest
-- add the missing `HOMEBREW_TAP_TOKEN` GitHub secret to `atm-core` as a
-  one-time prerequisite before the Homebrew update job is expected to pass
-- port and adapt:
-  - `.github/workflows/release-preflight.yml`
-  - `.github/workflows/release.yml`
-  - `scripts/release_gate.sh`
-  - `scripts/release_artifacts.py`
-  - release inventory schema/supporting release docs needed by the workflows
-- define the retained publishable artifact set in
-  `release/publish-artifacts.toml`:
-  - `agent-team-mail-core`
-  - `agent-team-mail`
-- define the retained binary artifact set for GitHub Releases:
-  - `atm`
-- keep crates.io publish ordering explicit:
-  - `agent-team-mail-core` before `agent-team-mail`
-- keep GitHub Release asset packaging for the supported platform targets:
-  - `x86_64-unknown-linux-gnu`
-  - `x86_64-apple-darwin`
-  - `aarch64-apple-darwin`
-  - `x86_64-pc-windows-msvc`
-- port Homebrew update automation for the formulas already managed by the old
-  release workflow:
-  - `Formula/agent-team-mail.rb`
-  - `Formula/atm.rb`
-- add `winget` release automation for the retained CLI package:
-  - manifest generation or update path
-  - release-version and asset-URL wiring
-  - SHA256 update from the released Windows archive
-  - `vedantmgoyal2009/winget-releaser@v2` workflow step targeting package ID
-    `randlee.agent-team-mail`
-  - use the Windows ZIP asset from the GitHub Release as the installer source
-  - one-time initial manifest submission procedure for the first release
-  - recurring submission flow for later releases after the package exists in
-    `microsoft/winget-pkgs`
-  - no additional `winget` secret beyond the default workflow `GITHUB_TOKEN`
-  - verification of submission success rather than same-day installability
-- port/reference the proven `claude-history` winget materials:
-  - `.winget/randlee.claude-history.yaml`
-  - `docs/WINGET_SETUP.md`
-  - the `winget` step in `.github/workflows/release.yml`
-
-Acceptance criteria:
-- this repo has release-preflight and release workflows with no missing helper
-  files or schema dependencies
-- the release artifact manifest is the single source of truth for publishable
-  crates and release binaries in this repo
-- preflight validates version alignment, artifact inventory, and dependency
-  ordering from this repo layout
-- release workflow produces retained `atm` archives, crates publish order, and
-  Homebrew update steps without references to removed daemon/TUI/MCP artifacts
-- release automation includes a concrete `winget` update/publish path for the
-  retained Windows CLI install surface
-- `N.2` explicitly records the Homebrew secret prerequisite and the one-time
-  `winget` bootstrap requirement so the workflow design does not assume either
-  exists magically
-
-#### N.3 — Publisher Agent Port
-
-Goal:
-- port the release-orchestration agent instructions into this repo so release
-  execution remains controlled by the same hardened operating procedure
-
-Deliverables:
-- create `.claude/agents/publisher.md` in this repo
-- port the old `publisher` agent instructions and update all source-of-truth
-  references to this repo’s files and workflows
-- keep the hard rules around:
-  - tag creation only by workflow
-  - no manual `v*` tag pushes
-  - develop -> main release gate ordering
-  - required preflight and release workflow dispatch steps
-- narrow the retained artifact/channel assumptions to this repo’s actual
-  publish surface:
-  - crates.io
-  - GitHub Releases
-  - Homebrew
-  - `winget`
-- update the inventory and verification expectations so the publisher does not
-  expect daemon, MCP, TUI, or CI monitor outputs from this repo
-- document in the publisher agent:
-  - that `HOMEBREW_TAP_TOKEN` must exist on `atm-core` before Homebrew release
-    automation can run
-  - that the first `winget` release requires a one-time manual manifest
-    submission
-  - that later `winget` releases are workflow-driven
-  - that Microsoft review introduces a normal 1-2 day delay before `winget`
-    installability is observable
-
-Acceptance criteria:
-- `.claude/agents/publisher.md` exists in this repo
-- publisher source-of-truth paths resolve to files that exist in this repo
-- publisher instructions enumerate the retained artifact set and release
-  channels accurately
-- publisher instructions distinguish historical parity channels from the new
-  required `winget` channel for Windows installation
-
-#### N.4 — Customer-Facing Release Surface Documentation
-
-Goal:
-- make the replacement release understandable to downstream users and package
-  consumers before `1.0` ships
-
-Deliverables:
-- rewrite `README.md` from reset-workspace language into release-facing product
-  documentation
-- document installation from:
-  - GitHub Releases
-  - Homebrew
-  - crates.io
-  - `winget`
-- state that `agent-team-mail` and `agent-team-mail-core` are now published
-  from this repo
-- explain that the retained `1.0` replacement scope historically covered the
-  pre-Phase-Q CLI/core pair and continues to consume the published
-  `sc-observability` family
-- explain that `winget` is a new required `1.0` Windows channel rather than a
-  historical parity channel
-
-Acceptance criteria:
-- `README.md` matches the retained release surface and actual distribution
-  channels
-- customer-facing install instructions no longer describe this repo as a reset
-  workspace
-- release docs promise only retained legacy crates and the actual supported
-  install channels, including `winget`
-
-#### N.5 — Final Release Readiness Proof
-
-Goal:
-- prove that the retained replacement release can be published and installed
-  from this repo before the real `1.0` publish run starts
-
-Deliverables:
-- run and record:
-  - `cargo fmt --all --check`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo test --workspace`
-  - `cargo package -p agent-team-mail-core --locked`
-  - `cargo package -p agent-team-mail --locked`
-  - `cargo publish --dry-run -p agent-team-mail-core --locked --no-verify`
-  - `cargo publish --dry-run -p agent-team-mail --locked --no-verify`
-- perform one install smoke test against the packaged/publishable CLI artifact
-  surface to confirm `atm` is the installed entrypoint
-- verify that the release inventory and post-publish verification expectations
-  cover the retained release channels:
-  - crates.io
-  - GitHub Releases
-  - Homebrew
-  - `winget`
-- verify that `winget` readiness proof checks successful submission/manifests,
-  not immediate public installability
-
-Acceptance criteria:
-- all dry-run packaging and publishability checks succeed from this repo
-- the release inventory matches the retained release scope exactly
-- no retained release doc or workflow step depends on removed legacy crates
-- `N.5` explicitly acknowledges the 1-2 day Microsoft review lag so release
-  operators do not treat normal `winget` review delay as a failed publish
-
-Phase N completion gate:
-- package identities are switched to the legacy crates.io names
-- release automation is present in this repo and references the retained
-  artifact set correctly
-- `.claude/agents/publisher.md` is ported and accurate for this repo
-- customer-facing docs reflect the retained replacement release
-- preflight and release dry-runs are clean for the retained publishable crates
-- retained release channels confirmed:
-  - crates.io
-  - GitHub Releases
-  - Homebrew
-  - `winget`
-- `winget` is explicitly documented as a new required Windows install channel,
-  not as historical parity
-
-### Phase O: Security And Hardening [COMPLETE]
-
-Status: COMPLETE
-
-Goal:
-- close the confirmed CR001 findings that affect path safety, allocation
-  bounds, temp-file collision resistance, and send-alert lock behavior before
-  the next post-`1.0.1` hardening cycle begins
-
-Status summary:
-- CR001 confirmed four follow-up fixes that were intentionally left out of the
-  immediate release gate because they need small but focused design + test work
-- Phase O groups those fixes into one input-safety sprint and one
-  filesystem/lock-hardening sprint
-- accepted limitations from CR001 remain documented separately and are not
-  re-opened by this phase
-
-Integration branch: `integrate/phase-O`
-
-#### O.1 — Input Validation And Allocation Safety
-
-Goal:
-- close the two highest-risk confirmed CR001 findings by tightening the trust
-  boundary around path construction and bounding JSON-number normalization
-
-Deliverables:
-- `H-1`: add validated newtypes or one shared validator for team/agent path
-  segments
-  - reject path separators, `..`, empty segments, and platform-specific escapes
-    before any path construction in `address.rs` and `home.rs`
-- `M-2`: cap `normalize_json_number(...)` expansion length
-  - if the normalized form would exceed 64 characters, return the raw string
-    unchanged and emit `warn!` with
-    `code = %AtmErrorCode::WarningMalformedAtmFieldIgnored`
-
-Acceptance criteria:
-- `AgentAddress::from_str(...)` rejects `../evil`, `../../passwd`, and names
-  containing path separators
-- `normalize_json_number(...)` with exponent expansion over 64 characters
-  returns the raw string unchanged and emits the documented warning
-- `cargo test --workspace` passes
-- `cargo clippy --workspace --all-targets -- -D warnings` is clean
-
-#### O.2 — Filesystem Durability And Lock Hardening
-
-Goal:
-- close the remaining confirmed CR001 findings in persistence temp naming and
-  send-alert stale-lock handling
-
-Deliverables:
-- `C-1`: replace the timestamp-nanos temp-file suffix in `persistence.rs` with
-  `Uuid::new_v4()` while keeping the target basename for debuggability
-- `H-2`: add sleep/backoff after successful stale-lock eviction in
-  `acquire_send_alert_lock(...)` so every `AlreadyExists` turn yields at least
-  once
-
-Acceptance criteria:
-- `atomic_write_bytes(...)` uses UUID-based temp names
-- `acquire_send_alert_lock(...)` sleeps on every `AlreadyExists` iteration,
-  regardless of whether stale-lock eviction succeeded
-- `cargo test --workspace` passes
-- `cargo clippy --workspace --all-targets -- -D warnings` is clean
-
-Phase O completion gate:
-- O.1 and O.2 are both merged to `integrate/phase-O`
-- all four confirmed CR001 findings are resolved:
-  - `H-1`
-  - `M-2`
-  - `C-1`
-  - `H-2`
-- CI passes on all platforms
-- `integrate/phase-O` merges to `develop`
-
-### Phase P: File-I/O Ownership And Single-Write-Path Hardening [MERGED / HARDENING FOLLOW-UP]
-
-Status note:
-- P.1 completed on `feature/pP-s1-ownership-classification` via PR `#111`
-  at `git#2e90a97`
-- P.2 completed on `feature/pP-s2-mailbox-read-path` via PR `#112`
-  at `git#f230ef4`
-- P.3 completed on `feature/pP-s3-atm-owned-state` via PR `#115`
-  at `git#ecb774a`
-- P.4 completed on `feature/pP-s4-claude-inbox-compat` via PR `#113`
-  at `git#9d5729b`
-- P.5 closure gate completed on `feature/pP-s5-closure-gate` via PR `#114`
-- final Phase P integration merged to `develop` via PR `#120` at `git#ad49336`
-- this phase section now records both the executed P.1-P.5 history and the
-  remaining hardening continuation work needed before a publish-quality close
-- `integrate/phase-P` is currently rebased onto `develop@628e176`; refresh it
-  again if `develop` advances before the next hardening slice begins
-
-Goal:
-- make the retained ATM implementation production-ready by applying one
-  explicit file-I/O model across every live file family:
-  - `read_only`
-  - `read_possible_write`
-  - `read_modify_write`
-- eliminate ad hoc write paths
-- minimize lock hold time without permitting stale-snapshot overwrites
-- stop treating Claude-owned inbox files as the long-term source of truth for
-  ATM-local workflow durability
-
-Non-negotiable constraints:
-- no production code path may introduce a second write path for a live file
-  family when an owner-layer helper already exists
-- no stale-snapshot `read -> mutate -> lock -> blind rename` flow is allowed
-- no new ATM-local durable state may be placed in Claude-owned inbox files
-- no tolerance for flaky tests
-
-Integration branch: `integrate/phase-P`
-
-#### P.6-P.8 — Post-Merge Hardening Continuation
-
-Goal:
-- close the remaining Phase P publish-risk gaps after the merge to `develop`
-- keep follow-up work split into deterministic, reviewable sprint slices:
-  - P.6: workflow-sidecar concurrency and typed boundary cleanup
-  - P.7: test hygiene and observability cleanup
-  - P.8: requirements/architecture/project-plan reconciliation
-
-Planning rule:
-- each hardening continuation sprint must start from the latest `develop` on
-  `integrate/phase-P`
-- if `develop` advances between sprints, refresh `integrate/phase-P` from it
-  before opening the next sprint branch
-- no sprint may rely on timing-based tests, unlocked ATM-owned state rewrites,
-  or new raw `String`/parse-later request surfaces for agent/team/address
-  identifiers
-
-##### P.6 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup [PLANNED]
-
-Goals:
-- make workflow-sidecar seeding in `send` safe for concurrent same-recipient
-  sends
-- remove the remaining raw-string request/target boundaries called out by the
-  Phase P rust-best-practices review
-
-Files expected in scope:
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/workflow.rs`
-- `crates/atm-core/src/mailbox/source.rs`
-- `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/tests/mailbox_locking.rs`
-- command-layer constructors/parsers that build these request types
-
-Design details:
-- introduce one owner-layer workflow commit path for `.atm-state/workflow` that
-  proves freshness before replacing the live file
-- `send_mail(...)` and the missing-config team-lead notice path must stop using
-  unlocked `load -> mutate -> save` on workflow state
-- same-recipient send/send concurrency must either:
-  - lock the workflow sidecar and reload under that lock before persisting, or
-  - use a compare-and-swap equivalent at the workflow owner boundary
-- mailbox append plus workflow seed must be treated as one coordinated
-  persistence plan for send-owned writes; no parallel ad hoc sidecar mutation
-  path is allowed
-- request/target parsing must move to construction time for the remaining
-  boundary types:
-  - `AddMemberRequest.team` and `.member` use `TeamName` / `AgentName`
-    instead of raw `String` (`RBP-F001`)
-  - `ReadQuery.target_address` uses `Option<AgentAddress>` instead of
-    `Option<String>` (`RBP-F002`)
-  - `ResolvedTarget.agent` / `.team` carry `AgentName` / `TeamName`
-    rather than raw `String` (`RBP-F003`)
-
-Implementation patterns:
-- prefer a typed workflow helper such as
-  `workflow::with_locked_state(...)` or `workflow::commit_state(...)`
-  over reimplementing lock/CAS logic inside `send/mod.rs`
-- keep validation at the API boundary: constructors, CLI parsing, and resolver
-  outputs should carry validated newtypes rather than validating deep in the
-  implementation
-- keep concurrent coverage deterministic by using channels/barriers with bounded
-  waits; do not use sleeps to try to overlap sends
-
-Reference shape:
-
-```rust
-// Pseudocode shape, not a final required signature.
-let envelope = mailbox::append_message(...)?;
-workflow::commit_state(home, team, recipient, |state| {
-    state.remember_initial_state(&envelope);
-})?;
-```
-
-```rust
-// Pseudocode shape for the final freshness boundary.
-workflow::commit_state(home, team, recipient, |state| {
-    let fresh = state.reload_or_validate()?;
-    fresh.remember_initial_state(&envelope);
-    Ok(())
-})?;
-```
-
-The hardening requirement is not the helper name; it is that `send` and the
-missing-config team-lead notice path must stop open-coding `load -> mutate ->
-save` against the workflow sidecar and must commit from a freshness-proven
-owner-layer boundary.
-
-Required coverage:
-- concurrent same-recipient send/send test proving two ATM-authored messages
-  both seed workflow state without lost updates
-- coverage for the missing-config team-lead notice path using the shared
-  workflow owner helper
-- request-construction tests showing invalid team/agent/address input is
-  rejected before command execution enters the core implementation
-- concurrent send where one path is a normal recipient send and the other is the
-  missing-config team-lead notice path for the same workflow file family
-- contention case where one sender observes an older workflow snapshot, loses
-  the race, reloads, and recomputes without dropping the winning sender's entry
-- mixed payload case where concurrent sends differ on `requires_ack`, `task_id`,
-  and summary generation, proving the seeded sidecar state tracks the correct
-  message identity rather than whichever writer saves last
-
-##### P.7 — Test Hygiene And Observability Cleanup [PLANNED]
-
-Goals:
-- remove the remaining timing-dependent and process-environment test seams
-- stop silently discarding malformed idle-notification JSON during read-path
-  classification
-
-Files expected in scope:
-- `crates/atm/tests/log.rs`
-- `crates/atm-core/src/config/discovery.rs`
-- `crates/atm-core/src/clear/mod.rs`
-- `crates/atm-core/src/read/mod.rs`
-- any shared test fixture/helper file needed to make readiness deterministic
-
-Design details:
-- replace the fixed `thread::sleep(Duration::from_millis(250))` in log-tail
-  coverage with an explicit readiness handshake or bounded polling barrier
-- replace all hardcoded `/tmp/atm-config-root` test roots in
-  `config/discovery.rs` with `tempdir()`-backed paths
-- scope `ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD` with an RAII env guard under
-  `#[serial]` in `clear/mod.rs`
-- replace `idle_notification_sender(...).ok().and_then(...)` with explicit
-  malformed-JSON handling that preserves non-fatal behavior but emits traceable
-  diagnostics and recovery context (`RBP-F004`)
-
-Implementation patterns:
-- any new helper introduced for log-tail readiness must expose a positive-ready
-  signal; it must not sleep "long enough"
-- process-environment mutation in tests must use one repo-standard pattern:
-  shared env lock plus scoped guard plus `#[serial]`
-- malformed JSON handling should remain fail-soft for Claude-owned inbox data,
-  but it must not silently disappear; trace/debug logging is required
-
-Reference shape:
-
-```rust
-// Pseudocode shape, not a required concrete helper name.
-let ready = readiness.wait_until_ready(timeout)?;
-assert!(ready);
-let records = log_tail.read_after(ready.cursor())?;
-```
-
-```rust
-let _guard = test_env::scoped_var(
-    "ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD",
-    "1",
-);
-```
-
-Required coverage:
-- deterministic log-tail readiness test with no fixed-duration sleep
-- `config/discovery.rs` tests rewritten to tempdir fixtures with no `/tmp`
-  assumptions
-- `clear/mod.rs` regression showing the injected disappearing-inbox path resets
-  state through scoped guard teardown
-- read-path coverage proving malformed idle-notification JSON is observable in
-  logs/diagnostics and does not panic or change mailbox state
-- malformed idle-notification JSON adjacent to valid mailbox records still
-  leaves the valid records readable and classifiable
-- tempdir-backed discovery tests cover paths with spaces and nested directories
-  so platform path handling is exercised instead of assuming `/tmp` semantics
-- env-guard teardown is verified on early-return/failure paths so one test's
-  injected state cannot leak into the next test process
-
-##### P.8 — Requirements, Architecture, And Plan Reconciliation [COMPLETE]
-
-Goals:
-- bring the written Phase P requirements, architecture, and plan text into
-  alignment with the landed implementation and the follow-up hardening results
-- close the remaining documentation ambiguity before a final publish decision
-
-Files expected in scope:
-- `docs/requirements.md`
-- `docs/project-plan.md`
-- `docs/architecture.md`
-- `docs/atm-core/modules/mailbox.md`
-- `docs/atm-core/modules/workflow.md`
-
-Design details:
-- rewrite `REQ-CORE-MAILBOX-LOCK-005` so it matches the executed mutation
-  taxonomy:
-  - `read_only`: no locks
-  - `read_possible_write`: unlocked observation is allowed, but any commit must
-    reload/prove freshness under the final lock set
-  - `read_modify_write`: acquire the final lock plan before the mutating
-    snapshot and hold it through commit
-- explicitly document that `read`, `ack`, and `clear` do not all share the same
-  pre-lock read behavior anymore; the requirement should describe the
-  command-specific executed pattern instead of the pre-Phase-P rule
-- keep `docs/requirements.md` and `docs/architecture.md` as the always-valid
-  enforced source of truth for the post-P.5 system state rather than a phase
-  narrative
-- record the P.6 and P.7 fixes in the Phase P closure history so the plan
-  reads as executed release evidence rather than mixed proposal/history
-
-Acceptance criteria:
-- requirements, architecture, and project-plan text all describe the same
-  mailbox-read taxonomy and lock acquisition model
-- the docs explicitly name the remaining P.6 send-side workflow freshness gap
-  rather than implying it is already solved
-- the Phase P heading and status note clearly show merged/executed state
-- no Phase P document still implies that the merged implementation is
-  proposal-only
-
-##### P.9 — Lock Sentinel Gap: Detailed Design And Doc Updates [COMPLETE]
-
-Goals:
-- produce a complete, implementation-ready design for the P.10 coding sprint
-- update `docs/requirements.md`, `docs/architecture.md`, and
-  `docs/atm-error-codes.md` so the production contract is settled before code
-  changes begin
-- make the design output itself the authoritative specification for P.10
-
-Files in scope:
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/atm-error-codes.md`
-- `docs/project-plan.md`
-- `crates/atm-core/src/mailbox/lock.rs` (read-only analysis only; no code
-  changes in P.9)
-
-Design outcomes:
-- GAP-1 uses a conservative basename predicate instead of
-  `path.extension() == "lock"`
-- GAP-2 uses a dedicated
-  `AtmErrorCode::MailboxLockReadOnlyFilesystem`
-  / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-  instead of overloading `MailboxLockFailed`
-- read-only filesystem classification is based on raw OS error codes, not
-  generic `PermissionDenied` handling
-- read-only failures surface directly from public sweep/acquire paths and do
-  not enter retry loops
-- drop-time cleanup remains warn-only because the mailbox mutation has already
-  completed successfully
-
-P.9 deliverables:
-1. Updated `docs/requirements.md` with explicit GAP-1 and GAP-2 lock
-   requirements
-2. Updated `docs/architecture.md` with the final sweep predicate, call-graph
-   decisions, and error-code rationale
-3. Updated `docs/atm-error-codes.md` with
-   `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-4. Populated `docs/project-plan.md` §P.10 with the exact implementation
-   contract
-5. ATM status report to `team-lead` with the five design-question answers and
-   a summary of the doc changes
-
-##### P.10 — Lock Sentinel Residual Gap Closure [PLANNED]
-
-Goals:
-- implement the hardened fixes for GAP-1 and GAP-2 exactly as specified by the
-  completed P.9 design output
-- close the remaining mailbox-lock residual risks without broadening scope into
-  unrelated refactors
-
-Files expected in scope:
-- `crates/atm-core/src/mailbox/lock.rs`
-- `crates/atm-core/src/error.rs`
-- `crates/atm-core/src/error_codes.rs`
-- `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/schema/inbox_message.rs`
-- docs already updated in P.9
-
-Exact GAP-1 predicate:
-
-```rust
-let is_lock_sentinel_candidate = path
-    .file_name()
-    .and_then(|name| name.to_str())
-    .is_some_and(|name| name.ends_with(".lock") || name.contains(".lock."));
-```
-
-Why this expression:
-- `ends_with(".lock")` keeps the ordinary live sentinel path
-- `contains(".lock.")` catches rotated artifacts such as `.lock.old` and
-  `.lock.replaced`
-- basename-only matching avoids matching parent directories
-- generic `contains("lock")` is forbidden because it creates unrelated-file
-  false positives
-
-Exact GAP-2 platform classification:
-- Linux: `libc::EROFS` (`30`)
-- macOS: `libc::EROFS` (`30`)
-- Windows: `windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT as i32` (`19`)
-
-Recommended helper shape:
-
-```rust
-fn is_readonly_filesystem_error(error: &io::Error) -> bool
-```
-
-```rust
-fn mailbox_lock_path_error(
-    operation: &'static str,
-    lock_path: &Path,
-    error: io::Error,
-) -> AtmError
-```
-
-Required call-graph decisions:
-- `open_lock_file(...)` maps read-only failures to
-  `MailboxLockReadOnlyFilesystem`
-- `write_lock_owner_record(...)` maps both truncate and write failures through
-  the same helper
-- `remove_lock_sentinel_with_retry(...)` checks read-only first and returns the
-  error immediately instead of entering the permission-denied retry loop
-- `evict_stale_lock_sentinel(...)` must become result-bearing enough for public
-  sweep/acquire call sites to surface read-only failures instead of only
-  warning
-- `MailboxLockGuard::drop` keeps warning-only cleanup on read-only failure
-
-Recommended result-shape change:
-- change stale-sentinel eviction from a bare `bool` outcome to a richer result
-  that distinguishes:
-  - removed
-  - skipped (live owner / malformed / not found)
-  - failed (`io::Error`)
-
-Test simulation pattern:
-- do not require a real read-only mount
-- add a deterministic synthetic seam patterned after
-  `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR`
-- recommended env var contract:
-  - `ATM_TEST_FORCE_LOCK_READONLY_FS=open`
-  - `ATM_TEST_FORCE_LOCK_READONLY_FS=write_owner`
-  - `ATM_TEST_FORCE_LOCK_READONLY_FS=remove`
-- operation scoping is strict:
-  - `open` affects only the lock open/create path; owner-record write and
-    sentinel removal continue to execute normally
-  - `write_owner` affects only owner-record truncate/write
-  - `remove` affects only stale-sentinel removal / cleanup
-- the seam must synthesize the platform-correct raw OS error so the production
-  classification logic is what the tests exercise
-
-Required coverage:
-- unit: rotated sentinel names such as `inbox.json.lock.old` are considered
-  sweep candidates, while unrelated filenames are ignored
-- unit: malformed rotated sentinel contents are skipped, not deleted
-- unit: read-only `open` returns
-  `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-- unit: read-only owner-record write returns
-  `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-- unit: read-only sentinel removal is not retried as permission-denied
-- unit or focused integration: public stale-sentinel sweep surfaces the
-  read-only error instead of logging and continuing
-- regression: drop-time cleanup remains non-fatal even when read-only cleanup
-  fails after a successful command
-
-Acceptance criteria:
-- no rotated stale sentinel escapes the sweep solely because it no longer ends
-  with the literal `.lock` extension
-- read-only filesystem failures are machine-readable and operator-distinct from
-  contention and generic path I/O
-- retry loops are reserved for genuine contention or documented transient
-  sharing failures, not persistent read-only mounts
-- tests remain deterministic and mount-free
-
-#### P.0 — Audited Production File-I/O Inventory
-
-The implementation phase must treat this as the starting inventory of affected
-production-path files and modules.
-
-Read-path inventory:
-- `crates/atm-core/src/config/mod.rs`
-- `crates/atm-core/src/mailbox/mod.rs`
-- `crates/atm-core/src/mailbox/source.rs`
-- `crates/atm-core/src/mailbox/lock.rs`
-- `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/read/seen_state.rs`
-- `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/clear/mod.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/doctor/mod.rs`
-- `crates/atm-core/src/identity/hook.rs`
-- `crates/atm-core/src/send/input.rs`
-
-Live write-path inventory:
-- mailbox replacement through:
-  - `crates/atm-core/src/mailbox/atomic.rs`
-  - callers in `mailbox/mod.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`
-- mailbox lock sentinel lifecycle in:
-  - `crates/atm-core/src/mailbox/lock.rs`
-- seen-state watermark in:
-  - `crates/atm-core/src/read/seen_state.rs`
-- send-alert state and lock in:
-  - current implementation location: `crates/atm-core/src/send/mod.rs`
-  - owning helper boundary remains a Phase P.3 design decision until that
-    sprint resolves it
-- team config writes in:
-  - `crates/atm-core/src/team_admin.rs`
-- restore marker / restore staging / task bucket / highwatermark in:
-  - `crates/atm-core/src/team_admin.rs`
-- shared atomic commit boundary in:
-  - `crates/atm-core/src/persistence.rs`
-
-Supporting path/ownership surfaces that must stay aligned:
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/atm-core/modules/mailbox.md`
-- `docs/atm-message-schema.md`
-- `docs/claude-code-message-schema.md`
-- `docs/legacy-atm-message-schema.md`
-- `docs/atm-error-codes.md`
-
-Current concrete boundaries to review and either retain as the one owning
-helper or retire during the phase:
-- mailbox rewrite helpers:
-  - `crates/atm-core/src/mailbox/mod.rs::locked_read_modify_write(...)`
-  - `crates/atm-core/src/read/mod.rs::persist_source_files(...)`
-  - `crates/atm-core/src/ack/mod.rs::persist_source_files(...)`
-  - `crates/atm-core/src/clear/mod.rs::persist_source_files(...)`
-- ATM-owned state helpers:
-  - `crates/atm-core/src/read/seen_state.rs::save_seen_watermark(...)`
-  - `crates/atm-core/src/send/alert_state.rs::register_missing_team_config_alert(...)`
-  - `crates/atm-core/src/send/alert_state.rs::clear_missing_team_config_alert(...)`
-  - `crates/atm-core/src/send/alert_state.rs::save(...)`
-  - `crates/atm-core/src/send/alert_state.rs::acquire_lock(...)`
-  - `crates/atm-core/src/team_admin.rs::write_team_config(...)`
-  - `crates/atm-core/src/team_admin.rs::atomic_write(...)`
-  - `crates/atm-core/src/team_admin/restore.rs::write_restore_marker(...)`
-  - `crates/atm-core/src/team_admin/restore.rs::clear_restore_marker(...)`
-  - `crates/atm-core/src/team_admin/restore.rs::recompute_highwatermark(...)`
-- shared low-level atomic commit primitive:
-  - `crates/atm-core/src/persistence.rs::atomic_write_bytes(...)`
-  - `crates/atm-core/src/persistence.rs::atomic_write_string(...)`
-
-Inventory rule:
-- every sprint must update this inventory if new production-path live I/O
-  surfaces are introduced
-- code review for the phase is not complete until each inventory entry has an
-  identified mutation class and one owner-layer commit boundary
-
-#### P.1 — File Ownership Classification And Helper Boundaries
-
-Goal:
-- classify every live file family by ownership and mutation class
-- extract or confirm one owner-layer write boundary per file family before
-  deeper behavior changes land
-
-Design details:
-- introduce an internal file-I/O taxonomy used in docs and code review:
-  - Claude-owned compatibility surface
-  - ATM-owned source of truth
-  - staging/scratch artifact
-- define one owner-layer boundary for each live file family:
-  - mailbox owner helper
-  - seen-state owner helper
-  - send-alert state owner helper
-  - team-config owner helper
-  - task/highwatermark owner helper
-  - restore-marker owner helper
-- low-level atomic replacement stays in `persistence.rs`; file-family semantics
-  stay out of command handlers
-- no public API ceremony is required if a small internal helper layer keeps the
-  ownership boundary explicit
-
-Implementation patterns:
-- prefer typed owner helpers over generic closure-heavy abstractions when the
-  file family has domain-specific preconditions
-- call sites should say "save seen watermark", "write team config", or
-  "commit mailbox state" instead of assembling temp-file mechanics locally
-- staging directories are not live source-of-truth files, but their creation
-  and cleanup must still be deterministic and owned by one restore helper path
-
-Files expected in scope:
-- `crates/atm-core/src/persistence.rs`
-- `crates/atm-core/src/read/seen_state.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/mailbox/atomic.rs`
-- `crates/atm-core/src/mailbox/mod.rs`
-- `crates/atm-core/src/lib.rs` if new owner modules/helpers are factored out
-
-Concrete implementation targets:
-- keep `persistence.rs` as the low-level atomic primitive layer
-- use `mailbox::store::commit_mailbox_state(...)` and
-  `mailbox::store::commit_source_files(...)` as the mailbox owner boundary
-- keep `read::seen_state::save_seen_watermark(...)` as the seen-state owner
-  boundary
-- use `send::alert_state::{load, save, acquire_lock}` as the send-alert state
-  owner boundary, with
-  `send::alert_state::{register_missing_team_config_alert,
-  clear_missing_team_config_alert}` as the command-facing mutation helpers
-- keep `team_admin::write_team_config(...)` as the team-config owner boundary
-- use `team_admin::restore::restore_task_state_from_backup(...)` as the task bucket /
-  `.highwatermark` owner boundary
-- use `team_admin::restore::{prepare_restore_workspace, cleanup_restore_workspace,
-  write_restore_marker, clear_restore_marker}` as the restore workspace and
-  restore-marker owner boundaries
-
-Tests required:
-- unit coverage for each owner helper boundary
-- deterministic tests proving owner helpers preserve existing on-disk shape
-- deterministic tests proving owner helpers are the only commit path used by
-  production call sites added in the sprint
-
-Acceptance criteria:
-- every live file family in `P.0` names one owner-layer write boundary
-- no new direct `fs::write`, truncate-and-rewrite, or ad hoc temp-file logic is
-  introduced in production code
-- the docs and module ownership notes match the helper boundaries
-
-#### P.2 — Mailbox Read Path Classification And Shared Commit Flow
-
-Goal:
-- make mailbox command behavior conform exactly to the three operation classes
-- share the observational read path and the commit path across read/ack/clear
-  wherever the behavior is identical
-
-Design details:
-- `read_only` mailbox work:
-  - `mailbox::store::observe_source_files(...)`
-  - merge/classify/filter/select
-  - no mailbox lock
-- `read_possible_write` mailbox work:
-  - unlocked observational snapshot first via
-    `mailbox::store::observe_source_files(...)`
-  - only if mutation is needed, enter
-    `mailbox::store::with_locked_source_files(...)`
-- mailbox commit path:
-  - acquire the deterministic lock set
-  - re-discover source paths under lock
-  - reload current source files
-  - recompute the selected mutation from fresh data
-  - persist through `mailbox::store::commit_source_files(...)` while locks are
-    still held
-- `ack` resolves the reply inbox from an unlocked preflight, then uses one
-  final sorted superset lock for reload/recompute/persist through the shared
-  commit pattern
-
-Implementation patterns:
-- share the unlocked snapshot loader between `read` initial selection and wait
-  polling
-- use `mailbox::store::with_locked_source_files(...)` as the shared
-  read/ack/clear lock+reload entry point and
-  `mailbox::store::commit_source_files(...)` as the shared mailbox persistence
-  leaf
-- share sort/limit/selection recomputation utilities where behavior matches
-- keep lock acquisition out of read-only paths entirely
-- use deterministic path ordering and one total timeout budget for every
-  multi-file commit path
-
-Files expected in scope:
-- `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/clear/mod.rs`
-- `crates/atm-core/src/mailbox/mod.rs`
-- `crates/atm-core/src/mailbox/source.rs`
-- `crates/atm-core/src/mailbox/lock.rs`
-
-Concrete implementation targets:
-- consolidate the current per-command mailbox rewrite helpers so `read`,
-  `ack`, and `clear` do not each own a separate final persist step
-- keep `ack` on the documented unlocked-preflight plus final-superset-lock
-  behavior, and move any duplicated reload/recompute/persist shape behind
-  shared mailbox owner helpers
-- preserve the current Windows-safe sentinel cleanup behavior already present
-  from `fix/issue-104-inbox-locks`; no sprint in Phase P may regress that
-
-Tests required:
-- deterministic success-path and failure-path tests for:
-  - read timeout polling without mailbox lock acquisition
-  - writeback path lock acquisition only when mutation is actually needed
-  - overlapping-origin `read`/`ack`/`clear` no-deadlock behavior
-  - source-set drift under lock causing clean abort instead of partial write
-- no test may rely on open-ended sleep loops, background polling races, or
-  indefinite `join()` behavior
-
-Acceptance criteria:
-- observational mailbox reads are lock-free
-- every mailbox writeback path uses the shared commit pattern
-- `ack`/`clear`/`read` do not each carry bespoke stale-snapshot writeback logic
-
-#### P.3 — ATM-Owned State Families: Seen-State, Send-Alert, Restore, Tasks
-
-Goal:
-- harden every ATM-owned state family outside the mailbox surface so each one
-  follows the same mutation taxonomy and one-owner write rule
-
-Design details:
-- seen-state:
-  - `read_only` load
-  - `read_modify_write` save through one seen-state helper
-- send-alert state:
-  - state JSON and lock file treated as one owner-managed state family
-  - lock semantics and stale-lock handling documented and isolated from command
-    logic
-- restore/task/highwatermark state:
-  - restore marker, task bucket install, and `.highwatermark` recompute all go
-    through typed owner helpers
-  - staging directories remain staging-only and are never treated as live
-    source-of-truth files
-- team config:
-  - continue config-last semantics
-  - write path remains singular and helper-owned
-
-Implementation patterns:
-- prefer one helper per file family over one mega-helper that obscures domain
-  rules
-- keep PID/stale-lock handling deterministic and isolated
-- avoid mixed responsibility functions that both plan restore state and commit
-  several file families ad hoc
-
-Files expected in scope:
-- `crates/atm-core/src/read/seen_state.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/doctor/mod.rs`
-- `crates/atm-core/src/persistence.rs`
-
-Concrete implementation targets:
-- remove any remaining direct knowledge of send-alert JSON file shape from
-  non-owner call sites
-- keep restore staging helpers separate from live-file commit helpers so review
-  can distinguish staging-only writes from source-of-truth writes
-- if team-admin remains the owner for multiple file families, factor internal
-  helper sections or submodules so each file family still has one obvious write
-  boundary in code review
-
-Tests required:
-- deterministic round-trip tests for each ATM-owned state family
-- deterministic stale-lock eviction tests for send-alert state
-- deterministic restore-marker/task/highwatermark tests with no timing races
-- explicit regression tests that staging cleanup and restore-marker cleanup do
-  not hang or depend on filesystem timing quirks
-
-Acceptance criteria:
-- every ATM-owned non-mailbox state family in `P.0` uses one owner-layer write
-  boundary
-- no command handler directly manipulates the underlying JSON/state file shape
-  when a helper exists
-
-#### P.4 — Claude-Owned Inbox Compatibility Retirement
-
-Goal:
-- remove ATM-local workflow durability from the Claude-owned inbox rewrite path
-- move toward an ATM-owned source-of-truth for ATM workflow state
-
-Design details:
-- introduce an ATM-owned workflow sidecar family under:
-  - `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
-- the sidecar is the ATM-owned source of truth for mailbox-local ATM workflow
-  state rather than storing new durable ATM semantics by rewriting
-  Claude-owned inbox records
-- sidecar records are keyed by stable ATM message identity string:
-  - ULID for forward ATM-authored messages
-  - legacy UUID `message_id` for compatibility records that already have one
-- Phase P.4 does not invent durable ATM-local workflow state for Claude-native
-  records that lack ATM message identity; those remain compatibility-only until
-  a later explicit enrichment/migration decision lands
-- initial target data to move behind the sidecar boundary:
-  - read state
-  - ack-required / acknowledged state
-  - ATM message identity metadata when ATM authors the message
-- `send` remains allowed to append a new Claude-native inbox record, but ATM
-  workflow durability should be committed to ATM-owned state
-- `read`, `ack`, and `clear` should project mailbox display state by joining:
-  - Claude-owned inbox records
-  - ATM-owned workflow sidecar state
-- legacy top-level ATM compatibility fields remain readable during migration,
-  but new source-of-truth behavior must not depend on rewriting them in place
-
-Implementation patterns:
-- design the sidecar keying and join semantics before migration code lands
-- use one owner-layer helper for sidecar load/project/save rather than letting
-  `read`, `ack`, and `clear` each shape sidecar JSON independently
-- prefer lazy backfill or compatibility projection over one risky bulk rewrite
-- keep the join deterministic and bounded; no background repair daemon
-
-Files expected in scope:
-- `crates/atm-core/src/schema/inbox_message.rs`
-- `crates/atm-core/src/mailbox/*`
-- `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/clear/mod.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `docs/atm-message-schema.md`
-- `docs/claude-code-message-schema.md`
-
-Concrete implementation targets:
-- define one owner helper for sidecar load/project/save before modifying `read`,
-  `ack`, or `clear` to consume it
-- make sidecar projection deterministic over mixed legacy and forward ATM
-  records before any inbox rewrite retirement code lands
-- keep message-schema docs and code keyed to the exact same identity contract;
-  no sprint may silently broaden the key space without doc updates
-
-Tests required:
-- deterministic projection tests over mixed legacy and sidecar-backed data
-- deterministic compatibility tests proving Claude-only appends are preserved
-- deterministic tests proving sidecar updates are keyed by ATM message identity
-  and do not require rewriting the source inbox record
-- no test may rely on concurrent unbounded polling or external background
-  repair to reach a passing state
-
-Acceptance criteria:
-- ATM no longer depends on full-file rewrite of Claude-owned inbox files for
-  new durable ATM workflow state
-- architecture docs can truthfully say ATM-local workflow durability lives in
-  an ATM-owned source-of-truth path
-- the sidecar file path and key format are documented and covered by tests
-
-#### P.5 — Cleanup, Audit Closure, And Production Gate
-
-Goal:
-- close the phase only when the documented model is actually enforceable in
-  code review and CI
-
-Deliverables:
-- rerun the explicit `P.0` inventory audit against the current source tree
-- remove any leftover parallel write paths
-- update module ownership docs if helpers moved
-- add code comments at the owner-layer boundaries where future contributors are
-  most likely to slip back into stale-snapshot or bespoke-write habits
-
-Deterministic test policy:
-- every new failure-path test must have a bounded completion path
-- allowed patterns:
-  - barrier/channel readiness handshakes
-  - short bounded lock timeout values
-  - deterministic fault-injection seams
-  - elapsed-time upper bounds with generous CI margins
-- forbidden patterns:
-  - open-ended polling loops waiting for "eventual" state
-  - indefinite `join()` waits
-  - sleeps used as the primary synchronization mechanism
-  - tests that only fail under scheduler luck or filesystem timing luck
-  - stress tests that are expected to pass "most of the time"
-
-Verification required:
-- `cargo fmt --check`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test --workspace`
-
-Phase P completion gate:
-- every live file family in `P.0` is classified and owned
-- every live write path goes through one owner-layer write boundary
-- requirements, architecture, project plan, and module ownership docs agree
-- the test suite for the phase is explicitly deterministic and CI-safe
-- the remaining external-writer limitations, if any, are documented as accepted
-  compatibility boundaries rather than hidden assumptions
-
 ## 21. Former Phase Q [ABANDONED]
 
-Historical note:
-- the former Phase Q SQLite/daemon execution line was abandoned
-- `docs/plan-phase-Q.md` is retained only as a one-line historical marker
-- any still-useful ideas must be brought forward manually into the active Phase R / Phase U documents after review
-
-## 22. Phase R — Boundary Establishment And Enforcement
-
-Detailed execution source:
-- [`docs/plan-phase-R.md`](./plan-phase-R.md)
-
-Summary:
-- Phase R is the active redesign line that replaces the abandoned earlier SQLite/daemon
-  implementation path.
-- Wave 1 establishes enforceable crate boundaries before substantive feature
-  work resumes:
-  - lint/parser foundation and debt burn-down
-  - the new crate skeleton
-  - public boundary traits/facades
-  - major shared data structures
-- Wave 2 implements behavior only against those enforced boundaries.
-- The next planning increment after the current boundary-lint implementation
-  branch merges adds:
-  - planning-aware inventory-parity warn/error enforcement
-  - TOML as the canonical machine-readable boundary source
-
-Cross-reference:
-- The authoritative sprint-by-sprint Phase R plan lives in
-  [`docs/plan-phase-R.md`](./plan-phase-R.md).
-
-## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening
-
-Goal:
-- finish the design and execution plan needed to make daemon singleton the
-  first-class runtime invariant
-- remove daemon-spawn-driven test strategy from the ordinary correctness path
-- replace it with production-faithful in-process transport seams and narrow
-  daemon-runtime coverage
-
-Authoritative design references:
-- [`docs/adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
-- [`docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
-- [`docs/testing-guidelines.md`](./testing-guidelines.md)
-- [`docs/plan-phase-R.md`](./plan-phase-R.md)
-
-Execution shape:
-- `R.9` is the planning, requirements, ADR, and lint-design sprint
-- `R.10` is the implementation and test-migration sprint
-- `R.13` through `R.18` are the remaining continuation sprints required to
-  turn the thin daemon line into the full production runtime still described by
-  the accepted Phase R requirements and architecture
-- `R.18` is the accepted closeout sprint for bounded `SIGHUP` reload,
-  singleton-held shutdown finalization, portability cleanup, and final
-  phase-doc reconciliation on the daemon line
-
-R.9 deliverables:
-- explicit requirement language that bans the current daemon-spawn test pattern
-- ADR for host-wide daemon singleton
-- ADR for test fidelity and daemon isolation
-- singleton lint gate design integrated into `just lint`
-- transport test-seam design:
-  - `FakeClientTransport`
-  - loopback/in-process transport
-  - narrow daemon-runtime harness
-- mapped resolution plan for:
-  - ARCH-SINGLETON
-  - CI-WIN-001
-  - singleton review findings `RBP-F001` through `RBP-F012`
-  - QA carry-forward items affecting singleton and test fidelity
-
-R.10 deliverables:
-- client-side pre-spawn launch gate
-- daemon-side serving gate and stale-owner recovery hardening
-- typed boundary/runtime fixes required by the singleton/test redesign
-- deletion of daemon-spawn helpers from ordinary tests
-- migration of CLI tests to fake or loopback transport seams
-
-Lint gate decision:
-- existing generic tools such as `clippy` are not sufficient to enforce the
-  singleton/test-fidelity architecture rule
-- Phase R therefore adds a dedicated repository lint gate, integrated into
-  `just lint`, with an initial planned entrypoint of
-  `scripts/lint_daemon_singleton.py`, that rejects banned daemon-spawn
-  patterns and related timing workarounds in ordinary tests
-
-Acceptance:
-- requirements, architecture, ADRs, and testing guidelines agree on the
-  singleton rule and approved test tiers
-- continuation sprint execution after `R.10` must follow the tracked sequence
-  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` for the
-  runtime/product closeout line, with `docs/phase-R/sprint-R19.md` reserved for
-  postmortem lint backfill after the closeout implementation settles
-- `sc-lint` inventory-parity / planning-metadata gates are treated as an
-  external prerequisite that must be ready before `R.13` implementation starts
-- there is no approved ordinary test-daemon launch path
-- the implementation plan explicitly prevents new daemon-spawn helpers from
-  proliferating
-
-## 24. Phase R Postmortem Linter Backfill
-
-Goal:
-- convert the recurring mechanically-detectable Phase R defect families into
-  normal repository lint or CI gates
-- prove the rules on `atm-core` first, then migrate only the reusable subset
-  into the standalone `sc-lint` repository
-
-Execution rule:
-- implementation happens on `atm-core` first even when the eventual home is
-  `sc-lint`
-- migration to standalone `sc-lint` is a follow-up extraction step after
-  local rule shape, allow-list policy, and false-positive behavior are proven
-
-Partition:
-- reusable/static-analysis rules that should graduate to `sc-lint` after
-  proving out:
-  - Unix platform-gating enforcement
-  - production `Condvar::wait(...)` liveness enforcement
-- ATM-local rules that should remain `atm-core`-owned unless later generalized:
-  - duplicate semantic string-literal enforcement in non-test Rust code
-  - fixed-sleep test-hygiene enforcement
-  - triage Turtle consistency enforcement
-
-Planned sequence:
-1. extend `sc-portability` on `atm-core` for:
-   - ungated `std::os::unix` imports
-   - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
-2. extend the repository-local identity-literal gate into a duplicate semantic
-   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
-   first mandatory case
-3. add a repository-local fixed-sleep test-hygiene lint and wire it into
-   `just lint`
-4. extend `sc-boundary` on `atm-core` for bare production
-   `Condvar::wait(...)`
-5. add a repository-local triage-record consistency validator and wire it into
-   `just lint` or the equivalent default CI lint surface
-6. after all five families are stable on `atm-core`, migrate the reusable
-   analyzers and any generic helper framework into standalone `sc-lint`
-
-Scope note:
-- the broader design guidance against duplicated raw strings and magic numbers
-  already exists; this sprint is about selecting the first hard-gated subset,
-  not restating that policy
-- this sprint raises that policy into a hard gate for duplicated semantic
-  string literals in non-test Rust code
-- raw `"team-lead"` is the first mandatory case because it is already
-  duplicated widely enough in the repo to justify enforcement now
-- the canonical Rust definition source for this literal is
-  `crates/atm-core/src/roles.rs` via `ROLE_TEAM_LEAD`
-- `TeamName` / `AgentName` structural newtype hardening remains the longer-term
-  direction, but the immediate lint still uses a grep-backed gate because the
-  postmortem problem is duplicated handwritten literals already spread through
-  non-test production code and the full newtype migration is broader than this
-  follow-up sprint
-- the lint contract still needs explicit exclusions only for narrow benign
-  repeated classes if they are discovered during implementation
-- those exclusions must stay narrow; the rule must not exempt ordinary
-  production code wholesale
-
-Required deliverables for this planning/implementation line:
-- one Phase R sprint plan covering the five families and their partitioning
-- updates to requirements and architecture that explain why some rules stay
-  repo-local while others graduate to `sc-lint`
-- update `docs/project-plan.md` itself to record:
-  - the ATM-first/prove-then-migrate rule
-  - the reusable-vs-ATM-local partition
-  - the implementation sequence for Families A/B/C/D/I
-  - the migration criteria for moving reusable rules into standalone `sc-lint`
-- a clear `just lint` integration decision for every family before coding
-
-Acceptance:
-- every postmortem family is assigned to one concrete implementation home
-- the sequencing explains what lands in Rust analyzer code versus repository
-  Python/CI glue
-- the migration boundary between `atm-core` and `sc-lint` is explicit rather
-  than implied
-
-## 25. Phase U Mailbox Simplification And Identity Cleanup
-
-Integration branch: `integrate/phase-U`
-
-Goal:
-- remove the remaining confusing mailbox/identity carry-forward design from the
-  current ATM line
-- make SQLite the only ATM-owned mailbox state/query authority outside the
-  private Claude-compat watcher/import/export boundary
-- replace ambiguous or duplicated message identity, state, and thread-update
-  behavior with smaller auditable contracts
-
-Execution shape:
-- Phase U is a sequential cleanup line; each sprint should leave the mailbox
-  model simpler than before and should not introduce new compatibility
-  side-channels
-- later sprints may assume earlier cleanup decisions are final; they should
-  delete redirected code rather than preserve fallback branches
-- `U.8` through `U.10` assume `U.0` is already complete
-- `U.11` assumes `U.10` is complete
-
-Planned sprint sequence:
-
-### U.0 — Remove Old `atm-graft` Implementation Line [COMPLETED]
-
-Status:
-- completed by `team-lead`
-
-Scope:
-- remove the old graft implementation line before the restacked thin-client
-  graft work begins
-
-Acceptance:
-- later Phase U graft sprints assume no legacy graft implementation line
-  remains to preserve
-
-### U.1 — Delete `metadata.atm` Read-Path Dependence
-
-Scope:
-- remove ATM-owned read-path dependence on `metadata.atm.*`
-- treat any ATM-owned machine state currently read from Claude JSON as either:
-  - SQLite-owned state that must move into the store/query layer, or
-  - dead code that should be deleted
-- keep Claude JSON handling private to the watcher/import/export boundary
-
-Acceptance:
-- no normal ATM read/query/runtime path depends on `metadata.atm.*`
-- the active implementation exposes zero surviving `metadata.atm` fields
-- dead compatibility helpers and tests that only exist to preserve
-  `metadata.atm` reads are removed
-
-### U.2 — ADR: One Message Identity
-
-Scope:
-- adopt one logical ATM message identity
-- remove duplicated ATM-owned message-id storage and plumbing
-- keep Claude inbox `message_id` only as the boundary wire encoding needed for
-  Claude interoperability
-- rename confusing `legacy_*` identity terms to names that describe the actual
-  surviving identifier role
-
-Acceptance:
-- `metadata.atm.messageId` is removed from the design and implementation line
-- duplicated UUID/ULID reinterpretation plumbing no longer persists two fields
-  for the same logical identity
-- if SQLite persists `message_id`, it persists only the compatibility UUID wire
-  form of that one logical identity
-- the project docs include an ADR-level statement that ATM owns one logical
-  message identity and Claude `message_id` is only the compatible boundary
-  encoding of that identity
-
-### U.3 — Thread / Update / Supersede Hardening
-
-Scope:
-- keep explicit support for the two thread-update modes:
-  - `add-details`
-  - `supersede`
-- make the intended behavioral differences between those modes explicit across
-  validation, selection, ack, and nudge behavior
-- remove any shortcut where generic successor-chain collapse hides missing
-  per-mode semantics
-- terminal `add-details` must preserve predecessor context in the effective
-  current body used for matching and display
-- terminal `supersede` must expose only the replacement body as the effective
-  current instruction
-
-Acceptance:
-- mode-specific tests exist for both `add-details` and `supersede`
-- tests cover:
-  - send validation
-  - list/read current-vs-historical selection
-  - ack reopen behavior
-  - nudge behavior when a successor arrives after the predecessor was already
-    read
-- the resulting product behavior is documented clearly enough that the thread
-  mode is not just stored metadata with implied meaning
-
-### U.4 — Unified Mutable Message State
-
-Scope:
-- replace the split `mail_visibility_states` / `ack_state` model with one
-  mutable message-state owner
-- land the unified table as `mail_message_states`
-- move mailbox/runtime state into that unified state surface, including:
-  - read state
-  - ack state
-  - expiration
-  - delete/hide state
-- rename `expires_at` to `expires_at`
-
-Acceptance:
-- ATM no longer splits mutable per-message state across visibility JSON and a
-  separate ack table
-- `expires_at` is the canonical expiration field name
-- delete/close remain state mutations; hard deletion stays cleanup-policy-only
-- deleted rows remain hidden from normal queries and only surface through
-  admin-only diagnostics
-
-### U.5 — SQLite Query Cutover And Query Simplification
-
-Scope:
-- move `atm list`, `atm read`, and related normal mailbox queries fully onto
-  SQLite
-- start query planning from mutable message state and only read content rows
-  that are actually needed
-- remove any remaining JSON-backed summary/source read path outside the private
-  watcher/import/export boundary
-- keep `atm ack` and `atm clear` out of scope for this sprint; they stay on
-  their existing runtime path until a later dedicated rewrite
-
-Acceptance:
-- normal mailbox queries do not read Claude JSON directly
-- `atm list` and `atm read` are auditable as SQLite-backed query paths
-- `atm ack` and `atm clear` are not claimed as SQLite-cutover deliverables in
-  `U.5`
-- query diagrams and tests show the actual boundary methods, tables read, and
-  error exits for all non-trivial mailbox queries
-
-### U.6 — Provenance / Timing Field Reduction
-
-Scope:
-- justify or remove mailbox-row provenance/timing fields that are not clearly
-  part of the enduring contract
-- specifically review `imported_from` and `recorded_at`
-- remove weak round-trip provenance from the enduring message contract
-- if `recorded_at` survives, keep it only as store-owned ingest timing for
-  local health/reporting rather than caller-supplied message metadata
-
-Acceptance:
-- each surviving mailbox-row provenance/timing field has one clear product
-  reason to exist
-- fields that exist only for weak round-trip convenience are removed
-
-### U.7 — Roster Simplification And Explicit Member Model
-
-Scope:
-- replace the duplicated whole-roster JSON plus per-member projection design
-  with one canonical roster store
-- make member lifecycle and harness behavior explicit in first-class member
-  fields
-- sync Claude Code roster changes from `config.json` into the canonical roster
-  store behind the private watcher/import boundary instead of treating
-  `config.json` as general runtime truth
-- keep room for controlled extensibility through one metadata JSON field rather
-  than document-shaped roster duplication
-
-Target member fields:
-- `team_name`
-- `agent_name`
-- `member_kind` enum
-- `harness` enum:
-  - `claude-code`
-  - `codex-cli`
-  - `gemini-cli`
-  - `opencode`
-- `agent_type` string
-- `model` string
-- `metadata_json`
-- runtime/routing fields that remain justified after review (for example
-  `recipient_pane_id`, `updated_at`)
-- `pid` remains transient daemon-owned runtime state rather than part of the
-  canonical roster-member row or SQLite roster truth
-
-Acceptance:
-- ATM has one canonical roster truth, not both whole-team JSON and per-member
-  roster duplication
-- Claude Code `config.json` roster changes are ingested through the private
-  watcher/import boundary into the canonical roster store; normal runtime paths
-  do not read `config.json` directly for roster truth
-- `member_kind` is explicit and supports the distinct lifecycle logic for
-  permanent vs ephemeral members
-- `harness` is a first-class behavioral enum and is not treated as ad hoc
-  string metadata
-- `agent_type` and `model` remain plain strings for utility/informational use
-- custom harness/member extensions flow through `metadata_json` instead of
-  forcing new roster document shapes
-- `recipient_pane_id` remains an optional canonical member field because
-  Claude-code roster ingress may already know the authoritative pane mapping
-  needed by post-send hook routing
-
-### U.8 — Shared Thin-Client ICD For CLI And Graft
-
-Scope:
-- restack the abandoned earlier graft-client work as a thin-client sprint
-- require `atm-graft` to use the same shared ICD family as CLI traffic
-- forbid a graft-private daemon API line
-
-Acceptance:
-- `atm-graft` is modeled as a thin client using shared `atm-core` protocol
-  contracts
-- any extra request/response shapes needed for graft remain part of the shared
-  ICD family rather than a daemon-private API
-- `U.8` lands the `atm-graft` crate on the existing shared unary
-  request/response family rather than on graft-private daemon packets
-- U.8 owns shared ICD family and naming/DTO planning only; the follow-on
-  runtime and advisory cutover ownership is fixed in
-  `docs/phase-U/removal-inventory.md`
-
-### U.9 — Client-Owned Graft Runtime
-
-Scope:
-- restack the abandoned earlier graft-runtime work as an ownership sprint
-- move all client-specific graft runtime behavior into `atm-graft`
-- keep only generic request-serving/runtime composition in the daemon
-- status: complete
-
-Acceptance:
-- the daemon does not own client-specific graft runtime behavior; temporary
-  graft-named advisory substrate cleanup remains owned by `U.10`
-- client-specific receive/injection/runtime behavior is owned by `atm-graft`
-  or by generic shared interfaces in `atm-core`
-- the client runtime stays lean and production-complete:
-  one persistent receive thread, one open dedicated daemon advisory-stream
-  connection, one minimal pending queue, and one host wake/event path
-- U.9 owns client-runtime cutover only; daemon advisory-surface generification
-  stays in U.10
-
-### U.10 — Generic Daemon Advisory-Notification Surface
-
-Scope:
-- restack the abandoned earlier graft-notification work as a generic-boundary sprint
-- define the daemon-owned post-commit advisory surface generically
-- keep `atm-graft` as one consumer of that surface rather than a daemon-owned
-  subsystem
-
-Status:
-- completed on `feature/pU-u10-generic-advisory-notification`
-
-Acceptance:
-- the daemon owns only a generic advisory-notification surface
-- any message family needed for advisory delivery remains part of the same
-  shared ICD used by CLI and thin clients
-- the daemon-side design stays lean and does not grow a client-specific
-  notifier framework
-- U.10 owns the daemon-side generic replacement for the remaining graft-named
-  advisory-session surfaces listed in `docs/phase-U/removal-inventory.md`
-
-### U.11 — ATM-Graft API Cleanup
-
-Scope:
-- tighten the post-`U.10` `atm-graft` API surface without adding product
-  capability
-- narrow `with_poll_interval()` and `from_transport()` to `#[cfg(test)]`
-  seams
-- remove redundant convenience aliases including
-  `fetch_pending_nudges` / `drain_pending_nudges`
-- consolidate daemon-binary and same-host endpoint resolution into the
-  `atm-daemon-bootstrap` workspace crate
-- harden timing-sensitive test waits without changing production behavior
-
-Status:
-- completed
-
-Acceptance:
-- the remaining `atm-graft` public surface matches the lean client/runtime
-  contract from `U.9` / `U.10`
-- daemon bootstrap resolution is shared through
-  `atm-daemon-bootstrap` rather than duplicated path helpers
-- timing-sensitive waits are reduced or explicitly justified in tests
-- no new boundary expansion or product behavior change is introduced
-
-Phase U inventory note:
-- the authoritative current file/line removal inventory for U.0 through U.11
-  lives in `docs/phase-U/removal-inventory.md`
-
-## 26. Phase V Daemon Hardening And Boundary Cleanup
+- **Phase Q [ABANDONED]** — The former Phase Q SQLite/daemon execution line was abandoned; `docs/plans/phase-Q/plan-phase-Q.md` is retained as a one-line historical marker only, and any still-useful ideas must be brought forward manually into the active Phase R documents.
+
+## 22. Phase R — Boundary Establishment And Enforcement [COMPLETE]
+
+- **Phase R: Boundary Establishment And Enforcement [COMPLETE]** — Established enforceable crate boundaries, lint/parser foundation, new crate skeleton, public boundary traits/facades, and major shared data structures as Wave 1; implemented behavior against the enforced boundary in Wave 2. (Authoritative plan: [`docs/plans/phase-R/plan-phase-R.md`](./plans/phase-R/plan-phase-R.md); merged daemon baseline)
+
+## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening [COMPLETE]
+
+- **Phase R.9 / R.10: Daemon Singleton And Test Fidelity Hardening [COMPLETE]** — Made daemon singleton the first-class runtime invariant, removed daemon-spawn-driven test strategy from the correctness path, and replaced it with production-faithful in-process transport seams and narrow daemon-runtime coverage.
+
+## 24. Phase R Postmortem Linter Backfill [COMPLETE]
+
+- **Phase R Postmortem Linter Backfill [COMPLETE]** — Converted recurring mechanically-detectable Phase R defect families (Unix platform-gating, bare `Condvar::wait`, duplicate semantic string literals, fixed-sleep test hygiene, triage-record consistency) into repository lint or CI gates, with reusable rules staged for graduation to standalone `sc-lint`.
+
+## 25. Phase U Mailbox Simplification And Identity Cleanup [COMPLETE]
+
+- **Phase U: Mailbox Simplification And Identity Cleanup [COMPLETE]** — Removed legacy mailbox/identity carry-forward design, made SQLite the sole ATM-owned mailbox authority outside the Claude-compat watcher boundary, and replaced ambiguous message identity/state/thread-update behavior with smaller auditable contracts across sprints U.0–U.11. (Integration branch: `integrate/phase-U`)
+
+## 26. Phase V Daemon Hardening And Boundary Cleanup [COMPLETE]
+
+- **Phase V: Daemon Hardening And Boundary Cleanup [COMPLETE]** — Closed daemon hardening follow-on from Phase U: defined `SubsystemObservability` per-subsystem injection, deleted old central event-reconstruction helpers, and hardened `.with_recovery()` on the four required runtime error categories across sprints V.1–V.4. (PRs #269–#277 range via Phase W completion)
+
+## 27. Phase W Production Readiness Follow-Up [COMPLETE]
+
+- **Phase W: Production Readiness Follow-Up [COMPLETE]** — Closed remaining production-readiness gaps after Phase V: daemon-side sink-failure visibility, same-host traceability and interface parity, SQLite observability and protocol parity, peer replay recovery, doctor projection, SQLite error-contract cleanup, and phase closeout. (Sprints W.1–W.8; PRs #269–#277; integration branch `integrate/phase-W`)
+
+## 28. Phase Xb SQLite SSOT And Daemon Boundary Simplification Restart [COMPLETE]
+
+- **Phase Xb: SQLite SSOT And Daemon Boundary Simplification Restart [COMPLETE]** — Removed the dual mailbox/runtime implementation so ATM has one durable mailbox path, aligned daemon runtime truth with the SQLite SSOT claim, and made replay persistence startup behavior explicit and enforceable. (Integration branch: `integrate/phase-Xb`; authoritative plan: `docs/phase-X/plan-phase-X.md`)
+
+## 29. Phase Xb Planning And Pre-Phase Lint Prerequisite [COMPLETE]
+
+- **Phase Xb Planning And Pre-Phase Lint Prerequisite [COMPLETE]** — Added guardrails to catch stale legacy paths and silent regressions earlier; removed remaining legacy mailbox/runtime branches behind the retained boundary. (Pre-phase branch: `feature/pX-lint-gates`)
+
+## 30. Phase Y Pre-Smoke Trivial Fixes [COMPLETE]
+
+- **Phase Y Pre-Smoke Trivial Fixes [COMPLETE]** — Landed small pre-Phase-Y cleanup items: shared `ATM_SERVICE_NAME` reuse, `atm ack` validation cleanup, architecture wording, `GH #78` regression coverage, and trivial-fixes QA-1 follow-up. (Branch: `feature/pY-trivial-fixes`; status: complete)
+
+## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout [COMPLETE]
+
+- **Phase Y: Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout [COMPLETE]** — Made the first daemon + SQLite mail-SSOT release safe for real operator use: consolidated compatibility writes behind one hard owner boundary, centralized delivery routing, removed mutable workflow-state projection from compatibility output, and delivered `atm help` UX improvements across sprints Y.1–Y.6. (Authoritative plan: `docs/plan-phase-Y.md`; integration branch: `integrate/phase-Y`)
+
+## 32. Phase Yb Message-Path Consolidation Planning [COMPLETE]
+
+- **Phase Yb: Message-Path Consolidation Planning [COMPLETE]** — Consolidated message paths after Phase Y: shared delivery plans across Claude/non-Claude harness paths, dedicated `NonClaudeOutbound` payload boundary, fail-closed handling for missing roster harness data, and repair/rebuild-only mailbox rewrite seams across sprints Y.7–Y.11. (Integration branch: `integrate/phase-Y`)
+
+## 33. Phase Yc Final Production-Readiness Closure [COMPLETE]
+
+- **Phase Yc: Final Production-Readiness Closure [COMPLETE]** — Closed the final Claude recovered degraded-delivery contract gap and the final `NotificationSink` boundary bypass reopened by focused production-readiness review, across sprints Y.12–Y.13. (Implementation target: `integrate/phase-Y`)
+
+## 34. Phase Yd Develop-Gate Closure [COMPLETE]
+
+- **Phase Yd: Develop-Gate Closure [COMPLETE]** — Documented and closed the full Phase Y blocker set (recovered Claude logical-message-set, production notification boundary, retained-runtime composition, candidate closure, thin-liveness) across sprints Y.14–Y.18; readiness record at `19376e42` explicitly authorized Phase Y to land on `develop` and Phase Z to begin. (Integration target: `integrate/phase-Y`)
+
+## 35. Phase Ye Daemon Ownership Simplification [COMPLETE]
+
+- **Phase Ye: Daemon Ownership Simplification [COMPLETE]** — Simplified `RuntimeStatusCache`, `NotificationRuntime`, and `ReconcileRuntime` ownership surfaces from lock-heavy to immutable snapshot publication and bounded channel/actor ownership across sprints Y.19–Y.23; closed with `ADR-015` acceptance. (`Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.`)
+
+## 36. Phase Z Smoke, Dogfood, And Release Sign-Off [COMPLETE]
+
+- **Phase Z: Smoke, Dogfood, And Release Sign-Off [COMPLETE]** — Validated the first daemon + SQLite mail-SSOT release with real-binary smoke, roster truth cutover, watcher-owned Claude config ingest, boundary lint gates, `atm-dev` canary and dogfood, and final release sign-off; verdict `READY` on `feature/pZ-smoke-atm-graft @ 84935774` authorized in `docs/phase-Z/readiness.md` (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`). (Sprints Z.1–Z.24 and Z.3–Z.4; integration branch: `integrate/phase-Z`)
+
+## 37. Phase AB Windows/macOS Cross-Host Smoke
+
+Status summary:
+- `Phase Z` is complete and remains the accepted same-host release-readiness
+  line on `develop`.
+- Windows same-host build/test and release-binary daemon parity have been
+  restored on the post-`Z` baseline.
+- cross-host messaging between Windows and macOS has not yet been validated in
+  one authoritative executable smoke phase.
+- `Phase AB` is the next planning line and is not yet started.
 
 Planning branch:
-- `feature/daemon-hardening-plan`
-
-Goal:
-- close the daemon hardening follow-on work identified by the Phase U
-  post-mortem before daemon observability and runtime failure handling are
-  treated as settled enough for system testing
-- close the carried-forward daemon observability boundary issue and remove the
-  remaining central event-reconstruction shape
-- keep only testing-critical work on this line; defer the rest to backlog
-
-Execution shape:
-- `V.1` defines the observability boundary and event model
-- `V.2` migrates observability ownership into the daemon subsystems
-- `V.3` removes old central observability mapping code and streamlines the
-  final shape
-- `V.4` hardens daemon/client/runtime recovery guidance after the observability
-  line is in place
-- system testing should begin after `V.4`
-- `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
-  not deferred
-
-Phase V deliverables:
-- `SubsystemObservability` newtype and per-subsystem injection across the
-  daemon runtime line, including explicit ownership in
-  `RuntimeHealthMonitor` and `RuntimeComposition`
-- deletion of the old central observability delegation helpers:
-  `map_command_event`, `map_daemon_event`, `map_runtime_event`,
-  `emit_runtime_event`, and `record_daemon_event`
-- `.with_recovery()` hardening on the four required runtime error categories:
-  `ATM_DAEMON_UNAVAILABLE`, `ATM_SOCKET_CONNECT_FAILED`,
-  `ATM_DAEMON_START_FAILED`, and `ATM_IPC_RUNTIME_FAILED`
-- stable recovery/error-code namespace documented in
-  `docs/atm-daemon/recovery-text-rules.md`
-
-Planned sprint sequence:
-
-### V.1 — Observability Boundary And Event Model
-
-Scope:
-- define the final daemon observability boundary
-- keep observability at the bottom of the stack
-- define subsystem-owned event semantics and per-event context fields
-
-Acceptance:
-- the final observability boundary and event model are documented and ready to
-  implement
-
-### V.2 — Observability Migration Into Subsystems
-
-Scope:
-- move event construction into daemon subsystems
-- keep shared observability infrastructure thin
-
-Acceptance:
-- subsystem-owned event emission replaces central daemon event reconstruction
-
-### V.3 — Observability Removal And Streamlining
-
-Scope:
-- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
-  bootstrap responsibilities
-- remove obsolete mapping helpers and wrappers
-
-Acceptance:
-- the old central mapping model is removed and the remaining code is lean
-
-### V.4 — Recovery Context Hardening
-
-Scope:
-- require explicit recovery guidance on daemon-unavailable and related runtime
-  failure paths
-- define checklist or lint coverage for required `.with_recovery()` usage
-
-Acceptance:
-- the daemon/runtime paths that require recovery guidance are explicitly listed
-- their coverage is no longer a review-memory-only rule
-
-Deferred backlog:
-- runtime test isolation lint
-  - create GH issue from `FTQ-U9-001`
-  - GH issue: `#259`
-- workspace `#[path]` lint
-  - create GH issue for production cross-crate `#[path]` enforcement
-  - GH issue: `#260`
-- sprint-close hygiene gate
-  - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
-  - GH issue: `#261`
-
-## 27. Phase W Production Readiness Follow-Up
-
-Planning branch:
-- `feature/observability-findings-planning`
-
-Base branch:
-- `origin/develop`
-
-Integration branch:
-- `integrate/phase-W`
-
-Predecessor gate:
-- all Phase `V` implementation work is merged and validated on
-  `integrate/phase-V` before `integrate/phase-W` begins implementation
-
-Goal:
-- close the remaining production-readiness gaps identified after Phase V before
-  implementation starts
-- preserve one shared operator/diagnostic contract across ATM CLI, `atm-graft`,
-  and cross-daemon peer transport
-- collapse duplicate interface-specific error/reporting paths when the same
-  failure class is currently implemented in parallel
-
-Status note:
-- `W.1` merged to `integrate/phase-W`
-  - branch: `feature/pW-s1-emit-fallback`
-  - PR: `#269`
-  - merge commit: `0a2084e`
-- `W.2` merged to `integrate/phase-W`
-  - branch: `feature/pW-s2-daemon-client-traceability`
-  - PR: `#270`
-  - merge commit: `82142b0`
-- `W.3` merged to `integrate/phase-W`
-  - branch: `feature/pW-s3-sqlite-observability`
-  - PR: `#272`
-  - merge commit: `ae52c63`
-- `W.4` merged to `integrate/phase-W`
-  - branch: `feature/pW-s4-peer-replay-recovery`
-  - PR: `#271`
-  - merge commit: `c9d3984`
-- `W.5` merged to `integrate/phase-W`
-  - branch: `feature/pW-s5-doctor-projection`
-  - PR: `#274`
-  - merge commit: `2d2d482`
-- `W.6` merged to `integrate/phase-W`
-  - branch: `feature/pW-s6-sqlite-error-contract`
-  - PR: `#275`
-  - merge commit: `c8af6e7`
-- `W.7` merged to `integrate/phase-W`
-  - branch: `feature/pW-s7-triage-closeout`
-  - PR: `#276`
-  - merge commit: `d655d45`
-- `W.8` merged to `integrate/phase-W`
-  - branch: `feature/pW-s8-phase-w-closeout`
-  - PR: `#277`
-  - merge commit: `f404238`
-
-Execution shape:
-- `W.1` daemon-side observability sink failure visibility
-- `W.2` same-host daemon traceability and interface parity
-- `W.3` SQLite subsystem observability and protocol parity
-- `W.4` peer replay recovery text and peer-side protocol parity
-- `W.5` doctor projection of same-host bootstrap traceability
-- `W.6` SQLite degradation/error-contract cleanup and typed daemon event labels
-- `W.7` Phase `W` carry-forward triage loop and phase closeout record
-- `W.8` phase closeout: typed SQLite subsystem identity and ATM error
-  inventory correction
-
-Execution rules:
-- `W.1` defines the daemon-side sink-failure behavior for later emitted events
-- `W.2` owns same-host parity across `atm`, `atm-daemon-client`, and
-  `atm-graft`
-- `W.3` owns SQLite-backed doctor projection and non-CLI protocol-envelope
-  parity
-- `W.4` is independently executable from `W.2` and `W.3`; it owns peer replay
-  recovery text and peer-side parity through the shared protocol envelope
-
-Acceptance:
-- every critical failure class named in `docs/plan-phase-W.md` is assigned to a
-  specific sprint
-- each sprint has explicit hard dependencies, required work, acceptance
-  criteria, and required validation
-
-## 28. Phase Xb SQLite SSOT And Daemon Boundary Simplification Restart
-
-Planning input:
-- legacy planning branch: `feature/pX-s0-planning`
-- restart execution branch: `integrate/phase-Xb`
-
-Base branch:
-- `develop`
-
-Integration branch:
-- `integrate/phase-Xb`
-
-Goal:
-- remove the dual mailbox/runtime implementation so ATM has one durable
-  mailbox path
-- make daemon runtime truth align with the SQLite SSOT claim
-- make replay persistence startup behavior explicit and enforceable
-- add the guardrails needed to catch legacy-path regressions and stale code
-  earlier in development
-
-Restart note:
-- the original `integrate/phase-X` line is abandoned as the authoritative phase
-  branch
-- `Xb` sprint branches replay audited prior Phase `X` work onto a clean
-  `develop`-based integration line
-- prior implementation completion exists for much of `X.1` through `X.5`, but
-  QA must still validate each restarted sprint end to end after any cherry-pick
-  or selective reapplication
-
-Status note:
-- `X.0` complete on `feature/pX-lint-gates`
-  - target: `develop`
-  - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
-  - target: `integrate/phase-Xb`
-  - scope: mailbox runtime cutover and dual-mode retained-runtime surface
-    deletion
-- `X.2` complete on `feature/pXb-s2-command-path-simplification`
-  - target: `integrate/phase-Xb`
-  - scope: command-path simplification and legacy mailbox path deletion
-- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
-  - target: `integrate/phase-Xb`
-  - scope: daemon runtime truth unification and runtime-status-cache refactor
-- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
-  - target: `integrate/phase-Xb`
-  - scope: replay-persistence startup contract, peer-transport decomposition,
-    same-host helper deduplication, and follow-up boundary/error-visibility
-    cleanup
-- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout`
-  - target: `integrate/phase-Xb`
-  - scope: closeout guardrails, dependency-ownership validation, and replayed
-    sprint acceptance verification
-
-Pre-phase prerequisite:
-- already satisfied on `develop` before `integrate/phase-Xb` starts via
-  `feature/pX-lint-gates`:
-  - silent-emit regression gate
-  - RULE-002 function-length gate
-- those guards must already be live on every Phase `X` sprint branch from the
-  first push; they are not part of the `integrate/phase-Xb` sprint sequence
-
-Execution shape:
-- pre-phase prerequisite:
-  - inherited `X.0` lint-gate baseline already live before `integrate/phase-Xb`
-- `X.1` mailbox runtime cutover and dual-mode surface deletion on
-  `feature/pXb-s1-mailbox-runtime-cutover`
-- `X.2` command-path simplification and legacy mailbox path deletion on
-  `feature/pXb-s2-command-path-simplification`
-- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
-  `feature/pXb-s3-runtime-truth-unification`
-- `X.4` replay-persistence startup contract, peer-transport decomposition, and
-  same-host helper deduplication on
-  `feature/pXb-s4-replay-and-ipc-consolidation`
-- `X.5` systemic guardrails, dependency-ownership validation, and closeout
-  verification on `feature/pXb-s5-guardrails-and-closeout`
-
-#### Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
-
-Branch:
-- `feature/pXb-s4-replay-and-ipc-consolidation`
-
-PR:
-- `#290`
-
-Status:
-- X.4 complete (PR #290 merged to integrate/phase-Xb)
-
-Deliverables:
-- fail-closed replay-store startup contract documented and enforced in daemon
-  composition
-- peer-transport helper decomposition with the shared ATM error and recovery
-  contract preserved
-- same-host helper ownership consolidated into `atm-daemon-client`
-- CLI and graft same-host wrappers aligned to the shared daemon-client helper
-  line
-- daemon ingress/export error visibility tightened around config load, source
-  import, and source/mailbox projection rewrites
-- machine-readable and prose daemon-client boundary records aligned with the
-  replayed helper ownership
-
-Acceptance criteria:
-- one replay-persistence startup contract is documented in product and
-  daemon-local docs
-- daemon startup behavior in `composition.rs` matches the documented contract
-- `send_to_endpoint(...)` is under `80` lines
-- `send_once(...)` is under `80` lines
-- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
-  finds one shared helper definition per helper name
-- CLI and graft same-host paths share the same daemon-unavailable and
-  unexpected-response behavior
-- peer transport preserves the shared ATM error and recovery contract after the
-  `send_to_endpoint(...)` and `send_once(...)` refactor
-
-#### Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
-
-Branch:
-- `feature/pXb-s5-guardrails-and-closeout`
-
-PR:
-- `#291`
-
-Status:
-- X.5 complete (PR #291 merged to integrate/phase-Xb)
-
-Deliverables:
-- `ATM-QA-S4-001` closure by warning before peer-transport retry-budget fallback
-- `FTQ-006` closure by replacing composition test cwd restore pairs with
-  `CwdGuard`
-- `RBP-F005` closure by keeping the replayed local IPC and reconcile paths
-  inside the `RULE-002` function-length guardrail
-- `sprint-X5.md` aligned to the completed `pXb` branch state
-- closeout guardrails and dependency-ownership checks validated on the replayed
-  `X.5` line
-
-Acceptance criteria:
-- the legacy-mailbox-regression gate is runnable in CI
-- the replay-capability-degradation regression gate is runnable in CI
-- the local lint entrypoints include dependency-ownership validation
-- the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
-  closeout
-- the replayed `X.5` branch passes full sprint QA after any promoted finding
-  fix
-
-Execution rules:
-- no Phase `X` sprint may preserve or add a mailbox durability fallback path
-- SQLite/store is the only durable retained mailbox implementation after the
-  cutover line lands
-- file watchers may remain only as ingress/reconcile edges, not as a parallel
-  mailbox backend
-- CLI and graft same-host daemon helper behavior must collapse onto one shared
-  implementation line before Phase `X` closeout
-- when helper ownership moves across crate boundaries, the owning boundary docs
-  must be updated in the same sprint so plan and boundary rules do not
-  contradict each other
-- deletion sprints must include explicit whole-workspace searches for removed
-  legacy constructs, not only touched-file verification
-- sprint replay from prior Phase `X` commits is allowed only after audit and
-  does not reduce QA scope; QA runs on the full restarted sprint branch
-
-Acceptance:
-- every live legacy mailbox/runtime path named in `docs/phase-X/plan-phase-X.md`
-  maps to one explicit sprint deliverable and acceptance criterion
-- same-host helper duplication across `atm`, `atm-graft`, and
-  `atm-daemon-client` has explicit sprint ownership
-- Phase `X` includes CI or QA gates for:
-  - legacy mailbox-path regression
-  - replay-capability-degradation regression
-  - dependency-ownership validation via `cargo-shear`
-- the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
-- each sprint names the shared ATM error / protocol / doctor paths it must
-  reuse and the current `main` CLI baseline it must preserve
-- duplicate interface-specific error/reporting implementations for the same
-  touched failure class are marked for consolidation rather than preservation
-
-## 29. Phase Xb Planning And Pre-Phase Lint Prerequisite
-
-Planning input:
-- legacy planning branch: `feature/pX-s0-planning`
-
-Pre-phase prerequisite branch:
-- `feature/pX-lint-gates`
-
-Base branch:
-- `develop`
-
-Integration branch:
-- `integrate/phase-Xb`
-
-Goal:
-- remove the remaining legacy mailbox/runtime branches behind the retained
-  boundary
-- tighten daemon runtime truth around the SQLite SSOT claim
-- make replay persistence startup behavior explicit and enforceable
-- add guardrails that catch stale legacy paths and silent regressions earlier
-
-Status note:
-- `X.0` complete on `feature/pX-lint-gates`
-  - target: `develop`
-  - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
-  - target: `integrate/phase-Xb`
-  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
-- `X.2` complete on `feature/pXb-s2-command-path-simplification`
-  - target: `integrate/phase-Xb`
-  - scope: removed the remaining production legacy-key branches, moved send
-    threading/export to a store-backed projection load, and confined
-    compatibility inbox file helpers to the hidden daemon ingress/export seam
-- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
-  - target: `integrate/phase-Xb`
-  - scope: removed filesystem team discovery from daemon runtime hydration,
-    added explicit `RosterStore` team enumeration, and aligned core/daemon
-    boundary docs with store-owned team/member runtime truth
-- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
-  - target: `integrate/phase-Xb`
-  - scope: fail-closed replay startup, peer transport decomposition,
-    same-host helper deduplication, and follow-up boundary/error-visibility
-    cleanup
-- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout` (`#291`)
-  - target: `integrate/phase-Xb`
-  - scope: closeout guardrails, dependency-ownership validation, and replayed
-    sprint acceptance verification
-
-Execution shape:
-- pre-phase prerequisite:
-  - `X.0` shared lint gates already live on `develop` before
-  `integrate/phase-Xb` starts
-- `X.1` mailbox runtime cutover and dual-mode surface deletion on
-  `feature/pXb-s1-mailbox-runtime-cutover`
-- `X.2` command-path simplification and legacy mailbox path deletion on
-  `feature/pXb-s2-command-path-simplification`
-- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
-  `feature/pXb-s3-runtime-truth-unification`
-- `X.4` replay-persistence startup contract, peer-transport decomposition, and
-  same-host helper deduplication on
-  `feature/pXb-s4-replay-and-ipc-consolidation`
-- `X.5` systemic guardrails, dependency-ownership validation, and closeout
-  verification on `feature/pXb-s5-guardrails-and-closeout`
-
-Execution rules:
-- no Phase `X` sprint may preserve or add a mailbox durability fallback path
-- the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
-- file watchers may remain only as ingress/reconcile edges, not as a parallel
-  mailbox backend
-- no Phase `X` scope item relies on an implicit discovery sprint
-- Phase `X` closes only when the legacy mailbox/runtime deletion gates,
-  same-host helper deduplication, and daemon SQLite-runtime truth rules are
-  revalidated on `integrate/phase-Xb`
-- cherry-picked or selectively replayed prior Phase `X` work does not narrow
-  QA scope; each restarted sprint must pass QA as a full sprint
-- `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
-  the Phase `X` sprint line
-
-## 30. Phase Y Pre-Smoke Trivial Fixes
-
-Branch:
-- `feature/pY-trivial-fixes`
-
-Target:
-- `develop`
-
-Status:
-- complete
-
-Scope:
-- small pre-Phase-`Y` cleanup items that should land before the dedicated
-  Phase `Y` planning and smoke-testing line starts
-
-Delivered:
-- shared `ATM_SERVICE_NAME` constant reuse in CLI observability fatal-event
-  emission
-- `atm ack` validation cleanup to remove redundant dual state derivation
-- architecture wording cleanup for the current clear-eligibility model
-- safe `GH #78` follow-up to preserve the working compatibility inbox contract
-  while adding regression coverage
-- design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
-- trivial-fixes QA-1 follow-up landed on the same branch:
-  - generic internal fallback code for non-ATM fatal-error logging
-  - infallible `resolve_reply_target(...)` contract cleanup
-  - `atm ack` structured warn-field completion
-- `GH #83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
-
-## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout
-
-Planning branch:
-- `feature/pY-s0-planning`
-
-Pre-phase implementation branch:
-- `feature/pY-trivial-fixes`
+- `plan/phase-AB`
 
 Future integration branch:
-- `integrate/phase-Y`
-
-Target:
-- `develop` for planning / pre-phase setup
-- `integrate/phase-Y` for the execution line
-
-Status:
-- complete
-
-Status note:
-- `Y.1` merged to `integrate/phase-Y`
-  - branch: `feature/pY-s1-pre-smoke-scaffolding`
-  - PR: `#296`
-  - merge commit: `c63574cb`
-
-Authoritative plans:
-- `docs/plan-phase-Y.md`
-- `docs/plan-phase-Z.md`
+- `integrate/phase-AB`
 
 Goal:
-- make the first daemon + SQLite mail-SSOT release safe for real operator use
-- minimize ATM-authored metadata on the shared inbox surface
-- move all ATM-authored compatibility inbox/config writes behind one hard
-  owner boundary
-- centralize delivery routing into one coordinator plus explicit event-family
-  state machines
-- remove mutable workflow-state projection from compatibility output
-- document every CLI/client-socket write path and every SQLite query state
-  machine so QA can verify simplification directly
-- close implementation cleanup before progressive smoke and dogfood validation
-  begin on the next phase line
+- validate Windows <-> macOS cross-host ATM messaging on real binaries
+- keep clean-room disposable state as the first validation lane
+- prove durable send/read/ack, degraded notification visibility, and
+  retry-visible recovery across hosts
+- revalidate on copied state only after the disposable lane passes
 
 Execution shape:
-- `Y.0` pre-smoke trivial fixes on `feature/pY-trivial-fixes`
-- planning-branch audits and the shared-inbox field decision framework
-  complete before numbered sprint execution begins
-- `Y.1` `atm help` and UX improvements
-  - deliver `atm help`, `atm help --list`, typed concept-topic help, and
-    delegated clap subcommand help without broadening into general JSON-input work
-- `Y.2` pre-smoke easy fixes and validation
-  - close the deferred `Y.1` tier-2 help follow-ups for `hooks`, `identity`,
-    and `skills` without changing the compatibility inbox wire contract
-- `Y.3` hard write-boundary consolidation
-  - complete on `feature/pY-s3-hard-write-boundary-consolidation`
-  - normal retained compatibility rewrite now routes only through
-    `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
-- `Y.4` delivery coordinator and event-family state machines
-  - complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
-  - retained send/ack harness routing now resolves a copied roster snapshot in
-    `crates/atm-core/src/delivery_policy.rs`
-  - retained compatibility export now stays on the `Claude Code` harness path
-    only; non-Claude harnesses skip ATM-authored JSONL export
-- `Y.5` mutable compatibility-field removal and hidden-dependency exposure
-  - complete on `feature/pY-s5-mutable-compatibility-field-removal`
-  - retained compatibility export now keeps only immutable correlation/context
-    fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
-  - retained compatibility export now strips mutable/shared-projection fields:
-    `source_team`, `pendingAckAt`, `acknowledgedAt`,
-    `acknowledgesMessageId`, `expiresAt`, and `metadata.atm.*`
-  - retained compatibility export now reloads stored message records instead of
-    workflow-joined projected envelopes before writing Claude Code projection
-    files
-- `Y.6` append-only compatibility export cutover if the approved wire contract
-  allows it
-  - complete on `feature/pY-s6-append-only-compatibility-export`
-  - retained normal-runtime Claude Code compatibility writes now append one
-    JSONL record at a time after the durable SQLite/workflow step
-  - retained non-Claude harnesses still never receive ATM-authored JSONL
-    append output
-  - retained SQLite-failure recovery now emits the documented
-    original-plus-`atm-system@<team>` companion contract instead of silently
-    downgrading to a warning-only path
-
-Follow-on validation phase:
-- completed CLI JSON I/O audit recorded in
-  `docs/phase-Z/cli-json-io-audit.md`
-- retained-command JSON output already exists; structured JSON input is
-  deferred until after `Phase Z`
-- `Z.1` executable smoke bring-up
-- `Z.2` fix and revalidate
-- `Z.3` `atm-dev` canary and dogfood
-- `Z.4` final fixes and release sign-off
+- `AB.1` cross-host harness and clean-room baseline
+  - branch: `feature/pAB-s1-cross-host-harness-and-clean-room-baseline`
+- `AB.2` one-way cross-host delivery
+  - branch: `feature/pAB-s2-one-way-cross-host-delivery`
+- `AB.3` cross-host ack round-trip
+  - branch: `feature/pAB-s3-cross-host-ack-round-trip`
+- `AB.4` degraded notification and retry-visible recovery
+  - branch: `feature/pAB-s4-degraded-notification-and-retry-visible-recovery`
+- `AB.5` copied-state revalidation and readiness closeout
+  - branch: `feature/pAB-s5-copied-state-revalidation-and-readiness-closeout`
 
 Immediate planning outputs:
-- `docs/plan-phase-Y.md`
-- `docs/plan-phase-Z.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/inbox-field-inventory.md`
-- `docs/phase-Y/help.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
-- `docs/phase-Y/delivery-state-machines.md`
-- `docs/phase-Y/sprint-Y1.md`
-- `docs/phase-Y/sprint-Y2.md`
-- `docs/phase-Y/sprint-Y3.md`
-- `docs/phase-Y/sprint-Y4.md`
-- `docs/phase-Y/sprint-Y5.md`
-- `docs/phase-Y/sprint-Y6.md`
-- `docs/phase-Z/cli-json-io-audit.md`
-- `docs/phase-Z/sprint-Z1.md`
-- `docs/phase-Z/sprint-Z2.md`
-- `docs/phase-Z/sprint-Z3.md`
-- `docs/phase-Z/sprint-Z4.md`
-- approved implementation scopes for `Y.1` and `Y.2`, with `Y.1` kept
-  strictly on `atm help` and adjacent UX wording
+- `docs/plans/phase-AB/plan-phase-AB.md`
+- `docs/plans/phase-AB/cross-host-smoke-checklist.md`
+- `docs/plans/phase-AB/cross-host-findings-ledger.md`
+- `docs/plans/phase-AB/readiness.md`
+- `docs/plans/phase-AB/sprint-AB1.md`
+- `docs/plans/phase-AB/sprint-AB2.md`
+- `docs/plans/phase-AB/sprint-AB3.md`
+- `docs/plans/phase-AB/sprint-AB4.md`
+- `docs/plans/phase-AB/sprint-AB5.md`
 
-## 32. Phase Yb Message-Path Consolidation Planning
+Acceptance / Phase Entry Gate:
+- `Phase Z` must remain closed on `develop`
+- the clean-room disposable host-pair lane must pass before copied-state
+  validation begins
+- the phase does not close until both disposable and copied-state cross-host
+  smoke lanes pass with retained evidence
 
-Status summary:
-- `integrate/phase-Y` is accepted enough to define the next path-consolidation
-  line, but the production-readiness review still found structural message-path
-  issues that must be planned and implemented before broad smoke/dogfood work
-  resumes.
-- Phase `Yb` is now fully implemented through `Y.11`.
-- the line closes with:
-  - shared delivery plans across Claude/non-Claude harness paths
-  - a dedicated `NonClaudeOutbound` payload boundary
-  - fail-closed handling for missing roster harness data
-  - repair/rebuild-only mailbox rewrite seams
-- an explicit Claude-only append seam that is never selected for
-  `DeliveryHarnessPath::NonClaude`
-- an explicit repair/rebuild projection seam that no longer accepts a generic
-  recipient snapshot with a non-Claude no-op branch
-- a later focused production-readiness review still reopened two final blockers:
-  - partial Claude recovered degraded delivery remained possible
-  - production notification execution still bypassed `NotificationSink`
-- those blockers are tracked in `Phase Yc`; smoke/dogfood work must not resume
-  until `Phase Yc` closes **and** the later `Phase Yd` develop-gate record
-  says `Phase Z` may begin.
+## 38. Chore: ADR Rationale Audit [COMPLETE]
 
-Goal:
-- lock down the exact message-path consolidation work needed after `Phase Y`
-- document the removal ledger, current call stacks, shared executor contract,
-  and lintable boundary rules before implementation restarts
+- `CHORE-ADR-AUDIT-001` removed sprint-doc and phase-plan rationale
+  dependencies from permanent ADRs, inlined the missing durable rationale in
+  the affected records, and kept any surviving sprint references as historical
+  execution context only.
+  - branch: `chore/docs-restructure`
+  - authoritative source: `docs/adr/INDEX.md`
 
-Execution shape:
-- planning-only branch: `message-path-consolidation-plan-Yb`
-- future implementation integration branch: `integrate/phase-Yb`
-- implementation sequence:
-  - `Y.7` degraded delivery contract hardening
-    - branch: `feature/pYb-s7-degraded-delivery-contract-hardening`
-  - `Y.8` policy cleanup and impossible-path removal
-    - branch: `feature/pYb-s8-policy-cleanup-and-impossible-path-removal`
-  - `Y.9` non-Claude outbound boundary formalization
-    - branch: `feature/pYb-s9-non-claude-outbound-boundary-formalization`
-  - `Y.10` boundary enforcement and smoke handoff
-    - branch: `feature/pYb-s10-boundary-enforcement-and-smoke-handoff`
-  - `Y.11` post-`Y.10` boundary gap closure
-    - branch: `feature/pYb-s11-y10-gap-closure`
+## Publishing Improvements
 
-Immediate planning outputs:
-- `docs/phase-Yb/plan-phase-Yb.md`
-- `docs/phase-Yb/removal-ledger.md`
-- `docs/phase-Yb/message-path-call-stacks.md`
-- `docs/phase-Yb/lintable-boundary-plan.md`
-- `docs/phase-Yb/hardening-audit.md`
-- `docs/phase-Yb/qa-handoff.md`
-- `docs/phase-Yb/testing-and-validation.md`
-- `docs/phase-Yb/sprint-Y7.md`
-- `docs/phase-Yb/sprint-Y8.md`
-- `docs/phase-Yb/sprint-Y9.md`
-- `docs/phase-Yb/sprint-Y10.md`
-- `docs/phase-Yb/sprint-Y11.md`
-- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
-
-## 33. Phase Yc Final Production-Readiness Closure
-
-Status summary:
-- `integrate/phase-Y` still had two final runtime production-readiness
-  blockers reopened by focused review.
-- `Phase Yc` is the dedicated follow-on for those blockers.
-- `Phase Yc` is intentionally split into two sprints so each deliverable lands
-  at a production-ready level without mixing behavioral and boundary closure.
-
-Goal:
-- close the final Claude recovered degraded-delivery contract gap
-- close the final `NotificationSink` boundary bypass
-- leave the focused readiness record that proves those two original runtime
-  blockers are closed before the broader `Phase Yd` develop-gate closeout
-  begins
-- keep `Y.12` and `Y.13` on their user-discussed runtime/code scope; later
-  post-mortem lint recommendations are separate follow-up work, not substitute
-  deliverables for these two sprints
-
-Execution shape:
-- planning-only branch: `plan/phase-Yc-y12-y13`
-- implementation target branch: `integrate/phase-Y`
-- implementation sequence:
-  - `Y.12` Claude degraded delivery set closure
-    - branch: `feature/pYc-s12-claude-degraded-delivery-set-closure`
-  - `Y.13` notification boundary closure and readiness gate
-    - branch: `feature/pYc-s13-notification-boundary-and-readiness-gate`
-
-Immediate planning outputs:
-- `docs/phase-Yc/plan-phase-Yc.md`
-- `docs/phase-Yc/issues.md`
-- `docs/phase-Yc/readiness.md`
-- `docs/phase-Yc/sprint-Y12.md`
-- `docs/phase-Yc/sprint-Y13.md`
-
-Acceptance / Phase Z Smoke Gate:
-- `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
-  `Y.13` is still open.
-- the `Yc` readiness record must explicitly state that:
-  - the recovered Claude SQLite-failure path cannot partially emit a logical
-    message set while still claiming success
-  - the production notification path executes through
-    `NotificationSink::deliver(...)` rather than direct hook helpers
-  - the focused `Yc` readiness validation has passed on the merged
-    `integrate/phase-Y` line
-- `Yc` closure alone is not sufficient to start `Phase Z`; the later
-  `Phase Yd` readiness record still controls whether `Phase Z` may begin
-
-## 34. Phase Yd Develop-Gate Closure
-
-Status summary:
-- `Phase Yc` captured the two original runtime blockers reopened by the focused
-  production-readiness review.
-- `Y.15` is now closed on
-  `feature/pYd-s15-production-notification-boundary-closure`; the surviving
-  notification boundary proof now lives on the final accepted `Phase Y`
-  candidate line instead of only on the focused `Yc` line.
-- `Y.16` retained-runtime composition closure is now present on the accepted
-  candidate line through merge commit `2fd404dc`.
-- `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
-  candidate contains the required phase-end fix line and is validation-clean.
-- `Y.18` thin-liveness closure and final develop gate are now complete at
-  `19376e42`; the accepted candidate is authorized for `develop`, and
-  `Phase Z` may begin.
-- before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
-  blocker set must be documented explicitly and closed on a final
-  develop-gate line.
-- `Y.14` recovered Claude logical-message-set closure is complete on
-  `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
-  full `Y.14` through `Y.18` closeout line is now complete.
-- `Phase Z` is unblocked because the closeout line now says `Phase Y` is ready
-  for `develop`.
-
-Goal:
-- document the full `Phase Y` blocker set, not only the original two `Yc`
-  runtime gaps
-- close the remaining runtime, boundary, composition, accepted phase-end-fix,
-  and thin-liveness blockers before `develop`
-- leave one readiness record that explicitly authorizes `Phase Y` to land on
-  `develop` and `Phase Z` to begin
-
-Execution shape:
-- planning-only branch: `plan/phase-Yd-z-gate`
-- implementation target branch: `integrate/phase-Y`
-- implementation sequence:
-  - `Y.14` recovered Claude logical-message-set closure
-    - branch: `feature/pYd-s14-recovered-claude-logical-message-set-closure`
-  - `Y.15` production notification boundary closure
-    - branch: `feature/pYd-s15-production-notification-boundary-closure`
-  - `Y.16` retained-runtime composition closure
-    - branch: `feature/pYd-s16-retained-runtime-composition-closure`
-  - `Y.17` candidate closure
-    - branch: `feature/pYd-s17-candidate-closure`
-  - `Y.18` thin liveness closure and final develop gate
-    - branch: `feature/pYd-s18-thin-liveness-closure-and-final-develop-gate`
-
-Immediate planning outputs:
-- `docs/phase-Y/issues.md`
-- `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
-- `docs/phase-Yd/sprint-Y14.md`
-- `docs/phase-Yd/sprint-Y15.md`
-- `docs/phase-Yd/sprint-Y16.md`
-- `docs/phase-Yd/sprint-Y17.md`
-- `docs/phase-Yd/sprint-Y18.md`
-
-Acceptance / Develop And Phase Z Gate:
-- `Phase Y` does not land on `develop` while any blocking item in
-  `docs/phase-Y/issues.md` remains open.
-- `Phase Z` remains blocked until `docs/phase-Yd/readiness.md` explicitly
-  states that:
-  - the `Phase Y` blocker set is closed
-  - `Phase Y` may land on `develop`
-  - `Phase Z` may begin
-
-## 35. Phase Ye Daemon Ownership Simplification
-
-Status summary:
-- `Phase Y` closes delivery-path and readiness blockers, but it still leaves
-  three daemon-runtime ownership surfaces whose implementation shape is more
-  lock-heavy than the intended design:
-  - `RuntimeStatusCache`
-  - `NotificationRuntime`
-  - `ReconcileRuntime`
-- `Phase Ye` is the follow-on design line that simplifies those surfaces after
-  `Phase Y` lands on `develop`.
-- implementation continues on the existing `integrate/phase-Y` line rather
-  than creating a second long-lived integration branch
-- `Phase Ye` closes on the accepted line once `Y.23` records the phase-end
-  architecture proof and `ADR-015` acceptance.
-- `Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.`
-
-Goal:
-- replace read-mostly daemon status locking with immutable snapshot publication
-- replace daemon worker-lane shared mutable queue/debounce state with bounded
-  channel / actor ownership where that is the real design
-- leave one explicit ADR and daemon-doc contract for those ownership rules
-
-Execution shape:
-- planning-only branch:
-  - `plan/phase-Y-lock-removal`
-- implementation target branch:
-  - `integrate/phase-Y`
-- implementation sequence:
-  - `Y.19` runtime status snapshot publication
-  - `Y.20` notification runtime channel ownership
-  - `Y.21` reconcile runtime actor foundation
-  - `Y.22` reconcile runtime cutover
-  - `Y.23` phase-end architecture proof
-  - closed on accepted line after `Y.23` phase-end architecture proof
-
-Immediate planning outputs:
-- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
-- `docs/phase-Ye/issues.md`
-- `docs/phase-Ye/plan-phase-Ye.md`
-- `docs/phase-Ye/readiness.md`
-- `docs/phase-Ye/sprint-Y19.md`
-- `docs/phase-Ye/sprint-Y20.md`
-- `docs/phase-Ye/sprint-Y21.md`
-- `docs/phase-Ye/sprint-Y22.md`
-- `docs/phase-Ye/sprint-Y23.md`
-
-Phase rules:
-- `Phase Ye` does not reopen `Phase Y` delivery correctness work
-- `Phase Ye` does not absorb `Phase Z` rollout or smoke work
-- `RuntimeStatusCache` must close in one sprint because it is one ownership
-  surface, not a broad daemon-health redesign
-- `ReconcileRuntime` is intentionally split into foundation and cutover sprints
-  so the actor contract lands before the old shared-state path is deleted
-- `Phase Ye` ends with one separate proof sprint so reconcile cutover does not
-  also have to carry whole-phase closure
-
-## 36. Phase Z Smoke, Dogfood, And Release Sign-Off
-
-Status summary:
-- `Phase Yd` is complete and the final readiness record authorizes `Phase Y` to
-  land on `develop` and `Phase Z` to begin.
-- `Phase Ye` is complete on the current `develop` baseline and does not reopen
-  the `Phase Z` rollout gate.
-- `Phase Z` is complete; release verdict `READY` on
-  `feature/pZ-smoke-atm-graft @ 84935774`, authorized in
-  `docs/phase-Z/readiness.md` by `team-lead`
-  (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`).
-- `Z.1` smoke bring-up is complete at `70f4fa7f` with verdict `FAIL`; two
-  blocking findings are promoted to `Z.2`, which is now the next-unused sprint.
-- the `Z1-F001` analysis also reopened a broader follow-on line for roster
-  truth, watcher-owned Claude config ingress, member metadata ownership, and
-  backup / restore automation; that work is now split into `Z.5` through
-  `Z.10` and must close before `Z.3` canary begins.
-- the remaining boundary / follow-up hardening line is now split into `Z.11`
-  through `Z.15`; that line must also close before `Z.3` canary begins.
-
-Planning branch:
-- `plan/phase-Z`
-
-Future integration branch:
-- `integrate/phase-Z`
-
-Goal:
-- validate the first daemon + SQLite mail-SSOT release in real executable use
-- run the first real-binary smoke matrix on the accepted `Phase Y` line
-- close smoke findings before broader `atm-dev` dogfood begins
-- close the `config.json` / ATM roster / restore ownership gaps discovered
-  during smoke before broader dogfood begins
-- produce a final release-ready / not-ready verdict with evidence
-
-Execution shape:
-- `Z.1` smoke bring-up
-  - branch: `feature/pZ-s1-smoke-bring-up`
-- `Z.2` fix and revalidate
-  - branch: `feature/pZ-s2-fix-and-revalidate`
-- `Z.5` runtime roster truth cutover
-  - branch: `feature/pZ-s5-runtime-roster-truth-cutover`
-- `Z.6` Claude send semantics and immutable runtime roster view
-  - branch: `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
-- `Z.7` config-ingress boundary narrowing and static gates
-  - branch: `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
-- `Z.8` watcher-owned Claude config ingest
-  - branch: `feature/pZ-s8-watcher-owned-claude-config-ingest`
-- `Z.9` team-admin roster authority and member metadata
-  - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
-- `Z.10` team backup / restore automation and config projection
-  - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
-- `Z.11` first-send recovery contract and setup guidance
-  - branch: `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance`
-- `Z.12` retained runtime path elimination and boundary lint gate
-  - branch: `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate`
-- `Z.13` workspace config boundary cleanup and lint gate
-  - branch: `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate`
-- `Z.14` ambient singleton surface removal and lint gate
-  - branch: `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
-- `Z.15` deferred hardening follow-up consolidation
-  - branch: `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
-- `Z.16` smoke `Z.2` revalidation
-  - branch: `feature/pZ-s16-smoke-z1-rerun`
-- `Z.17` `atm-dev` canary and dogfood
-  - branch: `feature/pZ-s17-smoke-z3-rerun`
-- `Z.18` smoke skill scaffold and report infrastructure
-  - branch: `feature/pZ-s18-smoke-skill-and-report-infrastructure`
-- `Z.19` fast smoke happy-path execution
-  - branch: `feature/pZ-s19-fast-smoke-happy-path-execution`
-- `Z.20` normal smoke systemic execution
-  - branch: `feature/pZ-s20-normal-smoke-systemic-execution`
-- `Z.21` thorough smoke CLI coverage and reporting
-  - includes one real same-host `atm-graft` advisory plus unary ICD lane
-  - branch: `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
-- `Z.22` smoke findings review and major rework triage
-  - branch: `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
-- `Z.23` cross-platform test coverage reporting
-  - branch: `feature/pZ-s23-cross-platform-test-coverage-reporting`
-- `Z.3` `atm-dev` canary and dogfood
-  - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
-- `Z.4` final fixes and release sign-off
-  - branch: `feature/pZ-smoke-atm-graft`
-
-Phase Z sprint ledger:
+Implementation Branches:
 
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
-| `Z.1` | `complete` | `feature/pZ-s1-smoke-bring-up` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.2` | `complete` | `feature/pZ-s2-fix-and-revalidate` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.5` | `complete` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
-| `Z.6` | `complete` | `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md` |
-| `Z.7` | `complete` | `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `.just/allowlists/scb_config_allowlist.toml`, `.just/fixtures/scb_config_known_bad.rs` |
-| `Z.8` | `complete` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
-| `Z.9` | `complete` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
-| `Z.10` | `complete` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
-| `Z.11` | `complete` | `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z11.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/config-json-violation-inventory.md` |
-| `Z.12` | `complete` | `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z12.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_retained_allowlist.toml`, `.just/fixtures/scb_runtime_known_bad.rs` |
-| `Z.13` | `complete` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_workspace_allowlist.toml`, `.just/fixtures/scb_workspace_known_bad.rs` |
-| `Z.14` | `complete` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_singleton_allowlist.toml`, `.just/fixtures/scb_singleton_known_bad.rs` |
-| `Z.15` | `complete` | `feature/pZ-s15-deferred-hardening-follow-up-consolidation` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z15.md`, `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md` |
-| `Z.16` | `complete` | `feature/pZ-s16-smoke-z1-rerun` | `docs/phase-Z/sprint-Z16.md`, `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.17` | `complete` | `feature/pZ-s17-smoke-z3-rerun` | `docs/phase-Z/sprint-Z17.md`, `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.18` | `complete` | `feature/pZ-s18-smoke-skill-and-report-infrastructure` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z18.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `.gitignore` |
-| `Z.19` | `complete` | `feature/pZ-s19-fast-smoke-happy-path-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z19.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
-| `Z.20` | `complete` | `feature/pZ-s20-normal-smoke-systemic-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z20.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
-| `Z.21` | `complete` | `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z21.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
-| `Z.22` | `complete` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
-| `Z.23` | `complete` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `scripts/coverage/`, `Justfile` |
-| `Z.24` | `complete` | `feature/pZ-obs-v1.1.0-log-maintenance` | `docs/phase-Z/sprint-Z24.md`, `docs/plan-phase-Z.md`, `crates/atm-daemon/bin_support/daemon_observability.rs`, `crates/atm/src/output.rs`, `crates/atm-core/src/observability.rs` |
-| `Z.3` | `complete` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.4` | `complete` | `feature/pZ-smoke-atm-graft` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md`, `docs/phase-Z/canary-findings-ledger.md` |
+| `PI.1` | `complete` | `feature/pPI-s1-validation-infra` | `Justfile`, `.just/print_help.py`, `scripts/validate_release.py`, `scripts/verify_release_archive.py`, `scripts/release_artifacts.py`, `release/publish-artifacts.toml`, `release/RELEASE-NOTES-TEMPLATE.md`, `.github/workflows/release-preflight.yml`, `.github/workflows/release.yml` |
+| `PI.2` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
+| `PI.3` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
 
-Immediate planning outputs:
-- `docs/plan-phase-Z.md`
-- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `docs/phase-Z/cli-json-io-audit.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/config-json-violation-inventory.md`
-- `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
-- `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-findings-ledger.md`
-- `docs/phase-Z/release-checklist.md`
-- `docs/phase-Z/readiness.md`
-- `docs/phase-Z/sprint-Z1.md`
-- `docs/phase-Z/sprint-Z2.md`
-- `docs/phase-Z/sprint-Z5.md`
-- `docs/phase-Z/sprint-Z6.md`
-- `docs/phase-Z/sprint-Z7.md`
-- `docs/phase-Z/sprint-Z8.md`
-- `docs/phase-Z/sprint-Z9.md`
-- `docs/phase-Z/sprint-Z10.md`
-- `docs/phase-Z/sprint-Z11.md`
-- `docs/phase-Z/sprint-Z12.md`
-- `docs/phase-Z/sprint-Z13.md`
-- `docs/phase-Z/sprint-Z14.md`
-- `docs/phase-Z/sprint-Z15.md`
-- `docs/phase-Z/sprint-Z16.md`
-- `docs/phase-Z/smoke-skill-plan.md`
-- `docs/phase-Z/sprint-Z18.md`
-- `docs/phase-Z/sprint-Z19.md`
-- `docs/phase-Z/sprint-Z20.md`
-- `docs/phase-Z/sprint-Z21.md`
-- `docs/phase-Z/sprint-Z22.md`
-- `docs/phase-Z/sprint-Z23.md`
-- `docs/phase-Z/sprint-Z24.md`
-- `docs/phase-Z/smoke-findings-review.md`
-- `docs/phase-Z/sprint-Z3.md`
-- `docs/phase-Z/sprint-Z4.md`
-
-Acceptance / Phase Entry Gate:
-- `docs/phase-Yd/readiness.md` must explicitly state:
-  - `Phase Y` may land on `develop`
-  - `Phase Z` may begin
-- `Phase Ye` must remain closed and must not be used to reopen rollout scope
-- `Phase Z` sprint execution must validate on the real built executables, not
-  only unit or harness tests
-- `Z.3` canary execution must not begin until `Z.5` through `Z.10` close on the
-  accepted `integrate/phase-Z` line
-- `Z.3` canary execution must not begin until `Z.11` through `Z.15` also close
-  on the accepted `integrate/phase-Z` line
-- `Z.3` canary execution must not begin until `Z.18` through `Z.22` also close
-  on the accepted `integrate/phase-Z` line
-- the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
-  close on the accepted `integrate/phase-Z` line
+Authoritative sprint plan:
+- `docs/publishing-improvements/plan.md`

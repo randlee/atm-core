@@ -58,7 +58,7 @@ Similar pattern observed in Phase W and Phase Xb.
 - `.just/run_lint.py` — add sprint-status lint rule
 - `.claude/skills/quality-management-gh/SKILL.md` — add status-field check to
   sprint QA checklist
-- `docs/phase-Yb/sprint-*.md` template — add closeout step: "update status
+- `docs/plans/phase-Yb/sprint-*.md` template — add closeout step: "update status
   field before pushing final commit"
 
 ---
@@ -119,7 +119,7 @@ Y and Phase Xb. The specific delivery-seam escapes are new to Yb.
   enforced by CI
 - `.just/run_lint.py` — complete LINT-BOUNDARY-* rule implementation (YB-015
   was absent; must be implemented or removed from the plan)
-- `docs/phase-Yb/lintable-boundary-plan.md` §2 — mark rules as CI-active vs
+- `docs/plans/phase-Yb/lintable-boundary-plan.md` §2 — mark rules as CI-active vs
   documented-only; remove claims for unimplemented gates
 
 ---
@@ -151,7 +151,7 @@ but not enforced.
   the owning delivery boundary, not hook invocation count
 
 **Target artifacts:**
-- `docs/phase-Yb/sprint-Y*.md` template — acceptance criteria section must
+- `docs/plans/phase-Yb/sprint-Y*.md` template — acceptance criteria section must
   include `named_success_test:` and `named_fault_tests:` fields
 - `.claude/skills/quality-management-gh/SKILL.md` — add check: "does the test
   suite include a named success-path test for each delivery harness family?"
@@ -192,7 +192,7 @@ and Y.11.
 **Target artifacts:**
 - `boundaries/*.toml` schema — add required `allowed_callers` field
 - `.just/run_lint.py` — add TOML schema validation step
-- `docs/phase-Yb/lintable-boundary-plan.md` — add status column (active/planned)
+- `docs/plans/phase-Yb/lintable-boundary-plan.md` — add status column (active/planned)
   to the primitive caller allowlist table
 
 ---

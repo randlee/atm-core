@@ -1,6 +1,11 @@
 [workspace]
 members = [
+    "crates/atm-architecture",
+    "crates/atm-storage",
+    "crates/atm-storage-claude",
+    "crates/atm-storage-sqlserver-proof",
     "crates/atm-core",
+    "crates/atm-runtime",
     "crates/atm-runtime-test-support",
     "crates/atm",
     "crates/atm-daemon-bootstrap",
@@ -10,12 +15,12 @@ members = [
     "crates/sc-lint-boundary",
     "crates/sc-lint-directives",
     "crates/atm-daemon",
-    "crates/atm-rusqlite",
+    "crates/atm-storage-rusqlite",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "1.2.0"
+version = "1.2.2"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]
@@ -31,6 +36,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["serde", "v4"] }
 cargo_metadata = "0.23"
-sc-observability = "1.1.0"
-sc-observability-types = "1.1.0"
+sc-observability = "1.2.0"
+sc-observability-types = "1.2.0"
 arc-swap = "1.7"

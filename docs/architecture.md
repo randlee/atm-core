@@ -13,6 +13,7 @@ The current merged workspace contains:
 
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
+- `atm-runtime`: concrete runtime/store composition root
 - `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
@@ -44,6 +45,7 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
@@ -62,7 +64,7 @@ Phase-R redesign note:
   through Phase U as the supported thin-client host line rather than removed)
 - for the boundary / adapter model, Phase R supersedes any earlier
   pre-Phase-R architecture statements in this document that conflict with the
-  crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
+  crate-local boundary inventories, ADRs, or `docs/plans/phase-R/plan-phase-R.md`
 
 Phase-S portability note:
 - the Phase R integrated daemon proved the runtime split, but it still hard-
@@ -84,15 +86,48 @@ Phase-S portability note:
   implementation line that refines the queue-query packet mapping instead of
   preserving the old multi-message `read` response shape as the final
   contract
-- Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- Phase S planning is tracked in [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
+
+Phase-AA simplification note:
+- the current daemon composition root and daemon-routed doctor model are not
+  the intended steady-state architecture
+- Phase AA moves concrete SQLite construction into a dedicated `atm-runtime`
+  crate and removes adapter-specific health/observability ownership from
+  `atm-daemon`
+- the daemon remains in the product, but as a thin router rather than a
+  concrete storage/runtime host
+- subsystem-specific diagnosis belongs behind subsystem-owned diagnostic traits
+  instead of daemon-local backend-aware helpers
+- top-level doctor code may aggregate subsystem reports and daemon-owned
+  runtime state, but must not reimplement backend-specific diagnosis logic
+- `MailStore` and `RosterStore` remain the primary storage-neutral capability
+  traits in the simplification line described here
+- backend-specific implementations such as SQLite-backed and Claude-JSON-backed
+  adapters are allowed to satisfy the approved behavior-named trait family
+- `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
+  SQLite boundary records, adds `crates/atm-architecture/` as the primary
+  code-driven merge gate as the sole second enforcement layer, and treats
+  policy widening as an architecture change rather than routine lint-data
+  churn
+- `AA.11` narrows the active SQLite runtime baseline to the current
+  `message_id` durable schema; abandoned pre-production compatibility shapes
+  such as `legacy_message_id` remain historical documentation only and are not
+  part of normal bootstrap/migration behavior
+- Phase `AC` later supersedes this simplification line for storage contracts:
+  `MessageStore` and `RosterStore` become the approved shared contract, while
+  task storage is explicitly deferred until a later line starts from canonical
+  Claude-code task schema plus Pydantic validation instead of inheriting any
+  speculative legacy task-store surface; `AC.6` deletes that speculative
+  contract instead of preserving it as a compatibility line
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by four crates:
+The post-Q product runtime is implemented by five crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-runtime`
 - `atm-rusqlite`
 
 Product-level boundary rules:
@@ -100,13 +135,17 @@ Product-level boundary rules:
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns runtime composition, transport adapters, singleton
-  enforcement, and live-status runtime state.
+- `atm-daemon` owns transport adapters, singleton enforcement, live-status
+  runtime state, request routing, and daemon-owned runtime projection.
+- `atm-runtime` owns concrete runtime/store composition and storage-neutral
+  doctor/runtime assembly for daemon and direct CLI doctor callers.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-runtime` must remain a thin composition crate rather than a second
+  daemon or workflow host.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
@@ -183,6 +222,16 @@ Current Phase R boundary direction:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+- Phase AA target ownership:
+  - `atm` remains the CLI composition root
+  - `atm-runtime` becomes the concrete runtime/store composition root
+  - `atm-daemon` consumes storage-neutral runtime inputs and stops
+    constructing SQLite-backed adapters directly in production composition
+  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
+    edge; any reintroduction must fail the Rust
+    `crates/atm-architecture/` dependency guard (`cargo test --package
+    atm-architecture`), which is the sole code-driven boundary enforcement
+    layer
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating
@@ -738,8 +787,11 @@ Architectural rules:
   compatibility wire encoding of that identity.
 - if SQLite persists `message_id`, it stores that same identity in the
   compatibility wire form rather than as a second ATM-owned id.
-- Compatibility writes may preserve established top-level additive fields, but
-  they must not become the place where new ATM-owned machine state accumulates.
+- compatibility reads may tolerate established historical top-level additive
+  fields and `metadata.atm` derivatives, but they remain read-compatible
+  inputs rather than the active or forward-write contract
+- compatibility writes may preserve only the current approved additive surface
+  and must not become the place where new ATM-owned machine state accumulates
 - removed compatibility fields such as `source_team`, `pendingAckAt`,
   `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
   SQLite-only or workflow-only even if older inbox files still contain them.
@@ -766,7 +818,7 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn SourceIngress, exporter: &dyn ProjectionExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
 
 Current runtime note:
 - Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
@@ -1137,6 +1189,15 @@ Public entrypoint:
 - environment override visibility
 - current team member roster from `config.json`
 - observability health
+- aggregate-only subsystem doctor output from:
+  - `MailStoreDoctor`
+  - `RosterStoreDoctor`
+  - `ConfigDoctor`
+
+Current-state caveat:
+- the historical task-store doctor surface was removed during `AC.6`; future
+  task storage, if approved later, starts from canonical Claude-code schema
+  rather than from a preserved speculative doctor contract
 
 `DoctorFinding` contains:
 - severity
@@ -1147,6 +1208,9 @@ Public entrypoint:
 The report model should reuse the current doctor command’s severity/finding
 structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
+Daemon/CLI orchestration stays aggregate-only: those top-level paths may
+compose the `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` reports,
+but they must not reimplement backend-specific store investigation logic.
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -1318,6 +1382,55 @@ The mailbox layer owns:
 
 The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
 
+### 12.1 Atomic Full-Rewrite Semantics
+
+All inbox modifications use atomic full-rewrite for durability and consistency:
+
+**Atomic write pattern:**
+1. Acquire per-inbox file lock before any read
+2. Read and deserialize the full inbox document (JSON array or JSONL)
+3. Apply modification in memory (append message, update workflow state, replace clear set)
+4. Write to a temporary file with fsync to guarantee data durability
+5. Atomically rename temp file over original (single filesystem operation on POSIX; platform-equivalent on Windows)
+6. Release lock after rename completes
+
+This pattern ensures:
+- crash-safety: partial writes never corrupt the original file
+- consistency: concurrent ATM processes never lose updates due to race conditions
+- idempotency: replay of the same operation twice (e.g., after daemon restart) produces the same state
+
+The lock is held from step 1 through step 5 to prevent concurrent read-modify-write races. Full-rewrite applies to all inbox operations: `append_message`, read-state writeback, ack transition, and clear set replacement.
+
+### 12.2 Repair and Rebuild Seam Scope
+
+**Repair/rebuild is reserved for malformed mailbox state. Normal healthy mailbox operations never trigger repair.**
+
+When an inbox file is encountered:
+
+1. **Normal primary path** - healthy, legal mailbox state
+   - Current Claude inbox: one top-level JSON array of inbox messages
+   - Current ATM JSONL export: one JSON object per line (when ATM owns the export)
+   - Action: parse, validate message structure, apply atomic modification
+   - Repair: not triggered
+
+2. **Malformed or degraded state** - triggers repair/rebuild only when:
+   - JSON parse fails (invalid JSON structure, truncated file from crash)
+   - Required message fields are missing or syntactically invalid
+   - File was partially written or contains mixed/corrupt encodings
+   - Explicitly unsupported mailbox format
+   - Action: emit diagnostic, salvage segmentable valid records with explicit
+     degraded warnings when possible, rebuild if safe only through the
+     repair/rebuild seam
+
+**Key architectural rule:**
+- The legal current Claude inbox JSON-array shape must always stay on the normal primary path and never require repair/rebuild
+- Repair/rebuild does not apply to healthy, well-formed inbox state that conforms to the documented schema
+- If the current primary path still classifies healthy mailboxes as requiring repair, that is a bug in the path classification logic (see `compat_inbox_uses_legacy_array_format()` and related guards)
+- Fail-soft recovery is a read-path rule only; normal send/ack rewrite paths
+  must still fail closed on malformed current Claude inbox arrays
+
+Repair guidance for operators is documented separately in [`persisted-data-repair.md`](./persisted-data-repair.md).
+
 ## 13. Identity And File Policy
 
 ### 13.1 Hook Matching
@@ -1439,6 +1552,11 @@ Initial-release boundary rulings:
   - `Unavailable`
 - public ATM observability projections must not expose raw
   `serde_json::Value` / `Map<String, Value>` directly
+- the concrete `sc-observability` adapter is queue-backed as of Phase `AA.6`;
+  ATM uses `Logger::log()` for blocking admission, treats `flush()` /
+  `shutdown()` as the only durability barriers, and projects queue/writer/
+  maintenance state through ATM-owned health detail rather than leaking raw
+  shared types across the public boundary
 
 ### 14.2 Shared Crate Usage Rules
 
@@ -2354,13 +2472,31 @@ Required architectural rules:
 
 ### 21.2 Compatibility Surfaces
 
-Claude-owned inbox JSONL files remain required for:
+Claude-owned shared inbox files remain required for:
 - Claude context injection
 - compatibility with direct Claude-native writers
+- the current primary shared `.json` inbox path, whose file container is one
+  top-level JSON array of inbox messages
 
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- the legal current Claude `.json` inbox JSON-array shape is a supported
+  primary path, not a degraded fallback
+- the current Claude `.json` inbox contract is an atomic full-rewrite path:
+  load the top-level JSON array, append the new message in memory, then write
+  a replacement array document through temp-file + rename
+- ATM-owned `.jsonl` compatibility projections remain append-only exports and
+  do not redefine the shared Claude `.json` inbox contract
+- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
+  unsupported mailbox content rather than for the legal current `.json` array
+  shape
+- current Claude `.json` reads salvage segmentable valid message objects from
+  malformed arrays and emit explicit degraded warnings for localized bad
+  fragments; only non-segmentable root corruption remains terminal
+- `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)` is the only
+  approved full re-export seam for repair/rebuild and must not run on the
+  normal send or ack path
 - ATM-authored JSONL exports are a bounded compatibility projection over the
   durable SQLite message body
 - the default ATM-authored JSONL body export cap is `128 KiB`
@@ -2398,12 +2534,24 @@ Architectural rules:
 There are three distinct paths:
 
 1. Claude / compatibility path
-   - Claude or legacy writers append JSONL
+   - current Claude inbox files use one top-level JSON-array mailbox document
+     as the primary shared compatibility shape
+   - healthy current Claude `.json` inbox writes use atomic full-document
+     replacement: load existing array, append, write replacement via temp-file
+     + rename
+   - healthy current Claude `.json` inboxes stay on the normal primary path
+     and must not require repair/rebuild warnings
+   - ATM-owned `.jsonl` compatibility projections remain append-style only
+     where ATM explicitly owns that export surface
+   - `rebuild_compat_inbox_projection(...)` is reserved for explicit
+     malformed-state repair/rebuild and is not part of the ordinary send/ack
+     write path
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
-   - ATM-authored oversized-body exports replace JSONL `text` with exactly
-     `atm read --message-id <id>` while keeping the full body durable in SQLite
+   - ATM-authored oversized-body exports replace compatibility-surface `text`
+     with exactly `atm read --message-id <id>` while keeping the full body
+     durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
@@ -2596,22 +2744,15 @@ Scope rule:
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
 
-#### TaskStore
+#### Task Storage (Deferred)
 
-Dispatch model:
-- synchronous request/response from service or task-handling code
-- transaction-scoped mutating calls where task and mail state must commit
-  together
-
-Object-safety rule:
-- callers depend on an object-safe task-store trait or façade, not concrete
-  SQLite types
-
-Minimum method set:
-- create/load/update task rows
-- attach/detach task linkage to `message_key`
-- record acknowledgement-related task transitions
-- query task metadata needed by mail/CLI projections
+Phase `AC` closeout note:
+- speculative `TaskStore` and `TaskStoreDoctor` surfaces were deleted in
+  `AC.6`
+- future task storage is out of scope for the current shared storage contract
+- if approved later, task storage starts from canonical Claude-code task
+  schema plus Pydantic validation rather than from preserved transition
+  scaffolding
 
 #### RosterStore
 
@@ -2633,7 +2774,7 @@ Ownership rule:
   part of durable roster truth
 - `config.json` remains an ingress document, not a general runtime-read truth
 
-#### InboxIngress
+#### SourceIngress
 
 Dispatch model:
 - batch import from one changed inbox source
@@ -2647,7 +2788,7 @@ Minimum method set:
 - compute canonical imported identity/fingerprint
 - report degraded/skipped rows with structured diagnostics
 
-#### InboxExport
+#### ProjectionExport
 
 Dispatch model:
 - one-way export / re-export after durable commit
@@ -2812,23 +2953,33 @@ Architectural rules:
 explicit daemon health interface.
 
 Architectural rules:
-- CLI doctor code queries daemon/runtime state through one explicit request /
+- CLI doctor code may answer direct local config/store checks without daemon
+  routing, but daemon-owned runtime state still crosses one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
   - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
-  - SQLite readiness/openability as observed by the runtime
 - the runtime-health DTO returned across that boundary must carry:
   - liveness
   - readiness
   - singleton-owner pid when known
-  - SQLite-ready state
   - degraded-ingest state
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
+
+Phase AA target doctor split:
+- daemon health remains a separate explicit request/response boundary for
+  daemon-owned runtime state
+- direct local doctor checks that only require config or store access do not
+  need daemon routing
+- SQLite/store readiness has been removed from daemon-owned health collection
+  in `AA.3`; `RuntimeStatusSnapshot` carries no store-specific readiness
+  fields
+- store readiness then lives in direct local diagnostics or other subsystem
+  doctor reports assembled above the backend, not in the daemon runtime DTO
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 

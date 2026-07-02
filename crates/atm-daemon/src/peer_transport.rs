@@ -8,9 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::RemoteReplayStateRecord;
 use atm_core::AtmConfig;
-use atm_core::boundary::{self, AtmProtocol, ClientTransport, MessageKey};
+use atm_core::boundary::{
+    self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStateRecord, RemoteReplayStore,
+};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
@@ -28,8 +29,10 @@ const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
+const MAX_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
+const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -64,6 +67,15 @@ impl PeerTransportConfig {
             ))
             .with_recovery(
                 "Raise daemon.remote_retry_budget to at least one second before starting atm-daemon.",
+            ));
+        }
+        if remote_retry_budget > MAX_REMOTE_RETRY_BUDGET {
+            return Err(AtmError::validation(format!(
+                "daemon.remote_retry_budget must not exceed {} second(s)",
+                MAX_REMOTE_RETRY_BUDGET.as_secs()
+            ))
+            .with_recovery(
+                "Lower daemon.remote_retry_budget to one week or less before starting atm-daemon.",
             ));
         }
         Ok(Self {
@@ -117,21 +129,6 @@ fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
     }
 }
 
-pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
-    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
-
-    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError>;
-
-    fn delete(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        message_key: &MessageKey,
-    ) -> Result<(), AtmError>;
-
-    fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError>;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AttemptFailureKind {
     Retryable,
@@ -159,13 +156,28 @@ pub(crate) struct ReplayResumeSummary {
     pub(crate) purged_expired: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct PeerClientTransport {
     endpoint: Option<SocketAddr>,
     config: PeerTransportConfig,
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
     codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
+}
+
+impl std::fmt::Debug for PeerClientTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerClientTransport")
+            .field("endpoint", &self.endpoint)
+            .field("config", &self.config)
+            .field(
+                "replay_store",
+                &self.replay_store.as_ref().map(|_| "dyn RemoteReplayStore"),
+            )
+            .field("codec", &"JsonAtmProtocolCodec")
+            .field("observability", &self.observability)
+            .finish()
+    }
 }
 
 impl PeerClientTransport {
@@ -191,7 +203,7 @@ impl PeerClientTransport {
         replay_db_path: PathBuf,
     ) -> Self {
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(replay_db_path).expect("replay store");
+            atm_runtime::sqlite_remote_replay_store_for_test(replay_db_path).expect("replay store");
         Self {
             endpoint: Some(endpoint),
             config,
@@ -213,6 +225,14 @@ impl PeerClientTransport {
         let now = IsoTimestamp::now();
         let purged_expired = replay_store.purge_expired(now)?;
         let records = replay_store.load_all()?;
+        if records.len() > MAX_REMOTE_REPLAY_RESUME_RECORDS {
+            return Err(AtmError::daemon_unavailable(format!(
+                "daemon remote replay resume exceeded the bounded record cap ({MAX_REMOTE_REPLAY_RESUME_RECORDS})"
+            ))
+            .with_recovery(
+                "Drain or delete retained remote replay rows until the bounded startup replay cap is back under control, then restart atm-daemon.",
+            ));
+        }
         let mut delivered = 0usize;
         let mut retained = 0usize;
         for mut record in records {
@@ -235,7 +255,7 @@ impl PeerClientTransport {
                 Err(error) => {
                     record.attempt_count = record.attempt_count.saturating_add(1);
                     record.last_attempt_at = Some(IsoTimestamp::now());
-                    record.last_error = Some(error.code.to_string());
+                    record.last_error = Some(error.code);
                     tracing::warn!(
                         subsystem = "peer_transport",
                         action = "resume_replay",
@@ -279,6 +299,9 @@ impl PeerClientTransport {
             .endpoint
             .ok_or_else(remote_peer_endpoint_not_configured_error)?;
         let recorded_at = IsoTimestamp::now();
+        // The configured retry budget intentionally bounds both the live retry
+        // window and the retained replay TTL so durable replay cannot outlive
+        // the operator-visible retry promise for one remote delivery attempt.
         let expires_at = IsoTimestamp::from_datetime(
             recorded_at.into_inner()
                 + chrono::Duration::from_std(self.config.remote_retry_budget)
@@ -1010,10 +1033,9 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
-                .contains("host-scoped ATM durable replay store")
+                .contains("atm-daemon binary is installed")
         );
     }
 
@@ -1023,7 +1045,7 @@ mod tests {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+            atm_runtime::sqlite_remote_replay_store_for_test(tempdir.path().join("mail.db"))
                 .expect("replay store");
         let client = PeerClientTransport {
             endpoint: None,
@@ -1057,7 +1079,7 @@ mod tests {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+            atm_runtime::sqlite_remote_replay_store_for_test(tempdir.path().join("mail.db"))
                 .expect("replay store");
         let client = PeerClientTransport {
             endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7002))),
@@ -1085,10 +1107,9 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
-                .contains("remote retry budget configuration")
+                .contains("atm-daemon binary is installed")
         );
     }
 
@@ -1342,7 +1363,7 @@ mod tests {
             let response = ResponseEnvelope::Error(ProtocolErrorEnvelope {
                 code: AtmErrorCode::DaemonUnavailable,
                 message: "remote rejected request".to_string(),
-                recovery: None,
+                recovery: Vec::new(),
             });
             write_response_frame(&mut stream, &codec, request_id, response);
         });
@@ -1481,8 +1502,7 @@ mod tests {
         assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .expect("recovery guidance")
                 .contains("let the daemon resume the pending handoff")
         );

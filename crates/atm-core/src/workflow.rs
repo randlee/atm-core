@@ -16,7 +16,7 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::mailbox::lock;
 use crate::persistence;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -39,7 +39,7 @@ impl WorkflowMessageKey {
         Self(message_id)
     }
 
-    pub(crate) fn from_envelope(envelope: &MessageEnvelope) -> Option<Self> {
+    pub(crate) fn from_envelope(envelope: &InboxMessage) -> Option<Self> {
         envelope.message_id.map(Self::new)
     }
 }
@@ -191,9 +191,9 @@ where
 
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn project_envelope(
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
     workflow_state: &WorkflowStateFile,
-) -> MessageEnvelope {
+) -> InboxMessage {
     // Projection is the guardrail: higher-level services classify mailbox
     // state from this joined view instead of re-deriving workflow durability
     // from the Claude-owned inbox record.
@@ -214,8 +214,8 @@ pub(crate) fn project_envelope(
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn apply_projected_state(
     workflow_state: &mut WorkflowStateFile,
-    original: &MessageEnvelope,
-    projected: &MessageEnvelope,
+    original: &InboxMessage,
+    projected: &InboxMessage,
 ) -> bool {
     // Persist only the projected workflow axes here. Callers keep any inbox
     // compatibility rewrite separate so the workflow sidecar stays the single
@@ -239,18 +239,18 @@ pub(crate) fn apply_projected_state(
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn remove_message_state(
     workflow_state: &mut WorkflowStateFile,
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
 ) -> bool {
     workflow_key(envelope)
         .and_then(|key| workflow_state.messages.remove(&key))
         .is_some()
 }
 
-pub(crate) fn workflow_key(envelope: &MessageEnvelope) -> Option<WorkflowMessageKey> {
+pub(crate) fn workflow_key(envelope: &InboxMessage) -> Option<WorkflowMessageKey> {
     WorkflowMessageKey::from_envelope(envelope)
 }
 
-pub(crate) fn initial_state_for_envelope(envelope: &MessageEnvelope) -> WorkflowMessageState {
+pub(crate) fn initial_state_for_envelope(envelope: &InboxMessage) -> WorkflowMessageState {
     WorkflowMessageState {
         read: envelope.read,
         pending_ack_at: envelope.pending_ack_at,
@@ -260,7 +260,7 @@ pub(crate) fn initial_state_for_envelope(envelope: &MessageEnvelope) -> Workflow
 
 pub(crate) fn remember_initial_state(
     workflow_state: &mut WorkflowStateFile,
-    envelope: &MessageEnvelope,
+    envelope: &InboxMessage,
 ) -> bool {
     let Some(key) = workflow_key(envelope) else {
         return false;
@@ -282,12 +282,12 @@ mod tests {
         project_envelope, remember_initial_state, remove_message_state, save_workflow_state,
         workflow_key,
     };
-    use crate::schema::{AtmMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
-    fn sample_message() -> MessageEnvelope {
-        MessageEnvelope {
+    fn sample_message() -> InboxMessage {
+        InboxMessage {
             from: TEST_LEAD.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),

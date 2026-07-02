@@ -118,7 +118,7 @@ SCB_SINGLETON_TARGET_FILES = (
     Path("crates/atm-runtime-test-support/src/lib.rs"),
     Path("crates/atm-daemon/src/composition.rs"),
     Path("crates/atm-daemon/src/tests.rs"),
-    Path("crates/atm-rusqlite/src/lib.rs"),
+    Path("crates/atm-storage-rusqlite/src/lib.rs"),
 )
 SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
     Path("crates/atm-daemon-bootstrap/src/lib.rs"),

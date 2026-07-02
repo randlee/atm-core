@@ -198,7 +198,7 @@ Return fenced JSON only.
       "status": "present | partially-present | absent | not-verifiable",
       "closure_state": "closed | open | not-applicable",
       "evidence_refs": [
-        "docs/phase-X/sprint-X.md:10",
+        "docs/plans/phase-X/sprint-X.md:10",
         "crates/example/src/lib.rs:42"
       ],
       "notes": "short justification"

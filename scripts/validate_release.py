@@ -1,0 +1,680 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from dataclasses import asdict
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
+from pathlib import Path
+
+
+REQUIRED_RELEASE_FILES = (
+    "release/publish-artifacts.toml",
+    "scripts/release_gate.sh",
+    "scripts/release_artifacts.py",
+    "docs/release-inventory-schema.json",
+    "release/RELEASE-NOTES-TEMPLATE.md",
+)
+REQUIRED_RELEASE_BINARIES = ("atm", "atm-daemon")
+INVENTORY_REQUIRED_TOP = ("releaseVersion", "releaseTag", "releaseCommit", "generatedAt", "items")
+INVENTORY_REQUIRED_ITEM = ("artifact", "version", "sourceRef", "publishTarget", "verifyCommands", "required")
+CHECK_DEP_CURRENCY_ENV = "ATMD_CHECK_DEP_CURRENCY"
+GITHUB_ISSUE_ENV = "ATMD_GH_AUTOFIX_ISSUES"
+
+
+@dataclass
+class Finding:
+    check: str
+    severity: str
+    summary: str
+    detail: str = ""
+    command: list[str] | None = None
+    exit_code: int | None = None
+
+    @property
+    def blocks(self) -> bool:
+        return self.severity == "error"
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def workspace_version(root: Path) -> str:
+    cargo = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    version = cargo.get("workspace", {}).get("package", {}).get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise SystemExit("workspace.package.version missing from Cargo.toml")
+    return version
+
+
+def current_ref(root: Path) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if completed.returncode != 0:
+        return "UNKNOWN"
+    return completed.stdout.strip() or "UNKNOWN"
+
+
+def run_capture(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
+def append_completed_findings(
+    findings: list[Finding],
+    check: str,
+    completed: subprocess.CompletedProcess[str],
+    success_summary: str,
+    failure_summary: str,
+) -> None:
+    if completed.returncode == 0:
+        if completed.stdout.strip():
+            sys.stdout.write(completed.stdout)
+        if completed.stderr.strip():
+            sys.stderr.write(completed.stderr)
+        return
+    if completed.stdout.strip():
+        sys.stdout.write(completed.stdout)
+    if completed.stderr.strip():
+        sys.stderr.write(completed.stderr)
+    findings.append(
+        Finding(
+            check=check,
+            severity="error",
+            summary=failure_summary,
+            detail=(completed.stderr or completed.stdout).strip(),
+            command=completed.args if isinstance(completed.args, list) else None,
+            exit_code=completed.returncode,
+        )
+    )
+
+
+def validate_support_files(root: Path, findings: list[Finding]) -> None:
+    missing = [path for path in REQUIRED_RELEASE_FILES if not (root / path).exists()]
+    if missing:
+        findings.append(
+            Finding(
+                check="support-files",
+                severity="error",
+                summary="missing required release support files",
+                detail=", ".join(missing),
+            )
+        )
+
+
+def validate_lint(root: Path, findings: list[Finding]) -> None:
+    if shutil.which("just") is not None:
+        lint_cmd = ["just", "lint"]
+        failure_summary = "just lint failed"
+    else:
+        # CI images or minimal local environments may not have `just` installed.
+        lint_cmd = ["python3", ".just/run_lint.py", "all"]
+        failure_summary = "lint runner failed"
+    completed = run_capture(lint_cmd, cwd=root)
+    append_completed_findings(
+        findings,
+        "lint",
+        completed,
+        "lint passed",
+        failure_summary,
+    )
+
+
+def validate_manifest(root: Path, findings: list[Finding]) -> None:
+    commands = (
+        (
+            "manifest-coverage",
+            [
+                "python3",
+                "scripts/release_artifacts.py",
+                "validate-manifest",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--workspace-toml",
+                "Cargo.toml",
+            ],
+            "manifest coverage validation failed",
+        ),
+        (
+            "preflight-modes",
+            [
+                "python3",
+                "scripts/release_artifacts.py",
+                "validate-preflight-checks",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--workspace-toml",
+                "Cargo.toml",
+            ],
+            "preflight mode validation failed",
+        ),
+        (
+            "publish-order",
+            [
+                "python3",
+                "scripts/release_artifacts.py",
+                "validate-publish-order",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--workspace-toml",
+                "Cargo.toml",
+            ],
+            "publish-order validation failed",
+        ),
+    )
+    for check, cmd, summary in commands:
+        completed = run_capture(cmd, cwd=root)
+        append_completed_findings(findings, check, completed, f"{check} passed", summary)
+
+
+def validate_release_binaries(root: Path, findings: list[Finding]) -> None:
+    completed = run_capture(
+        [
+            "python3",
+            "scripts/release_artifacts.py",
+            "validate-release-binaries",
+            "--manifest",
+            "release/publish-artifacts.toml",
+            *sum((["--required", binary] for binary in REQUIRED_RELEASE_BINARIES), []),
+        ],
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "release-binaries",
+        completed,
+        "required release binaries validated",
+        "required release binaries missing from manifest",
+    )
+
+
+def validate_publish_surface(
+    root: Path,
+    version: str,
+    findings: list[Finding],
+    *,
+    enforce_release_version: bool,
+) -> None:
+    if enforce_release_version:
+        unpublished = run_capture(
+            [
+                "python3",
+                "scripts/release_artifacts.py",
+                "check-version-unpublished",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--version",
+                version,
+            ],
+            cwd=root,
+        )
+        append_completed_findings(
+            findings,
+            "publish-version-unpublished",
+            unpublished,
+            "release version is unpublished",
+            "release version already published",
+        )
+    else:
+        findings.append(
+            Finding(
+                check="publish-version-unpublished",
+                severity="warning",
+                summary="release version publication check skipped outside explicit release-candidate mode",
+            )
+        )
+
+    modes = {
+        "full": [
+            "python3",
+            "scripts/release_artifacts.py",
+            "list-preflight",
+            "--manifest",
+            "release/publish-artifacts.toml",
+            "--mode",
+            "full",
+        ],
+        "locked": [
+            "python3",
+            "scripts/release_artifacts.py",
+            "list-preflight",
+            "--manifest",
+            "release/publish-artifacts.toml",
+            "--mode",
+            "locked",
+        ],
+    }
+    crates_by_mode: dict[str, list[str]] = {}
+    for mode, cmd in modes.items():
+        completed = run_capture(cmd, cwd=root)
+        if completed.returncode != 0:
+            append_completed_findings(
+                findings,
+                f"publish-surface-{mode}-list",
+                completed,
+                f"{mode} preflight list generated",
+                f"{mode} preflight list generation failed",
+            )
+            crates_by_mode[mode] = []
+            continue
+        crates_by_mode[mode] = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+    for crate in crates_by_mode.get("full", []):
+        for cmd, check_name, summary in (
+            (
+                ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
+                f"cargo-package-{crate}",
+                f"`cargo package` failed for {crate}",
+            ),
+            (
+                ["cargo", "publish", "--dry-run", "-p", crate, "--locked", "--no-verify"],
+                f"cargo-publish-dry-run-{crate}",
+                f"`cargo publish --dry-run` failed for {crate}",
+            ),
+        ):
+            completed = run_capture(cmd, cwd=root)
+            append_completed_findings(findings, check_name, completed, f"{check_name} passed", summary)
+
+    for crate in crates_by_mode.get("locked", []):
+        completed = run_capture(["cargo", "check", "-p", crate, "--locked"], cwd=root)
+        append_completed_findings(
+            findings,
+            f"cargo-check-{crate}",
+            completed,
+            f"cargo check passed for {crate}",
+            f"`cargo check --locked` failed for {crate}",
+        )
+
+
+def validate_inventory(root: Path, version: str, findings: list[Finding]) -> None:
+    tag = f"v{version}"
+    commit_result = run_capture(["git", "rev-parse", "HEAD"], cwd=root)
+    if commit_result.returncode != 0:
+        append_completed_findings(
+            findings,
+            "inventory-commit",
+            commit_result,
+            "release commit resolved",
+            "release commit resolution failed",
+        )
+        return
+    commit = commit_result.stdout.strip()
+    with tempfile.TemporaryDirectory(prefix="atm-release-inventory-") as tmpdir:
+        output = Path(tmpdir) / "release-inventory.json"
+        completed = run_capture(
+            [
+                "python3",
+                "scripts/release_artifacts.py",
+                "emit-inventory",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--version",
+                version,
+                "--tag",
+                tag,
+                "--commit",
+                commit,
+                "--source-ref",
+                f"refs/heads/{current_ref(root)}",
+                "--generated-at",
+                utc_now(),
+                "--output",
+                str(output),
+            ],
+            cwd=root,
+        )
+        if completed.returncode != 0:
+            append_completed_findings(
+                findings,
+                "inventory-generate",
+                completed,
+                "release inventory generated",
+                "release inventory generation failed",
+            )
+            return
+        inventory = json.loads(output.read_text(encoding="utf-8"))
+
+    missing_top = [field for field in INVENTORY_REQUIRED_TOP if field not in inventory]
+    if missing_top:
+        findings.append(
+            Finding(
+                check="inventory-shape",
+                severity="error",
+                summary="inventory missing required top-level fields",
+                detail=", ".join(missing_top),
+            )
+        )
+        return
+    items = inventory.get("items", [])
+    if not isinstance(items, list) or not items:
+        findings.append(
+            Finding(
+                check="inventory-shape",
+                severity="error",
+                summary="inventory.items must be a non-empty list",
+            )
+        )
+        return
+    item_errors: list[str] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            item_errors.append(f"items[{idx}] must be an object")
+            continue
+        for field in INVENTORY_REQUIRED_ITEM:
+            if field not in item:
+                item_errors.append(f"items[{idx}] missing {field}")
+    if item_errors:
+        findings.append(
+            Finding(
+                check="inventory-shape",
+                severity="error",
+                summary="inventory shape validation failed",
+                detail="; ".join(item_errors),
+            )
+        )
+
+
+def validate_cargo_lock_drift(root: Path, findings: list[Finding], *, enforce_release_window: bool) -> None:
+    if not enforce_release_window:
+        findings.append(
+            Finding(
+                check="cargo-lock-drift",
+                severity="warning",
+                summary="Cargo.lock drift check skipped outside explicit release-candidate mode",
+            )
+        )
+        return
+    verify_ref = run_capture(["git", "rev-parse", "--verify", "origin/main"], cwd=root)
+    if verify_ref.returncode != 0:
+        append_completed_findings(
+            findings,
+            "cargo-lock-origin-main",
+            verify_ref,
+            "origin/main available",
+            "origin/main is not available for Cargo.lock drift comparison",
+        )
+        return
+    completed = run_capture(["git", "diff", "--name-only", "origin/main", "--", "Cargo.lock"], cwd=root)
+    if completed.returncode != 0:
+        append_completed_findings(
+            findings,
+            "cargo-lock-drift",
+            completed,
+            "Cargo.lock drift check passed",
+            "Cargo.lock drift check failed",
+        )
+        return
+    if completed.stdout.strip():
+        findings.append(
+            Finding(
+                check="cargo-lock-drift",
+                severity="error",
+                summary="Cargo.lock drift detected against origin/main",
+                detail=completed.stdout.strip(),
+                command=["git", "diff", "--name-only", "origin/main", "--", "Cargo.lock"],
+            )
+        )
+
+
+def workspace_package_names(root: Path) -> set[str]:
+    cargo = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    members = cargo.get("workspace", {}).get("members", [])
+    names: set[str] = set()
+    for member in members:
+        manifest = root / member / "Cargo.toml"
+        if not manifest.exists():
+            continue
+        data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        name = data.get("package", {}).get("name")
+        if isinstance(name, str) and name:
+            names.add(name)
+    return names
+
+
+def direct_registry_dependencies(root: Path) -> dict[str, str]:
+    internal = workspace_package_names(root)
+    manifests = [root / "Cargo.toml"]
+    cargo = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    for member in cargo.get("workspace", {}).get("members", []):
+        manifest = root / member / "Cargo.toml"
+        if manifest.exists():
+            manifests.append(manifest)
+
+    deps: dict[str, str] = {}
+
+    def collect_from_table(table: object) -> None:
+        if not isinstance(table, dict):
+            return
+        for dep_name, spec in table.items():
+            if dep_name in internal:
+                continue
+            package_name = dep_name
+            version: str | None = None
+            if isinstance(spec, str):
+                version = spec
+            elif isinstance(spec, dict):
+                if spec.get("workspace") is True or "path" in spec:
+                    continue
+                package_name = str(spec.get("package", dep_name))
+                if package_name in internal:
+                    continue
+                raw = spec.get("version")
+                if isinstance(raw, str):
+                    version = raw
+            if isinstance(version, str) and version.strip():
+                deps.setdefault(package_name, version.strip())
+
+    for manifest in manifests:
+        data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        collect_from_table(data.get("dependencies"))
+        collect_from_table(data.get("build-dependencies"))
+        for target_data in data.get("target", {}).values():
+            if isinstance(target_data, dict):
+                collect_from_table(target_data.get("dependencies"))
+                collect_from_table(target_data.get("build-dependencies"))
+    return deps
+
+
+def latest_registry_version(root: Path, crate: str) -> str | None:
+    completed = run_capture(["cargo", "search", crate, "--limit", "1"], cwd=root)
+    if completed.returncode != 0:
+        return None
+    pattern = re.compile(rf"^{re.escape(crate)} = \"([^\"]+)\"")
+    for line in completed.stdout.splitlines():
+        match = pattern.match(line.strip())
+        if match:
+            return match.group(1)
+    return None
+
+
+def maybe_file_dep_currency_issue(root: Path, stale: list[tuple[str, str, str]]) -> None:
+    if os.environ.get(GITHUB_ISSUE_ENV) != "1":
+        return
+    if not stale:
+        return
+    completed = run_capture(["gh", "--version"], cwd=root)
+    if completed.returncode != 0:
+        return
+    title = f"Release preflight stale dependency findings on {current_ref(root)}"
+    body_lines = [
+        "Publisher preflight found stale direct dependencies that should be reviewed:",
+        "",
+    ]
+    for dep, current, latest in stale:
+        body_lines.append(f"- `{dep}` current `{current}` latest `{latest}`")
+    body_lines.extend(
+        [
+            "",
+            f"Detected by `scripts/validate_release.py` with `{CHECK_DEP_CURRENCY_ENV}=1`.",
+        ]
+    )
+    run_capture(["gh", "issue", "create", "--title", title, "--body", "\n".join(body_lines)], cwd=root)
+
+
+def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
+    if os.environ.get(CHECK_DEP_CURRENCY_ENV) != "1":
+        findings.append(
+            Finding(
+                check="dependency-currency",
+                severity="warning",
+                summary=f"dependency currency check skipped; set {CHECK_DEP_CURRENCY_ENV}=1 to enable it",
+            )
+        )
+        return
+
+    stale: list[tuple[str, str, str]] = []
+    unresolved: list[str] = []
+    for dep, current in sorted(direct_registry_dependencies(root).items()):
+        latest = latest_registry_version(root, dep)
+        if latest is None:
+            unresolved.append(dep)
+            continue
+        if latest != current:
+            stale.append((dep, current, latest))
+
+    if unresolved:
+        findings.append(
+            Finding(
+                check="dependency-currency",
+                severity="warning",
+                summary="dependency currency check could not resolve some crates via cargo search",
+                detail=", ".join(unresolved),
+            )
+        )
+    if stale:
+        detail = "; ".join(f"{dep}: current {current}, latest {latest}" for dep, current, latest in stale)
+        findings.append(
+            Finding(
+                check="dependency-currency",
+                severity="warning",
+                summary="stale direct dependency versions detected",
+                detail=detail,
+            )
+        )
+        maybe_file_dep_currency_issue(root, stale)
+
+
+def write_findings(root: Path, version: str, findings_path: Path, findings: list[Finding]) -> None:
+    payload = {
+        "generatedAt": utc_now(),
+        "branch": current_ref(root),
+        "version": version,
+        "status": "fail" if any(f.blocks for f in findings) else "pass",
+        "findings": [asdict(f) | {"blocks": f.blocks} for f in findings],
+    }
+    findings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the retained release validation suite")
+    parser.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+        choices=(
+            "all",
+            "lint",
+            "support-files",
+            "manifest",
+            "publish-surface",
+            "release-binaries",
+            "inventory",
+            "cargo-lock-drift",
+            "dependency-currency",
+        ),
+    )
+    parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
+    parser.add_argument("--findings", default="release-findings.json", help="Path to findings JSON output")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    root = repo_root()
+    explicit_version = args.version is not None
+    version = args.version or workspace_version(root)
+    if version != workspace_version(root):
+        raise SystemExit(
+            f"release version mismatch: expected workspace version {workspace_version(root)}, got {version}"
+        )
+
+    findings: list[Finding] = []
+    actions = {
+        "support-files": lambda: validate_support_files(root, findings),
+        "lint": lambda: validate_lint(root, findings),
+        "manifest": lambda: validate_manifest(root, findings),
+        "publish-surface": lambda: validate_publish_surface(
+            root,
+            version,
+            findings,
+            enforce_release_version=explicit_version,
+        ),
+        "release-binaries": lambda: validate_release_binaries(root, findings),
+        "inventory": lambda: validate_inventory(root, version, findings),
+        "cargo-lock-drift": lambda: validate_cargo_lock_drift(
+            root,
+            findings,
+            enforce_release_window=explicit_version,
+        ),
+        "dependency-currency": lambda: validate_dependency_currency(root, findings),
+    }
+
+    findings_path = root / args.findings
+    try:
+        if args.target == "all":
+            for target in (
+                "support-files",
+                "lint",
+                "manifest",
+                "publish-surface",
+                "release-binaries",
+                "inventory",
+                "cargo-lock-drift",
+                "dependency-currency",
+            ):
+                print(f"== validate {target} ==")
+                actions[target]()
+        else:
+            actions[args.target]()
+    finally:
+        write_findings(root, version, findings_path, findings)
+        print(f"wrote findings: {findings_path}")
+
+    blockers = [finding for finding in findings if finding.blocks]
+    if blockers:
+        print("release validation blockers:")
+        for finding in blockers:
+            print(f"- [{finding.check}] {finding.summary}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

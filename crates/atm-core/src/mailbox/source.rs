@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "AC.2 preserves crate-private source-discovery helpers until all Claude compatibility callers move into atm-storage-claude."
+)]
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -8,19 +13,19 @@ use crate::address::AgentAddress;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
-use crate::schema::MessageEnvelope;
+use crate::schema::InboxMessage;
 use crate::types::{AgentName, SourceIndex, TeamName};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SourceFile {
     pub path: PathBuf,
-    pub messages: Vec<MessageEnvelope>,
+    pub messages: Vec<InboxMessage>,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 pub(crate) struct SourcedMessage {
-    pub envelope: MessageEnvelope,
+    pub envelope: InboxMessage,
     pub source_path: PathBuf,
     pub source_index: SourceIndex,
 }
