@@ -673,3 +673,6 @@ Authoritative phase plan:
 
 Supporting inventory and gap analysis:
 - `docs/plans/sc-lint-migration/plan.md`
+
+Phase issues inventory:
+- `docs/plans/phase-AD/issues.md`

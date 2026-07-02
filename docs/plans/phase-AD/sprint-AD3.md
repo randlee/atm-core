@@ -52,6 +52,15 @@ Required command contract:
 - no vendored analyzer crate deletion yet
 - no CI / release-preflight retarget yet
 
+## Code And Document Targets
+
+- `.just/lint_sc_portability.py`
+- `.just/tests/test_lint_sc_portability.py`
+- `.triage/phase-AD/ad3-vendored-sc-portability.json`
+- `.triage/phase-AD/ad3-published-sc-portability.json`
+- `.triage/phase-AD/ad3-sc-portability-parity.md`
+- `.just/compare_sc_lint_findings.py` if `AD.2` had to add it
+
 ## Deliverables
 
 - `.just/lint_sc_portability.py` calls the published `sc-lint-portability`
@@ -70,6 +79,14 @@ Required command contract:
   - any per-rule finding-count drift that requires explanation
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
+
+## Required Work
+
+- retarget the portability wrapper to the published analyzer only
+- preserve the ATM wrapper contract and user-facing lint name
+- reuse the deterministic parity comparison surface from `AD.2`
+- prove required portability rule families and JSON shape survive the cutover
+- block closure on unexplained rule loss or finding-count drift
 
 ## Acceptance Criteria
 

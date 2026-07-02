@@ -48,6 +48,13 @@ same facts directly from repo state.
 - no proc-macro dependency change yet
 - no vendored crate deletion yet
 
+## Code And Document Targets
+
+- repo-owned install contract doc or config record for the published tool pin
+- local developer install path docs/scripts
+- CI-consumable install path docs/scripts
+- no `.just/lint_*.py` wrapper edits in this sprint
+
 ## Deliverables
 
 - one repo-owned install path exists for the published analyzer binaries ATM
@@ -65,6 +72,14 @@ same facts directly from repo state.
   - release binaries
   - `cargo install`
   - `cargo binstall`
+
+## Required Work
+
+- choose one published `sc-lint` version pin that every later sprint will use
+- define one repo-owned install method for Linux, macOS, and Windows
+- record the exact binaries included in that contract
+- record the local and CI install steps without relying on `../sc-lint`
+- leave wrapper behavior unchanged so this sprint closes only the install line
 
 ## Acceptance Criteria
 

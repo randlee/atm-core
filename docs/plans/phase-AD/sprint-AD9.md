@@ -63,6 +63,15 @@ planning checkpoint after `AD.8`:
 - no transitive reachability redesign unless the released `D.1` surface
   requires it explicitly
 
+## Code And Document Targets
+
+- `.just/lint_boundaries.py`
+- current `boundaries/**/*.toml` records touched by dependency-policy
+  enforcement
+- the repo-owned version-pin record for published `sc-lint`
+- any ATM-specific tests or docs that remain authoritative for dependency
+  policy
+
 ## Deliverables
 
 - ATM pins the first released `sc-lint` version that includes direct
@@ -74,6 +83,16 @@ planning checkpoint after `AD.8`:
 - duplicated ATM-local dependency-policy checks in `.just/lint_boundaries.py`
   are deleted or reduced to ATM-only governance checks where released
   `sc-lint` is now authoritative
+
+## Required Work
+
+- pin the first published `sc-lint` release that actually includes `D.1`
+- rerun dependency-policy enforcement across the real ATM boundary inventory
+- fix any newly exposed boundary TOML drift before claiming closure
+- delete or reduce duplicated ATM-local dependency-policy logic only after the
+  released analyzer proves equal-or-better coverage
+- if upstream release lag blocks execution, record the checkpoint outcome
+  explicitly rather than leaving the sprint in an implicit hold
 
 ## Paths To Delete
 

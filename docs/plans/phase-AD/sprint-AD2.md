@@ -55,6 +55,16 @@ through `cargo run -q -p sc-lint-boundary`.
 - no vendored crate deletion yet
 - no CI install-path closeout yet
 
+## Code And Document Targets
+
+- `.just/lint_sc_boundary.py`
+- `.just/tests/test_lint_sc_boundary.py`
+- `.triage/phase-AD/ad2-vendored-sc-boundary.json`
+- `.triage/phase-AD/ad2-published-sc-boundary.json`
+- `.triage/phase-AD/ad2-sc-boundary-parity.md`
+- `.just/compare_sc_lint_findings.py` if no equivalent repo-local comparison
+  helper exists yet
+
 ## Deliverables
 
 - `.just/lint_sc_boundary.py` calls the published `sc-lint-boundary`
@@ -72,6 +82,15 @@ through `cargo run -q -p sc-lint-boundary`.
   - any per-rule finding-count drift that requires explanation
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
+
+## Required Work
+
+- retarget the boundary wrapper to the published binary only
+- preserve the ATM wrapper contract and user-facing lint name
+- add or reuse one deterministic parity comparison helper
+- produce vendored and published findings on the same ATM commit
+- block closure on unexplained rule loss, JSON-shape drift, or finding-count
+  drop
 
 ## Acceptance Criteria
 

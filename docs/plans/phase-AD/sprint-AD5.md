@@ -50,6 +50,11 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 - no CI / release-preflight cutover yet
 - no dependency-policy Phase `D.1` adoption yet
 
+## Code And Document Targets
+
+- `.just/lint_runtime_waits.py`
+- `.just/tests/test_lint_runtime_waits.py`
+
 ## Deliverables
 
 - `.just/lint_runtime_waits.py` sources findings from the published
@@ -58,6 +63,14 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
   `SCB-RUNTIME-002`
 - `.just/tests/test_lint_runtime_waits.py` is updated only as needed to
   preserve the ATM subset-wrapper contract
+
+## Required Work
+
+- retarget `runtime-waits` to `sc-lint-runtime`
+- preserve the `SCB-RUNTIME-001` / `SCB-RUNTIME-002` subset contract exactly
+- prove the wrapper no longer reads runtime rule ownership through the old
+  integrated boundary analyzer
+- block closure if published runtime coverage is weaker than the vendored path
 
 ## Acceptance Criteria
 

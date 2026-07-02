@@ -33,6 +33,15 @@ Production-ready commitment:
 - no CI / release-preflight cutover yet
 - no dependency-policy Phase `D.1` adoption yet
 
+## Code And Document Targets
+
+- root `Cargo.toml`
+- `Cargo.lock`
+- `crates/sc-lint-directives/`
+- `crates/sc-lint-attributes/`
+- `crates/sc-lint-boundary/`
+- any wrapper or helper path that still assumes those directories exist
+
 ## Deliverables
 
 - ATM removes the vendored workspace members:
@@ -42,6 +51,13 @@ Production-ready commitment:
 - no ATM workspace path dependency points at vendored `sc-lint-*`
 - no lint wrapper still shells through a workspace-built vendored `sc-lint`
   binary
+
+## Required Work
+
+- remove the vendored workspace members from the workspace definition
+- delete the vendored crate directories and update lockfile state
+- remove any residual path assumptions in wrappers, tests, or helper scripts
+- prove the previously cut-over wrappers still run after deletion
 
 ## Paths To Delete
 

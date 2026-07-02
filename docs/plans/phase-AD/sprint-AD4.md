@@ -49,6 +49,13 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - no vendored crate removal yet
 - no CI / release-preflight cutover yet
 
+## Code And Document Targets
+
+- `.just/lint_unix_gating.py`
+- `.just/tests/test_lint_unix_gating.py`
+- `.triage/phase-AD/ad4-sc-lint-portability-help.txt`
+- `.triage/phase-AD/ad4-unix-path-prefixes-review.md`
+
 ## Deliverables
 
 - `.just/lint_unix_gating.py` sources findings from the published
@@ -63,6 +70,15 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - if no direct equivalent exists, the sprint must either carry the behavior
   forward in an ATM-owned wrapper/config override or record an explicitly
   approved removal in that review artifact before sprint closure
+
+## Required Work
+
+- retarget `unix-gating` to published portability findings only
+- preserve the `PORT-004` / `PORT-005` subset contract exactly
+- inspect the published portability surface for `unix_path_prefixes`
+  equivalence
+- if direct equivalence is missing, define the repo-owned replacement or
+  record approved removal explicitly before closure
 
 ## Acceptance Criteria
 

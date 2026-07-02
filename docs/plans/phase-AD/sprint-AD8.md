@@ -33,12 +33,25 @@ Production-ready commitment:
 - no dependency-policy Phase `D.1` adoption yet
 - no new lint-target rename or local UX redesign
 
+## Code And Document Targets
+
+- `.github/workflows/ci.yml`
+- `scripts/validate_release.py`
+- any repo docs or tests that still describe vendored analyzer install steps
+
 ## Deliverables
 
 - `.github/workflows/ci.yml` uses the published install path only
 - `scripts/validate_release.py` uses the published install path only
 - any stale docs or tests that still describe a vendored analyzer build path
   are updated or removed
+
+## Required Work
+
+- move CI to the published install contract only
+- move release-preflight to the same published install contract
+- keep Linux, macOS, and Windows on one supported installation story
+- remove stale vendored-analyzer automation assumptions from docs and tests
 
 ## Acceptance Criteria
 

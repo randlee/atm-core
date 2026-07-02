@@ -47,6 +47,13 @@ sc-lint-attributes = "<published version>"
 - no CI / release-preflight cutover yet
 - no dependency-policy Phase `D.1` adoption yet
 
+## Code And Document Targets
+
+- `crates/atm-core/Cargo.toml`
+- `crates/atm-core/src/observability.rs`
+- any repo-owned version pin or install-contract record introduced earlier in
+  the phase
+
 ## Deliverables
 
 - `crates/atm-core/Cargo.toml` no longer path-depends on vendored
@@ -56,6 +63,16 @@ sc-lint-attributes = "<published version>"
 - the exact `#[sc_lint(...)]` attribute call sites in
   `crates/atm-core/src/observability.rs` are compiled and validated under the
   published proc-macro dependency
+
+## Required Work
+
+- replace the vendored proc-macro dependency with the published registry line
+- keep ATM source changes limited to what the proc-macro cutover strictly
+  requires
+- exercise the real `observability.rs` attribute usage explicitly, not only a
+  whole-workspace build
+- block closure if the published directive grammar requires unplanned source
+  redesign
 
 ## Acceptance Criteria
 

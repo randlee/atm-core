@@ -90,6 +90,39 @@ That document remains the original inventory deliverable. The proposed
 execution planning surface for this work is Phase `AD` plus the sprint docs
 below, pending explicit human sign-off.
 
+## Governing Documents
+
+Phase `AD` planning and review must read these documents directly from disk:
+
+- product requirements and architecture:
+  - [`docs/requirements.md`](../../requirements.md)
+  - [`docs/architecture.md`](../../architecture.md)
+- affected crate docs:
+  - [`docs/atm-core/requirements.md`](../../atm-core/requirements.md)
+  - [`docs/atm-core/architecture.md`](../../atm-core/architecture.md)
+  - [`docs/atm-core/boundaries.md`](../../atm-core/boundaries.md)
+  - [`docs/atm/requirements.md`](../../atm/requirements.md)
+  - [`docs/atm/architecture.md`](../../atm/architecture.md)
+  - [`docs/atm/boundaries.md`](../../atm/boundaries.md)
+- `sc-lint` product and boundary-model docs retained in this repo:
+  - [`docs/sc-lint/requirements.md`](../../sc-lint/requirements.md)
+  - [`docs/sc-lint/README.md`](../../sc-lint/README.md)
+  - [`docs/sc-lint/boundary-enforcement-model.md`](../../sc-lint/boundary-enforcement-model.md)
+  - [`docs/sc-lint/adr/ADR-004-structured-boundary-definitions.md`](../../sc-lint/adr/ADR-004-structured-boundary-definitions.md)
+- ADR index and relevant architectural policy:
+  - [`docs/adr/INDEX.md`](../../adr/INDEX.md)
+  - [`docs/adr/ADR-007-supported-platform-parity.md`](../../adr/ADR-007-supported-platform-parity.md)
+- machine-readable boundaries and boundary-governance surfaces:
+  - current `boundaries/**/*.toml` records
+  - `.just/lint_boundaries.py`
+- testing and cross-platform guidance:
+  - [`docs/testing-guidelines.md`](../../testing-guidelines.md)
+  - [`docs/cross-platform-guidelines.md`](../../cross-platform-guidelines.md)
+- process and coordination guidance:
+  - [`docs/team-protocol.md`](../../team-protocol.md)
+- phase-local issues inventory:
+  - [`docs/plans/phase-AD/issues.md`](./issues.md)
+
 ## Phase Rules
 
 Phase `AD` must preserve these invariants:
@@ -186,6 +219,12 @@ not control. To avoid an unbounded silent stall:
   - or, with explicit human sign-off, spin `AD.9` into a standalone follow-on
     phase if the upstream release slips or materially changes scope
 - silent indefinite carry-forward of `AD.9` is not allowed
+
+## Phase Issues Inventory
+
+The current open planning and execution risks for this phase are tracked in:
+
+- [`docs/plans/phase-AD/issues.md`](./issues.md)
 
 ## Duplicate-Surface Classification
 
