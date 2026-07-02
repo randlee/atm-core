@@ -32,6 +32,7 @@ product requirements without re-owning `atm-core` service semantics,
 - direct inbox JSONL parsing or writes
 - direct ownership of ATM semantic types that already belong to `atm-core`
 - forced interruption of a running tool call inside the host executable
+- runtime/storage composition ownership
 
 ## 3. Requirement Namespace
 
@@ -98,6 +99,10 @@ Required rules:
   `atm_core::load_atm_config`; it must not privately reparse `.atm.toml`
 - if graft mode is active, runtime identity comes from `ATM_IDENTITY`; graft
   mode must not invent a separate identity source
+- if graft mode is active, `ATM_IDENTITY` and `ATM_TEAM` resolve successfully,
+  and the standard same-host daemon endpoint can be derived from ATM-owned
+  config/environment inputs, `atm-graft` may attempt the standard supervised
+  daemon auto-start path instead of requiring the daemon to be pre-running
 - graft mode is enabled by default when active and may be disabled only by
   explicit config or runtime opt-out
 - `atm-graft` must use the same-host daemon API for:
@@ -109,6 +114,8 @@ Required rules:
   - optional runtime heartbeat / activity reporting when the host enables it
 - `atm-graft` must not bypass the daemon by talking directly to SQLite or inbox
   JSONL
+- `atm-graft` must not obtain same-host daemon bootstrap convenience by taking
+  a compile-time dependency on runtime/storage composition crates
 - pending nudge state must remain daemon-owned so embedded and CLI/hook-based
   consumers observe one queue
 - the host-facing nudge payload is structured and must contain at least:
@@ -147,6 +154,16 @@ Required rules:
   - typed shared DTOs for registration, unregistration, and nudge delivery
   - no graft-specific public trait family unless the shared boundary proves
     insufficient
+- the standard convenience `GraftClient::connect()` path must reuse the same
+  thin-client same-host bootstrap helper seam used by the CLI rather than
+  inventing a graft-private bootstrap path
+- the thin-client bootstrap helper seam may resolve the canonical same-host
+  endpoint, daemon binary, and supervised auto-start behavior, but it must not
+  introduce a transitive dependency on `atm-runtime`,
+  `atm-storage-rusqlite`, or other concrete storage backends
+- `atm-graft` compatibility with the primary `atm` install is defined by the
+  documented same-host RPC surface, not by a requirement that both crates ship
+  in lockstep versions
 - any hook-facing command that renders insertion-ready nudge text belongs on
   the `atm` CLI surface and must call the same daemon API used by `atm-graft`,
   but it is not a production substitute for embedded-mode automatic injection
@@ -214,6 +231,11 @@ Scope-simplification rule for the first implementation pass:
     unregistration, and typed nudge fetch/drain requests
   - the concrete exported types include `GraftClient` and `GraftSession`
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
+  - the standard convenience connection path uses the shared thin-client
+    bootstrap seam instead of a graft-private runtime/storage composition path
+  - `cargo tree -p atm-graft -e normal --prefix none` does not pull
+    `atm-runtime` or `atm-storage-rusqlite` solely to support same-host daemon
+    bootstrap convenience
 - `REQ-GRAFT-NOTIFY-001`
 - daemon-originated nudge receipt is automatic in embedded mode
 - daemon-owned advisory-stream delivery plus companion drain/fetch or

@@ -1,6 +1,6 @@
 ---
 title: Phase AC Plan
-status: complete
+status: active
 branch: plan/phase-AC
 worktree: ../atm-core-worktrees/plan/phase-AC
 ---
@@ -32,6 +32,17 @@ The required end state is:
 - the SQLite backend implements the same contract with richer capabilities layered separately
 - RPC carries canonical domain bodies under one generic envelope instead of per-message transport clones
 - `atm-core` depends on storage semantics, not concrete backend details
+
+Post-closeout follow-on note:
+
+- `AC.0` through `AC.7` closed the storage-contract reset line, but `Phase AC`
+  is reopened for one pre-`AB` crate-boundary follow-on sprint
+- `AC.8` owns a thin-client dependency relock: remove the unconditional
+  `atm-graft -> atm-daemon-bootstrap` compile-time edge while preserving the
+  standard same-host convenience bootstrap path for thin clients
+- this follow-on does not reopen the storage-contract design; it extends the
+  crate-graph cleanup line because the current `atm-graft` dependency path
+  still leaks runtime/storage implementation choices into a thin client
 
 ## Design Rules
 
@@ -335,6 +346,29 @@ Completion note:
   `crates/atm-storage-sqlserver-proof` compiles against `atm-storage` without
   an `atm-core` edge
 
+### AC.8 Thin-Client Same-Host Bootstrap Dependency Relock
+
+Purpose:
+
+- remove the unconditional `atm-graft -> atm-daemon-bootstrap` compile-time
+  edge
+- preserve the standard same-host thin-client convenience path, including
+  daemon auto-start when launch conditions are met
+- move canonical same-host endpoint and daemon-binary resolution onto the
+  thin-client bootstrap seam so `atm` and `atm-graft` use the same shared path
+  without pulling runtime or concrete storage backend crates
+- keep the RPC surface unchanged so a future `atm-graft` build does not have
+  to version-lock to the primary `atm` install beyond RPC compatibility
+
+Execution branch:
+- `feature/pAC-s8-thin-client-bootstrap-dependency-relock`
+
+Current status:
+- planned
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAC-s8-thin-client-bootstrap-dependency-relock`
+
 ## Immediate Planning Outputs
 
 Phase `AC` planning is not complete until these artifacts exist and agree:
@@ -350,6 +384,7 @@ Phase `AC` planning is not complete until these artifacts exist and agree:
 - `docs/plans/phase-AC/sprint-AC5.md`
 - `docs/plans/phase-AC/sprint-AC6.md`
 - `docs/plans/phase-AC/sprint-AC7.md`
+- `docs/plans/phase-AC/sprint-AC8.md`
 - `docs/plans/phase-AC/storage-surface-inventory.md`
 - `docs/plans/phase-AC/type-convergence-map.md`
 - `docs/plans/phase-AC/type-ledger.md`
@@ -375,6 +410,10 @@ Phase `AC` is not complete until:
 - the resulting storage contract is explicitly documented as suitable for a future `atm-storage-sqlserver` implementation
 - speculative task-store code is not treated as an approved compatibility line
   inside the shared storage contract
+- `atm-graft` keeps the shared same-host autostart convenience path without a
+  direct dependency on `atm-daemon-bootstrap`
+- `atm-graft` does not transitively pull runtime or concrete storage backend
+  crates solely to participate in same-host daemon bootstrap
 
 Phase `AC` closeout evidence now includes:
 
