@@ -1,6 +1,6 @@
 ---
 name: 03-consistency-hardening-task
-version: 1.0.0
+version: 1.1.0
 description: team-lead assignment template for cross-document consistency and ambiguity hardening after critical plan review.
 format: xml
 required_variables:
@@ -49,40 +49,12 @@ required_variables:
 {% endif %}
 
   <required-input>
-    The following fenced JSON handoff from `critical-plan-reviewer` is
-    required input. Reject the task if it is missing or malformed.
-
-    Expected shape:
-    ```json
-    {
-      "status": "PASS | FAIL",
-      "mode": "critical-plan-review",
-      "reviewer": "critical-plan-reviewer",
-      "round_id": "STEP3-R1",
-      "round_index": 1,
-      "reviewed_commit": "abc1234",
-      "previous_reviewed_commit": "",
-      "findings_hash": "stable-round-fingerprint",
-      "scope": {
-        "phase": "string or null",
-        "sprint": "string or null"
-      },
-      "sprint_scores": [
-        {
-          "sprint": "X.12",
-          "status": "PASS | FAIL",
-          "blocking_count": 0,
-          "important_count": 0,
-          "minor_count": 0
-        }
-      ],
-      "docs_read": [],
-      "findings": [],
-      "minor_wording": [],
-      "ready_for_next_step": true,
-      "errors": []
-    }
-    ```
+    The following review JSON from `critical-plan-reviewer` is required
+    input. Reject the task if it is missing or malformed. It must include:
+    `status`, `mode`, `reviewer`, `round_id`, `round_index`,
+    `reviewed_commit`, `previous_reviewed_commit`, `findings_hash`,
+    `sprint_scores`, `findings`, `minor_wording`, `ready_for_next_step`, and
+    `errors`.
 <![CDATA[
 {{ previous_step_json }}
 ]]>
@@ -207,41 +179,27 @@ required_variables:
       Continue until audit-phase produces zero findings.
     </repeat>
 
-    Return fenced JSON to `team-lead` when this pass completes. `team-lead`
-    will hand the plan off to the codex-orchestration plan-QA flow via
+    Return JSON to `team-lead` when this pass completes. `team-lead` will hand
+    the plan off to the codex-orchestration plan-QA flow via
     `quality-mgr`.
 
     <exit-criterion>
-      Output fenced JSON only when audit-phase produces zero findings:
-
-      ```json
-      {
-        "status": "PASS | FAIL",
-        "mode": "plan-hardening-consistency",
-        "round_id": "{{ round_id }}",
-        "round_index": {{ round_index }},
-        "reviewed_commit": "<commit-sha>",
-        "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
-        "iterations": 0,
-        "findings_resolved": 0,
-        "final_finding_count": 0,
-        "docs_modified": [],
-        "docs_created": [],
-        "ready_for_next_step": true,
-        "errors": []
-      }
-      ```
+      Output JSON only when audit-phase produces zero findings. Include:
+      `status`, `mode`, `round_id`, `round_index`, `reviewed_commit`,
+      `previous_reviewed_commit`, `iterations`, `findings_resolved`,
+      `final_finding_count`, `docs_modified`, `docs_created`,
+      `ready_for_next_step`, and `errors`.
     </exit-criterion>
   </plan-hardening-consistency>
 
   <workflow>
-    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required review JSON from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return JSON only. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

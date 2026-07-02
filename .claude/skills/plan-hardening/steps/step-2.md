@@ -15,7 +15,7 @@ Pass a fenced JSON input that includes:
 - `branch`
 - `review_cycle_limit`
 - `review_cycle_index`
-- `step-1` fenced JSON
+- `step-1` JSON
 
 Set `run_in_background: true`.
 
@@ -68,7 +68,7 @@ Save the extracted fenced JSON to `/tmp/step-2.json`.
   `reviewer_findings_json` contains the Step 2 fenced JSON, then re-run Step 1
 - every Step 2 `FAIL` must be routed to Step 1; there is no accept-and-proceed
   path
-- after Step 1 returns updated fenced JSON, update:
+- after Step 1 returns updated JSON, update:
   - `previous_reviewed_commit`
   - `reviewed_commit`
   - `findings_hash`
@@ -80,8 +80,8 @@ Save the extracted fenced JSON to `/tmp/step-2.json`.
     `plan-scope-reviewer` agent when possible
   - if the just-completed reviewer response used cycle index equal to
     `plan_scope_review_cycle_limit`, do not launch another background review;
-    stop the hardening run after the Step 1 correction pass and report
-    `cap-exhausted / not converged`
+    complete the Step 1 correction pass, record the capped review state, and
+    proceed directly to Step 3
 - if the next Step 2 response repeats the same `reviewed_commit` and the same
   `findings_hash`, classify it as a stale replay and do not open a new Step 1
   round
@@ -106,12 +106,12 @@ Update the round table after every Step 2 response:
 
 ## Hard stops
 
-- `step-1` fenced JSON from the Step 1 response is missing or malformed: do
+- `step-1` JSON from the Step 1 response is missing or malformed: do
   not advance; send a correction request immediately and identify the missing
   or malformed fields explicitly
 - reviewer launch input is missing `source_of_truth`, `references`,
   `worktree_path`, `branch`, `review_cycle_limit`, `review_cycle_index`, or
-  `step-1` fenced JSON: do not advance; correct the launch payload immediately
+  `step-1` JSON: do not advance; correct the launch payload immediately
 - reviewer output is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly
 - reviewer output repeats the same `reviewed_commit` and the same
@@ -120,4 +120,4 @@ Update the round table after every Step 2 response:
 - reviewer has reached `plan_scope_review_cycle_limit` without converging: do
   not launch another reviewer cycle, do not ask the user what to do, and do
   not accept the findings silently; finish the Step 1 correction pass and
-  report `cap-exhausted / not converged`
+  continue to Step 3

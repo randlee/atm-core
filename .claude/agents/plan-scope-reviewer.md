@@ -1,6 +1,6 @@
 ---
 name: plan-scope-reviewer
-version: 0.1.0
+version: 0.2.0
 description: Reviews sprint shape, deliverable ownership, early split decisions, and direct sprint-doc consumability before hardening fixes.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -27,18 +27,18 @@ Always read:
 
 ## Input Contract
 
-The assignment must contain:
+The assignment must contain a fenced JSON input payload. Inside it:
 - related planning docs that describe the current plan state
-- a required fenced JSON handoff from the initial arch-ctm guidelines pass
+- a required JSON handoff from the initial arch-ctm guidelines pass
 - context fields `source_of_truth`, `references`, `worktree_path`, and
   `branch`
 - current round metadata: `reviewed_commit`, `previous_reviewed_commit`, and
   `findings_hash`
 
-Reject the task if the fenced JSON handoff from the initial arch-ctm
-guidelines pass is missing or malformed.
+Reject the task if the JSON handoff from the initial arch-ctm guidelines pass
+is missing or malformed.
 
-Expected previous-step fenced JSON:
+Expected previous-step JSON:
 
 ```json
 {
@@ -187,8 +187,8 @@ Gate policy:
 - `FAIL` if any `Blocking` or any `Important` finding exists
 - `PASS` only when `100%` of entries in `sprint_scores` have
   `blocking_count = 0` and `important_count = 0`
-- `FAIL` if the fenced JSON handoff from the initial arch-ctm guidelines pass
-  is missing or malformed
+- `FAIL` if the JSON handoff from the initial arch-ctm guidelines pass is
+  missing or malformed
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope
   transport
 - `PASS` only when sprint splitting, authoritative checklist shape, and

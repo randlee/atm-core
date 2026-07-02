@@ -1,6 +1,6 @@
 ---
 name: plan-hardening
-version: 1.5.0
+version: 1.6.0
 description: >
   Team-lead drives plan hardening after the current plan state already exists
   in repo docs.
@@ -45,11 +45,11 @@ Always use:
 
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
-| 1 | `arch-ctm` | vars file | `step-1` fenced JSON | `steps/step-1.md` |
+| 1 | `arch-ctm` | vars file | `step-1` JSON | `steps/step-1.md` |
 | 2 | `plan-scope-reviewer` (background) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
-| 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
+| 3 | `arch-ctm` | `step-2` JSON | `step-3` JSON | `steps/step-3.md` |
 | 4 | `critical-plan-reviewer` (background) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
-| 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
+| 5 | `arch-ctm` | `step-4` JSON | `step-5` JSON | `steps/step-5.md` |
 | 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
 ## Round Tracking
@@ -83,17 +83,20 @@ Cycle-cap behavior:
 - no reviewer findings may be accepted as-is or bypass the plan-editing agent
 - if a reviewer returns `FAIL` on the final allowed reviewer cycle, `team-lead`
   must still send those findings to `arch-ctm` for one final correction pass
-- after that final correction pass, if no reviewer cycles remain, stop the
-  hardening run as `cap-exhausted / not converged` and report status plainly
+- after that final correction pass, if no reviewer cycles remain, do not
+  launch that reviewer again in the current hardening run; advance directly to
+  the next phase with the updated plan-editing output
 - do not ask the user how to proceed, do not offer multiple-choice options,
   and do not invent an "accept and proceed" path
 
 ## Hard Stops
 
 - `team-lead` only checks the top-level `status` and expected `mode` fields on
-  each fenced JSON response before advancing
-- every step after step 1 must receive the previous step's fenced JSON
-- missing or malformed fenced JSON is a hard stop
+  each response before advancing
+- reviewer steps require fenced JSON; plan-editing and QA-handoff steps use
+  plain JSON
+- every step after step 1 must receive the previous step response JSON
+- missing or malformed required JSON is a hard stop
 - a reviewer rerun is valid only when either `reviewed_commit` changed or
   `findings_hash` changed
 - if the same reviewer returns the same `reviewed_commit` and the same
@@ -103,10 +106,9 @@ Cycle-cap behavior:
 - remaining in-scope work without sprint ownership is a hard stop
 - if a sprint cannot credibly land its committed deliverables at a
   production-ready level, split it before implementation
-- if a reviewer loop reaches its configured cap without converging, stop after
-  routing the last findings to `arch-ctm` and report `cap-exhausted / not
-  converged`; do not continue launching background reviewers and do not ask
-  the user for a decision mid-loop
+- if a reviewer loop reaches its configured cap, stop launching that reviewer
+  after routing the last findings to `arch-ctm`; then continue with the next
+  hardening phase without asking the user for a mid-loop decision
 
 ## Render
 

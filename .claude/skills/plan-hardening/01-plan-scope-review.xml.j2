@@ -1,6 +1,6 @@
 ---
 name: 01-plan-scope-review-task
-version: 2.0.0
+version: 2.1.0
 description: team-lead assignment template for the initial arch-ctm guidelines pass before background scope review.
 format: xml
 required_variables:
@@ -69,31 +69,17 @@ required_variables:
     team-lead directly. If team-lead does not concede, escalate to the user.
     Do not normalize the new scope into the plan without user approval.
 
-    Return fenced JSON to `team-lead` when this pass is complete. `team-lead`
-    will launch `plan-scope-reviewer` with that JSON.
+    Return JSON to `team-lead` when this pass is complete. `team-lead` will
+    launch `plan-scope-reviewer` with that JSON.
 
-    If `team-lead` later sends back fenced JSON findings and `sprint_scores`
-    from
-    `plan-scope-reviewer`, fix those findings and return updated fenced JSON.
-    Continue until `team-lead` reports that `plan-scope-reviewer` returned
-    `PASS`.
+    If `team-lead` later sends back reviewer findings JSON and
+    `sprint_scores` from `plan-scope-reviewer`, fix those findings and return
+    updated JSON. `team-lead` decides whether to relaunch review or advance.
 
-    Expected output shape:
-    ```json
-    {
-      "status": "PASS | FAIL",
-      "mode": "plan-hardening-guidelines-pass",
-      "round_id": "{{ round_id }}",
-      "round_index": {{ round_index }},
-      "reviewed_commit": "<commit-sha>",
-      "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
-      "iterations": 0,
-      "docs_modified": [],
-      "docs_created": [],
-      "ready_for_next_step": true,
-      "errors": []
-    }
-    ```
+    Return one JSON object with:
+    `status`, `mode`, `round_id`, `round_index`, `reviewed_commit`,
+    `previous_reviewed_commit`, `iterations`, `docs_modified`,
+    `docs_created`, `ready_for_next_step`, and `errors`.
   </plan-hardening>
 
   <workflow>
@@ -103,7 +89,7 @@ required_variables:
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so scope review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the current pass converges. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `team-lead`.</step>
+    <step id="g">Return JSON only after the current pass converges. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated JSON to `team-lead`.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>
