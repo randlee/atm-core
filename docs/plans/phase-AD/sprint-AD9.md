@@ -27,6 +27,11 @@ Production-ready commitment:
 - duplicate ATM-local dependency-policy checks must be deleted or reduced once
   released `sc-lint` proves equivalent or stronger coverage
 
+If upstream `D.1` is still unreleased when `AD.8` finishes, this sprint
+remains the only blocked follow-on sprint under the phase-level checkpoint
+policy. `AD.1` through `AD.8` may still be declared functionally complete, but
+`AD.9` cannot disappear into an indefinite silent hold.
+
 Dependency-policy records that must be validated against released `D.1`:
 
 ```toml
@@ -40,6 +45,17 @@ forbidden_edges = ["left-package -> right-package"]
 
 - `AD.8`
 - a published `sc-lint` release exists that contains Phase `D.1`
+
+## External Release Checkpoint
+
+If the published `D.1` release is not available by the first ATM release-
+planning checkpoint after `AD.8`:
+
+- the branch must record an explicit re-review date against the real upstream
+  published state
+- and explicit human sign-off must decide whether to keep `AD.9` open or split
+  it into a standalone follow-on phase
+- indefinite carry-forward with no recorded checkpoint is not allowed
 
 ## Out Of Scope
 
@@ -72,6 +88,9 @@ forbidden_edges = ["left-package -> right-package"]
   sprint rather than being deferred
 - any residual dependency-policy logic left in `.just/lint_boundaries.py` is
   explicitly justified as ATM-only governance rather than silent duplication
+- if `D.1` is still unavailable at a release-planning checkpoint, the branch
+  records a new checkpoint date or an approved follow-on-phase split instead of
+  leaving the sprint in an unbounded implicit stall
 
 ## Required Validation
 

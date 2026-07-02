@@ -72,4 +72,5 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 
 - `python3 .just/run_lint.py runtime-waits`
 - `python3 .just/tests/test_lint_runtime_waits.py`
+- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule boundaries' .just/lint_runtime_waits.py .just/tests/test_lint_runtime_waits.py -S`
 - `git diff --check`

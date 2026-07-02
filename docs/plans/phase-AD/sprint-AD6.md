@@ -69,4 +69,5 @@ sc-lint-attributes = "<published version>"
 
 - `cargo build --workspace`
 - `cargo test -p atm-core observability`
+- `! rg -n 'path = \"\\.\\./sc-lint-attributes\"|path = \"\\.\\./sc-lint-directives\"' Cargo.toml crates/*/Cargo.toml -S`
 - `git diff --check`

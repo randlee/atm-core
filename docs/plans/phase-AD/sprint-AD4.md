@@ -56,12 +56,23 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - the wrapper continues to report only `PORT-004` and `PORT-005`
 - `.just/tests/test_lint_unix_gating.py` is updated only as needed to preserve
   the ATM subset-wrapper contract
+- one repo-owned review artifact
+  `.triage/phase-AD/ad4-unix-path-prefixes-review.md` records whether the
+  published `sc-lint-portability` surface exposes a direct equivalent for the
+  vendored `unix_path_prefixes` knob
+- if no direct equivalent exists, the sprint must either carry the behavior
+  forward in an ATM-owned wrapper/config override or record an explicitly
+  approved removal in that review artifact before sprint closure
 
 ## Acceptance Criteria
 
 - ATM still exposes the `unix-gating` local lint target after retargeting
 - non-`PORT-004` / non-`PORT-005` portability findings remain excluded from
   this wrapper
+- the `unix_path_prefixes` portability-config gap is closed explicitly:
+  - direct published equivalence is confirmed
+  - or the ATM-owned replacement behavior is named
+  - or approved removal is documented
 - the wrapper no longer shells through the old vendored portability path
 - any stale path-based analyzer invocation left in the repo blocks sprint
   closure
@@ -70,4 +81,8 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 
 - `python3 .just/run_lint.py unix-gating`
 - `python3 .just/tests/test_lint_unix_gating.py`
+- `sc-lint-portability --help > .triage/phase-AD/ad4-sc-lint-portability-help.txt`
+- `test -f .triage/phase-AD/ad4-unix-path-prefixes-review.md`
+- `rg -n 'direct equivalent|wrapper override|approved removal' .triage/phase-AD/ad4-unix-path-prefixes-review.md -S`
+- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_unix_gating.py .just/tests/test_lint_unix_gating.py -S`
 - `git diff --check`

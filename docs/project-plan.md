@@ -650,13 +650,18 @@ Implementation Branches:
 Authoritative sprint plan:
 - `docs/publishing-improvements/plan.md`
 
-## Phase AD: Published sc-lint Release Migration [PLANNED]
+## Phase AD Proposal: Published sc-lint Release Migration [PLANNED]
 
 Planning Branch:
 - `plan/sc-lint-published-migration`
 
 Status:
-- planning only
+- planning package only
+- the original scoped deliverable on this branch is the supporting inventory in
+  `docs/plans/sc-lint-migration/plan.md`
+- the `Phase AD` phase/sprint package is a proposed execution plan requested
+  after that inventory pass, and still requires explicit human sign-off before
+  any `integrate/phase-AD` or `feature/pAD-s*` implementation branch is opened
 - `atm-core` still vendors `crates/sc-lint-*` support crates today
 - cutover now follows phase/sprint planning conventions under `Phase AD`
 - phase closeout requires both vendored duplicate removal and adoption of the

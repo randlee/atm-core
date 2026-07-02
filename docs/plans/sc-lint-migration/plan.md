@@ -10,7 +10,7 @@ worktree: ../atm-core-worktrees/plan/sc-lint-published-migration
 
 This document is retained as a supporting inventory and gap-analysis artifact.
 
-The authoritative execution planning surface for this work now lives in:
+The proposed execution planning package for this work now lives in:
 
 - [`docs/plans/phase-AD/plan-phase-AD.md`](../phase-AD/plan-phase-AD.md)
 - `docs/plans/phase-AD/sprint-AD1.md`
@@ -38,6 +38,12 @@ gates.
 
 This is planning only. No cutover begins until a published `sc-lint` version
 exists that covers the current `atm-core` dependency and analyzer surface.
+
+The inventory/gap-analysis task was the originally scoped deliverable for this
+branch. The Phase `AD` phase/sprint package was added later as a planning
+proposal after the user asked for a phase-structured execution plan. That
+proposal is not an execution authorization by itself; it requires explicit
+human sign-off before any `AD.*` implementation branch is opened.
 
 ## Baseline
 
@@ -184,6 +190,13 @@ release line. The migration therefore requires both:
 | all-platform CI bring-up with no local vendored analyzer crates | workspace build today | unknown until release artifacts are published | high risk until install story is confirmed for Windows, macOS, and Linux |
 | portability config knob `unix_path_prefixes` | vendored `sc-lint-boundary/config/defaults.toml` | uncertain | must confirm whether the published portability crate exposes an equivalent config surface or bakes the defaults in |
 | release-preflight lint behavior | `scripts/validate_release.py` | not expected upstream | ATM-owned release gate must be retargeted |
+
+The unresolved `unix_path_prefixes` portability-config gap is a hard planning
+input for the later `unix-gating` cutover. The proposed execution package
+assigns that closure explicitly to `AD.4`; no `unix-gating` sprint may claim
+success until the published `sc-lint-portability` surface either provides an
+equivalent knob or ATM carries the behavior forward in a documented wrapper-
+owned override.
 
 ## Verified No-Change Areas
 

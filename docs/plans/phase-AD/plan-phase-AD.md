@@ -1,6 +1,6 @@
 ---
 title: Phase AD Plan
-status: complete
+status: proposed
 branch: plan/sc-lint-published-migration
 worktree: ../atm-core-worktrees/plan/sc-lint-published-migration
 ---
@@ -27,6 +27,27 @@ Phase `AD` also owns duplicate-surface cleanup. The end state is not merely
   checks that are intentionally ATM-owned
 - repo-local duplicate implementation is deleted once published parity is
   proven
+
+## Authorization And Current Status
+
+This document is a proposed execution package, not an approved implementation
+line yet.
+
+The original scoped deliverable on this planning branch was the supporting
+inventory and gap analysis in
+[`docs/plans/sc-lint-migration/plan.md`](../sc-lint-migration/plan.md). After
+that inventory pass, the user asked for a phase-structured migration plan, so
+this branch added the `Phase AD` phase doc and sprint set as a planning
+proposal.
+
+That proposal does not authorize execution by itself. Until a human reviewer
+explicitly signs off on `Phase AD`, all branch/worktree names below are
+reserved planning targets only:
+
+- `plan/sc-lint-published-migration` is the planning branch
+- `integrate/phase-AD` is the proposed execution integration branch
+- `feature/pAD-s*-...` names are proposed sprint branches, not active coding
+  assignments
 
 ## Scope Summary
 
@@ -65,8 +86,9 @@ The detailed current-state inventory and gap analysis remain in:
 
 - [`docs/plans/sc-lint-migration/plan.md`](../sc-lint-migration/plan.md)
 
-That document is supporting context only. The authoritative execution planning
-surface for this work is Phase `AD` plus the sprint docs below.
+That document remains the original inventory deliverable. The proposed
+execution planning surface for this work is Phase `AD` plus the sprint docs
+below, pending explicit human sign-off.
 
 ## Phase Rules
 
@@ -104,15 +126,21 @@ Phase `AD` must preserve these invariants:
   but any dependency-policy checks that released `sc-lint` `D.1` covers at
   equal or better strength must move to the published analyzer and be deleted
   or reduced in ATM during `AD.9`.
-- The phase does not close until a released `sc-lint` version containing Phase
-  `D.1` dependency-policy enforcement has been adopted and revalidated against
-  ATM's boundary inventory.
+- `AD.4` owns closure of the unresolved `unix_path_prefixes` portability-config
+  gap identified in the supporting inventory. The sprint must prove whether the
+  published `sc-lint-portability` surface preserves that knob directly or
+  whether ATM must carry the behavior forward in a documented wrapper-owned
+  override.
+- The full phase target is adoption of a released `sc-lint` version containing
+  Phase `D.1` dependency-policy enforcement plus revalidation against ATM's
+  boundary inventory, but external-release lag may leave `AD.9` as the only
+  open follow-on sprint after `AD.8`.
 
 ## Baseline
 
 - planning branch:
   - `plan/sc-lint-published-migration`
-- execution integration branch:
+- proposed execution integration branch:
   - `integrate/phase-AD`
 - current ATM vendored crates:
   - `crates/sc-lint-directives`
@@ -142,6 +170,22 @@ Phase `AD` execution begins only when:
 
 Phase `AD` may begin before released `Phase D.1` support exists, but the phase
 must remain open until `AD.9` is complete.
+
+## External Dependency Checkpoint Policy
+
+`AD.9` depends on a released upstream `sc-lint` `D.1` surface that ATM does
+not control. To avoid an unbounded silent stall:
+
+- `AD.1` through `AD.8` may be declared functionally complete once their local
+  cutover, deletion, CI, and release-preflight gates are green
+- if `AD.8` closes before a released `D.1` exists, `Phase AD` remains open
+  with `AD.9` as the only blocked follow-on sprint
+- at each ATM release-planning checkpoint after `AD.8`, the team must
+  re-review the upstream published state and record one explicit outcome:
+  - keep `AD.9` open against a new checkpoint date
+  - or, with explicit human sign-off, spin `AD.9` into a standalone follow-on
+    phase if the upstream release slips or materially changes scope
+- silent indefinite carry-forward of `AD.9` is not allowed
 
 ## Duplicate-Surface Classification
 
@@ -174,10 +218,10 @@ Purpose:
 - prove published analyzers are installable on all supported CI platforms
   without changing ATM wrapper behavior yet
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s1-published-tool-install-contract`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s1-published-tool-install-contract`
 
 Authoritative sprint doc:
@@ -192,10 +236,10 @@ Purpose:
 - prove full boundary-analyzer parity before any deletion or other wrapper
   retargeting starts
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s2-boundary-wrapper-published-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s2-boundary-wrapper-published-cutover`
 
 Authoritative sprint doc:
@@ -209,10 +253,10 @@ Purpose:
   `sc-lint-portability` binary
 - prove portability parity before the consumer-subset wrappers move
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s3-portability-wrapper-published-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s3-portability-wrapper-published-cutover`
 
 Authoritative sprint doc:
@@ -226,10 +270,10 @@ Purpose:
   published portability findings only
 - prove the repo-specific `PORT-004` / `PORT-005` contract survives intact
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s4-unix-gating-wrapper-published-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s4-unix-gating-wrapper-published-cutover`
 
 Authoritative sprint doc:
@@ -244,10 +288,10 @@ Purpose:
 - prove the `SCB-RUNTIME-001` / `SCB-RUNTIME-002` contract no longer depends on
   the old integrated vendored boundary crate
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s5-runtime-waits-wrapper-published-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s5-runtime-waits-wrapper-published-cutover`
 
 Authoritative sprint doc:
@@ -261,10 +305,10 @@ Purpose:
 - prove the exact ATM `#[sc_lint(...)]` usage remains compile-valid and
   semantically acceptable
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s6-proc-macro-registry-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s6-proc-macro-registry-cutover`
 
 Authoritative sprint doc:
@@ -278,10 +322,10 @@ Purpose:
   proc-macro parity are already proven
 - remove the now-stale duplicate implementation from the ATM repo
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s7-vendored-crate-removal`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s7-vendored-crate-removal`
 
 Authoritative sprint doc:
@@ -294,10 +338,10 @@ Purpose:
 - retarget CI and release-preflight to the published install path only
 - prove ATM release gating no longer depends on workspace-built `sc-lint`
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s8-ci-release-published-tool-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s8-ci-release-published-tool-cutover`
 
 Authoritative sprint doc:
@@ -313,10 +357,10 @@ Purpose:
 - remove or reduce ATM-local duplicate dependency-policy checks once published
   `sc-lint` proves equal-or-better coverage
 
-Execution branch:
+Proposed execution branch:
 - `feature/pAD-s9-dependency-policy-ownership-cutover`
 
-Execution worktree:
+Proposed execution worktree:
 - `../atm-core-worktrees/feature/pAD-s9-dependency-policy-ownership-cutover`
 
 Authoritative sprint doc:
@@ -336,3 +380,6 @@ Phase `AD` is complete only when:
 - any duplicate ATM dependency-policy checks that released `D.1` supersedes are
   deleted or explicitly reduced to ATM-only governance checks
 - no required boundary inventory fix remains deferred after `D.1` adoption
+
+If upstream `D.1` is still unreleased after `AD.8`, the phase remains open
+under the checkpoint policy above rather than claiming silent closeout.

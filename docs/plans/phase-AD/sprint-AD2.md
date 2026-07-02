@@ -60,8 +60,16 @@ through `cargo run -q -p sc-lint-boundary`.
 - `.just/lint_sc_boundary.py` calls the published `sc-lint-boundary`
 - `.just/tests/test_lint_sc_boundary.py` is updated only as needed to preserve
   the existing ATM wrapper contract
-- one parity proof is recorded on the same ATM commit showing the published
-  boundary analyzer preserves required ATM rule families and JSON shape
+- one parity proof is recorded on the same ATM commit as three deterministic
+  artifacts:
+  - `.triage/phase-AD/ad2-vendored-sc-boundary.json`
+  - `.triage/phase-AD/ad2-published-sc-boundary.json`
+  - `.triage/phase-AD/ad2-sc-boundary-parity.md`
+- the parity summary artifact is produced by a repo-local comparison helper or
+  equivalently deterministic normalization command that records:
+  - rule IDs present only in vendored output
+  - rule IDs present only in published output
+  - any per-rule finding-count drift that requires explanation
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
 
@@ -78,5 +86,8 @@ through `cargo run -q -p sc-lint-boundary`.
 
 - `python3 .just/run_lint.py sc-boundary`
 - `python3 .just/tests/test_lint_sc_boundary.py`
-- parity comparison artifact for vendored vs published `sc-boundary` findings
+- `cargo run -q -p sc-lint-boundary -- analyze --root . --format json > .triage/phase-AD/ad2-vendored-sc-boundary.json`
+- `sc-lint-boundary analyze --root . --format json > .triage/phase-AD/ad2-published-sc-boundary.json`
+- `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad2-vendored-sc-boundary.json --published .triage/phase-AD/ad2-published-sc-boundary.json --output .triage/phase-AD/ad2-sc-boundary-parity.md`
+- `! rg -n 'cargo run -q -p sc-lint-boundary' .just/lint_sc_boundary.py .just/tests/test_lint_sc_boundary.py -S`
 - `git diff --check`

@@ -71,8 +71,8 @@ same facts directly from repo state.
 - ATM can install the published `sc-lint` binaries on Linux, macOS, and
   Windows without using `../sc-lint`
 - the selected version pin is explicit and reviewable in repo state
-- at least one smoke proof per platform shows the installed binaries answer
-  `--version`
+- each supported platform records a `--version` check for the installed
+  binaries
 - `AD.1` does not retarget `.just/lint_*.py` yet; existing ATM lint behavior
   remains authoritative until `AD.2`
 - a reviewer can identify the exact install method and pinned version from repo

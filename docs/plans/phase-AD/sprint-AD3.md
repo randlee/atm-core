@@ -57,8 +57,17 @@ Required command contract:
 - `.just/lint_sc_portability.py` calls the published `sc-lint-portability`
 - `.just/tests/test_lint_sc_portability.py` is updated only as needed to
   preserve the existing ATM wrapper contract
-- one parity proof is recorded on the same ATM commit showing the published
-  portability analyzer preserves required ATM rule families and JSON shape
+- one parity proof is recorded on the same ATM commit as three deterministic
+  artifacts:
+  - `.triage/phase-AD/ad3-vendored-sc-portability.json`
+  - `.triage/phase-AD/ad3-published-sc-portability.json`
+  - `.triage/phase-AD/ad3-sc-portability-parity.md`
+- the parity summary artifact is produced by the same repo-local comparison
+  helper introduced in `AD.2`, or an equivalently deterministic normalization
+  command, and records:
+  - rule IDs present only in vendored output
+  - rule IDs present only in published output
+  - any per-rule finding-count drift that requires explanation
 - vendored `sc-lint-*` crates remain present after this sprint so parity
   investigation and rollback remain possible
 
@@ -75,6 +84,8 @@ Required command contract:
 
 - `python3 .just/run_lint.py sc-portability`
 - `python3 .just/tests/test_lint_sc_portability.py`
-- parity comparison artifact for vendored vs published `sc-portability`
-  findings
+- `cargo run -q -p sc-lint-boundary -- analyze --root . --rule portability --format json > .triage/phase-AD/ad3-vendored-sc-portability.json`
+- `sc-lint-portability analyze --root . --format json > .triage/phase-AD/ad3-published-sc-portability.json`
+- `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad3-vendored-sc-portability.json --published .triage/phase-AD/ad3-published-sc-portability.json --output .triage/phase-AD/ad3-sc-portability-parity.md`
+- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_sc_portability.py .just/tests/test_lint_sc_portability.py -S`
 - `git diff --check`
