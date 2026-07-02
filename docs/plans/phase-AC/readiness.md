@@ -9,6 +9,10 @@ Track accepted closure for the storage-contract reset line that restores:
 - interchangeable storage backends
 - Claude storage as a first-class backend
 
+Phase `AC` reopened for the planned `AC.8` follow-on because the thin-client
+crate graph still contains one pre-`AB` dependency leak that is in-scope for
+the Phase AC boundary-cleanup line.
+
 Authoritative supporting inventory:
 - `docs/plans/phase-AC/issues.md`
 
@@ -24,6 +28,7 @@ Authoritative supporting inventory:
 | `AC.5` | `complete` | `feature/pAC-s5-rpc-envelope-and-domain-type-unification` | `../atm-core-worktrees/feature/pAC-s5-rpc-envelope-and-domain-type-unification` | `atm-daemon-client` owns `RpcEnvelope`, same-host clients exchange that generic wrapper, canonical message/roster bodies are encoded through `atm-storage`, and no new transport-local message/roster clones were introduced in the cutover |
 | `AC.6` | `complete` | `feature/pAC-s6-cleanup-and-deletion-closeout` | `../atm-core-worktrees/feature/pAC-s6-cleanup-and-deletion-closeout` | speculative task-store contract surfaces and their runtime/daemon bridge usage are deleted, stale Claude source/projection wrapper families are removed from the shared/public seam, daemon consumers use canonical `atm-storage-claude::compat` paths, and SQLite observability is removed from `atm-storage` and owned by `atm-storage-rusqlite` |
 | `AC.7` | `complete` | `feature/pAC-s7-sqlserver-readiness-proof` | `../atm-core-worktrees/feature/pAC-s7-sqlserver-readiness-proof` | the post-`AC.6` contract is explicitly proven backend-neutral, `atm-storage-sqlserver-proof` compiles against `atm-storage` with no `atm-core` dependency, and the remaining SQL Server work is backend implementation scope only |
+| `AC.8` | `planned` | `feature/pAC-s8-thin-client-bootstrap-dependency-relock` | `../atm-core-worktrees/feature/pAC-s8-thin-client-bootstrap-dependency-relock` | `atm-daemon-client` owns the standard same-host endpoint/binary resolution helpers used by thin clients, `atm-graft` no longer depends on `atm-daemon-bootstrap`, and the convenience autostart path still runs through `DaemonSupervisor` without a runtime/storage backend leak |
 
 ## Phase Exit Criteria
 
@@ -48,3 +53,5 @@ Phase `AC` is not complete until all of the following are true:
 - `docs/plans/phase-AC/sqlserver-readiness-proof.md` proves future SQL Server
   work can implement the existing contract without another architecture reset
 - `docs/plans/phase-AC/issues.md` has no open issue whose owning sprint is still incomplete
+- thin clients retain the standard same-host daemon auto-start convenience path
+  without linking `atm-daemon-bootstrap` into `atm-graft`

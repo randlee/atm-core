@@ -38,6 +38,8 @@ outside the same-host daemon and release-signoff line:
 `Phase AB` does not begin until:
 
 - `Phase Z` remains closed with the release-ready verdict already recorded
+- the accepted `develop` baseline includes the `AC.8` thin-client bootstrap
+  dependency relock
 - the accepted `develop` baseline passes the same-host workspace test suite on:
   - Windows
   - macOS
