@@ -12,12 +12,14 @@
   triage:sweepScope "file_only" ;
   triage:category "documentation" ;
   triage:severity "important" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-01T19:50:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/REL-INT-425/int-pub-ready/1> ;
   triage:openOn <urn:atm:triage:worktree/int-pub-ready/a6d58723> ;
-  triage:promoteTo <urn:atm:triage:worktree/int-pub-ready/a6d58723> .
+  triage:promoteTo <urn:atm:triage:worktree/int-pub-ready/a6d58723> ;
+  triage:resolutionNote "Verified fixed on integrate/publish-release-readiness @ 9954ead2 (QA-2 recheck). The dangling 'Tag policy: docs/release-tag-protection.md' line no longer exists anywhere in .claude/agents/publisher.md (grep confirmed zero matches); the Source Of Truth section now correctly points to docs/WINGET_SETUP.md, which exists. Tag rules remain inline in publisher.md's Hard Rules and Step 0 tag-gate sections as this finding originally recommended." ;
+  triage:fixedOn <urn:atm:triage:worktree/int-pub-ready/9954ead2> .
 
 <urn:atm:triage:occurrence/REL-INT-425/int-pub-ready/1>
   a triage:Occurrence ;
@@ -36,3 +38,10 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
   triage:headSha "a6d58723" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/int-pub-ready/9954ead2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
+  triage:headSha "9954ead2" ;
+  triage:orderIndex 2 .
