@@ -409,8 +409,9 @@ pub(crate) fn configure_connection(
 ) -> Result<(), AtmError> {
     // Bound SQLite lock waits so contention returns an actionable ATM timeout
     // instead of hanging an adapter thread indefinitely.
+    let busy_timeout_ms = configured_sqlite_busy_timeout_ms();
     connection
-        .busy_timeout(std::time::Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
+        .busy_timeout(std::time::Duration::from_millis(busy_timeout_ms))
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -427,6 +428,18 @@ pub(crate) fn configure_connection(
             })?;
     }
     Ok(())
+}
+
+fn configured_sqlite_busy_timeout_ms() -> u64 {
+    #[cfg(test)]
+    if let Some(timeout) = std::env::var("ATM_TEST_SQLITE_BUSY_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        return timeout;
+    }
+
+    SQLITE_BUSY_TIMEOUT_MS
 }
 
 pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Connection, AtmError> {

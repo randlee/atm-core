@@ -607,7 +607,10 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = env_lock().lock().expect("env lock");
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let _timeouts = EnvGuard::set_many([
+        ("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", Some("100")),
+        ("ATM_TEST_SQLITE_BUSY_TIMEOUT_MS", Some("100")),
+    ]);
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
@@ -870,6 +873,7 @@ enum CommandOp {
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
+    // `ATM_TEST_SQLITE_BUSY_TIMEOUT_MS`,
     // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
     // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
     // mailbox lock behavior. Keep a single process-wide mutex in addition to
