@@ -24,17 +24,13 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_core::types::{AgentName, TeamName};
 #[cfg(not(test))]
-use atm_daemon_bootstrap::{
-    install_sqlite_retained_runtime_factory, resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
-};
-#[cfg(test)]
-use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
+use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
-    exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
+    exchange_envelope as daemon_exchange_envelope, parse_bootstrap_agent, parse_bootstrap_team,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
     unexpected_response,
 };
 #[cfg(test)]
@@ -480,24 +476,6 @@ fn bootstrap_trace_to_core(
         launch_gate_detail: report.launch_gate_detail,
         auto_start_detail: report.auto_start_detail,
     }
-}
-
-fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
-fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
 }
 
 impl AtmGraftClient for CliComposition<'_> {

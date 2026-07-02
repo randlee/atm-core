@@ -364,10 +364,17 @@ Execution branch:
 - `feature/pAC-s8-thin-client-bootstrap-dependency-relock`
 
 Current status:
-- planned
+- complete
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAC-s8-thin-client-bootstrap-dependency-relock`
+
+Completion note:
+- `AC.8` is complete when `atm-daemon-client` owns the shared same-host
+  endpoint and daemon-binary resolution seam, `atm` and `atm-graft` both call
+  that seam directly, `atm-graft` no longer depends on
+  `atm-daemon-bootstrap`, and the boundary TOMLs relock that ownership under
+  `python3 .just/lint_boundaries.py`.
 
 ## Immediate Planning Outputs
 

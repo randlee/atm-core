@@ -29,9 +29,9 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
 };
 
 #[cfg(test)]

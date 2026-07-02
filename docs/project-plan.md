@@ -331,7 +331,7 @@ Sprint line:
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification` `complete`
 - `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout` `complete`
 - `AC.7` `feature/pAC-s7-sqlserver-readiness-proof` `complete`
-- `AC.8` `feature/pAC-s8-thin-client-bootstrap-dependency-relock` `planned`
+- `AC.8` `feature/pAC-s8-thin-client-bootstrap-dependency-relock` `complete`
 
 Completion note:
 - `AC.7` proves SQL Server readiness from the real post-`AC.6` contract,

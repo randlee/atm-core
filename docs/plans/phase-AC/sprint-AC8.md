@@ -6,7 +6,7 @@ phase: AC
 sprint: AC.8
 worktree: ../atm-core-worktrees/feature/pAC-s8-thin-client-bootstrap-dependency-relock
 branch: feature/pAC-s8-thin-client-bootstrap-dependency-relock
-status: planned
+status: complete
 estimated_scope: small
 ```
 
@@ -138,14 +138,14 @@ Compatibility-shim rule:
 
 - `cargo test -p atm-daemon-client`
 - `cargo test -p atm-graft`
-- `cargo test -p atm`
+- `cargo test -p agent-team-mail`
 - `cargo tree -p atm-graft -e normal --prefix none`
 - `cargo tree -p atm-daemon-client -e normal --prefix none`
 - `python3 .just/lint_boundaries.py`
 - `git diff --check`
 - `rg -n "resolve_daemon_local_ipc_endpoint|resolve_daemon_bin" crates/atm-daemon-client/src/lib.rs`
 - `rg -n "atm_daemon_client::.*resolve_daemon|resolve_daemon_local_ipc_endpoint|resolve_daemon_bin" crates/atm/src/composition.rs crates/atm-graft/src/lib.rs`
-- `! rg -n "atm_daemon_bootstrap::.*resolve_daemon|resolve_daemon_local_ipc_endpoint|resolve_daemon_bin" crates/atm/src/composition.rs crates/atm-graft/src/lib.rs`
+- `! rg -n "atm_daemon_bootstrap::.*resolve_daemon|use atm_daemon_bootstrap::.*resolve_daemon" crates/atm/src/composition.rs crates/atm-graft/src/lib.rs`
 - `! rg -n "pub fn resolve_daemon_local_ipc_endpoint|pub fn resolve_daemon_bin" crates/atm-daemon-bootstrap/src/lib.rs`
 - `! rg -n "atm-daemon-bootstrap" crates/atm-graft/Cargo.toml`
 - `! cargo tree -p atm-graft -e normal --prefix none | rg "rusqlite|libsqlite3-sys"`

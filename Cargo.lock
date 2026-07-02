@@ -159,7 +159,6 @@ name = "atm-daemon-bootstrap"
 version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-daemon-client",
  "atm-runtime",
 ]
 
@@ -183,7 +182,6 @@ name = "atm-graft"
 version = "1.2.2"
 dependencies = [
  "agent-team-mail-core",
- "atm-daemon-bootstrap",
  "atm-daemon-client",
  "interprocess",
  "serde_json",
