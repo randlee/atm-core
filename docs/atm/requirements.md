@@ -188,6 +188,9 @@ Required Phase R rules:
 - the CLI-side auto-start path must acquire the documented pre-spawn launch
   gate before daemon fork/exec so concurrent CLIs cannot race into second-daemon
   startup attempts
+- the CLI standard same-host bootstrap path must reuse the shared
+  `atm-daemon-client` endpoint/bin helper seam rather than owning a
+  CLI-private bootstrap helper surface
 - CLI tests must not rely on `warm_daemon`, `ATM_DAEMON_BIN`, or other daemon
   spawn helpers to exercise normal command behavior
 - `CliComposition::from_transport(...)` remains the primary seam for injected

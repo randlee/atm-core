@@ -13,10 +13,14 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon-client/daemon-bootstrap.toml](../../boundaries/atm-daemon-client/daemon-bootstrap.toml)
 
 Purpose:
-- own the shared same-host bootstrap value types and launch gate helpers
+- own the shared same-host bootstrap value types, canonical endpoint/bin
+  resolution helpers, and launch gate helpers
 - keep `atm` and `atm-graft` aligned on daemon auto-start semantics
 
 Rules:
+- `atm-daemon-client` owns `resolve_daemon_local_ipc_endpoint()` and
+  `resolve_daemon_bin()` as the shared thin-client bootstrap seam consumed by
+  both `atm` and `atm-graft`
 - `atm-daemon-client` may own shared same-host connection-setup helpers such as
   `try_connect`, `exchange`, and `unexpected_response` when those helpers are
   extracted to keep `atm` and `atm-graft` aligned

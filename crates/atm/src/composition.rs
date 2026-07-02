@@ -26,14 +26,11 @@ use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
 #[cfg(not(test))]
-use atm_daemon_bootstrap::{
-    install_sqlite_retained_runtime_factory, resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
-};
-#[cfg(test)]
-use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
+use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
     exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
     unexpected_response,
 };

@@ -32,7 +32,7 @@ The authoritative design reset is:
 | `AC-ISSUE-004` | `closed` | the concrete SQLite backend had become the implicit home of business logic, causing backend-specific seams and logic leakage upward; `AC.6` completed the cleanup by removing the last `atm-storage`-level SQLite observability leakage and leaving that surface owned by `atm-storage-rusqlite`. | `AC.3`, `AC.4`, and `AC.6` |
 | `AC-ISSUE-005` | `closed` | notifications are not frozen as a separate post-commit trait, which leaves write and event semantics underspecified across backends. | `AC.1` and `AC.3` |
 | `AC-ISSUE-006` | `closed` | the current crate graph did not keep future SQL Server support easy because backend crates orbited `atm-core` too closely; Phase `AC` now proves peer backends can target `atm-storage` directly, including the compile-only SQL Server proof crate with no `atm-core` edge. | `AC.3` and `AC.7` |
-| `AC-ISSUE-007` | `open` | `atm-graft` still carries an unconditional compile-time dependency on `atm-daemon-bootstrap`, which leaks `atm-runtime` and `atm-storage-rusqlite` into a thin client even though same-host daemon auto-start should remain only a thin-client convenience path. | `AC.8` |
+| `AC-ISSUE-007` | `closed` | `atm-graft` no longer carries the unconditional compile-time dependency on `atm-daemon-bootstrap`; the shared same-host endpoint/bin bootstrap seam now lives in `atm-daemon-client`, and thin-client convenience auto-start no longer leaks `atm-runtime` or `atm-storage-rusqlite` into `atm-graft`. | `AC.8` |
 
 ## Inventory Rules
 

@@ -155,12 +155,13 @@ Required rules:
   - no graft-specific public trait family unless the shared boundary proves
     insufficient
 - the standard convenience `GraftClient::connect()` path must reuse the same
-  thin-client same-host bootstrap helper seam used by the CLI rather than
-  inventing a graft-private bootstrap path
+  thin-client same-host bootstrap helper seam owned by `atm-daemon-client` and
+  used by the CLI rather than inventing a graft-private bootstrap path
 - the thin-client bootstrap helper seam may resolve the canonical same-host
   endpoint, daemon binary, and supervised auto-start behavior, but it must not
-  introduce a transitive dependency on `atm-runtime`,
-  `atm-storage-rusqlite`, or other concrete storage backends
+  introduce a direct `atm-daemon-bootstrap` dependency or a transitive
+  dependency on `atm-runtime`, `atm-storage-rusqlite`, or other concrete
+  storage backends
 - `atm-graft` compatibility with the primary `atm` install is defined by the
   documented same-host RPC surface, not by a requirement that both crates ship
   in lockstep versions

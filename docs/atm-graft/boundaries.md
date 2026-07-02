@@ -13,11 +13,13 @@ Canonical machine-readable boundary source:
 
 Purpose:
 - consume the shared thin-client daemon request boundary owned by `atm-core`
+- consume the shared same-host bootstrap seam owned by `atm-daemon-client`
 - provide concrete embedded same-host client behavior for `send`, `read`, and
   `ack`
 
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
+- `atm-graft` must not take a Rust dependency on `atm-daemon-bootstrap`
 - `atm-graft` must use the shared `atm-core` request/response DTO family rather
   than inventing a graft-private daemon API
 - `atm-graft` must not add a graft-specific public trait family if the shared

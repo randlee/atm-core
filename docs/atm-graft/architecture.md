@@ -18,9 +18,10 @@ the pre-daemon workspace.
   in-process so ATM nudges can be injected without terminal automation layers.
 - `atm-graft` depends on `atm-core` semantic types, request/result contracts,
   config semantics, and error vocabulary.
-- `atm-graft` may depend on a shared thin-client same-host bootstrap seam for
-  canonical endpoint resolution, daemon-binary resolution, probe, and
-  supervised auto-start convenience, but it must not depend on runtime/storage
+- `atm-graft` may depend on the shared thin-client same-host bootstrap seam
+  owned by `atm-daemon-client` for canonical endpoint resolution,
+  daemon-binary resolution, probe, and supervised auto-start convenience, but
+  it must not depend on `atm-daemon-bootstrap` or on runtime/storage
   composition crates to obtain that behavior.
 - `atm-graft` must not depend on `atm-daemon` as a Rust crate; it talks to the
   daemon over the documented same-host protocol only.
