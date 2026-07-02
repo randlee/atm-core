@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.7
 worktree: ../atm-core-worktrees/feature/pAD-s7-vendored-crate-removal
 branch: feature/pAD-s7-vendored-crate-removal
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.7` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 

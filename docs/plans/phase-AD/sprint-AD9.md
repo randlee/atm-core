@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.9
 worktree: ../atm-core-worktrees/feature/pAD-s9-dependency-policy-ownership-cutover
 branch: feature/pAD-s9-dependency-policy-ownership-cutover
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.9` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 
@@ -51,8 +57,8 @@ forbidden_edges = ["left-package -> right-package"]
 If the published `D.1` release is not available by the first ATM release-
 planning checkpoint after `AD.8`:
 
-- the branch must record an explicit re-review date against the real upstream
-  published state
+- `team-lead` must record an explicit re-review date against the real upstream
+  published state in `.triage/phase-AD/ad9-checkpoint-log.md`
 - and explicit human sign-off must decide whether to keep `AD.9` open or split
   it into a standalone follow-on phase
 - indefinite carry-forward with no recorded checkpoint is not allowed
@@ -69,6 +75,9 @@ planning checkpoint after `AD.8`:
 - current `boundaries/**/*.toml` records touched by dependency-policy
   enforcement
 - the repo-owned version-pin record for published `sc-lint`
+- `.triage/phase-AD/ad9-checkpoint-log.md`
+- ADR recording the external dependency-policy ownership decision and rollback
+  posture
 - any ATM-specific tests or docs that remain authoritative for dependency
   policy
 
@@ -83,6 +92,9 @@ planning checkpoint after `AD.8`:
 - duplicated ATM-local dependency-policy checks in `.just/lint_boundaries.py`
   are deleted or reduced to ATM-only governance checks where released
   `sc-lint` is now authoritative
+- a repository ADR records the decision to retire in-repo duplication in favor
+  of the published `sc-lint` dependency-policy surface, including rollback
+  posture if the upstream release proves insufficient
 
 ## Required Work
 
@@ -91,6 +103,8 @@ planning checkpoint after `AD.8`:
 - fix any newly exposed boundary TOML drift before claiming closure
 - delete or reduce duplicated ATM-local dependency-policy logic only after the
   released analyzer proves equal-or-better coverage
+- author or update the ADR that records external ownership of the
+  dependency-policy enforcement surface and the allowed rollback posture
 - if upstream release lag blocks execution, record the checkpoint outcome
   explicitly rather than leaving the sprint in an implicit hold
 
@@ -117,4 +131,6 @@ planning checkpoint after `AD.8`:
 - `python3 .just/run_lint.py all`
 - any ATM-specific boundary or architecture test surface tied to dependency
   policy
+- `test -f .triage/phase-AD/ad9-checkpoint-log.md`
+- `rg -n 're-review date|follow-on phase|keep AD\\.9 open|human sign-off' .triage/phase-AD/ad9-checkpoint-log.md -S`
 - `git diff --check`

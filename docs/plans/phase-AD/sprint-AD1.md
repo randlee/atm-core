@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.1
 worktree: ../atm-core-worktrees/feature/pAD-s1-published-tool-install-contract
 branch: feature/pAD-s1-published-tool-install-contract
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.1` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 
@@ -53,6 +59,8 @@ same facts directly from repo state.
 - repo-owned install contract doc or config record for the published tool pin
 - local developer install path docs/scripts
 - CI-consumable install path docs/scripts
+- `.github/workflows/ci.yml` for additive published-binary install smoke while
+  vendored wrapper behavior remains unchanged
 - no `.just/lint_*.py` wrapper edits in this sprint
 
 ## Deliverables
@@ -79,6 +87,9 @@ same facts directly from repo state.
 - define one repo-owned install method for Linux, macOS, and Windows
 - record the exact binaries included in that contract
 - record the local and CI install steps without relying on `../sc-lint`
+- wire additive published-binary install smoke into CI before any wrapper
+  retarget begins, while leaving vendored wrapper execution authoritative until
+  `AD.8` removes the old CI assumptions
 - leave wrapper behavior unchanged so this sprint closes only the install line
 
 ## Acceptance Criteria
@@ -88,6 +99,8 @@ same facts directly from repo state.
 - the selected version pin is explicit and reviewable in repo state
 - each supported platform records a `--version` check for the installed
   binaries
+- CI resolves the published binaries on Linux, macOS, and Windows before any
+  later sprint retargets a wrapper to call them by bare name
 - `AD.1` does not retarget `.just/lint_*.py` yet; existing ATM lint behavior
   remains authoritative until `AD.2`
 - a reviewer can identify the exact install method and pinned version from repo
@@ -98,4 +111,7 @@ same facts directly from repo state.
 - published `sc-lint-boundary --version`
 - published `sc-lint-portability --version`
 - published `sc-lint-runtime --version`
+- additive CI evidence from `.github/workflows/ci.yml` records successful
+  published-binary `--version` checks on `ubuntu-latest`, `macos-latest`, and
+  `windows-latest` while wrapper execution still uses the pre-cutover path
 - `git diff --check`

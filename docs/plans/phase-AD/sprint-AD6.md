@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.6
 worktree: ../atm-core-worktrees/feature/pAD-s6-proc-macro-registry-cutover
 branch: feature/pAD-s6-proc-macro-registry-cutover
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.6` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 
@@ -51,6 +57,8 @@ sc-lint-attributes = "<published version>"
 
 - `crates/atm-core/Cargo.toml`
 - `crates/atm-core/src/observability.rs`
+- dedicated proc-macro compatibility test covering the real
+  `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` call sites
 - any repo-owned version pin or install-contract record introduced earlier in
   the phase
 
@@ -63,6 +71,8 @@ sc-lint-attributes = "<published version>"
 - the exact `#[sc_lint(...)]` attribute call sites in
   `crates/atm-core/src/observability.rs` are compiled and validated under the
   published proc-macro dependency
+- a dedicated proc-macro compatibility test exists for the published macro
+  path rather than relying only on whole-workspace compilation
 
 ## Required Work
 
@@ -85,6 +95,7 @@ sc-lint-attributes = "<published version>"
 ## Required Validation
 
 - `cargo build --workspace`
-- `cargo test -p atm-core observability`
+- `cargo test -p atm-core sc_lint_observability_macro_compat -- --exact`
+- `test \"$(rg '#\\[sc_lint\\(boundary\\.allow\\(\"cycle\\.recursive_value_container\"\\)\\)\\]' crates/atm-core/src/observability.rs -c)\" = '2'`
 - `! rg -n 'path = \"\\.\\./sc-lint-attributes\"|path = \"\\.\\./sc-lint-directives\"' Cargo.toml crates/*/Cargo.toml -S`
 - `git diff --check`

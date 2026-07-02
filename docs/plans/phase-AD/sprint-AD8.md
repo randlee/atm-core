@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.8
 worktree: ../atm-core-worktrees/feature/pAD-s8-ci-release-published-tool-cutover
 branch: feature/pAD-s8-ci-release-published-tool-cutover
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.8` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 

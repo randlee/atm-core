@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.2
 worktree: ../atm-core-worktrees/feature/pAD-s2-boundary-wrapper-published-cutover
 branch: feature/pAD-s2-boundary-wrapper-published-cutover
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.2` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 

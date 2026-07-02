@@ -193,6 +193,8 @@ Phase `AD` must preserve these invariants:
 
 Phase `AD` execution begins only when:
 
+- explicit human sign-off has approved the proposed `Phase AD` execution line
+  described in `Authorization And Current Status`
 - a published `sc-lint` release exists for the tool and crate surfaces ATM
   intends to consume first
 - ATM has one supported installation path for those published tools on:
@@ -213,7 +215,7 @@ not control. To avoid an unbounded silent stall:
   cutover, deletion, CI, and release-preflight gates are green
 - if `AD.8` closes before a released `D.1` exists, `Phase AD` remains open
   with `AD.9` as the only blocked follow-on sprint
-- at each ATM release-planning checkpoint after `AD.8`, the team must
+- at each ATM release-planning checkpoint after `AD.8`, `team-lead` must
   re-review the upstream published state and record one explicit outcome:
   - keep `AD.9` open against a new checkpoint date
   - or, with explicit human sign-off, spin `AD.9` into a standalone follow-on

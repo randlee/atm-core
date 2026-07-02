@@ -6,9 +6,15 @@ phase: AD
 sprint: AD.3
 worktree: ../atm-core-worktrees/feature/pAD-s3-portability-wrapper-published-cutover
 branch: feature/pAD-s3-portability-wrapper-published-cutover
-status: planned
+status: proposed-pending-signoff
 estimated_scope: medium
 ```
+
+## Authorization Gate
+
+This sprint is a proposed planning target only. No implementation branch or
+worktree for `AD.3` may open until explicit human sign-off approves `Phase AD`
+per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
 
 ## Goal
 
@@ -96,6 +102,8 @@ Required command contract:
 - the published analyzer reproduces the required ATM portability rule families
 - any finding-volume drop, rule disappearance, or incompatible JSON shape
   blocks sprint closure
+- any explained finding-volume drop is documented in the parity artifact and
+  requires reviewer sign-off rather than implementer-only assertion
 
 ## Required Validation
 
