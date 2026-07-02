@@ -141,6 +141,10 @@ clean:
 lint target='all':
     {{python_cmd}} .just/run_lint.py {{target}}
 
+# Run the retained release validation / preflight suite.
+validate target='all':
+    {{python_cmd}} scripts/validate_release.py {{target}}
+
 # Run the Phase Z smoke harness.
 smoke level='normal':
     {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts

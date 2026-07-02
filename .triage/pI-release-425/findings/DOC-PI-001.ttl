@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DOC-PI-001>
+  a triage:Finding ;
+  triage:findingId "DOC-PI-001" ;
+  triage:title "Plan documentation status inconsistency in Publishing Improvements" ;
+  triage:description "docs/publishing-improvements/plan.md frontmatter claims status: complete on integrate/publish-release-readiness branch, but docs/project-plan.md still shows PI.2 as in_progress on feature/pPI-s2-publisher-prompt and PI.3 as planned with branch: TBD. Team-lead confirmed this branch intentionally consolidates PI.1-PI.3 implementation. project-plan.md Publishing Improvements table must be updated to reflect actual consolidated branch state." ;
+  triage:phaseId "pI-release-425" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-01T12:52:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723> .
+
+<urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 618 ;
+  triage:snippet "| `PI.2` | `in_progress` | `feature/pPI-s2-publisher-prompt` |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723> ;
+  triage:notes "PI.2 status should reflect consolidation onto integrate/publish-release-readiness; branch should be updated from feature/pPI-s2-publisher-prompt" .
+
+<urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 619 ;
+  triage:snippet "| `PI.3` | `planned` | `TBD` |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723> ;
+  triage:notes "PI.3 status should change from planned to reflect consolidation; branch should be updated from TBD to integrate/publish-release-readiness" .
+
+<urn:atm:triage:occurrence/DOC-PI-001/integrate-pub-3>
+  a triage:Occurrence ;
+  triage:file "docs/publishing-improvements/plan.md" ;
+  triage:line 290 ;
+  triage:snippet "This branch is planning-only." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723> ;
+  triage:notes "Related to ARCH-002 finding. 'Planning Branch Scope' section (lines 290-299) contradicts frontmatter status: complete. Scope language should be updated to reflect actual consolidated PI.1-PI.3 implementation on this branch. This fix should be sequenced with ARCH-002 since both touch the same file." .
+
+<urn:atm:triage:worktree/integrate-pub-release-readiness/a6d58723>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:orderIndex 1 .

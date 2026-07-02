@@ -8,6 +8,7 @@ license.workspace = true
 description = "AST-sensitive Rust boundary analyzer."
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [[bin]]
 name = "sc-lint-boundary"

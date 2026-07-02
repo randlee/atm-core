@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "Release gate script missing branch identity check" ;
+  triage:description "scripts/release_gate.sh only checks that origin/main/origin/develop refs exist and unconditionally prints PASS; never asserts triggering branch is release/vX.Y.Z" ;
+  triage:phaseId "pI-release-425" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-01T12:51:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/develop/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/integrate-publish/1> ;
+  triage:openOn <urn:atm:triage:worktree/develop/0d5f9d7a> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-publish/a6d58723> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-publish/a6d58723> .
+
+<urn:atm:triage:occurrence/ARCH-001/develop/1>
+  a triage:Occurrence ;
+  triage:file "scripts/release_gate.sh" ;
+  triage:line 26 ;
+  triage:snippet "info \"PASS - release gate checks satisfied\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "0d5f9d7a5feb9539e2360efe5af2ff4e3b782b06" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/0d5f9d7a> .
+
+<urn:atm:triage:occurrence/ARCH-001/integrate-publish/1>
+  a triage:Occurrence ;
+  triage:file "scripts/release_gate.sh" ;
+  triage:line 26 ;
+  triage:snippet "info \"PASS - release gate checks satisfied\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-publish/a6d58723> .
+
+<urn:atm:triage:worktree/develop/0d5f9d7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "develop" ;
+  triage:path "/Users/randlee/Documents/github/atm-core" ;
+  triage:headSha "0d5f9d7a5feb9539e2360efe5af2ff4e3b782b06" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-publish/a6d58723>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/publish-release-readiness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/publish-release-readiness" ;
+  triage:headSha "a6d58723bb25336b30104dc31a5f8acaf40b2b74" ;
+  triage:orderIndex 1 .
