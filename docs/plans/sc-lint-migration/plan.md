@@ -1,12 +1,34 @@
 ---
-title: sc-lint Published Release Migration Plan
-plan_type: migration_plan
+title: sc-lint Published Release Migration Inventory And Gap Analysis
+plan_type: support_inventory
 status: complete
 branch: plan/sc-lint-published-migration
 worktree: ../atm-core-worktrees/plan/sc-lint-published-migration
 ---
 
-# sc-lint Published Release Migration Plan
+# sc-lint Published Release Migration Inventory And Gap Analysis
+
+This document is retained as a supporting inventory and gap-analysis artifact.
+
+The authoritative execution planning surface for this work now lives in:
+
+- [`docs/plans/phase-AD/plan-phase-AD.md`](../phase-AD/plan-phase-AD.md)
+- `docs/plans/phase-AD/sprint-AD1.md`
+- `docs/plans/phase-AD/sprint-AD2.md`
+- `docs/plans/phase-AD/sprint-AD3.md`
+- `docs/plans/phase-AD/sprint-AD4.md`
+- `docs/plans/phase-AD/sprint-AD5.md`
+- `docs/plans/phase-AD/sprint-AD6.md`
+- `docs/plans/phase-AD/sprint-AD7.md`
+- `docs/plans/phase-AD/sprint-AD8.md`
+- `docs/plans/phase-AD/sprint-AD9.md`
+
+This supporting doc remains useful because it captures:
+
+- the original vendored-vs-published inventory
+- the initial gap analysis
+- the early no-change verification for boundary TOMLs and release manifests
+- the Python lint ownership review and duplicate-surface classification
 
 ## Goal
 
@@ -75,6 +97,39 @@ exists that covers the current `atm-core` dependency and analyzer surface.
 | `.github/workflows/ci.yml` | runs `just lint` on Ubuntu, macOS, and Windows | current CI assumes analyzers are built from the workspace checkout | CI must install/pin published `sc-lint` tools first |
 | `scripts/validate_release.py` | treats `just lint` or `.just/run_lint.py all` as a release gate | release sign-off depends on the lint suite | release preflight must use the published tool install path too |
 
+### D. Python lint ownership review
+
+| Current ATM asset | Current role | Keep or replace | Notes |
+| --- | --- | --- | --- |
+| `.just/run_lint.py` | local lint orchestration and house target naming | keep | ATM-owned wrapper/orchestration layer; not a `sc-lint` product concern |
+| `.just/lint_sc_boundary.py` | thin full-boundary analyzer wrapper | replace backend | should call published `sc-lint-boundary` directly |
+| `.just/lint_sc_portability.py` | thin portability analyzer wrapper | replace backend | should call published `sc-lint-portability` directly |
+| `.just/lint_unix_gating.py` | repo-specific portability subset wrapper | keep | remains ATM-owned, but backend must come from published portability findings |
+| `.just/lint_runtime_waits.py` | repo-specific runtime-waits subset wrapper | keep | remains ATM-owned, but backend must come from published `sc-lint-runtime` |
+| `.just/lint_boundaries.py` | ATM boundary-TOML schema, allowlist, review-gate, and dependency-policy checks | keep partially | ATM-specific governance stays; dependency-policy overlap with released `sc-lint` `D.1` must be re-evaluated and reduced/deleted where redundant |
+
+### E. Duplicate-surface classification
+
+Duplicate implementation expected to be removed during execution:
+
+- vendored crates:
+  - `crates/sc-lint-directives`
+  - `crates/sc-lint-attributes`
+  - `crates/sc-lint-boundary`
+- any analyzer invocation path that still relies on:
+  - `cargo run -q -p sc-lint-boundary`
+  - a workspace-built vendored `sc-lint` binary
+- any ATM-local dependency-policy enforcement in `.just/lint_boundaries.py`
+  that the released `sc-lint` `D.1` boundary scan proves equivalent or stronger
+
+ATM-owned surface expected to remain after migration:
+
+- repo-local lint names and orchestration in `.just/run_lint.py`
+- subset wrappers for `unix-gating` and `runtime-waits`
+- ATM-specific boundary schema / allowlist / review-gate checks in
+  `.just/lint_boundaries.py`
+- wrapper-contract tests that protect ATM report shape and target naming
+
 ## Vendored Snapshot vs Upstream Release-Line Gap
 
 ### ATM vendored snapshot facts
@@ -125,6 +180,7 @@ release line. The migration therefore requires both:
 | default lint subset for `PORT-004` / `PORT-005` (`unix-gating`) | ATM wrapper filters portability findings | not a product feature by itself | ATM must keep this wrapper locally; upstream explicitly treats it as a consumer adaptation |
 | default lint subset for `SCB-RUNTIME-001` / `SCB-RUNTIME-002` (`runtime-waits`) | ATM wrapper filters boundary findings | expected yes through `sc-lint-runtime` rule ownership | moderate risk because ATM currently filters those IDs out of the wrong analyzer family |
 | current `just lint` names and report formatting | `.just/run_lint.py` + local Python wrappers | not expected upstream | ATM-owned adapter layer must remain |
+| dependency-policy enforcement from `dependencies.allowed_*` and `forbidden_edges` | partly duplicated in `.just/lint_boundaries.py` today | expected yes once released `sc-lint` Phase `D.1` lands | migration is not complete until ownership moves to released `sc-lint` or ATM explicitly proves why a residual check stays local |
 | all-platform CI bring-up with no local vendored analyzer crates | workspace build today | unknown until release artifacts are published | high risk until install story is confirmed for Windows, macOS, and Linux |
 | portability config knob `unix_path_prefixes` | vendored `sc-lint-boundary/config/defaults.toml` | uncertain | must confirm whether the published portability crate exposes an equivalent config surface or bakes the defaults in |
 | release-preflight lint behavior | `scripts/validate_release.py` | not expected upstream | ATM-owned release gate must be retargeted |

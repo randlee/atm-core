@@ -80,15 +80,21 @@ Phase-AB planning note:
 - the planning branch is `plan/phase-AB`
 - the execution integration branch is `integrate/phase-AB`
 
-sc-lint published-release migration note:
+Phase-AD planning note:
 - `atm-core` still vendors `crates/sc-lint-*` support crates and local wrapper
   scripts that shell through those workspace members today
-- the planning line for migrating from the vendored snapshot to the next
-  published `sc-lint` release is tracked in
-  [`docs/plans/sc-lint-migration/plan.md`](./plans/sc-lint-migration/plan.md)
-- implementation is deferred until a published `sc-lint` release is available
-  that covers the current ATM proc-macro, analyzer, CI, and release-gate
-  surface
+- the planning line for migrating from the vendored snapshot to the published
+  `sc-lint` release line is `Phase AD`, tracked in
+  [`docs/plans/phase-AD/plan-phase-AD.md`](./plans/phase-AD/plan-phase-AD.md)
+- `Phase AD` is now split into single-closure phase-named sprints rather than
+  one overloaded migration bucket
+- the sprint sequence explicitly separates published-tool install, boundary
+  wrapper cutover, portability wrapper cutover, Unix-gating cutover,
+  runtime-waits cutover, proc-macro cutover, vendored-crate removal, CI/release
+  cutover, and the final released `sc-lint` Phase `D.1` dependency-policy
+  ownership cutover
+- the planning branch is `plan/sc-lint-published-migration`
+- the execution integration branch is `integrate/phase-AD`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -129,6 +135,9 @@ Status:
   to `atm-runtime`.
 - Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
   execution after the accepted Phase Z baseline.
+- Phase AD is the active planning line for migrating ATM from vendored
+  `sc-lint-*` crates to the published `sc-lint` release line, including the
+  released `Phase D.1` dependency-enforcement adoption closeout.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`
@@ -641,7 +650,7 @@ Implementation Branches:
 Authoritative sprint plan:
 - `docs/publishing-improvements/plan.md`
 
-## sc-lint Published Release Migration [PLANNED]
+## Phase AD: Published sc-lint Release Migration [PLANNED]
 
 Planning Branch:
 - `plan/sc-lint-published-migration`
@@ -649,8 +658,13 @@ Planning Branch:
 Status:
 - planning only
 - `atm-core` still vendors `crates/sc-lint-*` support crates today
-- cutover is deferred until a published `sc-lint` release exists that covers
-  the current ATM proc-macro, analyzer, CI, and release-gate surface
+- cutover now follows phase/sprint planning conventions under `Phase AD`
+- phase closeout requires both vendored duplicate removal and adoption of the
+  released `sc-lint` `D.1` dependency-enforcement work on ATM boundary
+  inventory
 
-Authoritative migration plan:
+Authoritative phase plan:
+- `docs/plans/phase-AD/plan-phase-AD.md`
+
+Supporting inventory and gap analysis:
 - `docs/plans/sc-lint-migration/plan.md`
