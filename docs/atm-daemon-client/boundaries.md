@@ -21,6 +21,10 @@ Rules:
 - `atm-daemon-client` owns `resolve_daemon_local_ipc_endpoint()` and
   `resolve_daemon_bin()` as the shared thin-client bootstrap seam consumed by
   both `atm` and `atm-graft`
+- `atm-daemon-client` may depend on `atm-core` specifically for canonical
+  ATM-owned environment/config and daemon-endpoint resolution needed by that
+  shared seam; it must not use that edge to acquire runtime assembly or
+  concrete storage-backend ownership
 - `atm-daemon-client` may own shared same-host connection-setup helpers such as
   `try_connect`, `exchange`, and `unexpected_response` when those helpers are
   extracted to keep `atm` and `atm-graft` aligned

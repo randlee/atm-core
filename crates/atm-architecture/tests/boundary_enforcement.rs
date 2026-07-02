@@ -16,6 +16,8 @@ use serde::Deserialize;
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-graft", "atm-daemon"),
+    ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
 ];
@@ -192,7 +194,10 @@ fn missing_forbidden_edges(
 
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
-    let mut files = vec![root.join("boundaries/atm-runtime/runtime-composition.toml")];
+    let mut files = vec![
+        root.join("boundaries/atm-graft/shared-client-consumer.toml"),
+        root.join("boundaries/atm-runtime/runtime-composition.toml"),
+    ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
