@@ -80,6 +80,16 @@ Phase-AB planning note:
 - the planning branch is `plan/phase-AB`
 - the execution integration branch is `integrate/phase-AB`
 
+sc-lint published-release migration note:
+- `atm-core` still vendors `crates/sc-lint-*` support crates and local wrapper
+  scripts that shell through those workspace members today
+- the planning line for migrating from the vendored snapshot to the next
+  published `sc-lint` release is tracked in
+  [`docs/plans/sc-lint-migration/plan.md`](./plans/sc-lint-migration/plan.md)
+- implementation is deferred until a published `sc-lint` release is available
+  that covers the current ATM proc-macro, analyzer, CI, and release-gate
+  surface
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
