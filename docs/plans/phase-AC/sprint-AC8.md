@@ -98,6 +98,10 @@ Compatibility-shim rule:
   binary resolution helpers used by thin clients
 - `atm` and `atm-graft` both consume those shared thin-client helpers for the
   convenience bootstrap path
+- `boundaries/atm-daemon-client/daemon-bootstrap.toml` and
+  `boundaries/atm-graft/shared-client-consumer.toml` are updated to encode the
+  relocked thin-client ownership and dependency rules enforced by
+  `python3 .just/lint_boundaries.py`
 - `crates/atm-graft/Cargo.toml` no longer depends on `atm-daemon-bootstrap`
 - `atm-graft` no longer transitively pulls `atm-runtime`,
   `atm-storage-rusqlite`, `rusqlite`, or `libsqlite3-sys`
@@ -126,6 +130,9 @@ Compatibility-shim rule:
 - `atm-daemon-bootstrap` no longer owns the endpoint/bin helper seam
 - the RPC surface exposed by `atm-daemon-client` and consumed by `atm-graft`
   remains unchanged
+- the machine-readable boundary records for the shared thin-client consumer and
+  daemon-bootstrap seam pass `python3 .just/lint_boundaries.py` with the
+  relocked dependency policy encoded directly in the TOMLs
 
 ## Required Validation
 
@@ -150,7 +157,9 @@ Compatibility-shim rule:
 - `docs/plans/phase-AC/readiness.md`
 - `docs/plans/phase-AC/issues.md`
 - `boundaries/atm-daemon-client/daemon-bootstrap.toml`
+- `boundaries/atm-graft/shared-client-consumer.toml`
 - `docs/atm-daemon-client/boundaries.md`
+- `docs/atm-graft/boundaries.md`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/requirements.md`
 - `docs/atm/architecture.md`

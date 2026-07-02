@@ -124,6 +124,7 @@ Status:
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
+  - `crates/atm-daemon-bootstrap`
   - `crates/atm-daemon-client`
   - `crates/atm-graft`
   - `crates/atm-runtime`
@@ -155,6 +156,7 @@ The abandoned early SQLite/daemon target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-daemon-bootstrap`
 - `crates/atm-daemon-client`
 - `crates/atm-graft`
 - `crates/atm-rusqlite`
@@ -329,12 +331,20 @@ Sprint line:
 - `AC.5` `feature/pAC-s5-rpc-envelope-and-domain-type-unification` `complete`
 - `AC.6` `feature/pAC-s6-cleanup-and-deletion-closeout` `complete`
 - `AC.7` `feature/pAC-s7-sqlserver-readiness-proof` `complete`
+- `AC.8` `feature/pAC-s8-thin-client-bootstrap-dependency-relock` `planned`
 
 Completion note:
 - `AC.7` proves SQL Server readiness from the real post-`AC.6` contract,
   lands `crates/atm-storage-sqlserver-proof` as a compile-only backend proof,
   and closes the final backend-interchangeability issue without another storage
   reset.
+
+AC.8 follow-on note:
+- `AC.8` is the thin-client dependency relock follow-on that removes the
+  unconditional `atm-graft -> atm-daemon-bootstrap` compile-time edge while
+  preserving the standard same-host daemon auto-start convenience path through
+  shared `atm-daemon-client` helpers and machine-readable boundary-policy
+  enforcement.
 
 AC.6 closeout:
 - deleted the speculative `TaskStore` family from `atm-core` and removed the
