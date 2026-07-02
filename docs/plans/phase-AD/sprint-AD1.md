@@ -90,6 +90,9 @@ same facts directly from repo state.
 - wire additive published-binary install smoke into CI before any wrapper
   retarget begins, while leaving vendored wrapper execution authoritative until
   `AD.8` removes the old CI assumptions
+- add the install-smoke step at workflow or shared job scope so later wrapper
+  sprints inherit the same published-binary installation contract instead of
+  silently redefining it per step
 - leave wrapper behavior unchanged so this sprint closes only the install line
 
 ## Acceptance Criteria

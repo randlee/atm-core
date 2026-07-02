@@ -76,8 +76,7 @@ planning checkpoint after `AD.8`:
   enforcement
 - the repo-owned version-pin record for published `sc-lint`
 - `.triage/phase-AD/ad9-checkpoint-log.md`
-- ADR recording the external dependency-policy ownership decision and rollback
-  posture
+- `docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
 - any ATM-specific tests or docs that remain authoritative for dependency
   policy
 
@@ -133,4 +132,6 @@ planning checkpoint after `AD.8`:
   policy
 - `test -f .triage/phase-AD/ad9-checkpoint-log.md`
 - `rg -n 're-review date|follow-on phase|keep AD\\.9 open|human sign-off' .triage/phase-AD/ad9-checkpoint-log.md -S`
+- `test -f docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
+- `rg -n 'dependency-policy|ownership|rollback posture|published sc-lint' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
 - `git diff --check`

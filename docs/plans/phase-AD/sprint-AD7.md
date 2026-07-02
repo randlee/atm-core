@@ -85,5 +85,5 @@ Production-ready commitment:
 - `python3 .just/run_lint.py sc-portability`
 - `python3 .just/run_lint.py unix-gating`
 - `python3 .just/run_lint.py runtime-waits`
-- `rg -n 'path = \"\\.\\./sc-lint-(attributes|directives|boundary)\"|crates/sc-lint-(attributes|directives|boundary)' Cargo.toml crates/*/Cargo.toml -S`
+- `! rg -n 'path = \"\\.\\./sc-lint-(attributes|directives|boundary)\"|crates/sc-lint-(attributes|directives|boundary)' Cargo.toml crates/*/Cargo.toml -S`
 - `git diff --check`

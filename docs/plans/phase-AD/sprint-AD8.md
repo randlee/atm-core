@@ -71,5 +71,5 @@ Production-ready commitment:
 
 - `python3 .just/run_lint.py all`
 - `python3 scripts/validate_release.py`
-- `rg -n '\\.\\./sc-lint|cargo run -q -p sc-lint-boundary|path = \"\\.\\./sc-lint-' .github/workflows .just scripts Justfile Cargo.toml crates -S`
+- `! rg -n '\\.\\./sc-lint|cargo run -q -p sc-lint-boundary|path = \"\\.\\./sc-lint-' .github/workflows .just scripts Justfile Cargo.toml crates -S`
 - `git diff --check`
