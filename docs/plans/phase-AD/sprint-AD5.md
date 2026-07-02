@@ -29,6 +29,9 @@ Production-ready commitment:
 - the wrapper must keep the ATM-owned runtime-waits subset contract
 - the wrapper must stop reading runtime findings out of the old integrated
   vendored boundary analyzer
+- the sprint must not assume the published analyzer still emits
+  `SCB-RUNTIME-001` / `SCB-RUNTIME-002` unless the retained `sc-lint` rule
+  inventory proves it; direct continuity or explicit mapping must be recorded
 
 Required command and filter contract:
 
@@ -45,6 +48,10 @@ command(repo_root) == [
 RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 ```
 
+If the published analyzer now emits different rule IDs for the equivalent
+runtime-waits findings, the wrapper must use one explicit repo-owned upstream-
+to-ATM mapping and still expose only the ATM contract above.
+
 ## Prerequisites
 
 - `AD.4`
@@ -60,6 +67,7 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 
 - `.just/lint_runtime_waits.py`
 - `.just/tests/test_lint_runtime_waits.py`
+- `.triage/phase-AD/ad5-runtime-waits-rule-map.md`
 
 ## Deliverables
 
@@ -69,11 +77,21 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
   `SCB-RUNTIME-002`
 - `.just/tests/test_lint_runtime_waits.py` is updated only as needed to
   preserve the ATM subset-wrapper contract
+- one repo-owned rule-map artifact
+  `.triage/phase-AD/ad5-runtime-waits-rule-map.md` records either:
+  - direct published `SCB-RUNTIME-001` / `SCB-RUNTIME-002` continuity
+  - or the explicit published-rule-id to ATM-rule-id mapping used by the
+    wrapper
 
 ## Required Work
 
 - retarget `runtime-waits` to `sc-lint-runtime`
 - preserve the `SCB-RUNTIME-001` / `SCB-RUNTIME-002` subset contract exactly
+- inspect the published rule inventory for direct
+  `SCB-RUNTIME-001` / `SCB-RUNTIME-002` continuity and record the result in
+  the rule-map artifact
+- if published rule IDs differ, define one explicit upstream-to-ATM mapping
+  rather than leaving the translation implicit in wrapper code
 - prove the wrapper no longer reads runtime rule ownership through the old
   integrated boundary analyzer
 - block closure if published runtime coverage is weaker than the vendored path
@@ -82,6 +100,8 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 
 - ATM still exposes the `runtime-waits` local lint target after retargeting
 - non-runtime findings remain excluded from this wrapper
+- any published-rule-id drift is resolved by an explicit rule-map artifact
+  rather than implementer-only assumption
 - the wrapper no longer shells through the vendored integrated boundary
   analyzer for runtime rule ownership
 - any finding-volume drop caused by missing runtime rule coverage blocks sprint
@@ -91,5 +111,7 @@ RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 
 - `python3 .just/run_lint.py runtime-waits`
 - `python3 .just/tests/test_lint_runtime_waits.py`
+- `test -f .triage/phase-AD/ad5-runtime-waits-rule-map.md`
+- `rg -n 'direct continuity|published rule id|ATM rule id|SCB-RUNTIME-001|SCB-RUNTIME-002|mapping' .triage/phase-AD/ad5-runtime-waits-rule-map.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary|--rule boundaries' .just/lint_runtime_waits.py .just/tests/test_lint_runtime_waits.py -S`
 - `git diff --check`

@@ -45,6 +45,16 @@ published `sc-lint` migration proposal.
   `D.1` release that ATM does not control; the checkpoint policy prevents
   silent indefinite carry-forward
 
+### AD-ISSUE-005 Published Rule-Id Continuity For Consumer-Subset Wrappers
+
+- status: open until `AD.5`
+- owner: `AD.4` and `AD.5`
+- summary: the retained `sc-lint` docs in this repo do not currently prove
+  that published analyzer rule IDs still match ATM's local `PORT-004` /
+  `PORT-005` and `SCB-RUNTIME-001` / `SCB-RUNTIME-002` wrapper contracts, so
+  each subset-wrapper cutover must prove direct continuity or record an
+  explicit upstream-to-ATM mapping
+
 ## Closed Items
 
 - none yet

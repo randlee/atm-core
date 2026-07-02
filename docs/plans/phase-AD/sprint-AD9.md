@@ -74,7 +74,11 @@ planning checkpoint after `AD.8`:
 - `.just/lint_boundaries.py`
 - current `boundaries/**/*.toml` records touched by dependency-policy
   enforcement
+- owning crate-local `requirements.md`, `architecture.md`, and `boundaries.md`
+  docs for every touched boundary record
 - the repo-owned version-pin record for published `sc-lint`
+- `.triage/phase-AD/ad9-dependency-policy-command.sh`
+- `.triage/phase-AD/ad9-dependency-policy-cutover.md`
 - `.triage/phase-AD/ad9-checkpoint-log.md`
 - `docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
 - any ATM-specific tests or docs that remain authoritative for dependency
@@ -84,6 +88,9 @@ planning checkpoint after `AD.8`:
 
 - ATM pins the first released `sc-lint` version that includes direct
   dependency-policy enforcement from Phase `D.1`
+- one repo-owned executable artifact
+  `.triage/phase-AD/ad9-dependency-policy-command.sh` runs the exact released
+  `D.1` dependency-policy command path selected for ATM
 - ATM reruns its boundary inventory against the released dependency-policy rule
   family
 - any ATM boundary inventory drift exposed by real `D.1` enforcement is fixed
@@ -91,6 +98,14 @@ planning checkpoint after `AD.8`:
 - duplicated ATM-local dependency-policy checks in `.just/lint_boundaries.py`
   are deleted or reduced to ATM-only governance checks where released
   `sc-lint` is now authoritative
+- one repo-owned cutover summary artifact
+  `.triage/phase-AD/ad9-dependency-policy-cutover.md` records:
+  - the published `sc-lint` version adopted
+  - the exact command shipped in `ad9-dependency-policy-command.sh`
+  - boundary TOML records touched by released `D.1` enforcement
+  - any owning crate docs updated to match those boundary edits
+  - any residual ATM-only dependency-policy checks left in
+    `.just/lint_boundaries.py`
 - a repository ADR records the decision to retire in-repo duplication in favor
   of the published `sc-lint` dependency-policy surface, including rollback
   posture if the upstream release proves insufficient
@@ -98,12 +113,18 @@ planning checkpoint after `AD.8`:
 ## Required Work
 
 - pin the first published `sc-lint` release that actually includes `D.1`
+- add one repo-owned executable helper that runs the exact released `D.1`
+  dependency-policy command path against the ATM repo
 - rerun dependency-policy enforcement across the real ATM boundary inventory
 - fix any newly exposed boundary TOML drift before claiming closure
+- if boundary TOML edits change dependency-policy semantics, update the owning
+  crate-local requirements, architecture, and boundary docs in the same sprint
 - delete or reduce duplicated ATM-local dependency-policy logic only after the
   released analyzer proves equal-or-better coverage
 - author or update the ADR that records external ownership of the
   dependency-policy enforcement surface and the allowed rollback posture
+- author the cutover summary artifact that records exact command, touched
+  boundary records, owning-doc reconciliation, and residual ATM-only checks
 - if upstream release lag blocks execution, record the checkpoint outcome
   explicitly rather than leaving the sprint in an implicit hold
 
@@ -118,6 +139,8 @@ planning checkpoint after `AD.8`:
   family is active and green on ATM
 - any ATM boundary TOML edits required by real `D.1` enforcement land in this
   sprint rather than being deferred
+- any touched owning crate docs land in the same sprint as dependency-policy
+  boundary TOML edits rather than remaining in contradiction
 - any residual dependency-policy logic left in `.just/lint_boundaries.py` is
   explicitly justified as ATM-only governance rather than silent duplication
 - if `D.1` is still unavailable at a release-planning checkpoint, the branch
@@ -126,10 +149,12 @@ planning checkpoint after `AD.8`:
 
 ## Required Validation
 
-- the released `D.1` dependency-focused boundary command path
+- `test -x .triage/phase-AD/ad9-dependency-policy-command.sh`
+- `bash .triage/phase-AD/ad9-dependency-policy-command.sh`
 - `python3 .just/run_lint.py all`
-- any ATM-specific boundary or architecture test surface tied to dependency
-  policy
+- `test -f .triage/phase-AD/ad9-dependency-policy-cutover.md`
+- `rg -n 'published version|exact command|touched boundary records|owning crate docs|residual ATM-only checks' .triage/phase-AD/ad9-dependency-policy-cutover.md -S`
+- `python3 .just/lint_boundaries.py`
 - `test -f .triage/phase-AD/ad9-checkpoint-log.md`
 - `rg -n 're-review date|follow-on phase|keep AD\\.9 open|human sign-off' .triage/phase-AD/ad9-checkpoint-log.md -S`
 - `test -f docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`

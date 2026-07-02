@@ -104,6 +104,9 @@ Phase `AD` planning and review must read these documents directly from disk:
   - [`docs/atm/requirements.md`](../../atm/requirements.md)
   - [`docs/atm/architecture.md`](../../atm/architecture.md)
   - [`docs/atm/boundaries.md`](../../atm/boundaries.md)
+  - during `AD.9`, also read the owning crate-local `requirements.md`,
+    `architecture.md`, and `boundaries.md` docs for every boundary record whose
+    dependency-policy semantics are touched by released `D.1` enforcement
 - `sc-lint` product and boundary-model docs retained in this repo:
   - [`docs/sc-lint/requirements.md`](../../sc-lint/requirements.md)
   - [`docs/sc-lint/README.md`](../../sc-lint/README.md)
@@ -155,10 +158,18 @@ Phase `AD` must preserve these invariants:
   - repo-specific report formatting
   - repo-specific orchestration
   - an ATM-only boundary-governance rule not provided by released `sc-lint`
+- `AD.4` and `AD.5` preserve ATM-owned subset semantics, not blind published
+  rule-id continuity. If the released analyzer keeps equivalent semantics but
+  renames the emitted rule IDs, the sprint must record one explicit upstream-
+  to-ATM rule mapping artifact and keep the ATM wrapper contract intentional.
 - `lint_boundaries.py` may keep ATM-only boundary schema and review-gate logic,
   but any dependency-policy checks that released `sc-lint` `D.1` covers at
   equal or better strength must move to the published analyzer and be deleted
   or reduced in ATM during `AD.9`.
+- if `AD.9` changes dependency-policy semantics in any `boundaries/**/*.toml`
+  record, the owning crate-local requirements, architecture, and boundary docs
+  for those records must be updated in the same sprint rather than left in
+  contradiction with the enforced TOML state
 - `AD.4` owns closure of the unresolved `unix_path_prefixes` portability-config
   gap identified in the supporting inventory. The sprint must prove whether the
   published `sc-lint-portability` surface preserves that knob directly or
@@ -309,7 +320,9 @@ Purpose:
 
 - keep `unix-gating` as an ATM-owned subset wrapper while moving its backend to
   published portability findings only
-- prove the repo-specific `PORT-004` / `PORT-005` contract survives intact
+- prove the repo-specific `PORT-004` / `PORT-005` contract survives intact,
+  either through direct published rule-id continuity or through an explicit
+  repo-owned mapping from published rule IDs to the ATM wrapper surface
 
 Proposed execution branch:
 - `feature/pAD-s4-unix-gating-wrapper-published-cutover`
@@ -327,7 +340,9 @@ Purpose:
 - keep `runtime-waits` as an ATM-owned subset wrapper while moving its backend
   to the published runtime analyzer
 - prove the `SCB-RUNTIME-001` / `SCB-RUNTIME-002` contract no longer depends on
-  the old integrated vendored boundary crate
+  the old integrated vendored boundary crate, either through direct published
+  rule-id continuity or through an explicit repo-owned mapping from published
+  rule IDs to the ATM wrapper surface
 
 Proposed execution branch:
 - `feature/pAD-s5-runtime-waits-wrapper-published-cutover`
@@ -397,6 +412,9 @@ Purpose:
 - rerun ATM boundary inventory against the new `dependencies` rule family
 - remove or reduce ATM-local duplicate dependency-policy checks once published
   `sc-lint` proves equal-or-better coverage
+- record the exact released `D.1` invocation, touched boundary records,
+  residual ATM-only checks, and owning-doc reconciliation in repo-owned AD.9
+  artifacts
 
 Proposed execution branch:
 - `feature/pAD-s9-dependency-policy-ownership-cutover`

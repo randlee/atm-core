@@ -28,6 +28,9 @@ This sprint closes only the repo-specific `unix-gating` wrapper cutover.
 Production-ready commitment:
 - the wrapper must keep the ATM-owned `PORT-004` / `PORT-005` subset contract
 - the wrapper must stop depending on the vendored integrated portability path
+- the sprint must not assume the published analyzer still emits `PORT-004` /
+  `PORT-005` unless the retained `sc-lint` rule inventory proves it; direct
+  continuity or explicit mapping must be recorded
 
 Required command and filter contract:
 
@@ -43,6 +46,10 @@ command(repo_root) == [
 
 RULE_IDS = {"PORT-004", "PORT-005"}
 ```
+
+If the published analyzer now emits different rule IDs for the equivalent Unix-
+gating findings, the wrapper must use one explicit repo-owned upstream-to-ATM
+mapping and still expose only the ATM contract above.
 
 ## Prerequisites
 
@@ -61,6 +68,7 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - `.just/tests/test_lint_unix_gating.py`
 - `.triage/phase-AD/ad4-sc-lint-portability-help.txt`
 - `.triage/phase-AD/ad4-unix-path-prefixes-review.md`
+- `.triage/phase-AD/ad4-unix-gating-rule-map.md`
 
 ## Deliverables
 
@@ -69,6 +77,11 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - the wrapper continues to report only `PORT-004` and `PORT-005`
 - `.just/tests/test_lint_unix_gating.py` is updated only as needed to preserve
   the ATM subset-wrapper contract
+- one repo-owned rule-map artifact
+  `.triage/phase-AD/ad4-unix-gating-rule-map.md` records either:
+  - direct published `PORT-004` / `PORT-005` continuity
+  - or the explicit published-rule-id to ATM-rule-id mapping used by the
+    wrapper
 - one repo-owned review artifact
   `.triage/phase-AD/ad4-unix-path-prefixes-review.md` records whether the
   published `sc-lint-portability` surface exposes a direct equivalent for the
@@ -81,6 +94,10 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 
 - retarget `unix-gating` to published portability findings only
 - preserve the `PORT-004` / `PORT-005` subset contract exactly
+- inspect the published rule inventory for direct `PORT-004` / `PORT-005`
+  continuity and record the result in the rule-map artifact
+- if published rule IDs differ, define one explicit upstream-to-ATM mapping
+  rather than leaving the translation implicit in wrapper code
 - inspect the published portability surface for `unix_path_prefixes`
   equivalence
 - if direct equivalence is missing, define the repo-owned replacement or
@@ -91,6 +108,8 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - ATM still exposes the `unix-gating` local lint target after retargeting
 - non-`PORT-004` / non-`PORT-005` portability findings remain excluded from
   this wrapper
+- any published-rule-id drift is resolved by an explicit rule-map artifact
+  rather than implementer-only assumption
 - the `unix_path_prefixes` portability-config gap is closed explicitly:
   - direct published equivalence is confirmed
   - or the ATM-owned replacement behavior is named
@@ -104,6 +123,8 @@ RULE_IDS = {"PORT-004", "PORT-005"}
 - `python3 .just/run_lint.py unix-gating`
 - `python3 .just/tests/test_lint_unix_gating.py`
 - `sc-lint-portability --help > .triage/phase-AD/ad4-sc-lint-portability-help.txt`
+- `test -f .triage/phase-AD/ad4-unix-gating-rule-map.md`
+- `rg -n 'direct continuity|published rule id|ATM rule id|PORT-004|PORT-005|mapping' .triage/phase-AD/ad4-unix-gating-rule-map.md -S`
 - `test -f .triage/phase-AD/ad4-unix-path-prefixes-review.md`
 - `rg -n 'direct equivalent|wrapper override|approved removal' .triage/phase-AD/ad4-unix-path-prefixes-review.md -S`
 - `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_unix_gating.py .just/tests/test_lint_unix_gating.py -S`
