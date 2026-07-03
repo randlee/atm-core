@@ -27,13 +27,15 @@ sandbox = "workspace-write"
 approval_policy = "on-failure"
 
 [startup.team-lead]
-all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md"]
-
-[startup.quality-mgr]
-all = ["Read .claude/skills/quality-management-gh/SKILL.md"]
+all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md",
+       "Use atm_send for all messages to arch-ctm or quality-mgr" ]
 
 [startup.arch-ctm]
-all = ["Read docs/team-protocol.md"]
+all = ["Use atm_send for all messages to team-lead or quality-mgr"]
+
+[startup.quality-mgr]
+all = ["read .claude/agents/quality-mgr.md for directive",
+       "Use atm_send for all messages to team-lead or arch-ctm" ]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
 [rmux]
