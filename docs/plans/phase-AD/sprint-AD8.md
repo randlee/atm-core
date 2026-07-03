@@ -20,6 +20,7 @@ target: integrate/phase-AD
 - `AD.2` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
 - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 
@@ -39,6 +40,7 @@ target: integrate/phase-AD
 - `crates/atm-core/src/delivery_execution.rs`
 - `crates/atm-core/src/service_runtime.rs`
 - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/atm-core/requirements.md`
 - `docs/plans/phase-Y/delivery-state-machines.md`
@@ -46,6 +48,7 @@ target: integrate/phase-AD
 - `docs/plans/phase-Y/new-message-non-claude.mmd`
 - `docs/atm/flow-diagrams.md`
 - `docs/architecture.md`
+- `docs/requirements.md`
 - `docs/atm-core/architecture.md`
 - code/tests that still assume inbox append can serve as post-send context
   injection

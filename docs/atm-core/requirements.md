@@ -300,7 +300,7 @@ Required `atm-core` crate rules:
   - inbox ingress
   - inbox export
   - config ingress
-  - watcher / reconcile
+  - watcher / reconcile (historical only; retired per `ADR-019`, see §10.1)
   - notifier-facing service integration
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`

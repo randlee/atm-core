@@ -487,18 +487,15 @@ Per-team layout:
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
-Current shared inbox file-container rule:
-- the supported current Claude inbox container at
-  `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json` is one top-level JSON
-  array of inbox messages
-- that current `.json` array shape is the primary supported ATM compatibility
-  path, not a legacy/degraded fallback
-- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
-  unsupported mailbox content rather than for the legal current Claude
-  JSON-array shape
-- current Claude inbox reads must salvage segmentable valid message objects
-  from malformed `.json` arrays and emit explicit degraded warnings for
-  localized bad fragments instead of failing the whole inbox by default
+Historical shared inbox file-container rule:
+- the prior Claude inbox container at
+  `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json` used one top-level
+  JSON array of inbox messages
+- that `.json` array shape is historical-only after `ADR-019`; it is not a
+  live production compatibility path for accepted send/read behavior
+- any retained repair/rebuild or salvage handling for malformed Claude inbox
+  JSON exists only for historical compatibility tooling and must not redefine
+  current runtime requirements
 
 ### 3.2.1 Message Schema Ownership And Compatibility
 
