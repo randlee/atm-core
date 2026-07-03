@@ -1208,6 +1208,19 @@ mod tests {
         assert!(matches!(response, ResponseEnvelope::Error(_)));
 
         lifecycle.set_terminate_for_test(true);
+        // Two independent call sites race to reap the same panicked dispatch-worker
+        // JoinHandle: the per-connection reap in `handle_connection`, and the opportunistic
+        // accept-loop reap in `prepare_accept_iteration` (which always runs on the very
+        // iteration that observes the termination signal, before the loop breaks). Both are
+        // now non-escalating on a dispatch-worker panic (see
+        // `ActiveConnectionRegistry::reap_finished_dispatches`), so by the time the shutdown
+        // drain's own escalating reap (`join_tracked_dispatches`) runs, the panicked handle
+        // has always already been removed from the tracked list. The serve result is
+        // therefore deterministically non-fatal for this single-request-panic scenario,
+        // regardless of which opportunistic reap wins the race; only a panic first
+        // discovered during the deliberate shutdown drain is escalated as fatal (covered by
+        // `drain_active_connections_for_shutdown_surfaces_dispatch_panic_as_fatal` and
+        // `active_connection_registry::tests::join_tracked_dispatches_escalates_after_panic`).
         serve_result_rx
             .recv_timeout(Duration::from_secs(15))
             .expect("recv serve result")
@@ -1263,6 +1276,47 @@ mod tests {
         );
         let _ = release_tx.send(());
         drop(active_connection);
+    }
+
+    #[test]
+    fn drain_active_connections_for_shutdown_surfaces_dispatch_panic_as_fatal() {
+        // The opportunistic accept-loop and per-connection reaps treat a panicked dispatch
+        // worker as non-fatal (see `active_connection_registry::tests::
+        // reap_finished_dispatches_logs_and_continues_after_panic`). The deliberate shutdown
+        // drain must still surface a panic discovered while it is joining tracked dispatch
+        // workers, since a wedged/panicked worker blocking graceful shutdown is legitimately
+        // worth surfacing to the caller.
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let dispatch_registry = Arc::clone(&registry);
+        let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+        let join_handle = std::thread::spawn(move || {
+            let _dispatch = dispatch_registry.register_dispatch_work();
+            let _completion_tx = completion_tx;
+            panic!("intentional dispatch worker panic for shutdown drain test");
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                1,
+            )
+            .expect("dispatch handle push");
+        let force_shutdown = AtomicBool::new(false);
+        let error = drain_active_connections_for_shutdown(
+            registry.as_ref(),
+            &force_shutdown,
+            Duration::from_secs(5),
+            Duration::from_secs(5),
+            Instant::now(),
+            TRACKED_DISPATCH_JOIN_DEADLINE,
+        )
+        .expect_err("a dispatch worker panic discovered during the shutdown drain must be fatal");
+        assert!(
+            error.message.contains("daemon dispatch thread panicked"),
+            "unexpected error: {error:?}"
+        );
     }
 
     #[test]
