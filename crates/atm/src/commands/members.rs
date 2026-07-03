@@ -155,6 +155,7 @@ mod tests {
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
             let _env = EnvGuard::set_many([
                 ("ATM_HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                ("ATM_IDENTITY", Some(TEST_SENDER)),
                 ("ATM_TEAM", None),
                 ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
             ]);
