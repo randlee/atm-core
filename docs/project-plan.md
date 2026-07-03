@@ -51,13 +51,14 @@ Phase-S planning note:
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and
   documents the bounded queue-query split between `atm list` and
-  single-message `atm read`, including the ATM-authored Claude JSONL
+  single-message `atm read`, including the historical ATM-authored Claude JSONL
   compatibility envelope for oversized message bodies
-- the remaining Phase S implementation work continues in:
+- the historical remaining Phase S implementation work continued in:
   - `S.6` daemon post-mortem runtime remediation
   - `S.7` bounded queue-query implementation
-  - `S.8` Claude JSONL compatibility-envelope implementation
-  - `S.9` host-scoped retained logging defaults, including watcher/reconcile
+  - `S.8` historical Claude JSONL compatibility-envelope implementation
+  - `S.9` host-scoped retained logging defaults, including historical
+    watcher/reconcile
     exclusion for `~/.atm/logs/`
 
 Phase-AA simplification note:
@@ -79,6 +80,15 @@ Phase-AB planning note:
   disposable clean-room state first, then disposable copied-state revalidation
 - the planning branch is `plan/phase-AB`
 - the execution integration branch is `integrate/phase-AB`
+
+Phase-AD planning note:
+- `Phase AD` is the active release-blocking correction line for caller
+  identity ownership, direct post-send emission, and deletion of retired
+  Claude/reconcile/notification-runtime paths
+- the authoritative planning document is
+  [`docs/plans/phase-AD/plan-phase-AD.md`](./plans/phase-AD/plan-phase-AD.md)
+- the planning branch is `plan/post-send-hook-fix`
+- the execution integration branch is `integrate/phase-AD`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -119,6 +129,9 @@ Status:
   to `atm-runtime`.
 - Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
   execution after the accepted Phase Z baseline.
+- Phase AD is the active planning line for release-blocking caller-identity,
+  post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
+  baseline.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`
@@ -609,7 +622,59 @@ Acceptance / Phase Entry Gate:
 - the phase does not close until both disposable and copied-state cross-host
   smoke lanes pass with retained evidence
 
-## 38. Chore: ADR Rationale Audit [COMPLETE]
+## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [PLANNED]
+
+Status summary:
+- `Phase AD` is the active release-blocking correction line for the accepted
+  `1.2.3` baseline.
+- it restores caller-owned identity handling so the CLI fails closed when
+  identity is absent and the daemon never guesses identity
+- it narrows post-send behavior back to a direct persist-then-emit seam with
+  sender-visible warnings on emission failure
+- it deletes retired Claude inbox, reconcile, and notification-runtime paths
+  that no longer belong on the accepted line
+
+Planning branch:
+- `plan/post-send-hook-fix`
+
+Integration branch:
+- `integrate/phase-AD`
+
+Goal:
+- restore CLI-owned caller identity resolution
+- restore direct post-send nudge emission after persistence
+- remove retired Claude/reconcile/notification-runtime behavior from the
+  accepted line
+- finish the SQLite-backed roster repair path for pane and member metadata
+
+Deliverables:
+- required caller identity on caller-owned CLI -> daemon requests
+- direct `PostSendHookEmitter` contract plus boundary-governance records
+- local tmux and graft-backed emitter paths with sender-visible warning
+  behavior
+- deletion of `atm-storage-claude`, `ReconcileRuntime`, and daemon
+  notification queue/worker runtime
+- `atm teams update-member` as the accepted repair path for existing member
+  metadata
+
+Sprint line:
+- `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
+- `AD.2` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
+- `AD.3` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
+- `AD.4` `feature/pAD-s4-reconcile-runtime-removal`
+- `AD.5` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
+- `AD.6` `feature/pAD-s6-post-send-nudge-contract-simplification`
+- `AD.7` `feature/pAD-s7-local-tmux-post-send-emitter`
+- `AD.8` `feature/pAD-s8-graft-post-send-emitter`
+- `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
+- `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
+- `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
+
+Acceptance:
+- the phase closes only through
+  [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
+
+## 39. Chore: ADR Rationale Audit [COMPLETE]
 
 - `CHORE-ADR-AUDIT-001` removed sprint-doc and phase-plan rationale
   dependencies from permanent ADRs, inlined the missing durable rationale in

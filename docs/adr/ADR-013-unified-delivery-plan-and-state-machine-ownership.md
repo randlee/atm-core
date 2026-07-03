@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Superseded
 
-Accepted note: Implementation is complete through `Phase Yc Y.13`
+Superseded by: `ADR-019`
+
+Historical note: Implementation was completed through `Phase Yc Y.13`
 (`feature/pYc-s13-notification-boundary-and-readiness-gate`).
 
 Closeout note:
@@ -15,6 +17,20 @@ Closeout note:
   final accepted `Phase Y` candidate line at `ad61b3dd`, preserving
   `NotificationSink::deliver(...)` as the only approved notification side
   effect on the live send/ack path
+
+## Supersession Note
+
+`ADR-019` restores the direct post-send model:
+
+- persist message
+- emit post-send behavior through a dedicated post-send emitter when the
+  recipient exposes that capability
+- log and warn on emission failure
+
+`DeliveryPlan`, `NotificationSink`, and the notification worker are no longer
+the governing send-path contract.
+
+This ADR remains a historical record of the earlier Y/Yc design line only.
 
 ## Context
 

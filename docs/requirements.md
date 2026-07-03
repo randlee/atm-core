@@ -313,7 +313,8 @@ Satisfied by:
 - cross-host daemon API over TCP/TLS
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
-- hook-based identity fallback
+- caller identity resolution through explicit CLI override or invoking-shell
+  `ATM_IDENTITY`
 - file-reference policy handling for `send --file`
 - origin-inbox merge / ingest compatibility for Claude-owned inbox files
 - ATM-owned read/ack/clear/task state in SQLite
@@ -418,9 +419,10 @@ Product requirement ID:
 Satisfied by:
 - `REQ-CORE-CONFIG-001` for home/path/config resolution aspects
 - `REQ-CORE-RUNTIME-001` for durable mail/roster store ownership aspects
-- `REQ-CORE-INGEST-001` for Claude inbox/config ingest compatibility aspects
-- `REQ-CORE-MAILBOX-001` for persisted Claude inbox write/read compatibility
-  aspects
+- `REQ-CORE-INGEST-001` for config ingest and historical Claude inbox ingest
+  compatibility aspects
+- `REQ-CORE-MAILBOX-001` for persisted mailbox atomicity plus historical Claude
+  inbox write/read compatibility aspects
 - `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
 - `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
@@ -486,18 +488,15 @@ Per-team layout:
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
-Current shared inbox file-container rule:
-- the supported current Claude inbox container at
-  `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json` is one top-level JSON
-  array of inbox messages
-- that current `.json` array shape is the primary supported ATM compatibility
-  path, not a legacy/degraded fallback
-- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
-  unsupported mailbox content rather than for the legal current Claude
-  JSON-array shape
-- current Claude inbox reads must salvage segmentable valid message objects
-  from malformed `.json` arrays and emit explicit degraded warnings for
-  localized bad fragments instead of failing the whole inbox by default
+Historical shared inbox file-container rule:
+- the prior Claude inbox container at
+  `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json` used one top-level
+  JSON array of inbox messages
+- that `.json` array shape is historical-only after `ADR-019`; it is not a
+  live production compatibility path for accepted send/read behavior
+- any retained repair/rebuild or salvage handling for malformed Claude inbox
+  JSON exists only for historical compatibility tooling and must not redefine
+  current runtime requirements
 
 ### 3.2.1 Message Schema Ownership And Compatibility
 
@@ -530,8 +529,8 @@ Required rules:
   with descriptive errors
 - read-path validation failure for additive ATM fields must trigger warning +
   degradation logic rather than failing the overall message read
-- a separate ATM-native inbox remains deferred; the current shared inbox
-  remains compatibility-only
+- a separate ATM-native inbox remains deferred; on the earlier compatibility
+  line, the shared inbox remained compatibility-only
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
@@ -611,7 +610,6 @@ Required config fields:
 Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
-- `[atm].claude_jsonl_body_export_max_bytes`
 - `[[atm.post_send_hooks]]`
 
 Runtime identity rules:
@@ -619,8 +617,14 @@ Runtime identity rules:
   fallback for the retained multi-agent ATM model
 - runtime identity must come from:
   - explicit command override when supported
-  - hook-file identity
   - `ATM_IDENTITY`
+- caller-owned CLI commands must resolve identity before daemon dispatch; if no
+  valid identity exists, the CLI must fail locally and must not contact the
+  daemon
+- daemon-backed caller-owned request DTOs must carry resolved caller identity
+  as required request data
+- the daemon must not consult hook files, repo-local config, or daemon ambient
+  `ATM_IDENTITY` to fill a missing caller identity
 - an obsolete config `[atm].identity` field may remain temporarily for
   migration, but ATM must ignore it for runtime identity resolution and
   `atm doctor` must flag it for removal
@@ -628,9 +632,6 @@ Runtime identity rules:
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
-- `.atm.toml` may define `[atm].claude_jsonl_body_export_max_bytes` as the
-  ATM-authored Claude JSONL body export cap; `0` means stub-only ATM-authored
-  export
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -742,20 +743,24 @@ Satisfied by:
 ### 4.1 Send Identity Resolution Order
 
 1. `--from`
-2. hook-file identity
-3. `ATM_IDENTITY`
+2. `ATM_IDENTITY`
 
 ### 4.2 Read Identity Resolution Order
 
 1. `--as`
-2. hook-file identity
-3. `ATM_IDENTITY`
+2. `ATM_IDENTITY`
 
 ### 4.3 Doctor Identity Resolution
 
-`atm doctor` uses the same config and hook-resolution paths as the retained mail commands, but it must not fail immediately only because hook identity is absent. Missing hook identity is a diagnostic finding unless identity resolution is explicitly required for a requested check.
+`atm doctor` is diagnostic and may run without resolved caller identity. It may
+inspect `ATM_IDENTITY` visibility and explicit-override behavior, but it must
+not treat hook files, repo-local config identity, or daemon ambient identity as
+command identity.
 
-If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error. An obsolete config `identity` field may be reported as a diagnostic, but it does not count as command identity.
+If command identity cannot be determined where required, the CLI must fail with
+a structured recovery-oriented error before daemon dispatch. An obsolete config
+`identity` field may be reported as a diagnostic, but it does not count as
+command identity.
 
 ## 5. Address Resolution
 
@@ -901,6 +906,8 @@ Retired from the current implementation:
 ### 6.3 Required Behavior
 
 - resolve sender identity using the defined precedence
+- if sender identity cannot be resolved from `--from` or invoking-shell
+  `ATM_IDENTITY`, fail before daemon dispatch
 - resolve recipient address using the defined precedence
 - resolve aliases before mailbox lookup
 - when a cross-team alias-oriented sender is projected into `from`, also
@@ -933,6 +940,8 @@ Retired from the current implementation:
   errors without relying on stderr scraping
 - emit structured diagnostics for hook-rule evaluation and actionable warnings
   only when a configured hook execution fails
+- if a configured recipient exposes post-send behavior and no emission occurs,
+  ATM must either emit the post-send effect or surface a sender-visible warning
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
@@ -1083,6 +1092,8 @@ Shared rules:
   provided
 - both commands must resolve identity and target address using the defined
   precedence
+- if caller identity cannot be resolved from `--as` or invoking-shell
+  `ATM_IDENTITY`, fail before daemon dispatch
 - `--as <name>` changes caller identity resolution, not message matching
 - `--json` changes output format only and is not a message-selection filter
 - both commands must verify target team exists
@@ -1354,7 +1365,9 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
 
 ### 8.3 Required Behavior
 
-- resolve the caller's own inbox using the retained identity rules
+- resolve the caller's own inbox using explicit `--as` or invoking-shell
+  `ATM_IDENTITY`
+- fail before daemon dispatch if caller identity is unavailable
 - locate the target message in the merged inbox surface
 - require the target message to be in the pending-ack ack state
 - persist the ack transition back to the physical inbox file that owns the source message when the merged inbox surface includes origin inbox files
@@ -1503,6 +1516,7 @@ Remove non-actionable messages from one inbox without touching actionable work.
 
 - default to the caller's own inbox when no target agent is provided
 - resolve the target inbox using the retained address and identity rules
+- fail before daemon dispatch if caller identity is unavailable
 - compute clear eligibility from the merged inbox surface
 - persist removals back to the physical inbox file that owns each removed message when origin inbox files are present in the merged surface
 
@@ -1646,7 +1660,7 @@ Phase-AA target direction:
 The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
-- identity resolution inputs and fallbacks
+- caller identity inputs and failure contract
 - obsolete `[atm].identity` configuration drift detection
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
@@ -1661,7 +1675,6 @@ The initial doctor implementation must cover:
   stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK` as a
   transitional compatibility finding rather than a normal mail-correctness
   dependency in the current SQLite/daemon architecture
-- hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
 - active shared log path visibility
@@ -1717,6 +1730,7 @@ release and the documented backup/restore workflow.
 The retained `teams` surface for initial release is:
 - `atm teams`
 - `atm teams add-member`
+- `atm teams update-member`
 - `atm teams backup`
 - `atm teams restore`
 
@@ -1725,7 +1739,6 @@ orchestration commands such as:
 - `spawn`
 - `join`
 - `resume`
-- `update-member`
 - `remove-member`
 - `cleanup`
 
@@ -1741,6 +1754,25 @@ Bare `atm teams` must:
 - reject duplicate member names
 - persist the new member entry deterministically in team config
 - create any required local inbox state atomically with the roster update
+
+`atm teams update-member` must:
+- validate that the target team exists
+- validate that the target member already exists
+- update existing canonical roster metadata without creating a new member
+- accept point updates for the accepted mutable roster metadata:
+  - `home_dir`
+  - `harness`
+  - `agent_type`
+  - `model`
+  - `recipient_pane_id`
+- reject requests that attempt to use `update-member` as implicit member
+  creation
+- reject operator attempts to set `cwd`, `live_cwd`, or `launch_cwd`; runtime
+  working location and startup-location logging are not operator-settable
+  through `update-member`
+- project the repaired metadata deterministically into compatibility
+  `config.json`
+- preserve unchanged member metadata when a field is not supplied
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
@@ -1784,6 +1816,9 @@ JSON output must include:
 - `team`
 
 `add-member` JSON output must additionally include:
+- `member`
+
+`update-member` JSON output must additionally include:
 - `member`
 
 `backup` JSON output must additionally include:
@@ -1830,8 +1865,16 @@ follow-up without depending on daemon-only or hook-only state.
 - return a structured error when the team or team config is missing
 - show all configured members deterministically, with `team-lead` first when
   present and remaining members in stable local order
-- expose currently persisted member metadata that ATM already knows locally,
-  such as type, model, cwd, or pane id when present in config
+- use these names distinctly:
+  - `home_dir`: durable SQL-backed agent-home directory for the member; for
+    worktree-backed members it preserves the worktree home and the canonical
+    association back to the owning main repo
+  - `live_cwd`: runtime-observed in-memory working directory after any `cd`
+  - `launch_cwd`: startup-only current-directory snapshot used for logging
+- never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
+- expose currently persisted member metadata that ATM already knows durably,
+  such as `home_dir`, type, model, or pane id
+- not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
 Richer runtime state, such as live session or activity data, may be layered on
@@ -2209,7 +2252,7 @@ Current runtime required families:
   - replay/import failure
   - backpressure/degraded ingest
 - export:
-  - Claude compatibility export failure
+  - historical Claude compatibility export failure
   - re-export/replay failure
 - transport:
   - local daemon request failure
@@ -2486,8 +2529,9 @@ closed before the 1.0 release.
     owner pid while the lock is held, unlinks the sentinel on guard drop, and
     must tolerate stale pid-bearing sentinels from crashed processes
   - advisory locking is cooperative: only concurrent ATM processes coordinate
-  - the sentinel lock must not block Claude Code's native inbox appends because
-    Claude does not participate in ATM's cooperative lock protocol
+  - any retained historical Claude inbox tooling must not let the sentinel lock
+    block Claude Code native inbox appends because Claude does not participate
+    in ATM's cooperative lock protocol
 
 - `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and
   Windows without platform-specific feature flags in consuming code.
@@ -3065,13 +3109,14 @@ mail correctness.
 
   Required behavior:
 - ingest must be idempotent
-- ingest must accept the legal current Claude inbox container shape: one
-  top-level JSON array document for each shared `.json` inbox file
+- historical Claude inbox ingest tooling must accept the prior legal inbox
+  container shape: one top-level JSON array document for each shared `.json`
+  inbox file
 - parseable external rows must not be silently dropped
 - malformed external rows must emit structured diagnostics rather than panic
-- legal current Claude JSON-array inbox files must stay on the normal
-  supported ingest path; repair/rebuild is reserved for malformed or
-  unsupported mailbox state
+- on the earlier compatibility line, legal Claude JSON-array inbox files stayed
+  on the normal supported ingest path; repair/rebuild was reserved for
+  malformed or unsupported mailbox state
 - backlog/slow-ingest conditions must surface through structured diagnostics
   or health findings rather than dropping records silently
 - roster/config ingest must apply one deterministic last-write-wins policy
@@ -3130,7 +3175,7 @@ mail correctness.
     - transport listeners
     - route selection
     - live-status cache
-    - watch/reconcile loop if enabled
+    - direct post-send emission routing when persistence succeeds
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 
@@ -3188,13 +3233,9 @@ mail correctness.
 
   Required behavior:
   - only the owning store subsystem may touch SQLite
-  - only the owning inbox ingress/export subsystem may parse or write inbox
-    JSONL
   - only the owning config-ingress subsystem may parse team `config.json`
-  - only the owning watcher/reconcile subsystem may consume filesystem watch
-    events or drive watch-triggered rescan/reconcile logic
   - only the owning transport subsystem may touch sockets
-  - only the owning notifier/plugin subsystem may talk to agent processes
+  - only the owning post-send/advisory subsystem may talk to agent processes
   - no business logic may live in I/O adapter code
   - no "just this one call site" bypasses are allowed
   - I/O-owning boundary traits are sealed by default; opening a boundary for
@@ -3251,7 +3292,8 @@ mail correctness.
     injectable typed handlers for request families
   - adding a new request family must not require embedding business logic into
     same-host local-IPC or TCP/TLS transport adapters
-  - transport receive logic must not perform SQL, watcher, or notification
+  - transport receive logic must not perform SQL, filesystem watch, or
+    post-send emission
     business logic inline
   - any violation of this transport isolation rule is a direct QA failure for
     the current SQLite/daemon implementation line
@@ -3280,29 +3322,23 @@ mail correctness.
   - any violation of this dispatcher/handler rule is a direct QA failure for
     the current SQLite/daemon implementation line
 
-- `REQ-CORE-TRANSPORT-001A` Filesystem watch/reconcile logic must remain a
-  separate owned subsystem from transport, store, and notifier logic.
+- `REQ-CORE-TRANSPORT-001A` is historical only.
 
-  Required behavior:
-  - watch event ingestion, debounce, and reconcile triggering must stay behind
-    one owned watcher/reconcile boundary
-  - the watcher boundary may request work from ingress/store/notifier
-    handlers, but it must not inline SQL, socket, or notification delivery
-    logic
-  - the transport boundary must not absorb watcher responsibilities
-  - any violation of this watcher isolation rule is a direct QA failure for
-    the current SQLite/daemon implementation line
-  - the daemon implementation may use a bounded polling watch registry instead
-    of OS-native filesystem subscriptions, but the watch lifecycle must remain
-    daemon-owned and long-lived rather than one-shot helper calls
-  - reconcile triggering must support debounce/coalesce so repeated identical
-    requests do not fan out into duplicate import work
-  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+  Phase AD retires filesystem watch/reconcile from the accepted runtime.
+  New transport or daemon work must not preserve or expand that retired
+  subsystem.
+  - on the earlier compatibility line, the daemon implementation could use a
+    bounded polling watch registry instead of OS-native filesystem
+    subscriptions, and the watch lifecycle remained daemon-owned and long-lived
+    rather than one-shot helper calls
+  - historical reconcile triggering supported debounce/coalesce so repeated
+    identical requests did not fan out into duplicate import work
+  - `R.17` had completed this lane as a daemon-owned polling watch registry, an
     ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
-    those lanes must start and stop only through the daemon composition root
-  - the notifier lane uses a bounded queue of `64` events and must fail closed
-    with typed backpressure instead of silently buffering unbounded plugin
-    traffic
+    those lanes started and stopped only through the daemon composition root
+  - the historical notifier lane used a bounded queue of `64` events and failed
+    closed with typed backpressure instead of silently buffering unbounded
+    plugin traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
@@ -3377,131 +3413,63 @@ mail correctness.
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
 
-### 22.5 Claude Compatibility And Native Agent Path
+### 22.5 Direct Post-Send And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Current Claude inbox JSON-array files are the required
-  primary compatibility path for Claude context injection, while JSONL remains
-  a supported append-style compatibility surface only where ATM explicitly
-  owns that projection.
+- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the
+  `atm-storage-claude` backend are retired from the accepted line.
 
   Required behavior:
-  - healthy current Claude `.json` inbox files must be accepted on the normal
-    primary write path rather than surfaced as degraded rebuild-only state
-  - ATM-authored Claude inbox exports must remain Claude-native at the top
-    level with only the limited additive compatibility fields ATM still
-    requires
-  - ATM may continue to use JSONL append semantics only for explicit `.jsonl`
-    compatibility projections it owns; that append surface must not redefine
-    the current Claude inbox contract
-  - Claude-native external writes must be importable into SQLite through one
-    owned ingress boundary
-  - once team roster and pane mapping truth move to SQLite, ATM-owned
-    post-send-hook payloads must carry the authoritative `recipient_pane_id`
-    from roster truth when known
-- post-send hooks must be able to rely on that payload field instead of
-    rediscovering pane mappings from local files once roster migration is
-    complete
-  - ATM-authored `.jsonl` exports must remain valid JSONL records
-  - the default ATM-authored `.jsonl` body export cap is `128 KiB`
-  - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
-    means stub-only ATM-authored export
-  - when an ATM-authored body exceeds the configured export cap, the exported
-    JSONL `text` field must be exactly `atm read --message-id <id>`
-  - summary text must remain populated when ATM exports that retrieval stub
-  - the full ATM-authored body must remain durable in SQLite even when JSONL
-    export is stubbed
-  - Claude-native inbound messages must not be rewritten into ATM retrieval
-    stubs
-  - watcher/reconcile logic must treat re-observed ATM-authored compatibility
-    projections for the same logical message as idempotent state, not as new
-    logical mail
+  - no retained production path may use Claude inbox `.json` or `.jsonl` files
+    for mailbox delivery, context injection, compatibility export, or
+    background ingress
+  - the accepted line must not ship the `atm-storage-claude` crate or its
+    boundary records as a production backend
+  - the shared backend contract remains required after Claude backend
+    retirement; SQLite is one backend implementation and future SQL backend
+    support remains an architectural requirement
+  - no retained production path may require watcher/reconcile observation of
+    Claude mailbox files
+  - any surviving Claude mailbox documentation must be clearly historical and
+    must not redefine current send/read semantics
 
-- `REQ-CORE-COMPAT-002` Native agent/plugin traffic must not use JSONL.
+- `REQ-CORE-COMPAT-002` Native agent/plugin traffic must use the daemon API,
+  not Claude mailbox JSON.
 
   Required behavior:
-  - native agent/plugin delivery and notification uses the daemon API instead
-    of JSONL
-  - the later agent plugin crate must align to this daemon API rather than
-    introducing a parallel message transport
+  - native agent/plugin delivery and notification uses the daemon API only
+  - thin-client surfaces such as graft align to the shared daemon/API contract
+    rather than to a mailbox-JSON transport
 
-- `REQ-CORE-COMPAT-003` Compatibility export and nudge policy must be owned by
-  explicit event-family state machines.
-
-  Required behavior:
-  - one central delivery-policy coordinator dispatches by event family and
-    canonical roster `harness`
-  - harness routing is based on `RosterHarness`, not model strings
-  - the coordinator must not collapse all delivery behavior into one universal
-    send state enum
-  - at minimum the implementation must expose:
-    - `NewMessageStateMachine`
-    - `ThreadUpdateStateMachine`
-  - `NewMessageStateMachine` must have distinct audited Claude-harness and
-    non-Claude-harness paths
-  - `ThreadUpdateStateMachine` must remain distinct because parent/root
-    legality, sender-match checks, and one-successor rules are not new-message
-    semantics
-  - observable transition emission is required for every write-affecting state
-    transition
-
-- `REQ-CORE-COMPAT-004` Non-Claude harnesses must never receive ATM-authored
-  JSONL append output.
+- `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
+  emitter seam.
 
   Required behavior:
-  - only `RosterHarness::ClaudeCode` may take the compatibility JSONL append
-    branch
-  - `codex-cli`, `gemini-cli`, `opencode`, and later non-Claude harnesses must
-    use non-JSONL delivery/notification paths
-  - this branch must not depend on model strings
+  - `atm send` persists the message to durable ATM state
+  - `atm ack` persists the reply to durable ATM state
+  - after successful persistence, ATM emits post-send behavior only when the
+    recipient exposes that capability
+  - emission failure must be logged and surfaced as a sender-visible warning
+  - post-send emission must not redefine send success after persistence
 
-- `REQ-CORE-COMPAT-005` New-message SQLite failure must emit a companion system
-  error message instead of silently degrading.
-
-  Required behavior:
-  - if the durable SQLite write succeeds:
-    - the original message proceeds normally
-  - if the durable SQLite write fails:
-    - the original outward message still proceeds
-    - for `RosterHarness::ClaudeCode`, ATM appends:
-      - the original message
-      - a second error message from `atm-system@<team>`
-    - for non-Claude harnesses, ATM emits:
-      - the original message through the non-Claude delivery path
-      - a second error message from `atm-system@<team>` through the same
-        non-Claude delivery path
-    - the notification/nudge behavior mirrors both messages
-  - if the Claude-harness append fails after a successful SQLite write:
-    - the fallback notification path is post-send-hook execution
-  - no alternate fallback path may replace the companion error-message rule
-
-- `REQ-CORE-COMPAT-006` Yb must introduce one uniform typed delivery-plan seam
-  for new-message and ack-reply execution.
+- `REQ-CORE-COMPAT-004` Post-send capability resolution must not depend on
+  caller working directory or retired mailbox/config side channels.
 
   Required behavior:
-  - `crates/atm-core/src/delivery_plan.rs` defines:
-    - `atm_core::delivery_plan::DeliveryPlan`
-    - `atm_core::delivery_plan::ReplyDeliveryPlan`
-    - `atm_core::delivery_plan::LogicalMessage`
-    - `atm_core::delivery_plan::DeliveryTarget`
-    - `atm_core::delivery_plan::NotificationTarget`
-    - `atm_core::delivery_plan::DeliveryPlanDisposition`
-  - `crates/atm-core/src/delivery_execution.rs` defines:
-    - `atm_core::delivery_execution::execute_delivery_plan(...)`
-    - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
-  - Claude and non-Claude machines must emit the same typed plan shape
-  - outer send/ack/persistence code must not branch on harness after the plan
-    is produced
+  - running `atm send` from another repository or working directory must not
+    silently change whether post-send emission is attempted
+  - authoritative `recipient_pane_id`, when known, must come from canonical ATM
+    roster state rather than from rediscovering live pane routing through local
+    mailbox files
 
-- `REQ-CORE-COMPAT-007` Yb must formalize a dedicated non-Claude outbound
-  payload boundary.
+- `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
+  typed delivery-plan execution are not the governing send-path contract.
 
   Required behavior:
-  - `atm_core::boundary::NonClaudeOutbound` is the only approved non-Claude
-    message-delivery boundary
-  - `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound` is the
-    daemon-owned runtime adapter for that boundary
-  - `NotificationSink` remains notification-only and must not stand in for
-    non-Claude message delivery
+  - post-send ownership must remain a direct emitter seam on the send/ack path
+  - if notification logging is retained, it must be a direct append at the
+    event site rather than a daemon worker/runtime subsystem
+  - no retained send/ack contract may require `DeliveryPlan`,
+    `ReplyDeliveryPlan`, or `NotificationSink`
 
 ### 22.6 Lock Elimination Target
 
@@ -3592,8 +3560,8 @@ mail correctness.
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
-  - Claude compatibility export remains a compatibility projection only and is
-    never the ATM-owned runtime truth
+  - any retained historical Claude compatibility export remains a
+    compatibility projection only and is never the ATM-owned runtime truth
   - runtime roster truth remains the canonical ATM roster rather than
     `config.json`
   - `config.json` parsing remains limited to the approved ingress/comparison

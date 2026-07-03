@@ -120,6 +120,12 @@ Recommended daemon subsystem enum members:
 - `RuntimeStatusCache`
 - `ObservabilitySink`
 
+Historical-runtime note:
+- `NotificationRuntime`, `WatchRuntime`, and `ReconcileRuntime` are retained in
+  this Phase V.1 observability record as historical subsystem names from the
+  earlier compatibility line
+- they are not accepted live runtime lanes after `ADR-019`
+
 ## Per-Event Context Fields
 
 `team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
@@ -200,6 +206,11 @@ It must not own:
 - `crates/atm-daemon/src/host_ownership.rs`
 - `crates/atm-daemon/src/lifecycle_control.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
+
+Historical migration note:
+- the `notification_runtime.rs`, `watch_runtime.rs`, and
+  `reconcile_runtime.rs` entries above are historical Phase V migration targets
+  from the pre-`ADR-019` line only
 
 Shared wiring and test/support surfaces that must follow the final boundary are
 all `V.2` refactor targets, with `V.3` shim cleanup where compatibility-only

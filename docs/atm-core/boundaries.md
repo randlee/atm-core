@@ -70,24 +70,34 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/watch-event-source.toml](../../boundaries/atm-core/watch-event-source.toml)
 
-
+Historical status:
+- retired from the accepted runtime by `ADR-019`
+- any surviving references are deletion-planning or historical boundary records
+  only
 Purpose:
-- Owns filesystem watch event capture and delivery to the runtime reconcile layer.
+- historically owned filesystem watch event capture and delivery to the runtime
+  reconcile layer.
 
 Notes:
-- This keeps raw watch APIs out of store, transport, and service logic.
+- on the earlier compatibility line, this kept raw watch APIs out of store,
+  transport, and service logic.
 
 ## ReconcileCoordinator
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/reconcile-coordinator.toml](../../boundaries/atm-core/reconcile-coordinator.toml)
 
-
+Historical status:
+- retired from the accepted runtime by `ADR-019`
+- any surviving references are deletion-planning or historical boundary records
+  only
 Purpose:
-- Owns watch-driven reconcile policy and ingress triggering above raw watch events.
+- historically owned watch-driven reconcile policy and ingress triggering above
+  raw watch events.
 
 Notes:
-- This closes the missing watch/reconcile boundary gap in the initial Phase R set.
+- on the earlier compatibility line, this closed the missing watch/reconcile
+  boundary gap in the initial Phase R set.
 
 ## ServerTransport
 
@@ -217,9 +227,11 @@ Notes:
   `config.json` mismatch in returned warning text, but it must obtain member
   truth from `ProjectionRoster` rather than from `ConfigIngress`
 - approved surviving callers after the `Phase Z` follow-on line are:
-  - watcher / reconcile ingest
+  - historical watcher / reconcile ingest on the pre-`ADR-019` line
   - `doctor` comparison
   - narrow recreated-shell preservation reads during restore
+- watcher/reconcile has since been retired from the accepted runtime; only the
+  explicit comparison/preservation callers remain accepted
 - before `Z.8`, one temporary startup-only bridge was allowed outside the
   trait surface:
   - `atm_core::boundary_support::hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
@@ -318,6 +330,32 @@ Notes:
     normal append helper while degrading to warnings after partial success
   - persisted single-message Claude append remains on the existing append-only
     path and is not reopened onto this boundary
+
+## PostSendHookEmitter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/post-send-hook-emitter.toml](../../boundaries/atm-core/post-send-hook-emitter.toml)
+
+
+Purpose:
+- Owns the one accepted post-commit recipient-emission seam for post-send
+  behavior after durable message persistence succeeds.
+
+Notes:
+- Phase `AD` introduces this boundary as the replacement for
+  `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
+  path.
+- `send` / `ack` remain responsible for:
+  - persistence success
+  - deciding whether the recipient exposes post-send capability
+  - logging emission failure
+  - constructing sender-visible warnings on emission failure
+- the emitter is responsible only for attempting recipient-side emission and
+  returning typed success/failure.
+- local tmux-backed emission may live in `atm-core`; the graft-backed emitter
+  is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
+- this boundary must not become a logical-message-delivery, persistence, or
+  generic notification-planning seam.
 
 ## NotificationSink
 
