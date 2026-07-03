@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.3
+
+- recover the interrupted `v1.2.2` publish by cutting a clean `release/v1.2.3`
+  line from the immutable `3075384e` tag point rather than mutating the
+  partial `v1.2.2` release in place
+- add the missing `description` metadata to `atm-storage-claude` so crates.io
+  accepts the crate during ordered publish
+- replace bash-4-only `mapfile` usage in `release.yml` with bash-3.2-compatible
+  loops so the macOS archive jobs package release binaries successfully
+
 ## 1.2.2
 
 - converge the Phase AC storage layer on the `atm-storage` contract and

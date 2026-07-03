@@ -1,17 +1,24 @@
 # Release Notes
 
 ## Summary
-- version: 1.2.2
+- version: 1.2.3
 - release date: 2026-07-02
 - release owner: publisher (ATM release execution)
 
-This release rolls up two development phases (AA and AC), the release-readiness
-consolidation (PR #425), and the release-branch reconciliation that re-applied
-main's v1.2.0 publish-surface hotfixes on top of the develop content. It covers
-the un-shipped 1.2.1 line (Phase AA) and the current 1.2.2 line (Phase AC +
-release readiness) in a single release.
+This recovery release preserves the Phase AA, Phase AC, and release-readiness
+content already assembled for `v1.2.2`, but cuts a new immutable tag after two
+publish-blocking defects were discovered mid-release. `v1.2.2` remains as the
+partial, abandoned attempt; `v1.2.3` is the clean tag+publish line.
 
 ## Included Changes
+
+### 1.2.3 — Recovery patch release
+- Add the missing `description` metadata to `atm-storage-claude` so crates.io
+  accepts the crate during ordered publish.
+- Replace bash-4-only `mapfile` usage in `release.yml` with bash-3.2-compatible
+  loops so macOS packaging works on GitHub-hosted runners.
+- Preserve the immutable `v1.2.2` tag and recover with a new `release/v1.2.3`
+  branch/tag instead of mutating the failed release attempt.
 
 ### 1.2.2 — Phase AC + release readiness
 - Converge the storage layer on the `atm-storage` contract and canonical types,
@@ -65,22 +72,22 @@ release readiness) in a single release.
   `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, and
   `x86_64-pc-windows-msvc`, with checksums.
 - Homebrew: tap `randlee/homebrew-tap`, formulas `agent-team-mail.rb` and
-  `atm.rb` updated to 1.2.2.
-- winget: package `randlee.agent-team-mail` at 1.2.2. Microsoft review normally
+  `atm.rb` updated to 1.2.3.
+- winget: package `randlee.agent-team-mail` at 1.2.3. Microsoft review normally
   delays public `winget install` visibility by 1–2 days; submission success is
   the immediate release signal.
 
 ## Known Issues / Waivers
 - None. No verification waivers are required for this release.
 - Note (non-blocking): a standalone local `cargo publish -p agent-team-mail-core
-  --locked --dry-run` fails to resolve `atm-storage v1.2.2` because that new
+  --locked --dry-run` fails to resolve `atm-storage v1.2.3` because that new
   crate is not yet on crates.io outside the ordered release run. This is an
   ordering artifact, not a defect — the release workflow publishes `atm-storage`
   first, and CI preflight runs the full package check only on the leaf crate.
 
 ## Follow-Up
 - After the GitHub Release is created, attach these notes to the release body.
-- After `release/v1.2.2` merges back to `main`, ensure a `main -> develop`
+- After `release/v1.2.3` merges back to `main`, ensure a `main -> develop`
   reconciliation PR exists so the publish-surface hotfixes and version updates
   flow back to `develop`.
 - Confirm `winget` public visibility 1–2 days post-submission.
