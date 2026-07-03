@@ -221,6 +221,17 @@ Phase `AD` executes the deletion line first so new emitter work does not get
 implemented on top of retired Claude JSON, reconcile, or notification
 infrastructure.
 
+Phase `AD` orchestration rule:
+
+- `Phase AD` is a strict merge-forward line
+- each implementation sprint branch/worktree must be created from the current
+  accepted tip of the immediately preceding `AD` sprint
+- sprint branches must merge forward numerically:
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11`
+- accepted execution for this phase is immediate-predecessor merge-forward
+  only; do not run pairwise cross-merges between unrelated `AD` sprint
+  branches
+
 1. [AD.1 Caller Identity Ownership Restore](./sprint-AD1.md)
 2. [AD.2 Obsolete Config Identity Removal And Doctor Contract Repair](./sprint-AD2.md)
 3. [AD.3 Claude Backend And Inbox Nudge Retirement](./sprint-AD3.md)
