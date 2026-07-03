@@ -40,15 +40,13 @@ pub(crate) struct ResolvedTarget {
 pub(crate) fn resolve_target(
     target_address: Option<&AgentAddress>,
     actor: &AgentName,
-    team_override: Option<&TeamName>,
+    caller_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedTarget, AtmError> {
     let Some(target_address) = target_address else {
-        let team = config::resolve_team(team_override.map(TeamName::as_str), config)
-            .ok_or_else(AtmError::team_unavailable)?;
         return Ok(ResolvedTarget {
             agent: actor.clone(),
-            team,
+            team: caller_team.clone(),
             explicit: false,
         });
     };
@@ -57,7 +55,7 @@ pub(crate) fn resolve_target(
         .team
         .as_deref()
         .and_then(|team| team.parse().ok())
-        .or_else(|| config::resolve_team(team_override.map(TeamName::as_str), config))
+        .or_else(|| Some(caller_team.clone()))
         .ok_or_else(AtmError::team_unavailable)?;
     let agent = config::aliases::resolve_agent(&target_address.agent, config);
 
@@ -281,7 +279,7 @@ mod tests {
         let target = resolve_target(
             Some(&"tl".parse().expect("address")),
             &TEST_SENDER.parse().expect("agent"),
-            None,
+            &TEST_TEAM.parse().expect("team"),
             Some(&config),
         )
         .expect("target");

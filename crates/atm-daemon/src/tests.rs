@@ -401,9 +401,9 @@ fn production_runtime_installs_daemon_notification_sink() {
     let request = SendRequest::new(
         atm_home.clone(),
         workspace_dir.clone(),
-        Some(ROLE_TEAM_LEAD),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
         "qa-a@test-team",
-        Some(TEST_TEAM),
+        TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("boundary install proof".to_string()),
         None,
         false,

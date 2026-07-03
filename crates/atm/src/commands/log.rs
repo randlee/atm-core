@@ -8,6 +8,7 @@ use atm_core::observability::{
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
 
+use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -26,6 +27,7 @@ pub struct LogCommand {
 impl LogCommand {
     /// Execute the `atm log` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
+        let _caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         match self.mode {
             LogModeCommand::Snapshot(args) => {
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;

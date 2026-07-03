@@ -78,12 +78,15 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::ConfigTeamParseFailed
         | AtmErrorCode::ConfigTeamMissing => 2,
         AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
         | AtmErrorCode::AddressParseFailed
         | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamInvalid
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
