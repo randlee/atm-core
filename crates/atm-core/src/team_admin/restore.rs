@@ -798,42 +798,8 @@ mod tests {
     }
 
     fn with_env_var_serial<T>(key: &'static str, value: &str, body: impl FnOnce() -> T) -> T {
-        let _env_guard = EnvGuard::set_raw(key, value);
+        let _env_guard = crate::test_support::EnvGuard::set_raw(key, value);
         body()
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: restore tests that mutate process environment run under
-        // `serial_test` and hold the shared env lock for the full mutation
-        // window.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: same serialization guarantee as above.
-        unsafe { std::env::remove_var(key) };
     }
 
     #[test]

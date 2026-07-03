@@ -396,6 +396,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn run_snapshot_succeeds_with_fake_observability_snapshot() {
         let _caller = caller_context_env();
         let command = LogCommand {
@@ -426,6 +427,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn run_snapshot_surfaces_observability_query_error() {
         let _caller = caller_context_env();
         let command = LogCommand {
@@ -452,11 +454,14 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn run_snapshot_reads_real_retained_log_without_daemon() {
         let tempdir = TempDir::new().expect("tempdir");
-        let _caller = caller_context_env();
-        let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_LOG", Some("info")),
+        ]);
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("observability");
