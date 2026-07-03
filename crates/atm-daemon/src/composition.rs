@@ -1,7 +1,4 @@
-use crate::boundary_adapters::{
-    DaemonConfigIngress, DaemonInboxIngress, DaemonNotificationSink, DaemonReconcileCoordinator,
-    FileWatchEventSource,
-};
+use crate::boundary_adapters::{DaemonConfigIngress, DaemonNotificationSink};
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
@@ -18,7 +15,6 @@ use crate::{
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
-use atm_storage::RosterStore as SharedRosterStore;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -146,10 +142,7 @@ pub(crate) struct RuntimeComposition {
     _production_runtime: atm_core::LocalServiceRuntime,
     _notification_sink: DaemonNotificationSink,
     _status_source: DaemonStatusSource,
-    _watch_event_source: FileWatchEventSource,
-    _reconcile_coordinator: DaemonReconcileCoordinator,
     _config_ingress: DaemonConfigIngress,
-    _inbox_ingress: DaemonInboxIngress,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -223,13 +216,8 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let watch_event_source = FileWatchEventSource::new_with_observability(
-            SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
-        );
-        let inbox_ingress = DaemonInboxIngress::new();
         let peer_transport_config =
             load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
-        let reconcile_roster_store = runtime_assembly.shared_roster_store_arc();
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
@@ -242,13 +230,6 @@ impl RuntimeComposition {
             notification_sink.runtime(),
         );
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
-        let reconcile_coordinator = build_reconcile_coordinator(
-            &watch_event_source,
-            &inbox_ingress,
-            reconcile_roster_store,
-            notification_sink.clone(),
-            &observability,
-        );
         let peer_transport_runtime = build_peer_transport_runtime(
             runtime_assembly.remote_replay_store.clone(),
             peer_transport_config,
@@ -264,10 +245,7 @@ impl RuntimeComposition {
             _production_runtime: runtime_assembly.service_runtime,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
-            _watch_event_source: watch_event_source.clone(),
-            _reconcile_coordinator: reconcile_coordinator,
             _config_ingress: config_ingress,
-            _inbox_ingress: inbox_ingress,
             peer_transport_runtime,
         })
     }
@@ -513,18 +491,9 @@ impl RuntimeComposition {
     }
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
-        self._notification_sink.start()?;
-        if let Err(error) = self._watch_event_source.start() {
+        if let Err(error) = self._notification_sink.start() {
             self.rollback_partially_started_lanes(StartedLanes {
-                watch_started: false,
-                notification_started: true,
-            });
-            return Err(error);
-        }
-        if let Err(error) = self._reconcile_coordinator.start() {
-            self.rollback_partially_started_lanes(StartedLanes {
-                watch_started: true,
-                notification_started: true,
+                notification_started: false,
             });
             return Err(error);
         }
@@ -532,23 +501,6 @@ impl RuntimeComposition {
     }
 
     fn rollback_partially_started_lanes(&self, started_lanes: StartedLanes) {
-        if started_lanes.watch_started
-            && let Err(error) = shutdown_lane_with_deadline(
-                "watch event source",
-                BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-                self._watch_event_source.clone(),
-                |lane| lane.shutdown(),
-            )
-        {
-            tracing::warn!(
-                subsystem = "composition",
-                action = "rollback_lane",
-                outcome = "incomplete",
-                %error,
-                lane = "watch event source",
-                "daemon background lane rollback shutdown was incomplete"
-            );
-        }
         if started_lanes.notification_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "notification sink",
@@ -570,35 +522,15 @@ impl RuntimeComposition {
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         let mut first_error = None;
-        for (lane_name, shutdown) in [
-            (
-                "reconcile coordinator",
-                shutdown_lane_with_deadline(
-                    "reconcile coordinator",
-                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-                    self._reconcile_coordinator.clone(),
-                    |lane| lane.shutdown(),
-                ),
-            ),
-            (
-                "watch event source",
-                shutdown_lane_with_deadline(
-                    "watch event source",
-                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-                    self._watch_event_source.clone(),
-                    |lane| lane.shutdown(),
-                ),
-            ),
-            (
+        for (lane_name, shutdown) in [(
+            "notification sink",
+            shutdown_lane_with_deadline(
                 "notification sink",
-                shutdown_lane_with_deadline(
-                    "notification sink",
-                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-                    self._notification_sink.clone(),
-                    |lane| lane.shutdown(),
-                ),
+                BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                self._notification_sink.clone(),
+                |lane| lane.shutdown(),
             ),
-        ] {
+        )] {
             if let Err(error) = shutdown {
                 tracing::warn!(
                     subsystem = "composition",
@@ -627,22 +559,6 @@ fn build_host_ownership_adapter(
         DaemonSubsystem::HostOwnership,
         Arc::clone(observability),
     ))
-}
-
-fn build_reconcile_coordinator(
-    watch_event_source: &FileWatchEventSource,
-    inbox_ingress: &DaemonInboxIngress,
-    reconcile_roster_store: Arc<dyn SharedRosterStore + Send + Sync>,
-    notification_sink: DaemonNotificationSink,
-    observability: &Arc<dyn DaemonRuntimeObservability>,
-) -> DaemonReconcileCoordinator {
-    DaemonReconcileCoordinator::new_with_observability(
-        watch_event_source.clone(),
-        inbox_ingress.clone(),
-        reconcile_roster_store,
-        notification_sink,
-        SubsystemObservability::new(DaemonSubsystem::ReconcileRuntime, Arc::clone(observability)),
-    )
 }
 
 fn build_peer_transport_runtime(
@@ -751,7 +667,6 @@ fn build_server_transport(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct StartedLanes {
-    watch_started: bool,
     notification_started: bool,
 }
 
