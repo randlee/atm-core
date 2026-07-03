@@ -114,7 +114,8 @@ ATM roster state in SQLite is the only canonical team roster truth.
 Positive:
 
 - one canonical roster truth for all runtime membership decisions
-- watcher / reconcile becomes the only external config-ingest reader
+- before `ADR-019`, watcher / reconcile was the planned external config-ingest
+  reader; that behavior is now historical only
 - doctor remains the explicit drift-report surface
 - team restore becomes deterministic and ATM-owned rather than a manual
   file-replay procedure

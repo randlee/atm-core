@@ -70,7 +70,15 @@ target: integrate/phase-AD
   import, rebuild, or context injection as a governing delivery/runtime path
 - update ADR and architecture docs so backend interoperability remains
   mandatory after Claude backend retirement
-- rewrite docs/diagrams/tests so Claude inbox append is historical only
+- rewrite `docs/plans/phase-Y/delivery-state-machines.md`,
+  `docs/plans/phase-Y/new-message-claude.mmd`,
+  `docs/plans/phase-Y/new-message-non-claude.mmd`,
+  `docs/atm/flow-diagrams.md`, `docs/architecture.md`, and
+  `docs/atm-core/architecture.md` so Claude inbox append is historical only
+- rewrite `scripts/test_atm_nudge.py`,
+  `crates/atm-core/src/send/tests.rs`, and
+  `crates/atm-daemon/src/tests_advisory.rs` when they still encode the retired
+  inbox-append or context-injection assumptions
 - modify any surviving local nudge tooling so it no longer models Claude inbox
   append as part of delivery
 

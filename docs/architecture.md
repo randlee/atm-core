@@ -2482,11 +2482,14 @@ Required architectural rules:
 
 ### 21.2 Compatibility Surfaces
 
-Claude-owned shared inbox files remain required for:
-- Claude context injection
-- compatibility with direct Claude-native writers
-- the current primary shared `.json` inbox path, whose file container is one
+Historical Claude-owned shared inbox compatibility previously existed for:
+- direct Claude-native writer interoperability
+- the prior shared `.json` inbox container shape, whose file container was one
   top-level JSON array of inbox messages
+
+Phase `AD` rule:
+- Claude context injection through inbox append is retired per `ADR-019`
+- no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
 - Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
