@@ -430,15 +430,17 @@ Required runtime rules:
   must fail the connection rather than triggering best-effort mid-stream
   resynchronization
 - daemon-private runtime control must be partitioned into explicit ownership
-  modules for exactly these eight partitions:
+  modules for these accepted runtime partitions:
   - singleton ownership
   - server runtime / connection registry / drain
   - request execution ownership
   - runtime status / reload / doctor projection
   - peer transport
-  - watch runtime
-  - reconcile runtime
-  - notification runtime
+- historical watch / reconcile / notification-runtime lanes are not part of
+  the accepted runtime requirement set
+- if temporary deletion scaffolding remains while `AD.4` / `AD.5` are in
+  flight, it must be marked obsolete and must not be described as a required
+  production partition
 - background-lane startup rollback and shutdown must attempt every lane needed
   for cleanup and must not leave partial runtime ownership after the first lane
   failure
@@ -494,10 +496,6 @@ Required runtime rules:
   - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
-  - reconcile notification fingerprint registry cap:
-    `MAX_RECONCILE_FINGERPRINT_KEYS = 1024`, evict-oldest-and-log
-  - watch subscription cap: `256`
-  - notification work queue depth: `64`
 - request work launched from the server path must remain tracked by runtime
   shutdown accounting until it completes or is cancelled
 - the current Phase R transport remains single-request-per-connection, so the
@@ -517,15 +515,8 @@ Required runtime rules:
 - status-cache saturation behavior must keep the retained live-member map
   actually bounded in cardinality; demotion to `unknown` alone is not
   sufficient
-- watch runtime must reject subscriptions beyond the bounded cap rather than
-  retaining unbounded watcher state
-- notification runtime must reject or degrade delivery beyond the bounded queue
-  cap rather than silently buffering unbounded work
 - ingest saturation emits `DaemonIngestQueueSaturated` and the matching health
   finding rather than silently dropping or only incrementing a counter
-- notification runtime producer paths must publish only lifecycle/degraded
-  checks plus bounded command-channel submission; callers must not mutate queue
-  state or persistence sequencing directly
 - until `schooks 1.0` is released, pid/activity updates may arrive through the
   interim Python hooks installed from `../agent-team-mail`
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook

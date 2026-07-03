@@ -643,14 +643,18 @@ Required service rules:
   SQLite rather than through a direct `config.json` read
 - `doctor` may read `config.json` only as a comparison surface against
   canonical ATM roster truth
-- watcher / reconcile is the only approved production reader of external
-  `config.json` roster changes
-- any new-team ingest or external Claude roster edit must flow into canonical
-  ATM roster truth through the watcher / reconcile lane
+- external `config.json` edits are not an accepted production ingress path for
+  canonical ATM roster truth
+- watcher / reconcile is historical only and must not remain the governing
+  production reader for external Claude roster edits
+- if ATM later needs an external-roster import surface, it must be an explicit
+  documented admin or CLI action against canonical ATM roster truth rather
+  than a daemon watch/reconcile side channel
 - daemon-authored Claude `config.json` projection writes must be suppressed
   once and only once through an explicit process-local journal; restart must
   clear suppression state and crash recovery must fall back to ordinary
-  idempotent external ingest
+  idempotent projection comparison behavior rather than a hidden external
+  ingest lane
 
 ## 10.2 Config Boundary Static Gates
 

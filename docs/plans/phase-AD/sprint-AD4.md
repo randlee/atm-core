@@ -29,7 +29,10 @@ target: integrate/phase-AD
 - `boundaries/atm-core/watch-event-source.toml`
 - `boundaries/atm-daemon/daemon-reconcile-coordinator.toml`
 - `boundaries/atm-daemon/file-watch-event-source.toml`
-- docs that still describe reconcile/watch as an active Claude Code subsystem
+- `docs/architecture.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-core/requirements.md`
 
 ## Paths To Delete
 
@@ -86,6 +89,9 @@ target: integrate/phase-AD
 - no accepted `atm-core` boundary surface still requires reconcile-only traits
 - no reconcile/watch boundary TOML still declares a deleted composition root or
   a retired reconcile/watch component as `active` or `stub_landed`
+- `docs/architecture.md`, `docs/atm-daemon/architecture.md`,
+  `docs/atm-daemon/requirements.md`, and `docs/atm-core/requirements.md` no
+  longer describe watch/reconcile as an accepted production subsystem
 - removing reconcile does not regress `send`, `read`, or `ack`
 
 ## Required Validation

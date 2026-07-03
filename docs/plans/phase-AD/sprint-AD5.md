@@ -30,6 +30,9 @@ target: integrate/phase-AD
 - `boundaries/atm-core/notification-sink.toml`
 - `boundaries/atm-daemon/daemon-notification-sink.toml`
 - `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
+- `docs/architecture.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/requirements.md`
 
 ## Paths To Delete
 
@@ -107,6 +110,9 @@ append_notification_log(&event)?;
 - no notification-related boundary TOML still declares a deleted notification
   worker composition root or a `NotificationSink` fallback on the accepted
   post-send path
+- `docs/architecture.md`, `docs/atm-daemon/architecture.md`, and
+  `docs/atm-daemon/requirements.md` no longer describe the notification worker
+  as an accepted production subsystem
 
 ## Required Validation
 

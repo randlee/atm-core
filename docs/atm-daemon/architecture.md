@@ -524,7 +524,7 @@ Dispatcher/handler rule:
 
 The daemon runtime is one crate but it is not one architectural blob.
 
-Required daemon-private partitions:
+Accepted daemon-private partitions:
 - `ownership`
   - owns host-wide lock paths, owner-record reads/writes, stale-owner recovery,
     and singleton cleanup rules
@@ -543,17 +543,16 @@ Required daemon-private partitions:
 - `peer_transport`
   - owns remote delivery, replay, retry, and remote transport-specific failure
     handling
+
+Historical-only retired partitions:
 - `watch_runtime`
-  - owns bounded watch subscription state and watch worker polling
 - `reconcile_runtime`
-  - owns reconcile debounce, coalescing, and bounded pending-work wakeups
-  - accepted ownership shape is one worker-owned actor lane with bounded
-    command-channel handoff and actor-owned request routing
 - `notification_runtime`
-  - owns bounded notification delivery command intake, degraded-state
-    publication, and worker-join lifecycle
-  - accepted ownership shape is one bounded `sync_channel` producer handoff
-    plus worker-owned drain/persistence state
+
+Phase `AD` rule:
+- these retired lanes may survive temporarily only as deletion scaffolding
+- they are not part of the accepted daemon runtime architecture
+- no new architecture text may describe them as required production partitions
 
 Observability rule:
 - daemon-owned `sc-observability` sinks are a cross-cutting runtime facility
@@ -687,9 +686,6 @@ Required caps:
 - bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
-- reconcile notification fingerprint registry cap: `1024` keys
-- watch subscription cap: `256` active subscriptions
-- notification work queue depth: `64`
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
@@ -699,13 +695,6 @@ Required saturation behavior:
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting through `DaemonIngestQueueSaturated`; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
-- watch subscription cap exceeded: reject the new subscription with typed
-  over-capacity failure rather than retaining unbounded watcher state
-- reconcile notification fingerprint registry cap exceeded: evict the oldest
-  tracked key before inserting the new key so the daemon preserves the latest
-  active reconcile targets without retaining unbounded fingerprint state
-- notification queue full: fail the enqueue with typed degraded delivery status
-  rather than silently buffering beyond the cap
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
   removed entries project as explicit `unknown` on later snapshot/doctor reads
@@ -756,8 +745,6 @@ Required timeout defaults:
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 - lifecycle wake-worker join during runtime teardown: `1s` max
-- reconcile runtime drain during runtime teardown: `2s` max
-- watch runtime drain during runtime teardown: `2s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max
 - configurable timeout or retry-budget overrides may raise these defaults, but
   they must not violate the floor contract:

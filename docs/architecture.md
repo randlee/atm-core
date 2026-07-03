@@ -2834,11 +2834,12 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- `R.17` implements a daemon-owned queued notifier worker with typed
-  unavailable/backpressure failures
-- notification delivery is no longer a tracing-only placeholder
-- the notifier queue is bounded to `64` events so plugin-local traffic fails
-  closed with backpressure rather than growing an unbounded daemon-side buffer
+- the historical `R.17` daemon-owned queued notifier worker is being retired by
+  `AD.5`
+- the accepted runtime must not require a daemon notification queue/worker just
+  to append one post-send event or warning
+- if notification logging survives, it is a direct append at the event site
+  rather than a retained daemon-owned worker subsystem
 
 ### 21.6.2 Structured Error And Observability Boundaries
 

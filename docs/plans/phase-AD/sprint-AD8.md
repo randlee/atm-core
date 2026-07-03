@@ -40,6 +40,7 @@ target: integrate/phase-AD
 - `crates/atm-core/src/service_runtime.rs`
 - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/atm-core/requirements.md`
 - docs/diagrams/state machines that still treat Claude inbox append as nudge
 - code/tests that still assume inbox append can serve as post-send context
   injection
@@ -120,6 +121,8 @@ target: integrate/phase-AD
 - the accepted docs explicitly state that backend interoperability survives
   with one live concrete backend because the shared contract remains
   future-backend-ready
+- `docs/atm-core/requirements.md` no longer requires watcher/reconcile as the
+  production ingress path for external Claude roster edits
 - every path listed under `Paths To Delete` is absent from the accepted line
 
 ## Required Validation
