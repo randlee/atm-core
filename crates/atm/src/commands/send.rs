@@ -249,8 +249,8 @@ mod tests {
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
-            from: None,
-            team: None,
+            from: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
             summary: None,
