@@ -2,7 +2,7 @@
 
 #![allow(
     dead_code,
-    reason = "AC.2 keeps internal projection writers until all Claude compatibility exports move behind atm-storage-claude."
+    reason = "Phase AD obsolete: retained only for historical Claude compatibility projection paths until the later deletion sprint removes the remaining helpers."
 )]
 
 use std::collections::BTreeMap;

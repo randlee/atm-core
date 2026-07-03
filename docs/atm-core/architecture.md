@@ -142,11 +142,11 @@ Follow-up work:
 - retained mailbox runtime selection must be fail-closed and store-backed only;
   `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
   cutover line lands
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line; retained command/runtime logic
-  must not treat mailbox JSON append as a second durable or governing runtime
-  backend, and the shared backend contract remains the required seam for
-  future backend implementations
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line;
+  retained command/runtime logic must not treat mailbox JSON append as a
+  second durable or governing runtime backend, and the shared backend
+  contract remains the required seam for future backend implementations
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -248,9 +248,9 @@ Phase R redesign notes:
   but it must not reimplement backend-specific diagnosis logic
 
 Phase AC supersession note:
-- `AC.2` moved the concrete Claude inbox storage backend into
+- `AC.2` moved the concrete Claude inbox storage backend into the now-retired
   `crates/atm-storage-claude`
-- `ADR-019` later retires that concrete backend from the accepted line because
+- `ADR-019` later retired that concrete backend from the accepted line because
   Claude Code no longer uses it
 - `atm-core` still owns generic source/projection boundary traits and helper
   request/response shapes during the cutover window, but it no longer owns the

@@ -895,9 +895,9 @@ mod tests {
         ReadQuery::new(
             root.to_path_buf(),
             root.to_path_buf(),
-            Some(TEST_LEAD),
+            TEST_LEAD.parse().expect("caller"),
             Some("agent-b@test-team"),
-            Some(TEST_TEAM),
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::Unread,
             false,
             false,
@@ -916,9 +916,9 @@ mod tests {
         SendRequest::new(
             root.to_path_buf(),
             root.to_path_buf(),
-            Some(TEST_LEAD),
+            TEST_LEAD.parse().expect("caller"),
             "agent-b@test-team",
-            Some(TEST_TEAM),
+            TEST_TEAM.parse().expect("team"),
             atm_core::send::SendMessageSource::Inline("hello".to_string()),
             None,
             false,
@@ -1105,7 +1105,7 @@ mod tests {
                     action: CommandAction::Send,
                     team: TEST_TEAM.parse().expect("team"),
                     agent: "agent-b".parse().expect("agent"),
-                    sender: request.sender_override.expect("sender"),
+                    sender: request.caller_identity,
                     outcome: SendCommandOutcome::Sent,
                     message_id: AtmMessageId::new(),
                     requires_ack: false,
@@ -1165,8 +1165,8 @@ mod tests {
             .acknowledge_message(AckRequest {
                 home_dir: root.path().to_path_buf(),
                 current_dir: root.path().to_path_buf(),
-                actor_override: Some(TEST_LEAD.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 message_id: read_message_id,
                 reply_body: "received".to_string(),
             })

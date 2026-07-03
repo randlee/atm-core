@@ -6,6 +6,9 @@ use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::TaskId;
 use clap::Args;
 
+use crate::commands::caller_context::{
+    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
+};
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
@@ -56,21 +59,25 @@ impl SendCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let composition = CliComposition::bootstrap("send", observability)?;
         let request = self.build_request(home_dir, current_dir)?;
+        let composition = CliComposition::bootstrap("send", observability)?;
         let outcome = composition.send(request)?;
 
         output::print_send_result(&outcome, json)
     }
 
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: self.from.as_deref().map(CallerIdentityOverride),
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
         let message_source = self.build_message_source()?;
         SendRequest::new(
             home_dir,
             current_dir,
-            self.from.as_deref(),
+            caller_context.caller_identity,
             &self.to,
-            self.team.as_deref(),
+            caller_context.caller_team,
             message_source,
             self.summary,
             self.requires_ack,
@@ -221,14 +228,8 @@ mod tests {
             .build_request(tempdir.path().join("home"), tempdir.path().join("cwd"))
             .expect("request");
 
-        assert_eq!(
-            request.sender_override.as_ref().map(|value| value.as_str()),
-            Some(ROLE_TEAM_LEAD)
-        );
-        assert_eq!(
-            request.team_override.as_ref().map(|value| value.as_str()),
-            Some(TEST_TEAM)
-        );
+        assert_eq!(Some(request.caller_identity.as_str()), Some(ROLE_TEAM_LEAD));
+        assert_eq!(Some(request.caller_team.as_str()), Some(TEST_TEAM));
         assert_eq!(request.summary_override.as_deref(), Some("summary"));
         assert!(request.requires_ack);
         assert_eq!(
@@ -248,8 +249,8 @@ mod tests {
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
-            from: None,
-            team: None,
+            from: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
             summary: None,

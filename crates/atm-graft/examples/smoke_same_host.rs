@@ -172,9 +172,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let read_outcome = session.read(ReadQuery::new(
         home_dir.clone(),
         args.workspace_root.clone(),
-        Some(args.agent.as_str()),
+        args.agent.parse().expect("caller"),
         Some(target_address.as_str()),
-        Some(args.team.as_str()),
+        args.team.parse().expect("team"),
         ReadSelection::All,
         false,
         false,
@@ -200,8 +200,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ack_outcome = session.ack(AckRequest {
         home_dir: home_dir.clone(),
         current_dir: args.workspace_root.clone(),
-        actor_override: Some(args.agent.clone()),
-        team_override: Some(args.team.clone()),
+        caller_identity: args.agent.parse().expect("caller"),
+        caller_team: args.team.parse().expect("team"),
         message_id: nudge.message_id,
         reply_body: "graft smoke ack reply".to_string(),
     })?;
@@ -209,9 +209,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let follow_up_outcome = session.send(SendRequest::new(
         home_dir,
         args.workspace_root.clone(),
-        Some(args.agent.as_str()),
+        args.agent.parse().expect("caller"),
         args.reply_target.as_str(),
-        Some(args.team.as_str()),
+        args.team.parse().expect("team"),
         SendMessageSource::Inline("graft smoke follow-up".to_string()),
         None,
         false,
