@@ -34,8 +34,32 @@ target: integrate/phase-AD
 ## Added Or Modified Artifacts
 
 - modify smoke runners so they prove:
-  - caller-owned identity success with invoking-shell `ATM_IDENTITY`
-  - caller-owned missing-identity failure before daemon dispatch
+  - env-only caller-context success for commands that require invoking-shell
+    `ATM_IDENTITY` plus `ATM_TEAM`
+  - caller-context failure for commands that require it when either
+    `ATM_IDENTITY` or `ATM_TEAM` is
+    missing
+  - CLI-only caller-context success when env caller context is absent but the
+    command-line override surface is present on commands that support it
+  - explicit CLI override wins over env when both are present on commands that
+    support override surfaces
+  - command-matrix coverage for the retained ATM command inventory:
+    - `send`
+    - `read`
+    - `ack`
+    - `list`
+    - `clear`
+    - `log`
+    - `members`
+    - `teams`
+    - `teams add-member`
+    - `teams update-member`
+    - `teams backup`
+    - `teams restore`
+  - diagnostic coverage for `doctor`:
+    - succeeds without caller identity
+    - succeeds without caller team
+    - still honors optional `--team` scoping
   - local tmux post-send emission
   - cross-team, cross-repo local post-send emission from a sender working in a
     different repository with a different durable `home_dir`
@@ -54,9 +78,17 @@ target: integrate/phase-AD
 
 ## Deliverables
 
-- smoke evidence proving bare identity commands work correctly
-- smoke evidence proving caller-owned commands fail locally when identity is
-  missing
+- smoke evidence proving bare caller-context commands work correctly
+- smoke evidence proving caller-context-owned retained ATM commands fail
+  locally when caller identity or caller team is missing
+- smoke evidence proving CLI-only caller-context paths still work when env
+  caller context is absent on commands that support overrides
+- smoke evidence proving explicit CLI caller-context overrides win over env on
+  commands that support both
+- smoke evidence proving the retained ATM command matrix stays on the declared
+  caller context instead of guessed fallback context
+- smoke evidence proving `doctor` remains identity-free and optional-team
+  diagnostics continue to work
 - smoke evidence proving configured post-send emission either succeeds or warns
 - smoke evidence proving local tmux recipients on the accepted line
 - smoke evidence proving sender repository/home-dir differences do not change
@@ -66,8 +98,19 @@ target: integrate/phase-AD
 
 ## Required Work
 
-- prove bare `send`/`read`/`ack` caller identity on the accepted baseline
-- prove caller-owned commands reject missing identity before daemon dispatch
+- prove bare `send`, `read`, `ack`, `list`, `clear`, `log`,
+  `members`, `teams`, `teams add-member`, `teams update-member`,
+  `teams backup`, and `teams restore` all execute on the declared caller
+  context on the accepted baseline
+- prove `atm doctor` runs without caller identity and without caller team,
+  while still honoring optional `--team` scoping
+- prove caller-context-owned retained ATM commands reject missing identity before retained
+  execution or daemon dispatch
+- prove caller-context-owned retained ATM commands reject missing team before retained execution or
+  daemon dispatch
+- prove CLI-only caller-context paths still work when env caller context is absent
+- prove explicit CLI caller-context overrides win over env when both are
+  present
 - prove local tmux-backed post-send emission
 - prove `atm send` from another team/repository with a different sender
   `home_dir` still fires the same recipient post-send behavior
@@ -85,9 +128,31 @@ target: integrate/phase-AD
 ## Acceptance Criteria
 
 - `just smoke normal` passes and its report artifacts prove the repaired local
-  identity plus local-emitter lane
-- smoke artifacts prove missing-identity caller commands fail locally before
-  daemon dispatch
+  caller-context plus local-emitter lane
+- smoke artifacts prove missing-identity caller-context-owned commands fail locally before
+  retained execution or daemon dispatch
+- smoke artifacts prove missing-team caller-context-owned commands fail locally before
+  retained execution or daemon dispatch
+- smoke artifacts prove CLI-only caller-context paths still work when env
+  caller context is absent on commands that support overrides
+- smoke artifacts prove explicit CLI caller-context overrides win over env on
+  commands that support both
+- smoke artifacts or targeted CLI-matrix artifacts prove the retained ATM
+  command inventory executes against the declared caller context:
+  - `send`
+  - `read`
+  - `ack`
+  - `list`
+  - `clear`
+  - `log`
+  - `members`
+  - `teams`
+  - `teams add-member`
+  - `teams update-member`
+  - `teams backup`
+  - `teams restore`
+- smoke artifacts prove `atm doctor` does not require `ATM_IDENTITY`,
+  does not require `ATM_TEAM`, and still honors optional `--team` scoping
 - smoke artifacts prove that sending from another team/repository with a
   different sender `home_dir` does not change whether local post-send
   emission is attempted
@@ -108,6 +173,7 @@ target: integrate/phase-AD
 - `python3 .just/run_lint.py all`
 - `just smoke normal`
 - `just smoke thorough`
+- targeted CLI integration coverage for the retained ATM command matrix
 - `just validate all`
 - boundary governance check for `PostSendHookEmitter`
 - `git diff --check`
