@@ -43,7 +43,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         return Ok(None);
     };
     let parsed = parse_raw_config_file(&path)?;
-    let obsolete_identity_present = parsed.atm.identity.is_some() || parsed.identity.is_some();
     let config_root = path
         .parent()
         .map(Path::to_path_buf)
@@ -52,7 +51,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     validate_post_send_hook_count(&parsed.atm.post_send_hooks, &path)?;
 
     Ok(Some(AtmConfig {
-        identity: parsed.atm.identity.or(parsed.identity),
+        obsolete_identity: parsed.atm.identity.or(parsed.identity),
         default_team: parse_default_team(parsed.atm.default_team.or(parsed.default_team), &path)?,
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
@@ -64,7 +63,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         daemon: parse_daemon_config(&parsed.daemon, &path)?,
         graft: normalize_graft_config(parsed.atm.graft),
         config_root,
-        obsolete_identity_present,
     }))
 }
 
@@ -180,6 +178,10 @@ pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, A
 /// helper signature used across command code paths. Identity is resolved
 /// exclusively via the `ATM_IDENTITY` environment variable and will never fall
 /// back to deprecated config identity fields.
+#[allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller identity resolution moved to the CLI boundary, but this env-only helper remains until the obsolete daemon-side identity module is deleted."
+)]
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<AgentName> {
     env::var("ATM_IDENTITY")
         .ok()
@@ -604,10 +606,10 @@ mod tests {
         .expect("config");
 
         let config = load_config(&nested).expect("config").expect("present");
-        assert_eq!(config.identity.as_deref(), Some(TEST_SENDER));
+        assert_eq!(config.obsolete_identity.as_deref(), Some(TEST_SENDER));
         assert_eq!(config.default_team.as_deref(), Some(TEST_TEAM));
         assert_eq!(config.config_root, root.path());
-        assert!(config.obsolete_identity_present);
+        assert!(config.obsolete_identity.is_some());
     }
 
     #[test]
@@ -620,10 +622,10 @@ mod tests {
         .expect("config");
 
         let config = load_config(root.path()).expect("config").expect("present");
-        assert_eq!(config.identity.as_deref(), Some(TEST_SENDER));
+        assert_eq!(config.obsolete_identity.as_deref(), Some(TEST_SENDER));
         assert_eq!(config.default_team.as_deref(), Some(TEST_TEAM));
         assert_eq!(config.config_root, root.path());
-        assert!(config.obsolete_identity_present);
+        assert!(config.obsolete_identity.is_some());
     }
 
     #[test]
@@ -824,9 +826,8 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
 
         let config = load_config(root.path()).expect("config").expect("present");
         assert_eq!(config.default_team, None);
-        assert_eq!(config.identity, None);
+        assert_eq!(config.obsolete_identity, None);
         assert_eq!(config.post_send_hooks.len(), 1);
-        assert!(!config.obsolete_identity_present);
     }
 
     #[test]
@@ -842,7 +843,7 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
 
         if let Some(ref config) = loaded {
             assert_eq!(
-                config.identity, None,
+                config.obsolete_identity, None,
                 "config walk must not escape tempdir root; sentinel identity must stay None"
             );
         }
@@ -1030,8 +1031,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         set_env_var("ATM_IDENTITY", "env-identity");
 
         let config = AtmConfig {
-            identity: Some("config-identity".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-identity".into()),
             ..Default::default()
         };
 
@@ -1049,8 +1049,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         remove_env_var("ATM_IDENTITY");
 
         let config = AtmConfig {
-            identity: Some("config-identity".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-identity".into()),
             ..Default::default()
         };
 

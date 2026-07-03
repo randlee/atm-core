@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "Phase AD obsolete: hook-file caller identity fallback is retired from production call sites and only remains until the follow-on deletion sprint removes the module."
+)]
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;

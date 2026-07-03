@@ -36,7 +36,6 @@ allowed_dependents = ["atm", "atm-graft"]
 allowed_dependencies = ["atm-storage"]
 forbidden_edges = [
   "atm-daemon-client -> atm-storage-rusqlite",
-  "atm-daemon-client -> atm-storage-claude",
 ]
 
 [references]
