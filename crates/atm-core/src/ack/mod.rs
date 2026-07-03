@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
@@ -11,7 +10,6 @@ use crate::delivery_plan::{
 };
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
-use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{AtmMessageId, InboxMessage};
@@ -27,8 +25,8 @@ use serde_json::Map;
 pub struct AckRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
-    pub team_override: Option<TeamName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub message_id: AtmMessageId,
     pub reply_body: String,
 }
@@ -134,10 +132,8 @@ fn ack_mail_with_runtime_impl<
     runtime: &R,
 ) -> Result<AckOutcome, AtmError> {
     let config = runtime.load_config(&request.current_dir)?;
-    let actor =
-        identity::resolve_actor_identity(request.actor_override.as_deref(), config.as_ref())?;
-    let team = config::resolve_team(request.team_override.as_deref(), config.as_ref())
-        .ok_or_else(AtmError::team_unavailable)?;
+    let actor = request.caller_identity.clone();
+    let team = request.caller_team.clone();
     let team_dir = runtime.team_dir(&request.home_dir, &team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&team));
@@ -1235,8 +1231,8 @@ mod tests {
             crate::ack::AckRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 current_dir: tempdir.path().to_path_buf(),
-                actor_override: Some(TEST_SENDER.parse().expect("agent")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 message_id: AtmMessageId::new(),
                 reply_body: "ack".to_string(),
             },
@@ -1304,8 +1300,8 @@ mod tests {
             crate::ack::AckRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 current_dir: tempdir.path().to_path_buf(),
-                actor_override: Some(actor.clone()),
-                team_override: Some(team.clone()),
+                caller_identity: actor.clone(),
+                caller_team: team.clone(),
                 message_id: source_message_id,
                 reply_body: "ack".to_string(),
             },

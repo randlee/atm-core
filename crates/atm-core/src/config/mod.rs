@@ -180,6 +180,10 @@ pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, A
 /// helper signature used across command code paths. Identity is resolved
 /// exclusively via the `ATM_IDENTITY` environment variable and will never fall
 /// back to deprecated config identity fields.
+#[allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller identity resolution moved to the CLI boundary, but this env-only helper remains until the obsolete daemon-side identity module is deleted."
+)]
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<AgentName> {
     env::var("ATM_IDENTITY")
         .ok()

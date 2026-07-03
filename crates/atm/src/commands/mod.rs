@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 pub mod ack;
+pub(crate) mod caller_context;
 pub mod clear;
 pub mod doctor;
 pub mod help;

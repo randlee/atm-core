@@ -3,6 +3,9 @@ use atm_core::home;
 use atm_core::list::ListQuery;
 use clap::Args;
 
+use crate::commands::caller_context::{
+    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
+};
 use crate::commands::util::parse_timestamp;
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
@@ -52,8 +55,8 @@ impl ListCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let composition = CliComposition::bootstrap("list", observability)?;
         let query = self.build_query(home_dir, current_dir)?;
+        let composition = CliComposition::bootstrap("list", observability)?;
         let outcome = composition.list(query)?;
         output::print_list_result(&outcome, json)
     }
@@ -63,14 +66,18 @@ impl ListCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ListQuery> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
         ListQuery::new(
             home_dir,
             current_dir,
-            self.actor.as_deref(),
+            caller_context.caller_identity,
             self.target.as_deref(),
-            self.team.as_deref(),
+            caller_context.caller_team,
             selection_mode,
             selection_mode != atm_core::types::ReadSelection::All,
             self.limit,
