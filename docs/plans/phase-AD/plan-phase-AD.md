@@ -1,17 +1,20 @@
 ---
 title: Phase AD Plan
 status: active
-branch: plan/post-send-hook-fix
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/post-send-hook-fix
+branch: integrate/phase-AD
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD
 ---
 
 # Phase AD Plan
 
 ## Goal
 
-Restore the original ATM runtime model for identity, send, read, and post-send
+Restore the original ATM runtime model for caller context, send, read, and post-send
 nudge behavior:
 
+- every retained ATM command that requires caller context runs with a known
+  caller identity and caller team, while `atm doctor` remains the explicit
+  identity-free, optional-team diagnostic exception
 - `atm send` persists the message to the database
 - if the recipient exposes a post-send hook capability, ATM fires it
 - post-send emission failure is logged and surfaced as a sender-visible warning
@@ -21,6 +24,9 @@ Phase `AD` exists because the current accepted line has drifted away from that
 model in several release-blocking ways:
 
 - bare ATM commands in an `arch-ctm` session can resolve as `team-lead`
+- bare ATM commands can also resolve or persist under the wrong team when
+  caller team falls back from repo-local/default config instead of the
+  invoking shell or explicit command-line context
 - `.atm.toml` still configures `[[atm.post_send_hooks]]`, but the live daemon
   path can complete a send with no nudge and no warning
 - the current post-send path is obscured by generic delivery/notification
@@ -36,6 +42,9 @@ model in several release-blocking ways:
 
 - `ATM_IDENTITY=arch-ctm` was present in the active shell, but bare ATM
   commands still resolved as `team-lead` until `--as arch-ctm` was forced
+- bare `atm read` on the accepted `1.2.3` release could still resolve as
+  `team-lead@atm-dev` even when `ATM_IDENTITY` and `ATM_TEAM` were unset,
+  proving that both caller identity and caller team can be guessed today
 - `.atm.toml` currently contains a `team-lead` post-send hook rule, but a live
   send produced neither the expected nudge nor a sender-visible warning
 - `atm doctor --team atm-dev` currently reports
@@ -49,17 +58,44 @@ Phase `AD` is corrective simplification, not a feature-expansion line.
 
 The governing rules are:
 
-- caller identity is mandatory for every caller-owned ATM command before any
-  daemon dispatch occurs
+- caller identity and caller team are mandatory only for retained ATM commands
+  that require caller-owned state or routing context
+- the accepted mandatory caller-context inventory for this rule is:
+  - `send`
+  - `read`
+  - `ack`
+  - `list`
+  - `clear`
+  - `log`
+  - `members`
+  - `teams`
+  - `teams add-member`
+  - `teams update-member`
+  - `teams backup`
+  - `teams restore`
+- `atm doctor` is diagnostic-only and must not require caller identity; its
+  `--team` override remains optional diagnostic scope, not mandatory caller
+  context
+- caller identity and caller team must be resolved together by one shared
+  CLI-owned caller-context resolver; retained ATM commands must not each parse
+  `ATM_IDENTITY`, `ATM_TEAM`, or repo config independently
 - the only accepted caller-identity sources at the CLI boundary are an explicit
-  command-line override or `ATM_IDENTITY` from the invoking shell
-- if caller identity is unresolved at the CLI boundary, the CLI must fail the
-  command and must not contact the daemon
-- every downstream request DTO for caller-owned commands must carry resolved
-  caller identity as a required field, never an optional field
+  command-line override when the command supports it or `ATM_IDENTITY` from
+  the invoking shell
+- the only accepted caller-team sources at the CLI boundary are an explicit
+  command-line override when the command supports it or `ATM_TEAM` from the
+  invoking shell
+- repo-local `[atm].default_team`, obsolete `[atm].identity`, hook files, and
+  daemon ambient environment must never be used to guess missing caller
+  context
+- if caller identity or caller team is unresolved for a command that requires
+  caller context, the CLI must fail the command and must not contact the daemon
+- every downstream request DTO for caller-owned daemon-backed commands must
+  carry resolved caller identity and resolved caller team as required fields,
+  never optional fields
 - the daemon must execute caller-owned commands against declared request
-  identity only and must never consult daemon ambient `ATM_IDENTITY` to fill a
-  missing caller identity
+  identity and team only and must never consult daemon ambient
+  `ATM_IDENTITY` or `ATM_TEAM` to fill missing caller context
 - message persistence is the send success boundary
 - post-send behavior is a post-commit side effect only
 - post-send behavior is event-driven; it is not planned through a generic
@@ -101,9 +137,14 @@ The governing rules are:
 
 Phase `AD` may:
 
-- fix caller identity ownership on daemon-backed ATM commands
-- make caller identity transport explicit and required for daemon-backed
-  caller-owned commands
+- fix caller context ownership on the full retained ATM command surface
+- make caller identity and caller team transport explicit and required for
+  daemon-backed caller-owned commands
+- make local retained command entry points consume the same shared
+  caller-context resolver rather than carrying duplicate command-specific
+  fallback logic
+- preserve diagnostic commands that do not need caller identity; `doctor`
+  remains identity-free with optional team scoping
 - simplify the post-send nudge path to one post-commit emission seam
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
@@ -169,13 +210,23 @@ Required runtime meaning:
 - caller-owned commands:
   - CLI resolves caller identity from explicit override or invoking-shell
     `ATM_IDENTITY`
-  - CLI fails locally if caller identity is unavailable
-  - daemon receives caller identity as required request data
-  - daemon never substitutes its own ambient identity
+  - CLI resolves caller team from explicit override or invoking-shell
+    `ATM_TEAM`
+  - CLI fails locally if caller identity or caller team is unavailable
+  - daemon receives caller identity and caller team as required request data
+  - daemon never substitutes its own ambient identity or team
+- doctor:
+  - CLI does not require caller identity
+  - CLI accepts optional `--team` diagnostic scope
+  - daemon/local doctor paths must not invent or require caller identity
 - send:
   - persist
   - if recipient has post-send hook capability, call `emit(...)`
   - if `emit(...)` fails, log it and append a sender-visible warning
+  - `AD.6` owns the stable post-send emission failure warning/error code used
+    by both local-tmux and graft emitters; earlier sprints may reference the
+    warning behavior, but they must not invent competing codes for the same
+    failure class
 - read:
   - load from durable state only
 
@@ -221,7 +272,24 @@ Phase `AD` executes the deletion line first so new emitter work does not get
 implemented on top of retired Claude JSON, reconcile, or notification
 infrastructure.
 
-1. [AD.1 Caller Identity Ownership Restore](./sprint-AD1.md)
+Phase `AD` orchestration rule:
+
+- `Phase AD` is a strict merge-forward line
+- Phase `AD` sprints execute back-to-back without stopping for QA or waiting
+  for all prior branches to be green
+- quality review trails implementation and must not be used to pause
+  downstream sprint development
+- before starting work on a sprint branch/worktree, merge forward from the
+  latest preceding sprint branch chain already in flight
+- if multiple predecessor sprint branches exist in front of the current
+  sprint, merge the full predecessor chain before starting new work on the
+  current sprint
+- sprint branches must merge forward numerically:
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11`
+- do not stop downstream development waiting for prior sprint QA to pass
+- do not run pairwise cross-merges between unrelated `AD` sprint branches
+
+1. [AD.1 Caller Context Ownership Restore](./sprint-AD1.md)
 2. [AD.2 Obsolete Config Identity Removal And Doctor Contract Repair](./sprint-AD2.md)
 3. [AD.3 Claude Backend And Inbox Nudge Retirement](./sprint-AD3.md)
 4. [AD.4 Reconcile Runtime Removal](./sprint-AD4.md)
@@ -238,10 +306,14 @@ infrastructure.
 Phase `AD` closes only when:
 
 - bare daemon-backed ATM commands honor the invoking shell identity correctly
-- caller-owned commands fail before daemon dispatch when neither explicit
-  override nor invoking-shell `ATM_IDENTITY` is present
-- daemon-backed caller-owned request shapes carry caller identity as required
-  data rather than relying on daemon ambient identity
+- retained ATM commands that require caller context honor the invoking shell
+  identity and team correctly
+- retained ATM commands that require caller context fail before command
+  execution or daemon dispatch when neither explicit override nor
+  invoking-shell `ATM_IDENTITY` / `ATM_TEAM` is present
+- `atm doctor` runs without caller identity and accepts optional team scoping
+- daemon-backed caller-owned request shapes carry caller identity and caller
+  team as required data rather than relying on daemon ambient identity/team
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning
@@ -265,3 +337,5 @@ Phase `AD` closes only when:
 - any remaining drift category not validated on entry is surfaced with accurate
   diagnostics
 - smoke and doctor coverage prove the repaired behavior on the accepted line
+- command-matrix coverage proves the repaired caller-context behavior on the
+  full retained ATM command surface

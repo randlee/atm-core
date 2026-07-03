@@ -605,26 +605,40 @@ Configuration resolution order:
 5. defaults
 
 Required config fields:
-- default team
+- default team for config/bootstrap flows that explicitly consume ATM config
+  defaults; it is not a runtime caller-team fallback for commands governed by
+  the caller-context matrix
 
 Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
 - `[[atm.post_send_hooks]]`
 
-Runtime identity rules:
+Runtime caller-context rules:
 - repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
   fallback for the retained multi-agent ATM model
+- repo-local `.atm.toml` `[atm].default_team` is not a valid runtime caller
+  team fallback for commands that require caller context
+- the authoritative command-by-command caller-context matrix is
+  `docs/requirements.md` §4.1
 - runtime identity must come from:
   - explicit command override when supported
   - `ATM_IDENTITY`
+- runtime caller team for commands that require it must come from:
+  - explicit command override when supported
+  - `ATM_TEAM`
 - caller-owned CLI commands must resolve identity before daemon dispatch; if no
   valid identity exists, the CLI must fail locally and must not contact the
   daemon
+- caller-owned CLI commands must resolve required caller team before daemon
+  dispatch; if no valid required caller team exists, the CLI must fail locally
+  and must not contact the daemon
 - daemon-backed caller-owned request DTOs must carry resolved caller identity
   as required request data
-- the daemon must not consult hook files, repo-local config, or daemon ambient
-  `ATM_IDENTITY` to fill a missing caller identity
+- daemon-backed caller-owned request DTOs must carry resolved caller team as
+  required request data when the command requires caller team
+- the daemon must not consult hook files, repo-local config, roster state, or
+  daemon ambient `ATM_IDENTITY` / `ATM_TEAM` to fill missing caller context
 - an obsolete config `[atm].identity` field may remain temporarily for
   migration, but ATM must ignore it for runtime identity resolution and
   `atm doctor` must flag it for removal
@@ -731,31 +745,64 @@ Historical note:
 - `OBS-GAP-1` is complete as a historical planning artifact and does not remain
   the gating item for retained observability delivery
 
-## 4. Identity Resolution
+## 4. Caller Context Resolution
 
 Product requirement ID:
-- `REQ-P-IDENTITY-001` Identity resolution must follow the documented command
-  precedence rules.
+- `REQ-P-IDENTITY-001` Caller-context resolution must follow the documented
+  command precedence rules.
 
 Satisfied by:
-- `REQ-CORE-CONFIG-001` for identity resolution policy
+- `REQ-CORE-CONFIG-001` for caller-context resolution policy
 
-### 4.1 Send Identity Resolution Order
+Caller context means:
 
-1. `--from`
-2. `ATM_IDENTITY`
+- caller identity when the command needs caller identity
+- caller team when the command needs caller team
 
-### 4.2 Read Identity Resolution Order
+Global caller-context rules:
 
-1. `--as`
-2. `ATM_IDENTITY`
+- repo-local `.atm.toml` `[atm].identity` is not valid runtime caller identity
+- repo-local `.atm.toml` `[atm].default_team` is not valid runtime caller team
+  for commands that require explicit caller context
+- daemon ambient `ATM_IDENTITY` / `ATM_TEAM` are not valid fallback sources
+- roster state, hook files, and target-address fields are not valid caller
+  context sources
+- if caller context is required and cannot be resolved from the documented
+  sources, the CLI must fail locally before daemon dispatch or retained
+  command execution
+- when both an explicit CLI caller-context override and invoking-shell env are
+  present, the explicit CLI override wins
+- `atm doctor` is diagnostic and is the explicit exception: it may run without
+  caller identity and without caller team
 
-### 4.3 Doctor Identity Resolution
+### 4.1 Caller-Context Matrix
 
-`atm doctor` is diagnostic and may run without resolved caller identity. It may
-inspect `ATM_IDENTITY` visibility and explicit-override behavior, but it must
-not treat hook files, repo-local config identity, or daemon ambient identity as
-command identity.
+| Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `atm send` | Yes | `--from`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context |
+| `atm read` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
+| `atm ack` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
+| `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
+| `atm clear` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target inbox/member selection is not caller context |
+| `atm log` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit caller override surface |
+| `atm members` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--team` scopes the roster being inspected and may also satisfy caller-team requirement |
+| `atm teams` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit override surface |
+| `atm teams add-member` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | positional `team` is the target roster team, not caller team |
+| `atm teams update-member` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | positional `team` is the target roster team, not caller team |
+| `atm teams backup` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | positional `team` is the backup target, not caller team |
+| `atm teams restore` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | positional `team` is the restore target, not caller team |
+| `atm doctor` | No | not required | No | optional `--team` only | diagnostic scope is optional; `ATM_IDENTITY` / `ATM_TEAM` visibility may be reported but are not required inputs |
+
+### 4.2 Command-Specific Notes
+
+- `--from` on `send` is caller identity override
+- `--from` on `read` / `list` is a sender filter only
+- `--as` changes caller identity only; it does not change target matching
+- any command without an explicit caller override surface must rely on the
+  invoking shell when caller context is required
+- `atm doctor` may inspect `ATM_IDENTITY` visibility and team override
+  behavior, but it must not treat hook files, repo-local config identity/team,
+  or daemon ambient identity/team as command caller context
 
 If command identity cannot be determined where required, the CLI must fail with
 a structured recovery-oriented error before daemon dispatch. An obsolete config
@@ -1660,7 +1707,7 @@ Phase-AA target direction:
 The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
-- caller identity inputs and failure contract
+- caller identity/team visibility and optional diagnostic scope behavior
 - obsolete `[atm].identity` configuration drift detection
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
@@ -1679,6 +1726,15 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+
+Caller-context behavior for `atm doctor`:
+
+- `atm doctor` must not require `ATM_IDENTITY`
+- `atm doctor` must not require `ATM_TEAM`
+- `atm doctor --team <name>` may narrow diagnostic scope when supplied
+- `atm doctor` may report caller-context visibility and invalid override
+  situations diagnostically, but it must not fail solely because caller
+  identity/team are absent
 
 ### 11.4 Output Contract
 
