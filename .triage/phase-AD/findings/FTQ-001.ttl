@@ -1,0 +1,153 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "caller_context.rs private EnvGuard does not share lock with unguarded ambient-env tests" ;
+  triage:description "EnvGuard in caller_context.rs uses a private lock via #[serial(env)] only within that module, but parallel tests in send.rs/ack.rs/list.rs/read.rs that also read ATM_IDENTITY/ATM_TEAM can race. Detected during AD.1-QA-1 flaky test analysis on PR #449." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/commands/" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AD1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AD2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AD3/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD.1/b7ee3554> ;
+  triage:openOn <urn:atm:triage:worktree/AD.2/be70a13d> ;
+  triage:openOn <urn:atm:triage:worktree/AD.3/94e75df5> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.4/a41348f4> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.5/e3a90938> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.6/836bd918> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.7/448de229> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.8/345ab8ce> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.9/57f1d35e> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.10/5563bba2> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.11/d709cb73> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD.3/94e75df5> .
+
+<urn:atm:triage:occurrence/FTQ-001/AD1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<std::ffi::OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.1/b7ee3554> .
+
+<urn:atm:triage:occurrence/FTQ-001/AD2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<std::ffi::OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.2/be70a13d> .
+
+<urn:atm:triage:occurrence/FTQ-001/AD3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<std::ffi::OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.3/94e75df5> .
+
+<urn:atm:triage:worktree/AD.1/b7ee3554>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:orderIndex 1 ;
+  triage:sprintId "AD.1" .
+
+<urn:atm:triage:worktree/AD.2/be70a13d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:orderIndex 2 ;
+  triage:sprintId "AD.2" .
+
+<urn:atm:triage:worktree/AD.3/94e75df5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:orderIndex 3 ;
+  triage:sprintId "AD.3" .
+
+<urn:atm:triage:worktree/AD.4/a41348f4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:orderIndex 4 ;
+  triage:sprintId "AD.4" .
+
+<urn:atm:triage:worktree/AD.5/e3a90938>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:orderIndex 5 ;
+  triage:sprintId "AD.5" .
+
+<urn:atm:triage:worktree/AD.6/836bd918>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:orderIndex 6 ;
+  triage:sprintId "AD.6" .
+
+<urn:atm:triage:worktree/AD.7/448de229>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:orderIndex 7 ;
+  triage:sprintId "AD.7" .
+
+<urn:atm:triage:worktree/AD.8/345ab8ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:orderIndex 8 ;
+  triage:sprintId "AD.8" .
+
+<urn:atm:triage:worktree/AD.9/57f1d35e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:orderIndex 9 ;
+  triage:sprintId "AD.9" .
+
+<urn:atm:triage:worktree/AD.10/5563bba2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:orderIndex 10 ;
+  triage:sprintId "AD.10" .
+
+<urn:atm:triage:worktree/AD.11/d709cb73>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:orderIndex 11 ;
+  triage:sprintId "AD.11" .

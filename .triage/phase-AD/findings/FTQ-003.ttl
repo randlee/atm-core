@@ -1,0 +1,86 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-003" ;
+  triage:title "flaky-test-qa: third angle on env-guard race in caller_context tests" ;
+  triage:description "flaky-test-qa's third critical finding on the same env-guard race as FTQ-001/FTQ-002, viewed from a third angle during AD.1-QA-1 on PR #449 -- same root cause (private EnvGuard in caller_context.rs not sharing env_lock() with other test modules that read ATM_IDENTITY/ATM_TEAM directly)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/commands/caller_context.rs" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:severity "blocking" ;
+  triage:category "FTQ" ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/AD-1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/AD-2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/AD-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD-1/b7ee3554> ;
+  triage:openOn <urn:atm:triage:worktree/AD-2/be70a13d> ;
+  triage:openOn <urn:atm:triage:worktree/AD-3/94e75df5> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD-4/a41348f4> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD-3/94e75df5> .
+
+<urn:atm:triage:occurrence/FTQ-003/AD-1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD-1/b7ee3554> .
+
+<urn:atm:triage:occurrence/FTQ-003/AD-2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD-2/be70a13d> .
+
+<urn:atm:triage:occurrence/FTQ-003/AD-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/caller_context.rs" ;
+  triage:line 112 ;
+  triage:snippet "struct EnvGuard { key: &'static str, previous: Option<OsString> }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD-3/94e75df5> .
+
+<urn:atm:triage:worktree/AD-1/b7ee3554>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD-2/be70a13d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD-3/94e75df5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD-4/a41348f4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:orderIndex 4 .
