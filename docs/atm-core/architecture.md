@@ -296,9 +296,12 @@ Config-ingress ownership rules:
   watcher ownership is the post-write missing-config existing-inbox fallback
   warning; that exception does not restore generic file-backed membership
   checks
-- `ConfigIngress` is reserved for watcher-owned external ingest plus approved
-  comparison/preservation callers such as `doctor` and recreated-shell restore
-  preservation
+- before `ADR-019`, `ConfigIngress` was reserved for watcher-owned external
+  ingest plus approved comparison/preservation callers such as `doctor` and
+  recreated-shell restore preservation
+- after `ADR-019`, no accepted runtime path keeps watcher/reconcile as a live
+  `ConfigIngress` owner; any retained `ConfigIngress` use is explicit
+  comparison/admin tooling only
 - repository-local lint / `sc-lint`-candidate gates should make direct
   production `config.json` roster reads and generic `load_team_config(...)`
   helper use mechanically detectable
