@@ -466,8 +466,9 @@ Required config rules:
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
   treated as compatibility aliases
-- `[atm].identity` is obsolete and must not participate in runtime identity
-  resolution; doctor should report it as configuration drift when present
+- `[atm].identity` and the legacy top-level `identity` key are obsolete and
+  must not participate in runtime identity resolution; doctor should report
+  them as configuration drift when present
 
 Required caller-context rules:
 - the authoritative command-by-command caller-context matrix is
@@ -545,8 +546,8 @@ Required caller-context rules:
   identity fallback
 
 Required doctor rules:
-- `atm doctor` must flag obsolete `[atm].identity` when present with
-  `ATM_WARNING_IDENTITY_DRIFT`
+- `atm doctor` must flag obsolete config identity fields (`[atm].identity` and
+  legacy top-level `identity`) when present with `ATM_WARNING_IDENTITY_DRIFT`
 - `atm doctor` must compare canonical ATM roster truth against
   `config.json.members`
 - ATM roster members missing from `config.json` are findings
