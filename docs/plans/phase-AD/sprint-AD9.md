@@ -96,6 +96,14 @@ pub struct UpdateMemberRequest {
 - remove lingering `.atm.toml` assumptions around active pane-id authority
 - update operator guidance for restoring pane truth when drift occurs
 
+## CLI Error Contract
+
+- `MemberAlreadyExists` / `ATM_MEMBER_ALREADY_EXISTS`
+  - cause: `atm teams add-member` targets a member row that already exists
+  - caller surface: command failure with no roster mutation
+  - recovery: use `atm teams update-member` for metadata repair on existing
+    members instead of retrying `add-member`
+
 ## This Sprint Does Not Close
 
 - caller identity ownership

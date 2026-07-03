@@ -92,6 +92,10 @@ The governing rules are:
 - backend interoperability does not require multiple live concrete backends on
   the accepted line; it requires that the shared contract stays future-backend
   ready without another architectural rewrite
+- any new sealed `atm-core` boundary trait introduced in this phase must land
+  with a matching `boundaries/atm-core/*.toml` governance record and a
+  `docs/atm-core/boundaries.md` inventory entry before implementation
+  dependents close
 
 ## Scope Rules
 
@@ -241,6 +245,9 @@ Phase `AD` closes only when:
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning
+- `PostSendHookEmitter` has a machine-readable boundary TOML plus a matching
+  `docs/atm-core/boundaries.md` inventory entry, and `AD.11` readiness/lint
+  checks fail closed if either record is missing
 - `ReconcileRuntime`, watched-file import, and daemon reconcile notification
   behavior are removed from the accepted line
 - daemon notification queue/worker delivery is removed; any retained

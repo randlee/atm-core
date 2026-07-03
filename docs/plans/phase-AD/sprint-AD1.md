@@ -87,6 +87,17 @@ fn resolve_cli_caller_identity(...) -> Result<AgentName, AtmError> {
 }
 ```
 
+## Error Contract
+
+- `CallerIdentityUnresolved` / `ATM_IDENTITY_UNAVAILABLE`
+  - cause: a caller-owned command reached the CLI boundary with neither an
+    explicit caller override nor invoking-shell `ATM_IDENTITY`
+  - emitted by: `resolve_cli_caller_identity(...)`
+  - sender surface: command failure before daemon dispatch
+  - recovery: set `ATM_IDENTITY` in the invoking shell or pass the explicit
+    `--as` / `--from` override the command supports
+  - daemon contact: forbidden
+
 ## Obsolescence Instructions
 
 - any caller-owned identity helper that falls back to hook files or daemon

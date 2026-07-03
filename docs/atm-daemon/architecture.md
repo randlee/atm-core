@@ -112,7 +112,7 @@ Phase-AA target direction:
   4. request dispatch through injected service/runtime ports
   5. typed daemon error/report projection for daemon-owned runtime state
 - the aggregate-only doctor surface consumes `MailStoreDoctor`,
-  `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor`
+  `RosterStoreDoctor`, and `ConfigDoctor`
 
 Phase R redesign notes:
 - `atm-daemon` remains runtime-oriented, not business-logic-oriented

@@ -331,6 +331,32 @@ Notes:
   - persisted single-message Claude append remains on the existing append-only
     path and is not reopened onto this boundary
 
+## PostSendHookEmitter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/post-send-hook-emitter.toml](../../boundaries/atm-core/post-send-hook-emitter.toml)
+
+
+Purpose:
+- Owns the one accepted post-commit recipient-emission seam for post-send
+  behavior after durable message persistence succeeds.
+
+Notes:
+- Phase `AD` introduces this boundary as the replacement for
+  `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
+  path.
+- `send` / `ack` remain responsible for:
+  - persistence success
+  - deciding whether the recipient exposes post-send capability
+  - logging emission failure
+  - constructing sender-visible warnings on emission failure
+- the emitter is responsible only for attempting recipient-side emission and
+  returning typed success/failure.
+- local tmux-backed emission may live in `atm-core`; the graft-backed emitter
+  is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
+- this boundary must not become a logical-message-delivery, persistence, or
+  generic notification-planning seam.
+
 ## NotificationSink
 
 Canonical machine-readable boundary source:

@@ -27,6 +27,8 @@ target: integrate/phase-AD
 - `scripts/smoke/run_thorough_graft.py`
 - `reports/smoke/`
 - `docs/plans/phase-AD/`
+- `boundaries/atm-core/post-send-hook-emitter.toml`
+- `docs/atm-core/boundaries.md`
 - readiness/project-plan docs touched by final verdict
 
 ## Added Or Modified Artifacts
@@ -66,6 +68,8 @@ target: integrate/phase-AD
 - prove graft-backed post-send emission
 - prove sender-visible warning behavior on forced emission failure
 - update readiness artifacts with final AD closure state
+- add or retain a readiness/boundary gate that fails closed when the
+  `PostSendHookEmitter` boundary TOML or matching inventory entry is missing
 
 ## This Sprint Does Not Close
 
@@ -84,6 +88,9 @@ target: integrate/phase-AD
   failure
 - readiness artifacts record `Phase AD` as closed only if all AD lanes above
   passed on the accepted line
+- readiness/boundary evidence records the presence of
+  `boundaries/atm-core/post-send-hook-emitter.toml` and the matching
+  `docs/atm-core/boundaries.md` inventory entry
 
 ## Required Validation
 
@@ -93,4 +100,5 @@ target: integrate/phase-AD
 - `just smoke normal`
 - `just smoke thorough`
 - `just validate all`
+- boundary governance check for `PostSendHookEmitter`
 - `git diff --check`

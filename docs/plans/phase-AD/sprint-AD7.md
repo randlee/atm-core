@@ -76,6 +76,24 @@ fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
 - keep send success dependent on persistence, not on downstream graft
   consumption
 
+## Error And Warning Contract
+
+The graft emitter must use the shared `AD.3` post-send taxonomy exactly:
+
+- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+  - cause: the recipient graft session or graft host receiver is unavailable
+    when emission is attempted
+  - sender surface: warning after successful persistence
+  - recovery: restore graft receiver availability, then resend only if a
+    fresh nudge is still required
+- `PostSendAdvisoryDeliveryFailed` /
+  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+  - cause: the daemon-to-graft advisory/session handoff failed after message
+    persistence
+  - sender surface: warning after successful persistence
+  - recovery: inspect daemon/graft logs, restore the advisory path, then
+    resend only if a fresh nudge is still required
+
 ## This Sprint Does Not Close
 
 - local tmux-backed emission

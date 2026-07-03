@@ -31,10 +31,12 @@ target: integrate/phase-AD
 - `crates/atm-core/src/delivery_plan.rs`
 - `crates/atm-core/src/delivery_execution.rs`
 - `crates/atm-core/src/boundary/mod.rs`
+- `boundaries/atm-core/post-send-hook-emitter.toml`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
 
 ## Interfaces To Add Or Modify
 
@@ -72,6 +74,9 @@ pub trait PostSendHookEmitter: sealed::Sealed {
 - post-send ownership no longer hidden behind generic delivery-plan behavior
 - live post-send capability resolution no longer changes based on the caller's
   current working directory
+- the new sealed boundary trait has a machine-readable governance record and a
+  matching `docs/atm-core/boundaries.md` inventory entry before AD.6 / AD.7
+  implementation work closes
 
 ## Required Work
 
@@ -82,6 +87,8 @@ pub trait PostSendHookEmitter: sealed::Sealed {
   decisions
 - preserve durable delivery behavior while shrinking post-send ownership to one
   direct seam
+- add the `PostSendHookEmitter` boundary TOML and boundary-inventory entry as
+  the governing contract record for this sealed trait
 
 ## Explicit Code Samples
 
@@ -101,6 +108,36 @@ if recipient_has_post_send_hook {
     }
 }
 ```
+
+## Error And Warning Taxonomy
+
+All post-send emission failures normalized by this sprint must reuse the
+following codes and recovery text in AD.6 / AD.7 rather than inventing
+emitter-specific warning strings:
+
+- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
+  - cause: the recipient requires local tmux emission but no authoritative
+    `tmux_pane_id` is available on the roster row
+  - sender surface: warning after successful persistence
+  - recovery: repair pane state with
+    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
+- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - cause: tmux rejected the pane id or the local pane send failed
+  - sender surface: warning after successful persistence
+  - recovery: verify the pane still exists, then repair changed pane state
+    with `atm teams update-member` if needed
+- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+  - cause: the graft recipient/session is unavailable when emission is
+    attempted
+  - sender surface: warning after successful persistence
+  - recovery: restore the graft receiver/session, then resend only if a fresh
+    nudge is still needed
+- `PostSendAdvisoryDeliveryFailed` /
+  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+  - cause: daemon-to-graft advisory delivery failed after message persistence
+  - sender surface: warning after successful persistence
+  - recovery: inspect daemon/graft logs, restore the advisory path, then
+    resend only if a fresh nudge is still needed
 
 ## Obsolescence Instructions
 
@@ -128,6 +165,9 @@ if recipient_has_post_send_hook {
 - sender warning ownership on emission failure is explicit and testable
 - no validated reproduction remains where running `atm send` from an unrelated
   repo or working directory changes whether post-send emission is attempted
+- the accepted `PostSendHookEmitter` contract is governed by
+  `boundaries/atm-core/post-send-hook-emitter.toml` plus the matching
+  `docs/atm-core/boundaries.md` entry
 
 ## Required Validation
 

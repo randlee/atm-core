@@ -56,8 +56,7 @@ Phase-AA target direction:
 - daemon doctor code aggregates subsystem reports and daemon-owned runtime
   state only; it must not reimplement backend-specific diagnosis
 - the aggregate-only doctor surface consumes `MailStoreDoctor`,
-  `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` rather than
-  backend-shaped helpers
+  `RosterStoreDoctor`, and `ConfigDoctor` rather than backend-shaped helpers
 - `RuntimeStatusSnapshot` must not carry `sqlite_ready` / `sqlite_detail` or
   any other store-specific readiness field after `AA.3`
 

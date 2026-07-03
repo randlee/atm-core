@@ -74,6 +74,22 @@ fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
 - use authoritative SQLite roster pane metadata for emission
 - fail cleanly and visibly when pane metadata is missing or invalid
 
+## Error And Warning Contract
+
+The local tmux emitter must use the shared `AD.3` post-send taxonomy exactly:
+
+- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
+  - cause: `recipient_pane_id` is absent for a recipient that requires local
+    tmux emission
+  - sender surface: warning after successful persistence
+  - recovery: repair the roster row with
+    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
+- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - cause: tmux rejected the pane id or the send operation failed
+  - sender surface: warning after successful persistence
+  - recovery: verify the pane still exists and repair changed pane metadata
+    through `atm teams update-member` when the pane id is stale
+
 ## This Sprint Does Not Close
 
 - graft-backed emission
