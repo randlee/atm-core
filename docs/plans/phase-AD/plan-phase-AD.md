@@ -76,8 +76,8 @@ The governing rules are:
 - daemon notification delivery is not a protected subsystem; if notification
   logging remains, ATM should append directly at the event site instead of
   routing through a retained queue/worker service
-- Claude Code JSON mailbox support is no longer used and must be removed from
-  the accepted runtime
+- Claude Code no longer uses the Claude backend, so `atm-storage-claude` and
+  Claude inbox-append runtime behavior must be removed from the accepted line
 - post-send nudge emission must not depend on Claude inbox append success
 - durable message delivery remains allowed, but post-send nudge ownership must
   be narrowed back to one direct seam
@@ -86,6 +86,12 @@ The governing rules are:
 - directory and roster cleanup in this phase must prefer deletion and direct
   field ownership over adding new coordinator structs, planner structs, or
   compatibility-only state machines
+- shared backend interoperability remains mandatory through the `atm-storage`
+  contract; SQLite is one backend and future SQL backend support remains a
+  requirement after the Claude backend is retired
+- backend interoperability does not require multiple live concrete backends on
+  the accepted line; it requires that the shared contract stays future-backend
+  ready without another architectural rewrite
 
 ## Scope Rules
 
@@ -100,8 +106,9 @@ Phase `AD` may:
 - remove `ReconcileRuntime` and the daemon watch/import subsystem
 - remove daemon notification queue/worker delivery and replace any retained
   notification logging with direct append logic if the log still has value
-- remove obsolete Claude JSON mailbox support and all inbox-based
-  nudge/context-injection logic
+- remove the retired Claude backend and obsolete Claude inbox-append runtime
+  assumptions while preserving the shared backend contract and future SQL
+  backend requirement
 - repair roster drift detection and operator guidance
 - finish the CLI-managed repair/update path for the existing SQLite-owned pane
   and member-home metadata and remove lingering `.atm.toml` assumptions
@@ -117,7 +124,8 @@ Phase `AD` must not:
   emission
 - preserve stale post-send behavior just because it is already threaded through
   `DeliveryPlan`, `NotificationSink`, or advisory queue code
-- keep Claude JSON mailbox support as a hidden fallback
+- keep Claude inbox append as a hidden runtime fallback
+- collapse the architecture into a permanent SQLite-only contract
 - preserve dead daemon subsystems just because they already exist
 
 ## Baseline
@@ -193,7 +201,12 @@ No accepted `Phase AD` design should require:
 
 Phase `AD` must freeze and enforce this rule:
 
-- Claude inbox JSON append is not part of the accepted Claude Code runtime
+- Claude inbox JSON append is not part of the accepted Claude Code
+  delivery/post-send runtime
+- `atm-storage-claude` is retired from the accepted line because Claude Code no
+  longer uses that backend
+- the shared `atm-storage` contract remains the governing backend seam after
+  Claude backend retirement
 - any surviving code, tests, docs, or diagrams that still treat inbox append as
   mailbox delivery, nudge delivery, or context injection must be removed or
   rewritten
@@ -206,7 +219,7 @@ infrastructure.
 
 1. [AD.1 Caller Identity Ownership Restore](./sprint-AD1.md)
 2. [AD.2 Obsolete Config Identity Removal And Doctor Contract Repair](./sprint-AD2.md)
-3. [AD.8 Claude JSON Mailbox And Inbox Nudge Removal](./sprint-AD8.md)
+3. [AD.8 Claude Backend And Inbox Nudge Retirement](./sprint-AD8.md)
 4. [AD.4 Reconcile Runtime Removal](./sprint-AD4.md)
 5. [AD.5 Notification Runtime Removal And Post-Send `NotificationSink` Detachment](./sprint-AD5.md)
 6. [AD.3 Post-Send Nudge Contract Simplification](./sprint-AD3.md)
@@ -234,9 +247,14 @@ Phase `AD` closes only when:
   notification log append is direct
 - local tmux-backed members use the approved local emitter
 - graft-backed recipients use the approved graft emitter
-- no approved path still ships Claude JSON mailbox support or treats Claude
-  inbox append as mailbox delivery, nudge delivery, or context injection
+- `atm-storage-claude` is removed from the accepted line
+- the shared backend contract remains intact and documented as future-SQL-ready
+- no approved runtime path still treats Claude inbox append as mailbox
+  delivery, nudge delivery, or context injection
 - active pane-id authority and repair flow runs through the existing SQLite
   roster state plus CLI, not `.atm.toml`
-- roster drift is either repaired or surfaced with accurate diagnostics
+- the validated-on-entry roster drift for `team-lead` and `arch-ctm` is
+  repaired on the accepted line
+- any remaining drift category not validated on entry is surfaced with accurate
+  diagnostics
 - smoke and doctor coverage prove the repaired behavior on the accepted line

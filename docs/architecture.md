@@ -1299,30 +1299,30 @@ Architectural rules:
 
 ## 7. Read Pipeline
 
-Supersession note:
-- the stage list below describes the retained file-backed line
-- the current SQLite/daemon pipeline is `ingest/reconcile -> SQLite projection ->
-  optional state mutation -> return outcome`
-- in the current architecture, SQLite projection rather than merged file truth becomes
-  authoritative for `read`
+Historical note:
+- the earlier file-backed/reconcile-fed line is historical only
+- the accepted runtime does not use `ingest/reconcile -> SQLite projection` as
+  a live read pipeline
+- AD.4 removes the remaining daemon watch/reconcile lane from the accepted
+  runtime
 
-The read pipeline stages are:
-1. resolve actor and target inbox
-2. build the hostname registry for configured origin inboxes
-3. load mailbox records from the merged inbox surface
-4. collapse duplicate `message_id` entries to the newest visible record
-5. classify read axis, ack axis, and derived message class
-6. apply sender and timestamp filters
-7. apply seen-state filter unless selection is `All`
-8. map derived message class to display bucket and apply selection mode
-9. wait if `timeout` is set and the current selection is empty
-10. sort newest-first and apply limit
-11. apply legal read-axis and ack-axis transitions for displayed messages
-12. persist state changes atomically
-13. update seen-state when enabled
-14. return outcome
+The accepted read pipeline stages are:
+1. resolve caller identity and target mailbox from the accepted CLI/runtime
+   contract
+2. load durable message state from the authoritative ATM store
+3. classify read axis, ack axis, and derived message class
+4. apply sender, timestamp, selection-mode, and seen-state filters
+5. sort newest-first and apply limit
+6. apply legal read/seen mutations for displayed messages
+7. persist any read/seen state changes atomically
+8. return outcome
 
-This ordering is part of the architecture contract.
+Architectural rules:
+- no accepted read path depends on watcher events, reconcile completion, or
+  mailbox-file ingest
+- durable ATM state, not merged mailbox-file truth, is authoritative for read
+- any retained mailbox-file compatibility readers are historical or
+  repair-only surfaces and do not redefine the accepted read contract
 
 ## 8. Ack Pipeline
 
@@ -2489,9 +2489,13 @@ Claude-owned shared inbox files remain required for:
   top-level JSON array of inbox messages
 
 Architectural rule:
-- Claude mailbox JSON is retired from the accepted runtime
+- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
+  backend are retired from the accepted line because Claude Code no longer
+  uses them
 - durable SQLite state is ATM's authoritative mail state
 - send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
+- the shared backend contract remains required so SQLite stays one backend
+  implementation rather than becoming the architecture
 - any surviving compatibility readers or repair paths are historical/deletion
   work only and must not redefine current runtime behavior
 

@@ -27,6 +27,9 @@ target: integrate/phase-AD
 - `crates/atm-core/src/boundary/mod.rs`
 - `crates/atm-core/src/delivery_execution.rs`
 - `crates/atm-core/src/service_runtime.rs`
+- `boundaries/atm-core/notification-sink.toml`
+- `boundaries/atm-daemon/daemon-notification-sink.toml`
+- `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
 
 ## Paths To Delete
 
@@ -57,6 +60,9 @@ append_notification_log(&event)?;
   at the event site rather than one queue/worker subsystem
 - modify daemon composition and boundary wiring so no accepted startup path
   constructs notification-runtime worker state
+- modify notification-related boundary TOMLs so deleted worker/runtime
+  components are no longer declared active composition roots and non-Claude
+  outbound contracts no longer imply notification-runtime fallback
 
 ## Obsolescence Instructions
 
@@ -98,10 +104,14 @@ append_notification_log(&event)?;
 - any retained notification log append is synchronous and directly testable
 - any retained `NotificationSink` surface is explicitly documented as
   non-post-send residual scope and is absent from the accepted post-send path
+- no notification-related boundary TOML still declares a deleted notification
+  worker composition root or a `NotificationSink` fallback on the accepted
+  post-send path
 
 ## Required Validation
 
 - targeted send-path and daemon composition regression tests
+- targeted boundary-lint / boundary-grep gates for notification boundary TOMLs
 - `test ! -e crates/atm-daemon/src/notification_runtime.rs`
 - `test ! -e crates/atm-daemon/src/notification_runtime_tests.rs`
 - `cargo test --workspace`

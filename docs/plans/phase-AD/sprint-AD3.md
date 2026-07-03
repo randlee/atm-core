@@ -110,8 +110,8 @@ if recipient_has_post_send_hook {
   sprint
 - if any of those helpers cannot be deleted immediately, mark them
   `Phase AD obsolete: not the governing post-send seam`, remove all new
-  send/ack callers, and carry them only until AD.5 / AD.8 delete the retained
-  paths
+  send/ack callers, and carry them only until the relevant AD.5 / AD.8
+  deletion work has landed when those retained paths still exist
 
 ## This Sprint Does Not Close
 

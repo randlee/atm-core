@@ -25,6 +25,10 @@ target: integrate/phase-AD
 - `crates/atm-daemon/src/boundary_adapters.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `crates/atm-core/src/boundary/mod.rs`
+- `boundaries/atm-core/reconcile-coordinator.toml`
+- `boundaries/atm-core/watch-event-source.toml`
+- `boundaries/atm-daemon/daemon-reconcile-coordinator.toml`
+- `boundaries/atm-daemon/file-watch-event-source.toml`
 - docs that still describe reconcile/watch as an active Claude Code subsystem
 
 ## Paths To Delete
@@ -41,6 +45,9 @@ target: integrate/phase-AD
   watch runtimes
 - modify boundary exports so reconcile/watch-only traits are absent from the
   accepted runtime surface
+- modify reconcile/watch boundary TOMLs so retired components are no longer
+  declared `active`, `stub_landed`, or composition-owned by deleted runtime
+  roots
 - rewrite docs that still describe reconcile/watch as a live Claude runtime
 
 ## Obsolescence Instructions
@@ -77,11 +84,15 @@ target: integrate/phase-AD
 - no accepted daemon composition path starts or references `ReconcileRuntime`
 - no accepted daemon composition path starts or references `WatchRuntime`
 - no accepted `atm-core` boundary surface still requires reconcile-only traits
+- no reconcile/watch boundary TOML still declares a deleted composition root or
+  a retired reconcile/watch component as `active` or `stub_landed`
 - removing reconcile does not regress `send`, `read`, or `ack`
 
 ## Required Validation
 
 - targeted daemon composition and command regression tests
+- targeted boundary-lint / boundary-grep gates for retired reconcile/watch
+  TOMLs
 - `test ! -e crates/atm-daemon/src/reconcile_runtime.rs`
 - `test ! -e crates/atm-daemon/src/reconcile_runtime/notification_fingerprints.rs`
 - `test ! -e crates/atm-daemon/src/reconcile_runtime_tests.rs`

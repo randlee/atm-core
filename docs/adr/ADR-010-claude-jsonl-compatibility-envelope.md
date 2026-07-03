@@ -14,7 +14,9 @@
 
 ## Supersession Note
 
-`ADR-019` retires Claude JSON mailbox support from the accepted runtime.
+`ADR-019` retires Claude inbox-append runtime behavior and the
+`atm-storage-claude` backend from the accepted product architecture while
+preserving the shared backend contract.
 
 This ADR remains the historical record of the JSONL compatibility-envelope
 decision from the earlier mailbox-compatibility line only. It is no longer the

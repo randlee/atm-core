@@ -107,6 +107,8 @@ pub struct UpdateMemberRequest {
 
 - doctor output accurately reflects repaired or still-drifting roster state
 - active team pane/registration truth is restored for the accepted baseline
+- the validated-on-entry blank `tmux_pane_id` drift for `team-lead` and
+  `arch-ctm` is repaired on the accepted baseline
 - operators can update existing member metadata through `atm teams
   update-member`
 - `atm teams add-member` remains create-only and rejects attempts to use it as
