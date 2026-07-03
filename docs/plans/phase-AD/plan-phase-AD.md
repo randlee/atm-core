@@ -226,6 +226,10 @@ Phase `AD` orchestration rule:
 - `Phase AD` is a strict merge-forward line
 - each implementation sprint branch/worktree must be created from the current
   accepted tip of the immediately preceding `AD` sprint
+- before development starts on a sprint, that sprint worktree must merge the
+  immediately preceding accepted `AD` sprint
+- before a sprint starts any QA-findings fix pass, that sprint worktree must
+  merge the latest tip of the immediately preceding accepted `AD` sprint again
 - sprint branches must merge forward numerically:
   - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11`
 - accepted execution for this phase is immediate-predecessor merge-forward
