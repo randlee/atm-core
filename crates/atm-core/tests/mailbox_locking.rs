@@ -917,8 +917,8 @@ impl Fixture {
         AckRequest {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.parse().expect("actor")),
-            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
+            caller_identity: actor.parse().expect("caller"),
+            caller_team: PRIMARY_TEAM.parse().expect("team"),
             message_id,
             reply_body: reply_body.to_string(),
         }
@@ -928,9 +928,9 @@ impl Fixture {
         ClearQuery {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.parse().expect("actor")),
+            caller_identity: actor.parse().expect("caller"),
+            caller_team: PRIMARY_TEAM.parse().expect("team"),
             target_address: None,
-            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
             older_than: None,
             idle_only: false,
             dry_run: false,
@@ -941,9 +941,9 @@ impl Fixture {
         ReadQuery::new(
             self.tempdir.path().to_path_buf(),
             self.tempdir.path().to_path_buf(),
-            Some(actor),
+            actor.parse().expect("caller"),
             None,
-            Some(PRIMARY_TEAM),
+            PRIMARY_TEAM.parse().expect("team"),
             ReadSelection::Actionable,
             false,
             false,
@@ -962,9 +962,9 @@ impl Fixture {
         SendRequest::new(
             self.tempdir.path().to_path_buf(),
             self.tempdir.path().to_path_buf(),
-            Some(sender),
+            sender.parse().expect("caller"),
             to,
-            Some(PRIMARY_TEAM),
+            PRIMARY_TEAM.parse().expect("team"),
             SendMessageSource::Inline(text.to_string()),
             None,
             false,

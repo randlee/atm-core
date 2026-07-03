@@ -386,9 +386,9 @@ fn send_request(home_dir: &Path) -> SendRequest {
     SendRequest {
         home_dir: home_dir.to_path_buf(),
         current_dir: home_dir.to_path_buf(),
-        sender_override: Some(AgentName::from_validated(TEST_SENDER)),
+        caller_identity: AgentName::from_validated(TEST_SENDER),
+        caller_team: TeamName::from_validated(TEST_TEAM),
         to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
-        team_override: None,
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),
         requires_ack: false,
@@ -537,9 +537,7 @@ fn append_failure_after_sqlite_commit_is_execution_only() {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
         },
-        sender_team: Some(TeamName::from_validated(TEST_TEAM)),
         canonical_sender: AgentName::from_validated(TEST_SENDER),
-        display_sender: AgentName::from_validated(TEST_SENDER),
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         delivery_family: DeliveryEventFamily::NewMessage,
@@ -589,9 +587,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
         },
-        sender_team: Some(TeamName::from_validated(TEST_TEAM)),
         canonical_sender: AgentName::from_validated(TEST_SENDER),
-        display_sender: AgentName::from_validated(TEST_SENDER),
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         delivery_family: DeliveryEventFamily::NewMessage,
@@ -965,9 +961,9 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
     let error = SendRequest::new(
         tempdir.path().to_path_buf(),
         tempdir.path().to_path_buf(),
-        Some(ROLE_TEAM_LEAD),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
         "../evil",
-        Some(TEST_TEAM),
+        TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("hello".to_string()),
         None,
         false,
@@ -980,21 +976,8 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
 }
 
 #[test]
-fn send_request_new_rejects_invalid_team_override_before_command_execution() {
-    let tempdir = tempdir().expect("tempdir");
-    let error = SendRequest::new(
-        tempdir.path().to_path_buf(),
-        tempdir.path().to_path_buf(),
-        Some(ROLE_TEAM_LEAD),
-        TEST_SENDER,
-        Some("../evil"),
-        SendMessageSource::Inline("hello".to_string()),
-        None,
-        false,
-        None,
-        false,
-    )
-    .expect_err("invalid team");
+fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
+    let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
     assert!(error.message.contains("team name"));
 }

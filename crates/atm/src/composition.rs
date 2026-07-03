@@ -752,9 +752,9 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 false,
@@ -773,9 +773,9 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 requires_ack,
@@ -789,8 +789,8 @@ mod tests {
             AckRequest {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 message_id,
                 reply_body: reply_body.to_string(),
             }
@@ -800,9 +800,9 @@ mod tests {
             ReadQuery::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 Some(TEST_RECIPIENT_ADDRESS),
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
                 false,
                 false,
@@ -821,9 +821,9 @@ mod tests {
             ClearQuery {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
                 target_address: Some(TEST_RECIPIENT_ADDRESS.parse().expect("recipient")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 older_than: None,
                 idle_only: false,
                 dry_run: false,

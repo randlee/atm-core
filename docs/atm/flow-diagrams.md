@@ -51,7 +51,8 @@ Static HTML viewers:
   [client-interface-diagrams.html](../reports/client-interface-diagrams.html)
 
 Simplified target model:
-- one private Claude compatibility boundary for JSONL ingest/export
+- historical Claude JSONL ingest/export remains documentation-only and is not
+  part of the accepted runtime after `ADR-019`
 - one SQLite-backed mailbox projection rooted in message-status
 - one generic post-commit notification/nudge subsystem
 - one generic registered-consumer registration/fetch/drain surface

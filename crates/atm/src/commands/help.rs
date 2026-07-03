@@ -304,17 +304,18 @@ resolved runtime destination. Harness and model are not the same thing.
 
 Send identity precedence:
 - `atm send --from alice team-lead \"...\"` uses `alice` immediately
-- if `--from` is absent, ATM falls back to hook-file identity
-- if hook-file identity is absent, ATM falls back to `ATM_IDENTITY`
+- if `--from` is absent, ATM falls back to `ATM_IDENTITY`
 
 Read/clear operator examples:
 - `atm read --as alice` changes the acting identity for that command
 - `atm read --team atm-dev` changes the selected team, not the sender identity
 
 Troubleshooting:
-- repo-local `[atm].identity` is obsolete and does not count as runtime identity
-- if ATM cannot resolve the required identity, fix the override, hook file, or
-  `ATM_IDENTITY` rather than guessing with mailbox-local state
+- repo-local `[atm].identity` and legacy top-level `identity` are obsolete and
+  do not count as runtime identity
+- if ATM cannot resolve the required identity, fix the override or
+  `ATM_IDENTITY`; ATM must not guess from hook files, config, or mailbox-local
+  state
 "
 }
 

@@ -1,7 +1,7 @@
-%% title: `Claude Harness New Message`
-%% summary: New-message state machine for Claude Code harness delivery.
-%% commentary: This machine persists SQLite first on the success path, allows Claude-only compatibility append after commit, and on SQLite failure still emits the original plus an `atm-system@<team>` error companion with mirrored nudges.
-%% notes: harness gate: ClaudeCode only | sqlite failure emits original + error companion | append failure after sqlite success falls back to post-send-hook
+%% title: `Claude Harness New Message` (Historical Pre-ADR-019)
+%% summary: Historical new-message state machine for the retired Claude inbox-append path. This diagram is not part of the accepted runtime after ADR-019.
+%% commentary: This historical machine persisted SQLite first on the success path, allowed Claude-only compatibility append after commit, and on SQLite failure still emitted the original plus an `atm-system@<team>` error companion with mirrored nudges.
+%% notes: historical only | retired inbox-append path | not part of the accepted runtime
 %% sets: delivery
 flowchart TD
     A["<b>ClaudeHarnessNewMessage</b><br/>Received"] --> B["PersistSqlite
