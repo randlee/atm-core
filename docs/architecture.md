@@ -717,8 +717,9 @@ ATM config and team-launch config are distinct concerns:
   surface
 - retired flat hook keys and `[atm].post_send_hook_members` must fail fast
   with migration guidance
-- `[atm].identity` is obsolete in the retained multi-agent model and must not
-  participate in runtime identity resolution
+- `[atm].identity` and the legacy top-level `identity` key are obsolete in the
+  retained multi-agent model and must not participate in runtime identity
+  resolution
 
 Team config loading must follow a narrow-scope recovery policy:
 - compatibility-only schema drift may use deterministic defaults at the schema
@@ -739,8 +740,9 @@ Diagnostics for team config failures must preserve:
 
 ### 5.1.1 Deprecated `[atm].identity`
 
-`[atm].identity` remains parse-compatible only as an obsolete migration field.
-It is no longer part of runtime sender or actor resolution.
+`[atm].identity` and the legacy top-level `identity` key remain
+parse-compatible only as obsolete migration fields. They are no longer part of
+runtime sender or actor resolution.
 
 Current runtime contract:
 - caller-context-owned commands resolve required caller identity/team according
@@ -748,14 +750,15 @@ Current runtime contract:
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch
 - `atm doctor` remains the explicit identity-free, optional-team exception
-- `[atm].identity` is ignored for runtime resolution even when still present in
-  `.atm.toml`
+- `[atm].identity` and legacy top-level `identity` are ignored for runtime
+  resolution even when still present in `.atm.toml`
 
 Deprecation and migration contract:
-- `atm doctor` reports stale `[atm].identity` with
+- `atm doctor` reports stale config identity fields with
   `ATM_WARNING_IDENTITY_DRIFT`
-- operator migration path is: remove `[atm].identity` and set `ATM_IDENTITY`
-  in the active agent environment instead
+- operator migration path is: remove `[atm].identity` and any legacy top-level
+  `identity` key, then set `ATM_IDENTITY` in the active agent environment
+  instead
 - keeping the obsolete key temporarily is tolerated for migration diagnostics
   only; it must not change runtime behavior
 

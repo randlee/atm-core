@@ -615,8 +615,9 @@ Supported optional config fields:
 - `[[atm.post_send_hooks]]`
 
 Runtime caller-context rules:
-- repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
-  fallback for the retained multi-agent ATM model
+- repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`
+  key are not valid runtime identity fallback for the retained multi-agent ATM
+  model
 - repo-local `.atm.toml` `[atm].default_team` is not a valid runtime caller
   team fallback for commands that require caller context
 - the authoritative command-by-command caller-context matrix is
@@ -639,9 +640,9 @@ Runtime caller-context rules:
   required request data when the command requires caller team
 - the daemon must not consult hook files, repo-local config, roster state, or
   daemon ambient `ATM_IDENTITY` / `ATM_TEAM` to fill missing caller context
-- an obsolete config `[atm].identity` field may remain temporarily for
-  migration, but ATM must ignore it for runtime identity resolution and
-  `atm doctor` must flag it for removal
+- obsolete config identity fields (`[atm].identity` and legacy top-level
+  `identity`) may remain temporarily for migration, but ATM must ignore them
+  for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
@@ -761,7 +762,8 @@ Caller context means:
 
 Global caller-context rules:
 
-- repo-local `.atm.toml` `[atm].identity` is not valid runtime caller identity
+- repo-local `.atm.toml` `[atm].identity` and legacy top-level `identity` are
+  not valid runtime caller identity
 - repo-local `.atm.toml` `[atm].default_team` is not valid runtime caller team
   for commands that require explicit caller context
 - daemon ambient `ATM_IDENTITY` / `ATM_TEAM` are not valid fallback sources
@@ -1708,7 +1710,8 @@ The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - caller identity/team visibility and optional diagnostic scope behavior
-- obsolete `[atm].identity` configuration drift detection
+- obsolete config identity drift detection (`[atm].identity` and legacy
+  top-level `identity`)
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when the current runtime is
@@ -3090,8 +3093,9 @@ The intentionally forbidden shape is:
   - the identical helper currently present in `ack/mod.rs`, `clear/mod.rs`, and
     `read/mod.rs` must be moved to `identity/mod.rs` as `pub(crate)`
 
-- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key must be
-  documented in a `# Deprecated` section in the config module documentation.
+- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key and
+  legacy top-level `identity` key must be documented in a `# Deprecated`
+  section in the config module documentation.
 
   Required behavior:
   - migration guidance: use `ATM_IDENTITY` environment variable instead

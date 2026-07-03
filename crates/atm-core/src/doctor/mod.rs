@@ -76,14 +76,14 @@ pub fn run_doctor_with_runtime(
     let mut findings = Vec::new();
     if config
         .as_ref()
-        .is_some_and(|config| config.obsolete_identity_present)
+        .is_some_and(|config| config.obsolete_identity.is_some())
     {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
             remediation: Some(
-                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
                     .to_string(),
             ),
         });
@@ -205,13 +205,13 @@ fn push_obsolete_identity_finding(
     config: Option<&config::AtmConfig>,
     config_report: &mut crate::boundary::ConfigDoctorReport,
 ) {
-    if config.is_some_and(|config| config.obsolete_identity_present) {
+    if config.is_some_and(|config| config.obsolete_identity.is_some()) {
         config_report.findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
             remediation: Some(
-                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
                     .to_string(),
             ),
         });
@@ -929,7 +929,7 @@ mod tests {
         assert!(
             report.findings[0]
                 .message
-                .contains("obsolete [atm].identity")
+                .contains("obsolete config identity")
         );
         assert_eq!(report.findings[1].code, AtmErrorCode::ObservabilityHealthOk);
     }

@@ -85,8 +85,8 @@ mod tests {
         let command = AckCommand {
             message_id: String::new(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some("test-team".to_string()),
+            actor: Some("sender-a".to_string()),
             json: false,
         };
 
@@ -103,8 +103,8 @@ mod tests {
         let command = AckCommand {
             message_id: "   ".to_string(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some("test-team".to_string()),
+            actor: Some("sender-a".to_string()),
             json: false,
         };
 

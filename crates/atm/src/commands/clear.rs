@@ -121,8 +121,8 @@ mod tests {
     fn build_query_rejects_invalid_target_before_core() {
         let command = ClearCommand {
             target: Some("../evil".to_string()),
-            actor_override: None,
-            team: None,
+            actor_override: Some("sender-a".to_string()),
+            team: Some("test-team".to_string()),
             older_than: None,
             idle_only: false,
             dry_run: false,
