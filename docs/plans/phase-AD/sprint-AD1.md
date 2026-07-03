@@ -53,7 +53,6 @@ target: integrate/phase-AD
   - `ReadQuery`
   - `ListQuery`
   - `ClearQuery`
-  - `DoctorQuery`
 - update daemon dispatch/request decode so caller-owned requests fail closed if
   the required caller-context fields are absent or invalid
 - update command-entry helpers so command-line overrides win over
@@ -62,6 +61,9 @@ target: integrate/phase-AD
 - update retained non-daemon and local-only command entry points (`log`,
   `teams`, `members`, and their subcommands) so they use the same
   caller-context rule even when they do not dispatch through the daemon
+- preserve `doctor` as a diagnostic command that does not require caller
+  identity; optional team scoping remains separate from caller-context
+  enforcement
 
 ## Exact Implementation Shape
 
@@ -127,10 +129,9 @@ pub(crate) fn resolve_cli_caller_context(
   - caller identity override source: `ClearCommand.actor_override` (`--as`)
   - caller team override source: `ClearCommand.team`
 - `atm doctor`
-  - caller identity override source: none; invoking-shell `ATM_IDENTITY` is
-    mandatory
-  - caller team override source: `DoctorCommand.team` when present, else
-    invoking-shell `ATM_TEAM`
+  - caller identity override source: none; caller identity is not required
+  - caller team override source: `DoctorCommand.team` when present; otherwise
+    diagnostic scope remains unset
 - `atm log`
   - caller identity override source: none; invoking-shell `ATM_IDENTITY` is
     mandatory
@@ -172,9 +173,10 @@ pub(crate) fn resolve_cli_caller_context(
   business logic
 - `members` / `teams` / `log` must fail closed at CLI entry when caller
   identity or caller team is missing; they must not remain "special cases"
-- `doctor` must enforce caller identity/team before both:
-  - the direct local fallback path
-  - the daemon-routed path
+- `doctor` must remain outside the shared caller-context failure path:
+  - no caller-identity requirement on the direct local path
+  - no caller-identity requirement on the daemon-routed path
+  - optional `--team` continues to scope diagnostics when supplied
 - no command may silently substitute a target team, repo-local default team, or
   roster-derived team as caller team
 
@@ -187,7 +189,6 @@ pub(crate) fn resolve_cli_caller_context(
   - `ReadQuery`
   - `ListQuery`
   - `ClearQuery`
-  - `DoctorQuery`
 - request decode/dispatch must reject missing caller-context fields before
   command execution; downstream `Option<AgentName>` / `Option<TeamName>` caller
   fields are not allowed on retained daemon-backed commands after this sprint
@@ -206,13 +207,14 @@ pub(crate) fn resolve_cli_caller_context(
 - unresolved caller identity or caller team fails at the CLI boundary before
   daemon dispatch or retained command execution
 - every retained ATM command that already exists before AD.9 uses the shared
-  caller-context resolver rather than per-command fallback logic
+  caller-context resolver rather than per-command fallback logic, except
+  `doctor`, which remains identity-free by design
 
 ## Required Work
 
 - add `caller_context.rs` as the only retained-command env-resolution module
-- wire `send`, `read`, `ack`, `list`, `clear`, `log`, `doctor`, `members`,
-  `teams`, `teams add-member`, `teams backup`, and `teams restore` through
+- wire `send`, `read`, `ack`, `list`, `clear`, `log`, `members`, `teams`,
+  `teams add-member`, `teams backup`, and `teams restore` through
   `resolve_cli_caller_context(...)`
 - thread resolved caller identity/team into daemon-backed request DTOs and
   fail closed before daemon dispatch when resolution fails
@@ -220,6 +222,8 @@ pub(crate) fn resolve_cli_caller_context(
   repo config, roster state, or daemon ambient env supply caller context
 - delete or obsolete every production caller-context fallback outside
   `caller_context.rs`
+- keep `doctor` out of the caller-context resolver and document/test that it
+  runs without caller identity while still honoring optional `--team`
 
 ## Explicit Code Samples
 
@@ -248,7 +252,7 @@ fn resolve_cli_caller_context(
 ## Error Contract
 
 - `CallerIdentityUnresolved` / `ATM_IDENTITY_UNAVAILABLE`
-  - cause: a caller-owned command reached the CLI boundary with neither an
+  - cause: a caller-context-owned command reached the CLI boundary with neither an
     explicit caller override nor invoking-shell `ATM_IDENTITY`
   - emitted by: `resolve_cli_caller_context(...)`
   - sender surface: command failure before daemon dispatch
@@ -290,34 +294,56 @@ fn resolve_cli_caller_context(
 - `ATM_IDENTITY=arch-ctm ATM_TEAM=atm-dev atm ack ...` replies as
   `arch-ctm@atm-dev`
 - `ATM_IDENTITY=arch-ctm ATM_TEAM=atm-dev atm list ...`,
-  `atm clear ...`, `atm log ...`, `atm doctor ...`, `atm members ...`,
+  `atm clear ...`, `atm log ...`, `atm members ...`,
   `atm teams ...`, `atm teams add-member ...`, `atm teams backup ...`, and
   `atm teams restore ...` all execute against `arch-ctm@atm-dev` caller
   context rather than guessed fallback context
+- `atm doctor ...` runs without requiring `ATM_IDENTITY`
+- `atm doctor --team atm-dev ...` scopes diagnostics to the supplied team, but
+  bare `atm doctor ...` still works when `ATM_TEAM` is unset
 - explicit `--as` / `--from` / `--team` continues to override invoking-shell
   `ATM_IDENTITY` / `ATM_TEAM`
 - if neither explicit override nor invoking-shell `ATM_IDENTITY` /
-  `ATM_TEAM` is present, retained ATM commands fail locally and do not
-  dispatch to the daemon
+  `ATM_TEAM` is present, caller-context-owned retained ATM commands fail
+  locally and do not dispatch to the daemon
 - no validated reproduction remains where a bare `arch-ctm` command resolves
   as `team-lead@atm-dev`
 
 ## Required Validation
 
-- targeted command tests for bare-env, explicit-override, and missing-context
-  paths across:
+- targeted command tests for env-only success across:
   - `send`
   - `read`
   - `ack`
   - `list`
   - `clear`
   - `log`
-  - `doctor`
   - `members`
   - `teams`
   - `teams add-member`
   - `teams backup`
   - `teams restore`
+- targeted command tests for CLI-only caller-context success across commands
+  that expose both caller-identity and caller-team override surfaces:
+  - `send`
+  - `read`
+  - `ack`
+  - `list`
+  - `clear`
+- targeted precedence tests proving explicit CLI caller-context overrides win
+  over env across:
+  - `send`
+  - `read`
+  - `ack`
+  - `list`
+  - `clear`
+- targeted missing-context failure tests across caller-context-owned commands:
+  - missing identity failure
+  - missing team failure
+- targeted doctor tests proving:
+  - `atm doctor` succeeds without `ATM_IDENTITY`
+  - `atm doctor` succeeds without `ATM_TEAM`
+  - `atm doctor --team <team>` still scopes diagnostics when supplied
 - targeted unit coverage for `resolve_cli_caller_context(...)` itself:
   - explicit identity/team override wins over env
   - env identity/team works when override is absent

@@ -12,7 +12,9 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD
 Restore the original ATM runtime model for caller context, send, read, and post-send
 nudge behavior:
 
-- every ATM command runs with a known caller identity and caller team
+- every retained ATM command that requires caller context runs with a known
+  caller identity and caller team, while `atm doctor` remains the explicit
+  identity-free, optional-team diagnostic exception
 - `atm send` persists the message to the database
 - if the recipient exposes a post-send hook capability, ATM fires it
 - post-send emission failure is logged and surfaced as a sender-visible warning
@@ -56,22 +58,24 @@ Phase `AD` is corrective simplification, not a feature-expansion line.
 
 The governing rules are:
 
-- caller identity and caller team are mandatory for every retained ATM command
-  that touches ATM state or routing
-- the accepted command inventory for this rule is:
+- caller identity and caller team are mandatory only for retained ATM commands
+  that require caller-owned state or routing context
+- the accepted mandatory caller-context inventory for this rule is:
   - `send`
   - `read`
   - `ack`
   - `list`
   - `clear`
   - `log`
-  - `doctor`
   - `members`
   - `teams`
   - `teams add-member`
   - `teams update-member`
   - `teams backup`
   - `teams restore`
+- `atm doctor` is diagnostic-only and must not require caller identity; its
+  `--team` override remains optional diagnostic scope, not mandatory caller
+  context
 - caller identity and caller team must be resolved together by one shared
   CLI-owned caller-context resolver; retained ATM commands must not each parse
   `ATM_IDENTITY`, `ATM_TEAM`, or repo config independently
@@ -84,8 +88,8 @@ The governing rules are:
 - repo-local `[atm].default_team`, obsolete `[atm].identity`, hook files, and
   daemon ambient environment must never be used to guess missing caller
   context
-- if caller identity or caller team is unresolved at the CLI boundary, the CLI
-  must fail the command and must not contact the daemon
+- if caller identity or caller team is unresolved for a command that requires
+  caller context, the CLI must fail the command and must not contact the daemon
 - every downstream request DTO for caller-owned daemon-backed commands must
   carry resolved caller identity and resolved caller team as required fields,
   never optional fields
@@ -139,6 +143,8 @@ Phase `AD` may:
 - make local retained command entry points consume the same shared
   caller-context resolver rather than carrying duplicate command-specific
   fallback logic
+- preserve diagnostic commands that do not need caller identity; `doctor`
+  remains identity-free with optional team scoping
 - simplify the post-send nudge path to one post-commit emission seam
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
@@ -209,6 +215,10 @@ Required runtime meaning:
   - CLI fails locally if caller identity or caller team is unavailable
   - daemon receives caller identity and caller team as required request data
   - daemon never substitutes its own ambient identity or team
+- doctor:
+  - CLI does not require caller identity
+  - CLI accepts optional `--team` diagnostic scope
+  - daemon/local doctor paths must not invent or require caller identity
 - send:
   - persist
   - if recipient has post-send hook capability, call `emit(...)`
@@ -292,11 +302,12 @@ Phase `AD` orchestration rule:
 Phase `AD` closes only when:
 
 - bare daemon-backed ATM commands honor the invoking shell identity correctly
-- bare retained ATM commands honor the invoking shell identity and team
-  correctly
-- retained ATM commands fail before command execution or daemon dispatch when
-  neither explicit override nor invoking-shell `ATM_IDENTITY` / `ATM_TEAM` is
-  present
+- retained ATM commands that require caller context honor the invoking shell
+  identity and team correctly
+- retained ATM commands that require caller context fail before command
+  execution or daemon dispatch when neither explicit override nor
+  invoking-shell `ATM_IDENTITY` / `ATM_TEAM` is present
+- `atm doctor` runs without caller identity and accepts optional team scoping
 - daemon-backed caller-owned request shapes carry caller identity and caller
   team as required data rather than relying on daemon ambient identity/team
 - repo config no longer carries obsolete `[atm].identity`
