@@ -37,6 +37,8 @@ target: integrate/phase-AD
   - caller-owned identity success with invoking-shell `ATM_IDENTITY`
   - caller-owned missing-identity failure before daemon dispatch
   - local tmux post-send emission
+  - cross-team, cross-repo local post-send emission from a sender working in a
+    different repository with a different durable `home_dir`
   - graft advisory post-send emission
   - sender-visible warning behavior on forced emission failure
 - add final report artifacts that map each AD closure claim to concrete smoke
@@ -57,6 +59,8 @@ target: integrate/phase-AD
   missing
 - smoke evidence proving configured post-send emission either succeeds or warns
 - smoke evidence proving local tmux recipients on the accepted line
+- smoke evidence proving sender repository/home-dir differences do not change
+  post-send emission behavior
 - smoke evidence proving graft-backed recipients on the accepted line
 - recorded readiness verdict for `Phase AD`
 
@@ -65,6 +69,8 @@ target: integrate/phase-AD
 - prove bare `send`/`read`/`ack` caller identity on the accepted baseline
 - prove caller-owned commands reject missing identity before daemon dispatch
 - prove local tmux-backed post-send emission
+- prove `atm send` from another team/repository with a different sender
+  `home_dir` still fires the same recipient post-send behavior
 - prove graft-backed post-send emission
 - prove sender-visible warning behavior on forced emission failure
 - update readiness artifacts with final AD closure state
@@ -82,6 +88,9 @@ target: integrate/phase-AD
   identity plus local-emitter lane
 - smoke artifacts prove missing-identity caller commands fail locally before
   daemon dispatch
+- smoke artifacts prove that sending from another team/repository with a
+  different sender `home_dir` does not change whether local post-send
+  emission is attempted
 - `just smoke thorough` passes and its report artifacts prove the repaired
   graft-backed lane
 - smoke artifacts record sender-visible warning behavior on forced emission
