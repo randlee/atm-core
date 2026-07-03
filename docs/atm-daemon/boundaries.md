@@ -226,28 +226,22 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/file-watch-event-source.toml](../../boundaries/atm-daemon/file-watch-event-source.toml)
 
 
+Historical status:
+- retired by `AD.4`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the runtime file-watch implementation behind the WatchEventSource contract.
+- Historically owned the runtime file-watch implementation behind the
+  WatchEventSource contract.
 
 Notes:
-- The active implementation is a daemon-owned polling subscription registry in
-  `atm_daemon::watch_runtime`.
-- It maintains long-lived watch state behind the boundary and refreshes
-  registered subscriptions on a bounded wake interval.
-- The subscription registry is explicitly bounded to 256 keys per daemon
-  process; callers must not assume unbounded watch-state retention.
-- `WatchEventSource::poll(...)` now returns the worker-owned snapshot/error
-  state instead of running direct synchronous discovery in the caller.
-- `Z.8` extends the watched batch to include the Claude team `config.json`
-  path when present so watcher-owned roster ingest sees external config edits
-  through the same bounded poll surface as inbox changes.
-- Shutdown is observed between polling iterations; one in-flight synchronous
-  filesystem scan may complete before the watch worker exits.
-- This adapter captures events only; it does not own reconcile policy.
-- Runtime lifecycle ownership stays above this boundary:
-  - `start()` and `shutdown()` are composition-root responsibilities
-  - callers outside `RuntimeComposition` must use `WatchEventSource::poll(...)`
-    only and must not bootstrap or tear down the runtime directly
+- `AD.4` deleted `atm_daemon::watch_runtime`, its worker thread, and its
+  composition wiring.
+- No accepted daemon runtime path constructs or starts a watch adapter after
+  `AD.4`.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## DaemonReconcileCoordinatorAdapter
 
@@ -255,35 +249,22 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-reconcile-coordinator.toml](../../boundaries/atm-daemon/daemon-reconcile-coordinator.toml)
 
 
+Historical status:
+- retired by `AD.4`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the runtime implementation of reconcile policy behind the ReconcileCoordinator contract.
+- Historically owned the runtime implementation of reconcile policy behind the
+  ReconcileCoordinator contract.
 
 Notes:
-- The active implementation is a daemon-owned debounce/coalesce worker in
-  `atm_daemon::reconcile_runtime`.
-- It triggers watch polling, inbox ingress, and notifier callbacks only through
-  their owned boundaries; it does not reach around into store or transport
-  internals.
-- `Z.8` extends this lane to import externally changed Claude `config.json`
-  roster state into canonical ATM roster truth through `RosterStore` and to
-  suppress one matching daemon-authored projection event with a process-local
-  path+digest journal.
-- Notification delivery in the reconcile path is boundary-only; tests exercise
-  fake `NotificationSink` implementations rather than plugin/runtime internals.
-- accepted `Phase Ye` design is one worker-owned actor lane with bounded
-  command-channel handoff plus per-request reply routing; pending/completed/
-  debounce state must not remain daemon-shared mutex state at closure.
-- the accepted reconcile lane is an actor-owned request path; callers submit
-  work through the bounded command channel and do not share worker state.
-- `Y.21` closed the command/reply contract, reply fanout, and shared
-  `JoinHandleOwner` lifecycle helper; `Y.22` closed deletion of the remaining
-  production shared-state runtime path and moved notification fingerprint
-  ownership fully inside `ReconcileWorkerState`.
-- Runtime lifecycle ownership stays above this boundary:
-  - `start()` and `shutdown()` are composition-root responsibilities
-  - callers outside `RuntimeComposition` must use
-    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
-    lifetime directly
+- `AD.4` deleted `atm_daemon::reconcile_runtime`, the reconcile worker lane,
+  and its startup/shutdown composition wiring.
+- The deleted lane had been the only accepted caller of daemon-local inbox
+  import and watch-trigger plumbing.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## DaemonRequestDispatcherAdapter
 
