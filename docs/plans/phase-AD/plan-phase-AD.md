@@ -224,17 +224,19 @@ infrastructure.
 Phase `AD` orchestration rule:
 
 - `Phase AD` is a strict merge-forward line
-- each implementation sprint branch/worktree must be created from the current
-  accepted tip of the immediately preceding `AD` sprint
-- before development starts on a sprint, that sprint worktree must merge the
-  immediately preceding accepted `AD` sprint
-- before a sprint starts any QA-findings fix pass, that sprint worktree must
-  merge the latest tip of the immediately preceding accepted `AD` sprint again
+- Phase `AD` sprints execute back-to-back without stopping for QA or waiting
+  for all prior branches to be green
+- quality review trails implementation and must not be used to pause
+  downstream sprint development
+- before starting work on a sprint branch/worktree, merge forward from the
+  latest preceding sprint branch chain already in flight
+- if multiple predecessor sprint branches exist in front of the current
+  sprint, merge the full predecessor chain before starting new work on the
+  current sprint
 - sprint branches must merge forward numerically:
   - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11`
-- accepted execution for this phase is immediate-predecessor merge-forward
-  only; do not run pairwise cross-merges between unrelated `AD` sprint
-  branches
+- do not stop downstream development waiting for prior sprint QA to pass
+- do not run pairwise cross-merges between unrelated `AD` sprint branches
 
 1. [AD.1 Caller Identity Ownership Restore](./sprint-AD1.md)
 2. [AD.2 Obsolete Config Identity Removal And Doctor Contract Repair](./sprint-AD2.md)
