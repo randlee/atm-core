@@ -9,7 +9,6 @@ use tracing::debug;
 use crate::address::AgentAddress;
 use crate::boundary;
 use crate::error::AtmError;
-use crate::identity;
 use crate::mailbox::source::ResolvedTarget;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -24,9 +23,9 @@ use crate::types::{AgentName, CommandAction, IsoTimestamp, MessageClass, TeamNam
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub target_address: Option<AgentAddress>,
-    pub team_override: Option<TeamName>,
     pub older_than: Option<Duration>,
     pub idle_only: bool,
     pub dry_run: bool,
@@ -141,11 +140,11 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     query: &ClearQuery,
 ) -> Result<ClearRuntimeContext, AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = query.caller_identity.clone();
     let target = resolve_target(
         query.target_address.as_ref(),
         &actor,
-        query.team_override.as_ref(),
+        &query.caller_team,
         config.as_ref(),
     )?;
 
@@ -545,9 +544,9 @@ mod tests {
         ClearQuery {
             home_dir,
             current_dir,
-            actor_override: Some(AgentName::from_validated(TEST_SENDER)),
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: Some(target.parse().expect("target")),
-            team_override: None,
             older_than: None,
             idle_only: false,
             dry_run: true,

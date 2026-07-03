@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller-owned context fallback is forbidden in production, but the retired helper module remains test-visible until the later deletion sprint removes it entirely."
+)]
+
 pub mod hook;
 
 use crate::config::AtmConfig;
@@ -102,8 +107,7 @@ mod tests {
         set_env_var("ATM_IDENTITY", TEST_SENDER);
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-agent".into()),
             ..Default::default()
         };
         assert_eq!(
@@ -121,8 +125,7 @@ mod tests {
         remove_env_var("ATM_IDENTITY");
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-agent".into()),
             ..Default::default()
         };
 
@@ -157,9 +160,8 @@ mod tests {
         set_env_var("ATM_TEAM", "");
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
+            obsolete_identity: Some("config-agent".into()),
             default_team: Some("config-team".parse().expect("team")),
-            obsolete_identity_present: true,
             ..Default::default()
         };
 
