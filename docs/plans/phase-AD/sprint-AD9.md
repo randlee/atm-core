@@ -18,8 +18,8 @@ target: integrate/phase-AD
 
 - `AD.1` complete
 - `AD.2` complete
-- `AD.6` complete
 - `AD.7` complete
+- `AD.8` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 
 ## Exact Targets

@@ -1,116 +1,113 @@
 ---
 id: AD.7
-title: Graft Post-Send Emitter
+title: Local Tmux Post-Send Emitter
 status: planned
-branch: feature/pAD-s7-graft-post-send-emitter
-worktree: ../atm-core-worktrees/feature/pAD-s7-graft-post-send-emitter
+branch: feature/pAD-s7-local-tmux-post-send-emitter
+worktree: ../atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter
 target: integrate/phase-AD
 ---
 
-# Sprint AD.7 — Graft Post-Send Emitter
+# Sprint AD.7 — Local Tmux Post-Send Emitter
 
 ## Goal
 
-- implement the graft-backed post-send emitter
+- implement the local tmux-backed post-send emitter
 
 ## Hard Dependencies
 
-- `AD.3` complete
+- `AD.6` complete
 - `AD.5` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-T/sprint-T8-atm-graft-crate.md`
 
 ## Exact Targets
 
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/graft.rs`
-- `crates/atm-daemon/src/advisory_runtime.rs`
-- `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-graft/src/lib.rs`
-- `crates/atm-graft/src/runtime.rs`
-- `crates/atm-graft/src/transport.rs`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/boundary/store.rs`
+- `scripts/atm-nudge.sh`
 
 ## Interfaces To Add Or Modify
 
 ```rust
-pub struct GraftPostSendEmitter { /* owned dependencies */ }
+pub struct LocalTmuxPostSendEmitter { /* owned dependencies */ }
 
-impl PostSendHookEmitter for GraftPostSendEmitter {
+impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
     fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
 }
 ```
 
 ```rust
 fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    self.graft_advisory.deliver_post_send(event)
+    let pane_id = event.recipient_pane_id.ok_or_else(missing_pane_error)?;
+    self.tmux_nudge.send(&pane_id, event)?;
+    Ok(())
 }
 ```
 
-- modify the daemon/graft advisory handoff so post-send emission crosses the
-  accepted graft advisory/session seam only
-- modify graft receive-loop/runtime code so emitted nudges are injected through
-  the live advisory path rather than through retired mailbox-context paths
-- modify send/ack warning paths so graft-unavailable or advisory-delivery
-  failures become sender-visible warnings with structured logs
+- modify local emission so the emitter consumes authoritative
+  `recipient_pane_id` from roster/store state
+- modify send/ack warning paths so pane-missing and tmux-send failures become
+  sender-visible warnings with structured logs
+- modify any surviving shell adapter so it consumes the provided pane id rather
+  than rediscovering pane routing from repo-local config
 
 ## Obsolescence Instructions
 
-- any retained graft-side nudge path that bypasses the advisory/session seam
-  becomes obsolete in this sprint
-- if a transitional unary fetch/drain compatibility path must remain for a
-  short period, mark it `Phase AD obsolete: compatibility-only graft nudge
-  path`, forbid new production callers, and remove it once the live advisory
-  lane proves stable
+- any local nudge helper that rediscovers pane routing from `.atm.toml`,
+  `config.json`, or cwd-dependent lookup becomes obsolete in this sprint
+- if `scripts/atm-nudge.sh` survives as an execution helper, mark the old
+  discovery path obsolete and permit only payload-driven pane targeting
 
 ## Deliverables
 
-- graft-backed recipients receive post-send emission through the approved
-  daemon/graft path
-- graft emission failures are logged and surfaced as sender-visible warnings
+- local tmux-backed recipients receive post-send emission through the approved
+  local emitter path
+- pane-not-found and local emission failures are logged and returned as
+  sender-visible warnings
 
 ## Required Work
 
-- align graft post-send emission with the simplified AD contract
-- use the existing graft host injection seam only as the receiver-side handoff
-- keep send success dependent on persistence, not on downstream graft
-  consumption
+- map local recipients with post-send capability onto the tmux-backed emitter
+- use authoritative SQLite roster pane metadata for emission
+- fail cleanly and visibly when pane metadata is missing or invalid
 
 ## Error And Warning Contract
 
-The graft emitter must use the shared `AD.3` post-send taxonomy exactly:
+The local tmux emitter must use the shared `AD.6` post-send taxonomy exactly:
 
-- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
-  - cause: the recipient graft session or graft host receiver is unavailable
-    when emission is attempted
+- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
+  - cause: `recipient_pane_id` is absent for a recipient that requires local
+    tmux emission
   - sender surface: warning after successful persistence
-  - recovery: restore graft receiver availability, then resend only if a
-    fresh nudge is still required
-- `PostSendAdvisoryDeliveryFailed` /
-  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
-  - cause: the daemon-to-graft advisory/session handoff failed after message
-    persistence
+  - recovery: repair the roster row with
+    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
+- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - cause: tmux rejected the pane id or the send operation failed
   - sender surface: warning after successful persistence
-  - recovery: inspect daemon/graft logs, restore the advisory path, then
-    resend only if a fresh nudge is still required
+  - recovery: verify the pane still exists and repair changed pane metadata
+    through `atm teams update-member` when the pane id is stale
 
 ## This Sprint Does Not Close
 
-- local tmux-backed emission
-- Claude inbox nudge deletion
+- graft-backed emission
 - roster drift repair
+- Claude inbox nudge deletion
 
 ## Acceptance Criteria
 
-- successful graft emission returns no warning
-- unavailable graft recipient or failed graft handoff returns a sender-visible
-  warning
+- successful local post-send emission returns no warning
+- missing or invalid pane state returns a sender-visible warning
 - emission failure is logged with enough context to diagnose sender, recipient,
-  and graft session scope
+  and pane ownership
+- the accepted local emitter does not require repo-local `.atm.toml` lookup to
+  resolve the live target pane
 
 ## Required Validation
 
-- targeted graft-emitter tests
+- targeted local-emitter tests
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `python3 .just/run_lint.py all`

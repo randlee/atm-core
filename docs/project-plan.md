@@ -660,12 +660,12 @@ Deliverables:
 Sprint line:
 - `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
 - `AD.2` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
-- `AD.8` `feature/pAD-s8-claude-backend-and-inbox-nudge-retirement`
+- `AD.3` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
 - `AD.4` `feature/pAD-s4-reconcile-runtime-removal`
 - `AD.5` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
-- `AD.3` `feature/pAD-s3-post-send-nudge-contract-simplification`
-- `AD.6` `feature/pAD-s6-local-tmux-post-send-emitter`
-- `AD.7` `feature/pAD-s7-graft-post-send-emitter`
+- `AD.6` `feature/pAD-s6-post-send-nudge-contract-simplification`
+- `AD.7` `feature/pAD-s7-local-tmux-post-send-emitter`
+- `AD.8` `feature/pAD-s8-graft-post-send-emitter`
 - `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
 - `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
 - `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`

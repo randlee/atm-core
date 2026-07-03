@@ -16,7 +16,7 @@ target: integrate/phase-AD
 ## Hard Dependencies
 
 - `AD.2` complete
-- `AD.8` complete
+- `AD.3` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/architecture.md`
 

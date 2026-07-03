@@ -1,177 +1,159 @@
 ---
 id: AD.3
-title: Post-Send Nudge Contract Simplification
+title: Claude Backend And Inbox Nudge Retirement
 status: planned
-branch: feature/pAD-s3-post-send-nudge-contract-simplification
-worktree: ../atm-core-worktrees/feature/pAD-s3-post-send-nudge-contract-simplification
+branch: feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
+worktree: ../atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
 target: integrate/phase-AD
 ---
 
-# Sprint AD.3 — Post-Send Nudge Contract Simplification
+# Sprint AD.3 — Claude Backend And Inbox Nudge Retirement
 
 ## Goal
 
-- simplify post-send nudge ownership back to one direct post-commit seam
+- retire `atm-storage-claude` and remove all post-send nudge/context-injection
+  logic that still depends on Claude inbox JSON append behavior
 
 ## Hard Dependencies
 
 - `AD.1` complete
 - `AD.2` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `#440`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 
 ## Exact Targets
 
-- `crates/atm-core/src/send/`
-- `crates/atm-core/src/ack/`
-- `crates/atm-core/src/send/hook.rs`
-- `crates/atm-core/src/config/mod.rs`
-- `crates/atm-core/src/delivery_plan.rs`
+- `crates/atm-storage-claude/Cargo.toml`
+- `crates/atm-storage-claude/src/lib.rs`
+- `crates/atm-storage-claude/src/backend.rs`
+- `crates/atm-storage-claude/src/compat.rs`
+- `crates/atm-storage-claude/src/mailbox.rs`
+- `crates/atm-storage-claude/src/paths.rs`
+- `crates/atm-storage-claude/src/roster.rs`
+- `boundaries/atm-storage-claude/message-store.toml`
+- `boundaries/atm-storage-claude/roster-store.toml`
+- `scripts/atm-nudge.py`
+- `scripts/test_atm_nudge.py`
 - `crates/atm-core/src/delivery_execution.rs`
-- `crates/atm-core/src/boundary/mod.rs`
-- `boundaries/atm-core/post-send-hook-emitter.toml`
-- `docs/requirements.md`
-- `docs/architecture.md`
+- `crates/atm-core/src/service_runtime.rs`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/atm-core/requirements.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/new-message-claude.mmd`
+- `docs/plans/phase-Y/new-message-non-claude.mmd`
+- `docs/atm/flow-diagrams.md`
+- `docs/architecture.md`
+- `docs/requirements.md`
 - `docs/atm-core/architecture.md`
-- `docs/atm-core/boundaries.md`
+- code/tests that still assume inbox append can serve as post-send context
+  injection
 
-## Interfaces To Add Or Modify
+## Paths To Delete
 
-- define the accepted post-send event contract explicitly:
+- `crates/atm-storage-claude/Cargo.toml`
+- `crates/atm-storage-claude/src/lib.rs`
+- `crates/atm-storage-claude/src/backend.rs`
+- `crates/atm-storage-claude/src/compat.rs`
+- `crates/atm-storage-claude/src/mailbox.rs`
+- `crates/atm-storage-claude/src/paths.rs`
+- `crates/atm-storage-claude/src/roster.rs`
+- `boundaries/atm-storage-claude/message-store.toml`
+- `boundaries/atm-storage-claude/roster-store.toml`
+- `scripts/atm-nudge-xml-1.py`
 
-```rust
-pub struct PostSendHookEvent {
-    pub sender: AgentName,
-    pub sender_team: TeamName,
-    pub recipient: AgentName,
-    pub recipient_team: TeamName,
-    pub message_id: AtmMessageId,
-    pub requires_ack: bool,
-    pub is_ack: bool,
-    pub task_id: Option<TaskId>,
-    pub recipient_pane_id: Option<PaneId>,
-}
+## Modified Surfaces
 
-pub trait PostSendHookEmitter: sealed::Sealed {
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
-}
-```
-
-- modify `send` and `ack` finalization so they call the direct emitter seam
-  after persistence and own sender-visible warning construction directly
-- modify post-send capability lookup so it no longer depends on caller working
-  directory or unrelated repo-local `.atm.toml` discovery
-
-## Deliverables
-
-- one accepted post-send contract:
-  - persist message
-  - emit nudge only when recipient exposes post-send capability
-  - log and warn on emission failure
-- post-send ownership no longer hidden behind generic delivery-plan behavior
-- live post-send capability resolution no longer changes based on the caller's
-  current working directory
-- the new sealed boundary trait has a machine-readable governance record and a
-  matching `docs/atm-core/boundaries.md` inventory entry before AD.6 / AD.7
-  implementation work closes
-
-## Required Work
-
-- document the simplified post-send runtime contract directly in the code/docs
-- narrow post-send responsibility away from generic plan construction where it
-  obscures the simple send model
-- remove caller-CWD-dependent config lookup from live post-send capability
-  decisions
-- preserve durable delivery behavior while shrinking post-send ownership to one
-  direct seam
-- add the `PostSendHookEmitter` boundary TOML and boundary-inventory entry as
-  the governing contract record for this sealed trait
-
-## Explicit Code Samples
-
-```rust
-pub trait PostSendHookEmitter: sealed::Sealed {
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
-}
-```
-
-```rust
-// Required send shape:
-persist_message(...)?;
-if recipient_has_post_send_hook {
-    if let Err(error) = post_send_hook_emitter.emit(&event) {
-        log_post_send_failure(&error);
-        warnings.push(render_post_send_warning(&error));
-    }
-}
-```
-
-## Error And Warning Taxonomy
-
-All post-send emission failures normalized by this sprint must reuse the
-following codes and recovery text in AD.6 / AD.7 rather than inventing
-emitter-specific warning strings:
-
-- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
-  - cause: the recipient requires local tmux emission but no authoritative
-    `tmux_pane_id` is available on the roster row
-  - sender surface: warning after successful persistence
-  - recovery: repair pane state with
-    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
-- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
-  - cause: tmux rejected the pane id or the local pane send failed
-  - sender surface: warning after successful persistence
-  - recovery: verify the pane still exists, then repair changed pane state
-    with `atm teams update-member` if needed
-- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
-  - cause: the graft recipient/session is unavailable when emission is
-    attempted
-  - sender surface: warning after successful persistence
-  - recovery: restore the graft receiver/session, then resend only if a fresh
-    nudge is still needed
-- `PostSendAdvisoryDeliveryFailed` /
-  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
-  - cause: daemon-to-graft advisory delivery failed after message persistence
-  - sender surface: warning after successful persistence
-  - recovery: inspect daemon/graft logs, restore the advisory path, then
-    resend only if a fresh nudge is still needed
+- modify remaining storage/runtime composition so no accepted production path
+  depends on the retired Claude backend or on Claude inbox append, watcher
+  import, rebuild, or context injection as a governing delivery/runtime path
+- update ADR and architecture docs so backend interoperability remains
+  mandatory after Claude backend retirement
+- rewrite `docs/plans/phase-Y/delivery-state-machines.md`,
+  `docs/plans/phase-Y/new-message-claude.mmd`,
+  `docs/plans/phase-Y/new-message-non-claude.mmd`,
+  `docs/atm/flow-diagrams.md`, `docs/architecture.md`, and
+  `docs/atm-core/architecture.md` so Claude inbox append is historical only
+- rewrite `scripts/test_atm_nudge.py`,
+  `crates/atm-core/src/send/tests.rs`, and
+  `crates/atm-daemon/src/tests_advisory.rs` when they still encode the retired
+  inbox-append or context-injection assumptions
+- modify any surviving local nudge tooling so it no longer models Claude inbox
+  append as part of delivery
 
 ## Obsolescence Instructions
 
-- `DeliveryPlan`, `ReplyDeliveryPlan`, `execute_delivery_plan(...)`,
-  `execute_reply_delivery_plan(...)`, and `NotificationSink`-based post-send
-  orchestration become obsolete for normal send/ack post-send behavior in this
-  sprint
-- if any of those helpers cannot be deleted immediately, mark them
-  `Phase AD obsolete: not the governing post-send seam`, remove all new
-  send/ack callers, and carry them only until the relevant AD.5 / AD.8
-  deletion work has landed when those retained paths still exist
+- any temporary compile scaffolding left in runtime glue after Claude backend
+  deletion must be marked
+  `Phase AD obsolete: historical Claude mailbox compatibility only`
+- obsolete compatibility helpers may remain only long enough to complete module
+  deletion; they must not gain new production call sites or new documented
+  behavior
+
+## Deliverables
+
+- `atm-storage-claude` is removed from the accepted line
+- no accepted runtime path or doc still claims Claude inbox JSON append is a
+  mailbox, nudge, delivery, or context-injection path
+- the surviving local nudge path, if any, no longer depends on Claude inbox
+  append semantics
+- the shared `atm-storage` contract remains the governing backend seam after
+  Claude backend retirement
+
+## Required Work
+
+- delete `atm-storage-claude` and its boundary records
+- delete or rewrite obsolete nudge/context-injection logic
+- rewrite state-machine/documentation text that still models Claude append as a
+  mailbox or nudge path
+- delete duplicate or stale nudge helpers when they exist only to preserve the
+  retired inbox/context-injection model
+- restate architecture so SQLite remains one backend implementation and future
+  SQL backend support remains explicit
+- restate docs so backend interoperability is preserved by the shared contract,
+  not by requiring multiple live concrete backends after Claude retirement
 
 ## This Sprint Does Not Close
 
-- local tmux-backed emitter implementation
-- graft-backed emitter implementation
-- Claude inbox nudge deletion
+- local or graft emitter implementation
+- roster drift repair
+- smoke/readiness closeout
 
 ## Acceptance Criteria
 
-- the accepted design for post-send nudge execution is stated directly in docs
-  and code-facing seams
-- post-send behavior is explicitly modeled as post-commit emission, not a
-  generic planned side-effect bundle
-- sender warning ownership on emission failure is explicit and testable
-- no validated reproduction remains where running `atm send` from an unrelated
-  repo or working directory changes whether post-send emission is attempted
-- the accepted `PostSendHookEmitter` contract is governed by
-  `boundaries/atm-core/post-send-hook-emitter.toml` plus the matching
-  `docs/atm-core/boundaries.md` entry
+- no accepted line still ships `atm-storage-claude` or its boundary records
+- no accepted doc states that Claude inbox JSON append is an approved mailbox,
+  delivery, nudge, or context-injection mechanism
+- no accepted runtime code path still depends on Claude inbox append, watcher
+  import, or rebuild behavior for message delivery, read semantics, or
+  post-send emission
+- the shared backend contract remains intact and documented as future-SQL-ready
+- the accepted docs explicitly state that backend interoperability survives
+  with one live concrete backend because the shared contract remains
+  future-backend-ready
+- `docs/atm-core/requirements.md` no longer requires watcher/reconcile as the
+  production ingress path for external Claude roster edits
+- every path listed under `Paths To Delete` is absent from the accepted line
 
 ## Required Validation
 
-- targeted tests or compile gates for the narrowed contract seam
+- doc/code grep gates for obsolete Claude nudge wording/logic
+- targeted boundary-lint / boundary-grep gates for deleted Claude backend
+  boundary TOMLs
+- `test ! -e crates/atm-storage-claude/Cargo.toml`
+- `test ! -e crates/atm-storage-claude/src/lib.rs`
+- `test ! -e crates/atm-storage-claude/src/backend.rs`
+- `test ! -e crates/atm-storage-claude/src/compat.rs`
+- `test ! -e crates/atm-storage-claude/src/mailbox.rs`
+- `test ! -e crates/atm-storage-claude/src/paths.rs`
+- `test ! -e crates/atm-storage-claude/src/roster.rs`
+- `test ! -e boundaries/atm-storage-claude/message-store.toml`
+- `test ! -e boundaries/atm-storage-claude/roster-store.toml`
+- `test ! -e scripts/atm-nudge-xml-1.py`
 - `cargo test --workspace`
 - `python3 .just/run_lint.py all`
 - `git diff --check`
