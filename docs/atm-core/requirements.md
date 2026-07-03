@@ -452,7 +452,10 @@ Required config rules:
   `.atm.toml`
 - `atm-core` ignores launcher-owned sections such as `[rmux]` and future
   `[scmux]`
-- `[atm].default_team` remains the shared team default
+- `[atm].default_team` remains the shared config default for ATM-owned
+  config/bootstrap flows that explicitly consume config defaults; it is not a
+  runtime caller-team fallback for commands governed by the caller-context
+  matrix
 - `[atm].team_members` defines the baseline team roster that should always be
   present in `config.json`
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
@@ -466,18 +469,28 @@ Required config rules:
 - `[atm].identity` is obsolete and must not participate in runtime identity
   resolution; doctor should report it as configuration drift when present
 
-Required identity rules:
-- runtime identity for caller-owned commands must come from explicit command
-  override when supported or invoking-shell `ATM_IDENTITY`
-- if no valid runtime identity exists where a command requires one, the command
-  must fail with a structured recovery-oriented error rather than inventing a
-  normal sender identity
-- caller-owned command entry points must reject unresolved identity before
-  daemon dispatch
-- downstream caller-owned request DTOs must carry resolved caller identity as a
-  required field
-- `atm-core` must not treat hook files, repo-local config, or daemon ambient
-  `ATM_IDENTITY` as fallback caller identity
+Required caller-context rules:
+- the authoritative command-by-command caller-context matrix is
+  `docs/requirements.md` §4.1
+- `atm-core` must implement that matrix exactly; crate-local code must not
+  widen accepted caller identity/team sources beyond the product matrix
+- where a command requires caller identity, runtime identity must come from the
+  documented explicit command override when supported or invoking-shell
+  `ATM_IDENTITY`
+- where a command requires caller team, runtime team must come from the
+  documented explicit command override when supported or invoking-shell
+  `ATM_TEAM`
+- if no valid required caller context exists, the command must fail with a
+  structured recovery-oriented error rather than inventing a normal sender
+  identity or caller team
+- caller-context-owned command entry points must reject unresolved context
+  before daemon dispatch
+- downstream caller-owned request DTOs must carry resolved required caller
+  context as required fields
+- `atm-core` must not treat hook files, repo-local config, roster state, or
+  daemon ambient `ATM_IDENTITY` / `ATM_TEAM` as fallback caller context
+- `atm doctor` is the explicit exception: it remains identity-free and
+  optional-team, while still inspecting caller-context visibility
 - aliases are input shorthand only until ATM resolves them to canonical member
   names
 - recipient aliases must resolve before membership validation, self-send
