@@ -1,6 +1,6 @@
 #![allow(
     dead_code,
-    reason = "AC.2 preserves crate-private source-discovery helpers until all Claude compatibility callers move into atm-storage-claude."
+    reason = "Phase AD obsolete: retained only for historical Claude compatibility paths until the later deletion sprint removes the remaining helpers."
 )]
 
 use std::fs;

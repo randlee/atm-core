@@ -8,7 +8,6 @@ use atm_core::boundary::{
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
 use atm_storage::RosterStore;
-use atm_storage_claude::compat::SourceFileRecord;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::path::PathBuf;
@@ -18,6 +17,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::claude_compat::SourceFileRecord;
 use crate::projection_write_journal::{
     ProjectionWriteJournal, ingest_claude_team_config_from_watch_batch,
 };

@@ -2512,9 +2512,9 @@ Phase `AD` rule:
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line because Claude Code no longer
-  uses them
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line
+  because Claude Code no longer uses them
 - durable SQLite state is ATM's authoritative mail state
 - send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
 - the shared backend contract remains required so SQLite stays one backend
