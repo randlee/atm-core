@@ -178,25 +178,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t full_checks < <(
+          while IFS= read -r crate; do
+            [[ -n "$crate" ]] || continue
+            cargo package -p "$crate" --locked
+          done < <(
             python3 scripts/release_artifacts.py list-preflight \
               --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
               --mode full
           )
-          for crate in "${full_checks[@]}"; do
-            [[ -n "$crate" ]] || continue
-            cargo package -p "$crate" --locked
-          done
 
-          mapfile -t locked_checks < <(
+          while IFS= read -r crate; do
+            [[ -n "$crate" ]] || continue
+            cargo check -p "$crate" --locked
+          done < <(
             python3 scripts/release_artifacts.py list-preflight \
               --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
               --mode locked
           )
-          for crate in "${locked_checks[@]}"; do
-            [[ -n "$crate" ]] || continue
-            cargo check -p "$crate" --locked
-          done
 
   publish-crates:
     needs: [gate-and-tag, prepare-release-inventory, pre-publish-audit]
@@ -292,7 +290,11 @@ jobs:
           VERSION='${{ needs.gate-and-tag.outputs.release_version }}'
           ARCHIVE="atm_${VERSION}_${{ matrix.target }}.tar.gz"
           cd target/${{ matrix.target }}/release
-          mapfile -t bins < <(python3 ../../../scripts/release_artifacts.py list-release-binaries --manifest ../../../release/publish-artifacts.toml)
+          bins=()
+          while IFS= read -r bin; do
+            [[ -n "$bin" ]] || continue
+            bins+=("$bin")
+          done < <(python3 ../../../scripts/release_artifacts.py list-release-binaries --manifest ../../../release/publish-artifacts.toml)
           tar czf "../../../${ARCHIVE}" "${bins[@]}"
           cd ../../..
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"

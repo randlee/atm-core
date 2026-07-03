@@ -4,12 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+description = "Claude-compatible mailbox and roster storage backend for atm-storage."
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.2.2" }
+atm-storage = { path = "../atm-storage", version = "1.2.3" }
 serde.workspace = true
 serde_json.workspace = true
 toml = "0.8"

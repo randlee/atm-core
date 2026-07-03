@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.2.3
+
+- recover the interrupted `v1.2.2` publish by cutting a clean `release/v1.2.3`
+  line from the immutable `3075384e` tag point rather than mutating the
+  partial `v1.2.2` release in place
+- add the missing `description` metadata to `atm-storage-claude` so crates.io
+  accepts the crate during ordered publish
+- replace bash-4-only `mapfile` usage in `release.yml` with bash-3.2-compatible
+  loops so the macOS archive jobs package release binaries successfully
+
+## 1.2.2
+
+- converge the Phase AC storage layer on the `atm-storage` contract and
+  canonical types, unifying the SQLite backend and the RPC envelope/domain
+  types on a single shared type surface
+- close out storage cleanup and deletion handling and prove SQL Server
+  readiness for the storage backend contract
+- land the Phase AC production-readiness boundary fixes so the retained
+  runtime enforces the storage boundary through live factory wiring
+- consolidate release readiness (PR #425): `release_gate.sh` branch-regex
+  enforcement, the canonical release validation suite (`validate_release.py`,
+  `verify_release_archive.py`), publisher release-branch discipline, and the
+  publishing-improvements plan docs
+
+## 1.2.1
+
+- restate the daemon architecture and introduce subsystem doctor traits for
+  health/observability of daemon subsystems
+- clean up the mailbox path and remove the SQLite legacy-compatibility surface
+- relock and enforce the crate boundaries hardened during Phase AA
+- upgrade observability across the daemon subsystems
+
 ## 1.2.0
 
 - complete Phase Z release validation, including fast/normal/thorough smoke,
