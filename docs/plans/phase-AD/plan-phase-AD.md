@@ -223,6 +223,10 @@ Required runtime meaning:
   - persist
   - if recipient has post-send hook capability, call `emit(...)`
   - if `emit(...)` fails, log it and append a sender-visible warning
+  - `AD.6` owns the stable post-send emission failure warning/error code used
+    by both local-tmux and graft emitters; earlier sprints may reference the
+    warning behavior, but they must not invent competing codes for the same
+    failure class
 - read:
   - load from durable state only
 

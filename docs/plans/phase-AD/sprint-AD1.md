@@ -79,11 +79,19 @@ pub(crate) struct CallerContext {
     pub caller_team: TeamName,
 }
 
+pub(crate) struct CallerIdentityOverride<'a>(pub &'a str);
+pub(crate) struct CallerTeamOverride<'a>(pub &'a str);
+
 pub(crate) struct CallerContextOverrides<'a> {
-    pub identity_override: Option<&'a str>,
-    pub team_override: Option<&'a str>,
+    pub identity_override: Option<CallerIdentityOverride<'a>>,
+    pub team_override: Option<CallerTeamOverride<'a>>,
 }
 ```
+
+- the lightweight override wrappers above are required even though this is a
+  transient CLI-owned struct; caller identity and caller team must not share a
+  bare `Option<&str>` shape that makes the two override roles interchangeable
+  in implementation notes or downstream review
 
 - define one exported retained-command entry helper in that module:
 
@@ -99,7 +107,9 @@ pub(crate) fn resolve_cli_caller_context(
   - caller team: explicit command override if present, else invoking-shell
     `ATM_TEAM`, else `CallerTeamUnresolved`
 - `resolve_cli_caller_context(...)` must parse both values into
-  `AgentName` / `TeamName` before returning
+  `AgentName` / `TeamName` before returning; malformed explicit/env values must
+  fail with stable parse-oriented caller-context errors rather than reusing the
+  unresolved/missing-context contract
 - `resolve_cli_caller_context(...)` must not:
   - read `.atm.toml`
   - read repo-local default-team config
@@ -192,6 +202,10 @@ pub(crate) fn resolve_cli_caller_context(
 - request decode/dispatch must reject missing caller-context fields before
   command execution; downstream `Option<AgentName>` / `Option<TeamName>` caller
   fields are not allowed on retained daemon-backed commands after this sprint
+- daemon-side decode/dispatch rejection is a separate failure class from
+  CLI-side caller-context resolution failure; the sprint must document both
+  paths explicitly rather than treating daemon validation as implied by the CLI
+  contract
 - local-only retained commands do not need to invent daemon DTOs, but they do
   need to receive a resolved `CallerContext` at CLI entry and fail closed when
   resolution fails
@@ -268,6 +282,35 @@ fn resolve_cli_caller_context(
   - recovery: set `ATM_TEAM` in the invoking shell or pass the explicit
     `--team` override the command supports
   - daemon contact: forbidden
+- `CallerIdentityInvalid` / `ATM_IDENTITY_INVALID`
+  - cause: a caller-context-owned command received a caller-identity override
+    or invoking-shell `ATM_IDENTITY` value that could not be parsed into
+    `AgentName`
+  - emitted by: `resolve_cli_caller_context(...)`
+  - caller surface: command failure before daemon dispatch
+  - recovery: pass a syntactically valid caller identity through `--from` /
+    `--as` or repair the invoking-shell `ATM_IDENTITY`
+  - daemon contact: forbidden
+- `CallerTeamInvalid` / `ATM_TEAM_INVALID`
+  - cause: a caller-context-owned command received a caller-team override or
+    invoking-shell `ATM_TEAM` value that could not be parsed into `TeamName`
+  - emitted by: `resolve_cli_caller_context(...)`
+  - caller surface: command failure before retained execution or daemon
+    dispatch
+  - recovery: pass a syntactically valid caller team through `--team` or
+    repair the invoking-shell `ATM_TEAM`
+  - daemon contact: forbidden
+- `CallerContextRequestInvalid` / `ATM_CALLER_CONTEXT_REQUEST_INVALID`
+  - cause: a daemon-backed request reached decode/dispatch with missing,
+    malformed, or otherwise invalid required `caller_identity` /
+    `caller_team` fields despite the CLI contract
+  - emitted by: daemon request decode/dispatch validation before retained
+    command execution
+  - caller surface: hard failure on the daemon-routed path; request is rejected
+    instead of being repaired from daemon ambient state
+  - recovery: repair the CLI/request-builder path so it always sends validated
+    caller-context fields that match the `AD.1` request shape
+  - daemon contact: already occurred; command execution remains forbidden
 
 ## Obsolescence Instructions
 
@@ -349,8 +392,14 @@ fn resolve_cli_caller_context(
   - env identity/team works when override is absent
   - missing identity fails with `CallerIdentityUnresolved`
   - missing team fails with `CallerTeamUnresolved`
-  - invalid explicit identity/team fails during parsing
-  - invalid env identity/team fails during parsing
+  - invalid explicit identity fails with `CallerIdentityInvalid`
+  - invalid explicit team fails with `CallerTeamInvalid`
+  - invalid env identity fails with `CallerIdentityInvalid`
+  - invalid env team fails with `CallerTeamInvalid`
+- targeted daemon request decode/dispatch tests proving malformed or missing
+  `caller_identity` / `caller_team` fields fail with
+  `CallerContextRequestInvalid` instead of falling back to daemon ambient
+  state
 - targeted command-entry tests proving no retained command reads caller context
   from repo-local `.atm.toml`, roster state, or daemon ambient state
 - `cargo test --workspace`
