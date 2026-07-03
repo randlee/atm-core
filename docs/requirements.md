@@ -419,9 +419,10 @@ Product requirement ID:
 Satisfied by:
 - `REQ-CORE-CONFIG-001` for home/path/config resolution aspects
 - `REQ-CORE-RUNTIME-001` for durable mail/roster store ownership aspects
-- `REQ-CORE-INGEST-001` for Claude inbox/config ingest compatibility aspects
-- `REQ-CORE-MAILBOX-001` for persisted Claude inbox write/read compatibility
-  aspects
+- `REQ-CORE-INGEST-001` for config ingest and historical Claude inbox ingest
+  compatibility aspects
+- `REQ-CORE-MAILBOX-001` for persisted mailbox atomicity plus historical Claude
+  inbox write/read compatibility aspects
 - `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
 - `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
@@ -528,8 +529,8 @@ Required rules:
   with descriptive errors
 - read-path validation failure for additive ATM fields must trigger warning +
   degradation logic rather than failing the overall message read
-- a separate ATM-native inbox remains deferred; the current shared inbox
-  remains compatibility-only
+- a separate ATM-native inbox remains deferred; on the earlier compatibility
+  line, the shared inbox remained compatibility-only
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
@@ -2251,7 +2252,7 @@ Current runtime required families:
   - replay/import failure
   - backpressure/degraded ingest
 - export:
-  - Claude compatibility export failure
+  - historical Claude compatibility export failure
   - re-export/replay failure
 - transport:
   - local daemon request failure
@@ -2528,8 +2529,9 @@ closed before the 1.0 release.
     owner pid while the lock is held, unlinks the sentinel on guard drop, and
     must tolerate stale pid-bearing sentinels from crashed processes
   - advisory locking is cooperative: only concurrent ATM processes coordinate
-  - the sentinel lock must not block Claude Code's native inbox appends because
-    Claude does not participate in ATM's cooperative lock protocol
+  - any retained historical Claude inbox tooling must not let the sentinel lock
+    block Claude Code native inbox appends because Claude does not participate
+    in ATM's cooperative lock protocol
 
 - `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and
   Windows without platform-specific feature flags in consuming code.
@@ -3107,13 +3109,14 @@ mail correctness.
 
   Required behavior:
 - ingest must be idempotent
-- ingest must accept the legal current Claude inbox container shape: one
-  top-level JSON array document for each shared `.json` inbox file
+- historical Claude inbox ingest tooling must accept the prior legal inbox
+  container shape: one top-level JSON array document for each shared `.json`
+  inbox file
 - parseable external rows must not be silently dropped
 - malformed external rows must emit structured diagnostics rather than panic
-- legal current Claude JSON-array inbox files must stay on the normal
-  supported ingest path; repair/rebuild is reserved for malformed or
-  unsupported mailbox state
+- on the earlier compatibility line, legal Claude JSON-array inbox files stayed
+  on the normal supported ingest path; repair/rebuild was reserved for
+  malformed or unsupported mailbox state
 - backlog/slow-ingest conditions must surface through structured diagnostics
   or health findings rather than dropping records silently
 - roster/config ingest must apply one deterministic last-write-wins policy
@@ -3324,17 +3327,18 @@ mail correctness.
   Phase AD retires filesystem watch/reconcile from the accepted runtime.
   New transport or daemon work must not preserve or expand that retired
   subsystem.
-  - the daemon implementation may use a bounded polling watch registry instead
-    of OS-native filesystem subscriptions, but the watch lifecycle must remain
-    daemon-owned and long-lived rather than one-shot helper calls
-  - reconcile triggering must support debounce/coalesce so repeated identical
-    requests do not fan out into duplicate import work
-  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+  - on the earlier compatibility line, the daemon implementation could use a
+    bounded polling watch registry instead of OS-native filesystem
+    subscriptions, and the watch lifecycle remained daemon-owned and long-lived
+    rather than one-shot helper calls
+  - historical reconcile triggering supported debounce/coalesce so repeated
+    identical requests did not fan out into duplicate import work
+  - `R.17` had completed this lane as a daemon-owned polling watch registry, an
     ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
-    those lanes must start and stop only through the daemon composition root
-  - the notifier lane uses a bounded queue of `64` events and must fail closed
-    with typed backpressure instead of silently buffering unbounded plugin
-    traffic
+    those lanes started and stopped only through the daemon composition root
+  - the historical notifier lane used a bounded queue of `64` events and failed
+    closed with typed backpressure instead of silently buffering unbounded
+    plugin traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
@@ -3556,8 +3560,8 @@ mail correctness.
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
-  - Claude compatibility export remains a compatibility projection only and is
-    never the ATM-owned runtime truth
+  - any retained historical Claude compatibility export remains a
+    compatibility projection only and is never the ATM-owned runtime truth
   - runtime roster truth remains the canonical ATM roster rather than
     `config.json`
   - `config.json` parsing remains limited to the approved ingress/comparison

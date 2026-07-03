@@ -2462,10 +2462,11 @@ Required invariants:
 
 ### 21.1.3 Crash Recovery And Replay
 
-Crash recovery must preserve durable truth before compatibility export.
+Crash recovery must preserve durable truth before any historical compatibility
+export or remote handoff.
 
 Required architectural rules:
-- the ordering rule is `SQLite commit -> export / remote handoff`
+- the ordering rule is `SQLite commit -> historical export / remote handoff`
 - re-export/replay is keyed by durable `message_key`
 - if daemon-managed retry/re-export state must survive crash, it is stored in
   SQLite with a bounded expiry/deadline rather than remaining RAM-only
@@ -2507,8 +2508,8 @@ SQLite.
 
 ### 21.2.1 Delivery Policy Placement
 
-Compatibility export and notification policy must not remain scattered through
-command code.
+Historical compatibility-export policy and current notification policy must not
+remain scattered through command code.
 
 Architectural rules:
 
@@ -2533,15 +2534,15 @@ Architectural rules:
 There are three distinct paths:
 
 1. Claude / compatibility path
-   - current Claude inbox files use one top-level JSON-array mailbox document
-     as the primary shared compatibility shape
-   - healthy current Claude `.json` inbox writes use atomic full-document
+   - on the earlier compatibility line, Claude inbox files used one top-level
+     JSON-array mailbox document as the shared compatibility shape
+   - historical Claude `.json` inbox writes used atomic full-document
      replacement: load existing array, append, write replacement via temp-file
      + rename
-   - healthy current Claude `.json` inboxes stay on the normal primary path
-     and must not require repair/rebuild warnings
-   - ATM-owned `.jsonl` compatibility projections remain append-style only
-     where ATM explicitly owns that export surface
+   - healthy historical Claude `.json` inboxes previously stayed on that
+     compatibility path and did not require repair/rebuild warnings
+   - historical ATM-owned `.jsonl` compatibility projections were append-style
+     only where ATM explicitly owned that export surface
    - `rebuild_compat_inbox_projection(...)` is reserved for explicit
      malformed-state repair/rebuild and is not part of the ordinary send/ack
      write path

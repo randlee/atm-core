@@ -449,10 +449,10 @@ Cross-document invariants:
 - `pending_ack`
 - `history`
 
-## 12. Claude JSONL Compatibility Projection
+## 12. Historical Claude JSONL Compatibility Projection
 
-Claude inbox JSONL remains a compatibility surface, not the durable source of
-truth.
+Before `ADR-019`, Claude inbox JSONL was a compatibility surface rather than
+the durable source of truth.
 
 Rules:
 - ATM keeps the full ATM-authored body in SQLite
@@ -464,8 +464,9 @@ Rules:
   - `atm read --message-id <id>`
 - summary remains populated
 - Claude-native inbound messages are not rewritten into ATM retrieval stubs
-- watcher/reconcile logic must treat re-observed ATM-authored compatibility
-  projections as idempotent and must not create self-induced churn loops
+- on the earlier compatibility line, watcher/reconcile logic treated
+  re-observed ATM-authored compatibility projections as idempotent and did not
+  create self-induced churn loops
 
 ## 13. Review Standard
 

@@ -92,10 +92,9 @@ Initial crate requirement IDs:
   the alert-metadata schema and sender-side dedup aspects of:
   `REQ-P-SCHEMA-001`, `REQ-P-CONFIG-HEALTH-001`,
   `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-MAILBOX-001` is historical only.
-  Phase AD retires Claude mailbox JSON compatibility from the accepted runtime;
-  retained ATM command behavior is store-backed and daemon-routed rather than
-  file-backed.
+- `REQ-CORE-MAILBOX-001` retains current store-backed mailbox atomicity and
+  consistency ownership; only its earlier Claude mailbox JSON compatibility
+  aspects are historical after `ADR-019`.
 - `REQ-CORE-COMPAT-001` `atm-core` owns the direct post-send and native-agent
   compatibility contract documented in product `requirements.md` Section 22.5.
   Satisfies:

@@ -51,13 +51,14 @@ Phase-S planning note:
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and
   documents the bounded queue-query split between `atm list` and
-  single-message `atm read`, including the ATM-authored Claude JSONL
+  single-message `atm read`, including the historical ATM-authored Claude JSONL
   compatibility envelope for oversized message bodies
-- the remaining Phase S implementation work continues in:
+- the historical remaining Phase S implementation work continued in:
   - `S.6` daemon post-mortem runtime remediation
   - `S.7` bounded queue-query implementation
-  - `S.8` Claude JSONL compatibility-envelope implementation
-  - `S.9` host-scoped retained logging defaults, including watcher/reconcile
+  - `S.8` historical Claude JSONL compatibility-envelope implementation
+  - `S.9` host-scoped retained logging defaults, including historical
+    watcher/reconcile
     exclusion for `~/.atm/logs/`
 
 Phase-AA simplification note:

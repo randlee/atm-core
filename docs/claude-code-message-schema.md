@@ -50,23 +50,24 @@ Observed current `team-lead -> quality-mgr` sample classes used by this repo:
 Those additive fields do not become Claude-owned native schema merely because
 they are tolerated by the read path.
 
-Current ATM compatibility note:
+Historical ATM compatibility note:
 
-- healthy current Claude `.json` inbox files are one top-level JSON array of
-  inbox-message objects
-- healthy current Claude `.json` inbox files are the primary shared inbox
-  path ATM must support directly
-- repair/rebuild is reserved for malformed or truly unsupported inbox content,
-  not for the legal current Claude JSON-array shape
-- ATM must salvage segmentable valid message objects from malformed current
-  Claude `.json` arrays whenever possible and surface explicit degraded
-  warnings for localized bad fragments
-- only malformed root content with no segmentable message objects remains a
+- before `ADR-019`, healthy Claude `.json` inbox files used one top-level JSON
+  array of inbox-message objects
+- on that earlier compatibility line, healthy Claude `.json` inbox files were
+  the shared inbox path ATM supported directly
+- repair/rebuild was reserved for malformed or truly unsupported inbox content,
+  not for the legal Claude JSON-array shape
+- the earlier compatibility line salvaged segmentable valid message objects
+  from malformed Claude `.json` arrays whenever possible and surfaced explicit
+  degraded warnings for localized bad fragments
+- only malformed root content with no segmentable message objects remained a
   terminal read failure
 
-## 2.1 Current Shared Inbox Contract Categories
+## 2.1 Historical Shared Inbox Contract Categories
 
-This repository distinguishes three categories at the shared inbox boundary:
+This repository previously distinguished three categories at the shared inbox
+boundary:
 
 1. Claude Code-native envelope
    - `from`
