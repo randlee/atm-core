@@ -1,7 +1,7 @@
 ---
 id: AD.2
 title: Obsolete Config Identity Removal And Doctor Contract Repair
-status: planned
+status: complete
 branch: feature/pAD-s2-config-identity-removal-and-doctor-repair
 worktree: ../atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair
 target: integrate/phase-AD

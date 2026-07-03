@@ -10,6 +10,7 @@ use atm_core::home;
 use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
 use clap::{Args, Subcommand};
 
+use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::commands::retained_roster::with_retained_roster_store;
 use crate::observability::CliObservability;
 use crate::output;
@@ -80,12 +81,15 @@ struct RestoreCommand {
 impl TeamsCommand {
     /// Execute the `atm teams` command.
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         let home_dir = home::atm_home()?;
         match self.command {
             None => {
-                let current_dir = std::env::current_dir()?;
                 let outcome = with_retained_roster_store(|roster_store| {
-                    team_admin::list_teams_with_roster_store(roster_store, current_dir)
+                    team_admin::list_teams_with_roster_store(
+                        roster_store,
+                        caller_context.caller_team.clone(),
+                    )
                 })?;
                 output::print_teams_result(&outcome, self.json)
             }
@@ -276,7 +280,8 @@ mod tests {
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
             let _env = EnvGuard::set_many([
                 ("ATM_HOME", Some(self.home_dir.to_str().expect("utf8"))),
-                ("ATM_TEAM", None),
+                ("ATM_IDENTITY", Some(TEST_SENDER)),
+                ("ATM_TEAM", Some(TEST_TEAM)),
                 ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
             ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);

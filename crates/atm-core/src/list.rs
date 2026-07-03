@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::error::AtmError;
-use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
 use crate::read::{
@@ -27,9 +26,9 @@ const MAX_LIST_LIMIT: usize = 10_000;
 pub struct ListQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub target_address: Option<AgentAddress>,
-    pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
     pub limit: Option<usize>,
@@ -44,9 +43,9 @@ impl ListQuery {
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        actor_override: Option<&str>,
+        caller_identity: AgentName,
         target_address: Option<&str>,
-        team_override: Option<&str>,
+        caller_team: TeamName,
         selection_mode: ReadSelection,
         seen_state_filter: bool,
         limit: Option<usize>,
@@ -59,9 +58,9 @@ impl ListQuery {
         Ok(Self {
             home_dir,
             current_dir,
-            actor_override: actor_override.map(str::parse).transpose()?,
+            caller_identity,
+            caller_team,
             target_address: target_address.map(str::parse).transpose()?,
-            team_override: team_override.map(str::parse).transpose()?,
             selection_mode,
             seen_state_filter,
             limit,
@@ -140,11 +139,11 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     runtime: &R,
 ) -> Result<ListOutcome, AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = query.caller_identity.clone();
     let target = resolve_target(
         query.target_address.as_ref(),
         &actor,
-        query.team_override.as_ref(),
+        &query.caller_team,
         config.as_ref(),
     )?;
     let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
@@ -528,9 +527,9 @@ mod tests {
         ListQuery::new(
             home_dir,
             current_dir,
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some(&target),
-            None,
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,
             None,

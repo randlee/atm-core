@@ -7,6 +7,10 @@ pub fn resolve_agent(value: &str, config: Option<&AtmConfig>) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
+#[allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller identity alias projection is no longer used after caller-context ownership moved to the CLI boundary."
+)]
 pub fn preferred_alias(canonical: &str, config: Option<&AtmConfig>) -> Option<String> {
     config.and_then(|config| {
         config

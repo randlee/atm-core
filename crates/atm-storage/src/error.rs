@@ -174,6 +174,17 @@ impl AtmError {
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
+    pub fn identity_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::IdentityInvalid,
+            AtmErrorKind::Identity,
+            format!("caller identity is invalid: {}", message.into()),
+        )
+        .with_recovery(
+            "Set ATM_IDENTITY or provide an explicit command identity override using a valid ATM agent name.",
+        )
+    }
+
     pub fn identity_conflict(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::IdentityConflict,
@@ -322,6 +333,17 @@ impl AtmError {
         .with_recovery("Pass an explicit team in the address or configure a default team.")
     }
 
+    pub fn team_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::TeamInvalid,
+            AtmErrorKind::Validation,
+            format!("caller team is invalid: {}", message.into()),
+        )
+        .with_recovery(
+            "Set ATM_TEAM or provide an explicit --team override using a valid ATM team name.",
+        )
+    }
+
     pub fn team_not_found(team: &str) -> Self {
         Self::new(
             AtmErrorKind::TeamNotFound,
@@ -341,6 +363,17 @@ impl AtmError {
     pub fn validation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::Validation, message).with_recovery(
             "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.",
+        )
+    }
+
+    pub fn caller_context_request_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::CallerContextRequestInvalid,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Repair the CLI request-builder path so ATM daemon requests always include validated caller_identity and caller_team fields.",
         )
     }
 
