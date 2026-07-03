@@ -638,15 +638,18 @@ ATM must distinguish canonical routing identity from the Claude-facing sender
 projection.
 
 Architectural rules:
-- caller-owned command identity resolves from explicit CLI override when the
-  command supports it, otherwise from invoking-shell `ATM_IDENTITY`, not
-  repo-local `[atm].identity`
-- caller-owned commands must resolve identity at the CLI boundary before any
-  daemon dispatch
-- daemon-backed caller-owned request DTOs must carry resolved caller identity
-  as required request data
+- commands that require caller identity/team resolve them according to the
+  matrix in `docs/requirements.md` §4.1, never from repo-local
+  `[atm].identity` / `[atm].default_team`
+- caller-context-owned commands must resolve required context at the CLI
+  boundary before any daemon dispatch
+- daemon-backed caller-owned request DTOs must carry required resolved caller
+  context as request data
 - the daemon must execute caller-owned commands against declared request
-  identity only and must never substitute daemon ambient `ATM_IDENTITY`
+  caller context only and must never substitute daemon ambient
+  `ATM_IDENTITY` / `ATM_TEAM`
+- `atm doctor` is diagnostic and remains outside the mandatory caller-context
+  path
 - ATM-owned aliases are input shorthands that resolve to canonical member names
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may project an alias-friendly sender in the persisted
@@ -704,6 +707,9 @@ ATM config and team-launch config are distinct concerns:
 - ATM-owned config uses the `[atm]` section of `.atm.toml`
 - launcher-owned sections such as `[rmux]` and future `[scmux]` remain outside
   the `atm-core` runtime config boundary and are ignored by ATM
+- `[atm].default_team` remains a config/bootstrap default only for flows that
+  explicitly consume ATM config defaults; it is not a runtime caller-team
+  fallback for commands governed by the caller-context matrix
 - `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
   checks
 - `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
@@ -737,10 +743,11 @@ Diagnostics for team config failures must preserve:
 It is no longer part of runtime sender or actor resolution.
 
 Current runtime contract:
-- caller-owned command identity resolves from explicit CLI override when
-  supported, then invoking-shell `ATM_IDENTITY`
-- if no caller-owned command identity source is available, the CLI fails with
-  `ATM_IDENTITY_UNAVAILABLE` before daemon dispatch
+- caller-context-owned commands resolve required caller identity/team according
+  to the matrix in `docs/requirements.md` §4.1
+- if required caller context is unavailable, the CLI fails before daemon
+  dispatch
+- `atm doctor` remains the explicit identity-free, optional-team exception
 - `[atm].identity` is ignored for runtime resolution even when still present in
   `.atm.toml`
 
@@ -1371,10 +1378,11 @@ Shared `sc-observability` should own record storage, filtering, and follow mecha
 
 The doctor pipeline stages are:
 1. resolve config and environment overrides
-2. resolve effective team and identity inputs
+2. resolve optional diagnostic team scope and inspect caller-context visibility
 3. inspect ATM config for obsolete fields such as `[atm].identity`
 4. verify local team/mailbox/config paths
-5. verify caller identity inputs and `ATM_IDENTITY` visibility
+5. verify caller-context visibility and invalid override situations without
+   making caller identity/team mandatory
 6. compare baseline `[atm].team_members` against `config.json.members`
 7. verify observability initialization and health
 8. verify observability query readiness for `atm log`
@@ -1474,18 +1482,26 @@ Supported structured hook-result levels remain:
 - `warn`
 - `error`
 
-### 13.2 Identity Resolution
+### 13.2 Caller Context Resolution
 
-Caller-owned command identity is not guessed.
+Caller-owned command context is not guessed.
+
+The authoritative command-by-command caller-context matrix lives in
+`docs/requirements.md` §4.1.
 
 The accepted command contract is:
-- the CLI resolves caller identity from explicit override when supported, or
-  from invoking-shell `ATM_IDENTITY`
-- if caller identity is unavailable, the CLI fails before daemon dispatch
-- downstream caller-owned request DTOs carry resolved caller identity as a
-  required field
-- the daemon never treats hook files, repo-local config, or daemon ambient
-  `ATM_IDENTITY` as fallback caller identity
+- commands that require caller identity resolve it from explicit override when
+  supported, otherwise from invoking-shell `ATM_IDENTITY`
+- commands that require caller team resolve it from explicit override when
+  supported, otherwise from invoking-shell `ATM_TEAM`
+- if required caller context is unavailable, the CLI fails before daemon
+  dispatch or retained command execution
+- downstream caller-owned request DTOs carry required resolved caller context
+  as request data
+- the daemon never treats hook files, repo-local config, roster state, or
+  daemon ambient `ATM_IDENTITY` / `ATM_TEAM` as fallback caller context
+- `atm doctor` is the explicit exception and may run without caller identity
+  or caller team while still honoring optional `--team` diagnostic scoping
 
 An obsolete `[atm].identity` field may be diagnosed by doctor, but it must not
 control sender/actor resolution.
