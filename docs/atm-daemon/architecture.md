@@ -88,7 +88,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- watch/reconcile runtime loop
+- direct post-send emission routing for local and graft-backed recipients
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -153,17 +153,16 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm-daemon` must not access SQLite except through the `atm-core` store
   boundary.
 - `atm-daemon` must not own concrete SQLite semantics.
-- `atm-daemon` must not parse or write inbox JSONL except through the
-  `atm-core` ingress/export boundaries.
-- write-affecting daemon mail events must route through one central
-  delivery-policy coordinator plus explicit event-family state machines rather
-  than through transport- or command-specific conditional branches
-- Phase `Yb` adds one daemon-owned execution rule:
-  - Claude delivery uses the `ProjectionExport` adapter only
-  - non-Claude delivery uses the `NonClaudeOutbound` adapter only
-  - notification remains a separate `NotificationSink` side effect
-  - the daemon-owned non-Claude adapter is
-    `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+- `atm-daemon` must not parse or write Claude mailbox JSON on the accepted
+  runtime.
+- `atm-daemon` must not resolve caller-owned command identity from daemon
+  ambient environment, hook files, or repo-local config.
+- caller-owned request packets received by `atm-daemon` must already carry
+  resolved caller identity as required request data, and the daemon must reject
+  any request shape that violates that contract.
+- write-affecting daemon mail events must keep one direct post-persist rule:
+  persist first, then emit post-send behavior only when the recipient exposes
+  that capability
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path
@@ -178,11 +177,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon worker lanes with active queue/debounce/completion state must use one
   worker-owned command-channel or actor ownership model rather than exposing
   shared mutable coordination locks to callers
-  - `Y.21` freezes the reconcile lane on the command-in / reply-out actor
-    contract and shared `JoinHandleOwner` lifecycle helper
-  - `Y.22` deletes the remaining production shared-state reconcile runtime
-    path and moves notification fingerprint ownership fully into worker-owned
-    reconcile state
+- daemon watch/reconcile and notification-runtime lanes are historical only and
+  are not part of the accepted runtime architecture
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
@@ -276,26 +272,14 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   - every daemon/runtime/transport `error!` event
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
-  - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
-  - notification delivery belongs only to the notifier/plugin boundary
+  - post-send emission belongs only to the post-send/advisory boundary
   - local-IPC and network I/O belong only to the transport boundary
 - UDP is not an approved daemon control-plane transport for same-host CLI
   request/response traffic; same-host and remote request families require the
   shared framed stream contract
-- watcher/reconcile adapters remain crate-private and dispatch through owned
-  ingress/service handlers rather than touching store/transport/notifier
-  internals directly
-- watcher/reconcile observation of ATM-authored compatibility projection
-  updates must be idempotent for the same logical message; re-observing the
-  same retrieval-stub projection must not create a new-mail churn loop
-- ADR reference:
-  - `ADR-010`
-- daemon-owned ingress/export boundary tests must therefore preserve the same
-  logical identity fingerprint across full-body and retrieval-stub projections
-  for one ATM-authored message id rather than treating the projection as new
-  mail
-- the watcher/reconcile boundary minimum method set is defined in product
-  [architecture.md §21.6.1](../architecture.md)
+- Phase AD note:
+  - watcher/reconcile compatibility-projection behavior is retired
+  - daemon architecture no longer depends on `ADR-010`
 
 ## 3.0.1 Allowed Operating-System Difference Inventory
 
@@ -317,7 +301,7 @@ Everything else must remain platform-neutral:
 - handler behavior
 - daemon status cache and doctor projection
 - replay, retry, and timeout semantics
-- watch/reconcile and notification runtime coordination
+- direct post-send emission routing and typed warning propagation
 - shutdown ordering and typed error surfaces
 
 If a code path needs additional platform branching outside the three areas
@@ -453,11 +437,9 @@ Privacy boundary:
   crate-private
 - status-cache submodules expose only the boundary needed for daemon health and
   routing decisions; cache internals and mutation helpers remain crate-private
-- watcher/reconcile submodules expose only the owned watch/reconcile boundary;
-  debounce state, scan cursors, and filesystem adapter details remain
-  crate-private
-- plugin/notifier submodules expose only notifier/plugin boundary traits or
-  façades required by runtime composition; delivery internals remain
+- post-send/advisory submodules expose only the owned post-send/advisory
+  boundary traits or façades required by runtime composition; delivery
+  internals remain
   crate-private
 - observability submodules expose only the daemon-owned event sink façade used
   by runtime composition; sink plumbing and field-shaping helpers remain
@@ -859,6 +841,4 @@ Initial use cases:
 - singleton runtime enforcement
 - local transport adapter structure
 - remote daemon-to-daemon protocol structure
-- runtime watch/reconcile orchestration
-- queued notifier/runtime delivery structure
-  - bounded at `64` in-memory events with typed backpressure on overflow
+- direct post-send/advisory routing structure

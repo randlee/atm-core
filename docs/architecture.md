@@ -213,11 +213,8 @@ Current Phase R boundary direction:
 - outbound transport boundary: `ClientTransport`
 - inbound transport boundary: `ServerTransport`
 - request routing boundary: `RequestDispatcher`
-- outbound notification boundary: `NotificationSink`
+- outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
-- watch/reconcile boundary family:
-  - `WatchEventSource`
-  - `ReconcileCoordinator`
 - current production composition ownership:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
@@ -641,8 +638,15 @@ ATM must distinguish canonical routing identity from the Claude-facing sender
 projection.
 
 Architectural rules:
-- runtime identity resolves from explicit CLI override, hook identity, or
-  `ATM_IDENTITY`, not repo-local `[atm].identity`
+- caller-owned command identity resolves from explicit CLI override when the
+  command supports it, otherwise from invoking-shell `ATM_IDENTITY`, not
+  repo-local `[atm].identity`
+- caller-owned commands must resolve identity at the CLI boundary before any
+  daemon dispatch
+- daemon-backed caller-owned request DTOs must carry resolved caller identity
+  as required request data
+- the daemon must execute caller-owned commands against declared request
+  identity only and must never substitute daemon ambient `ATM_IDENTITY`
 - ATM-owned aliases are input shorthands that resolve to canonical member names
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may project an alias-friendly sender in the persisted
@@ -678,6 +682,9 @@ Architectural rules:
 - recipient non-match is silent
 - retired flat hook keys and `[atm].post_send_hook_members` are configuration
   errors, not compatibility aliases
+- hook execution is the direct post-persist emission seam; the accepted
+  runtime must not route post-send behavior through `NotificationSink`,
+  `DeliveryPlan`, or Claude mailbox compatibility machinery
 - hook-decision logging must preserve sender, recipient, matched rule selector,
   and final execution outcome for troubleshooting
 - hook failure or timeout never rolls back a successful send
@@ -730,10 +737,10 @@ Diagnostics for team config failures must preserve:
 It is no longer part of runtime sender or actor resolution.
 
 Current runtime contract:
-- runtime identity resolves from explicit CLI override when supported, then
-  hook identity, then `ATM_IDENTITY`
-- if no runtime identity source is available, the command fails with
-  `ATM_IDENTITY_UNAVAILABLE`
+- caller-owned command identity resolves from explicit CLI override when
+  supported, then invoking-shell `ATM_IDENTITY`
+- if no caller-owned command identity source is available, the CLI fails with
+  `ATM_IDENTITY_UNAVAILABLE` before daemon dispatch
 - `[atm].identity` is ignored for runtime resolution even when still present in
   `.atm.toml`
 
@@ -1231,6 +1238,7 @@ ATM-owned public entrypoints should cover:
 - local team discovery
 - local member listing
 - local `add-member`
+- local `update-member`
 - local team backup
 - local team restore
 
@@ -1241,6 +1249,18 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- `update-member` is the retained local roster-metadata repair path for
+  existing members and must not create new members implicitly
+- accepted terminology must distinguish:
+  - `home_dir` = durable SQL-backed agent-home directory for the member; for
+    worktree-backed members it preserves the worktree home and the canonical
+    association back to the owning main repo
+  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
+  - `launch_cwd` = startup-only current-directory snapshot used for logging
+- operator repair paths may repair `home_dir` but must not treat `live_cwd` or
+  `launch_cwd` as durable roster metadata
+- accepted implementations must prefer direct roster-row and runtime-roster
+  fields over new directory-state coordinator structs
 - `backup` snapshots current team config, the ATM-owned `.atm-state` workflow
   compatibility state, a team-scoped export from the host-scoped SQLite
   database at `~/.atm/db/mail.db`, inboxes, and the ATM team task bucket into
@@ -1354,7 +1374,7 @@ The doctor pipeline stages are:
 2. resolve effective team and identity inputs
 3. inspect ATM config for obsolete fields such as `[atm].identity`
 4. verify local team/mailbox/config paths
-5. verify hook identity availability
+5. verify caller identity inputs and `ATM_IDENTITY` visibility
 6. compare baseline `[atm].team_members` against `config.json.members`
 7. verify observability initialization and health
 8. verify observability query readiness for `atm log`
@@ -1407,27 +1427,14 @@ The lock is held from step 1 through step 5 to prevent concurrent read-modify-wr
 
 When an inbox file is encountered:
 
-1. **Normal primary path** - healthy, legal mailbox state
-   - Current Claude inbox: one top-level JSON array of inbox messages
-   - Current ATM JSONL export: one JSON object per line (when ATM owns the export)
-   - Action: parse, validate message structure, apply atomic modification
-   - Repair: not triggered
+Claude mailbox JSON is historical only in the accepted runtime.
 
-2. **Malformed or degraded state** - triggers repair/rebuild only when:
-   - JSON parse fails (invalid JSON structure, truncated file from crash)
-   - Required message fields are missing or syntactically invalid
-   - File was partially written or contains mixed/corrupt encodings
-   - Explicitly unsupported mailbox format
-   - Action: emit diagnostic, salvage segmentable valid records with explicit
-     degraded warnings when possible, rebuild if safe only through the
-     repair/rebuild seam
-
-**Key architectural rule:**
-- The legal current Claude inbox JSON-array shape must always stay on the normal primary path and never require repair/rebuild
-- Repair/rebuild does not apply to healthy, well-formed inbox state that conforms to the documented schema
-- If the current primary path still classifies healthy mailboxes as requiring repair, that is a bug in the path classification logic (see `compat_inbox_uses_legacy_array_format()` and related guards)
-- Fail-soft recovery is a read-path rule only; normal send/ack rewrite paths
-  must still fail closed on malformed current Claude inbox arrays
+Architectural rule:
+- retained send/read/ack behavior must not depend on current Claude inbox JSON
+  arrays or JSONL mailbox exports
+- if historical compatibility readers remain temporarily during deletion work,
+  they are not the governing runtime path and must not influence live send/read
+  semantics
 
 Repair guidance for operators is documented separately in [`persisted-data-repair.md`](./persisted-data-repair.md).
 
@@ -1469,16 +1476,19 @@ Supported structured hook-result levels remain:
 
 ### 13.2 Identity Resolution
 
-Hook-file identity is retained because it is a current non-daemon convenience
-path for send/read identity resolution.
+Caller-owned command identity is not guessed.
 
-Only hook identity resolution is required for the rewrite. Session-resolution
-paths that exist only to bridge runtime/daemon ambiguity are not required.
+The accepted command contract is:
+- the CLI resolves caller identity from explicit override when supported, or
+  from invoking-shell `ATM_IDENTITY`
+- if caller identity is unavailable, the CLI fails before daemon dispatch
+- downstream caller-owned request DTOs carry resolved caller identity as a
+  required field
+- the daemon never treats hook files, repo-local config, or daemon ambient
+  `ATM_IDENTITY` as fallback caller identity
 
-Repo-local config identity is not retained as a runtime fallback. In the
-multi-agent model, runtime identity must come from explicit CLI override,
-hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
-diagnosed by doctor, but it must not control sender/actor resolution.
+An obsolete `[atm].identity` field may be diagnosed by doctor, but it must not
+control sender/actor resolution.
 
 ### 13.3 File Policy
 
@@ -1737,7 +1747,7 @@ Current runtime boundary rule:
 - precise persisted-data diagnostics for non-recoverable config failures
 - bridge hostname resolution for merged inbox reads
 - settings resolution
-- hook identity resolution
+- caller identity precedence and missing-identity rejection
 - file policy behavior
 - team membership validation
 - tolerant inbox parsing
@@ -2284,7 +2294,7 @@ preserving full diagnostic depth for explicit debugging.
 
 Duplicate function in `ack/mod.rs`, `clear/mod.rs`, and `read/mod.rs` moves to
 `identity/mod.rs` as `pub(crate) fn resolve_actor_identity(...)`. All three call sites
-update to use the shared helper while preserving the existing override -> hook -> runtime
+update to use the shared helper while preserving the existing override -> runtime-env
 identity resolution order.
 
 ### 20.3 normalize_json_number Panic Removal
@@ -2479,29 +2489,11 @@ Claude-owned shared inbox files remain required for:
   top-level JSON array of inbox messages
 
 Architectural rule:
-- JSONL is ingress/egress compatibility only
-- JSONL is not ATM's authoritative durable mail state
-- the legal current Claude `.json` inbox JSON-array shape is a supported
-  primary path, not a degraded fallback
-- the current Claude `.json` inbox contract is an atomic full-rewrite path:
-  load the top-level JSON array, append the new message in memory, then write
-  a replacement array document through temp-file + rename
-- ATM-owned `.jsonl` compatibility projections remain append-only exports and
-  do not redefine the shared Claude `.json` inbox contract
-- repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
-  unsupported mailbox content rather than for the legal current `.json` array
-  shape
-- current Claude `.json` reads salvage segmentable valid message objects from
-  malformed arrays and emit explicit degraded warnings for localized bad
-  fragments; only non-segmentable root corruption remains terminal
-- `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)` is the only
-  approved full re-export seam for repair/rebuild and must not run on the
-  normal send or ack path
-- ATM-authored JSONL exports are a bounded compatibility projection over the
-  durable SQLite message body
-- the default ATM-authored JSONL body export cap is `128 KiB`
-- config `[atm].claude_jsonl_body_export_max_bytes` may lower that cap,
-  including `0` for stub-only ATM-authored export
+- Claude mailbox JSON is retired from the accepted runtime
+- durable SQLite state is ATM's authoritative mail state
+- send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
+- any surviving compatibility readers or repair paths are historical/deletion
+  work only and must not redefine current runtime behavior
 
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
@@ -2561,71 +2553,24 @@ There are three distinct paths:
 3. Remote host path
    - cross-host delivery is daemon-to-daemon only
    - routing expands from `agent@team` to `agent@team.host`
-   - sender-side daemons do not write remote host JSONL directly
+   - sender-side daemons do not write remote host mailbox JSON directly
    - successful remote delivery requires remote daemon acceptance
-
-Projection-awareness rule:
-- watcher/reconcile logic must treat re-observed ATM-authored compatibility
-  projections for the same logical message as idempotent state rather than new
-  mail
-- re-observing the same ATM retrieval stub for the same `message_id` must not
-  trigger a new logical message import or notification loop
 
 ### 21.3.1 New-Message Failure Contract
 
-The first daemon + SQLite release keeps one exact outward-delivery rule for new
+The accepted daemon + SQLite runtime keeps one direct post-persist rule for new
 messages.
 
 Architectural rules:
 
-- for `RosterHarness::ClaudeCode`
-  - SQLite success:
-    - original message flow completes
-    - compatibility append runs
-    - normal nudge runs
-  - SQLite failure:
-    - the original message is still appended to the Claude inbox
-    - ATM appends a second `atm-system@<team>` error message to the Claude
-      inbox
-    - the notification path mirrors both messages
-  - compatibility append failure after SQLite success:
-    - post-send-hook execution is the fallback notification path
-- for non-Claude harnesses
-  - no compatibility JSONL append occurs
-  - on SQLite failure, the same original-plus-error-message rule applies
-    through the non-Claude delivery path rather than JSONL append
-
-### 21.3.2 Phase Yb Corrective Rule
-
-The accepted `integrate/phase-Y` baseline is not yet sufficient to claim that
-the architectural rule above is implemented cleanly.
-
-Phase `Yb` therefore tightens the architecture further:
-
-- Claude and non-Claude new-message machines must expose the same interface
-- both harness families must produce the same logical payload set:
-  - success -> original message only
-  - SQLite failure -> original message + `atm-system@<team>` error message
-- the only harness-specific difference may be the selected delivery target and
-  transport executor
-- the authoritative typed seam is:
-  - `atm_core::delivery_plan::DeliveryPlan`
-  - `atm_core::delivery_plan::ReplyDeliveryPlan`
-  - `atm_core::delivery_execution::execute_delivery_plan(...)`
-  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
-  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
-  - `atm_core::boundary::NonClaudeOutbound`
-- no command, ack, or persistence layer may branch on harness after the
-  machine has produced its delivery plan
-- post-send-hook execution remains notification-only and must not stand in for
-  real non-Claude outbound delivery
-
-Authoritative follow-on planning docs:
-
-- [phase-Yb/plan-phase-Yb.md](./phase-Yb/plan-phase-Yb.md)
-- [phase-Yb/removal-ledger.md](./phase-Yb/removal-ledger.md)
-- [phase-Yb/message-path-call-stacks.md](./phase-Yb/message-path-call-stacks.md)
-- [adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](./adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+- send success is durable ATM persistence
+- after persistence, ATM may emit one post-send effect when the recipient
+  exposes that capability
+- post-send emission failure is logged and returned as a sender-visible warning
+- post-send emission is not durable message delivery and does not redefine send
+  success
+- the accepted seam is a dedicated post-send emitter, not
+  `DeliveryPlan`/`NotificationSink`
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -2678,7 +2623,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime
+- direct post-send emission routing
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2838,8 +2783,8 @@ Socket receive loop rule:
   - serialize one typed response
 - forbidden responsibilities inside the receive loop:
   - direct SQL/store logic
-  - watcher/reconcile logic
-  - notifier/plugin delivery logic
+  - background watch/reconcile logic
+  - direct receiver-side post-send handling logic
   - embedded workflow/business-state transitions
 
 #### Dispatcher
@@ -2861,36 +2806,14 @@ Boundary rule:
 - adding a new request family should be an additive handler/registration
   change, not transport-adapter logic growth
 
-#### Watcher / Reconcile
+#### Watch / Reconcile
 
-Dispatch model:
-- watch-event/debounce driven trigger into owned reconcile handlers
+Watcher/reconcile is historical only.
 
-Object-safety rule:
-- callers depend on an object-safe watcher/reconcile trait or façade, not
-  concrete filesystem watcher implementations
-
-Minimum method set:
-- subscribe/start watch set
-- accept changed-path event
-- debounce/coalesce reconcile request
-- trigger owned ingress/reconcile handler
-- shut down watcher cleanly
-
-Current implementation note:
-- `R.17` implements this as a daemon-owned polling subscription runtime plus a
-  separate debounce/coalesce reconcile worker
-- watch refresh owns only source-path discovery and cached batches
-- reconcile triggers inbox ingress and notifier callbacks only through their
-  declared boundaries
-
-Boundary rule:
-- the watcher/reconcile subsystem owns filesystem watch events only
-- it must not perform SQL directly
-- it must not send socket traffic directly
-- it must not deliver notifier/plugin events directly
-- it may dispatch to the owning ingress/store/notifier handlers through their
-  boundaries only
+Architectural rule:
+- the accepted runtime does not own a daemon watch/reconcile subsystem
+- no retained send/read/ack path may depend on watcher events, debounce, or
+  reconcile completion
 
 #### Plugin / Notifier
 

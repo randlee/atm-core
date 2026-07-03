@@ -32,10 +32,9 @@ The canonical daemon/client recovery text rule set lives in:
 - cross-host daemon-to-daemon transport
 - daemon-private orchestration around injected `atm-core` service boundaries
 - live agent status cache
-- runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
-- daemon-side compatibility projection behavior that must keep ATM-authored
-  JSONL re-export idempotent under watcher/reconcile observation
+- daemon-side direct post-send emission routing for local and graft-backed
+  recipients
 
 `atm-daemon` does not own:
 
@@ -138,16 +137,9 @@ Initial crate requirement IDs:
   locks. The accepted ownership rule is bounded command-channel handoff into
   one actor-owned request lane. Satisfies:
   `REQ-CORE-BOUNDARY-002`, `REQ-DAEMON-RUNTIME-004`.
-  `NotificationRuntime` closes this rule in `Y.20` by using one bounded
-  `sync_channel` handoff, immutable runtime-status publication, and a
-  worker-owned persistence/drain lane.
-  `ReconcileRuntime` closes the contract/fanout half of this rule in `Y.21`
-  by freezing the command-in / reply-out actor contract and shared
-  `JoinHandleOwner` lifecycle helper ahead of the final `Y.22` production
-  cutover.
-  `ReconcileRuntime` closes the final production rule in `Y.22` by removing
-  the daemon-shared reconcile mutex/condvar path and moving notification
-  fingerprint ownership into `ReconcileWorkerState`.
+  Phase AD note:
+  - daemon watch/reconcile and notification-runtime lanes are retired from the
+    accepted runtime rather than preserved as the active closure of this rule
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host
@@ -215,14 +207,13 @@ Initial crate requirement IDs:
   - remote peer transport endpoint and credential inputs
   - timeout and retry-budget inputs
   - queue/cap inputs
-  - lifecycle-control / watch / reconcile enablement inputs
   - retained-log / observability sink inputs
   Invalid config must produce a typed failure or bounded reload rejection
   rather than a silent degraded state. Startup-fatal or reload-fatal validation
   applies to ownership, transport, replay-store, timeout-floor, retry-budget,
   and cap violations; warning-only handling is allowed only for optional
-  observability sinks or optional background-lane features when the daemon
-  keeps one documented degraded fallback path. Satisfies:
+  observability sinks when the daemon keeps one documented degraded fallback
+  path. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
@@ -247,6 +238,12 @@ Initial crate requirement IDs:
   If S.9 introduces any public retained-logging trait or sink boundary, that
   trait must be sealed by default per the product architecture trait-extension
   policy.
+- `REQ-DAEMON-RPC-IDENTITY-001` `atm-daemon` must consume caller-owned command
+  identity only from required request fields supplied by the client boundary.
+  The daemon must not derive caller identity from daemon ambient
+  `ATM_IDENTITY`, hook files, or repo-local config, and it must reject
+  malformed request shapes that omit required caller identity. Satisfies:
+  `REQ-P-IDENTITY-001`, `REQ-CORE-CONFIG-001`.
 - `REQ-DAEMON-OBS-003` daemon observability remains bottom-of-stack:
   the shared daemon observability layer must not import daemon subsystem types
   or reconstruct subsystem meaning centrally. Subsystems emit already-shaped
@@ -302,13 +299,10 @@ Initial crate requirement IDs:
   readiness, shutdown, retry, and helper-thread drain behavior must be proven
   through explicit synchronization or bounded runtime contracts. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
-- `REQ-DAEMON-RUNTIME-008` watcher/reconcile handling of ATM-authored
-  compatibility projection updates must remain idempotent for the same
-  logical message and must not create self-induced churn loops. Satisfies:
-  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`, `ADR-010`.
-  The daemon boundary contract proves this through import/re-export coverage
-  that preserves the same identity fingerprint when an ATM-authored message is
-  re-observed through a retrieval-stub projection.
+- `REQ-DAEMON-RUNTIME-008` is historical only.
+  Phase AD retires the watcher/reconcile mailbox-compatibility line and its
+  churn-loop contract from the accepted runtime. New daemon work must not
+  preserve or expand that retired behavior.
 
 ## 4. Required References
 
@@ -560,8 +554,8 @@ Required runtime rules:
   concrete socket/runtime adapter types
 - daemon boundary traits are sealed by default; opening a runtime/transport
   extension point requires explicit architecture review
-- watcher/reconcile runtime code must remain isolated from transport, store,
-  and notifier implementations behind its own owned boundary
+- any direct post-send/advisory implementation must remain isolated from
+  transport and store implementations behind its owned boundary
 - daemon unavailability after one documented auto-start attempt must surface as
   explicit runtime failure rather than hidden fallback to direct SQLite or
   inbox-file access

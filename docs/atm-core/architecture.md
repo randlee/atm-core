@@ -142,11 +142,9 @@ Follow-up work:
 - retained mailbox runtime selection must be fail-closed and store-backed only;
   `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
   cutover line lands
-- compatibility inbox files may survive only as ingress/export edges; retained
-  command/runtime logic must not treat them as a second durable mailbox backend
-- if compatibility inbox import/export helpers remain, they must stay behind
-  the hidden daemon-side ingress/export seam rather than leaking back into the
-  retained command runtime surface
+- Claude mailbox JSON is retired from the accepted runtime; retained
+  command/runtime logic must not treat mailbox JSON as a second durable or
+  compatibility backend
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -173,13 +171,9 @@ Required subsystem boundaries:
 - `MailStoreDoctor` boundary
 - `RosterStore` boundary
 - `RosterStoreDoctor` boundary
-- inbox-ingress boundary
-- inbox-export boundary
 - config-ingress boundary
 - `ConfigDoctor` boundary
-- `WatchEventSource` boundary
-- `ReconcileCoordinator` boundary
-- `NotificationSink` boundary
+- `PostSendHookEmitter` boundary
 - `StatusSource` boundary
 - `RemoteReplayStore` boundary
 - `RuntimeStorageFinalizer` boundary
@@ -213,8 +207,7 @@ Sealing posture per boundary:
 - `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
 - `ConfigDoctor`: sealed by default
-- watcher/reconcile adapters: sealed by default
-- notifier-facing service adapters: sealed by default unless an ADR explicitly
+- `PostSendHookEmitter` adapters: sealed by default unless an ADR explicitly
   opens the boundary
 - `ObservabilityPort`: sealed
 
@@ -237,7 +230,7 @@ Those belong to the `atm-daemon` crate.
 Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
-  store, ingress/export, watch/reconcile, and notification/status surfaces
+  store, config ingress, post-send emission, and notification/status surfaces
 - `atm-core` owns the ATM frame schema used by both same-host local IPC and
   cross-host daemon transport
 - `atm-core` owns the immutable public runtime roster projection
@@ -402,8 +395,14 @@ Send-specific policy remains layered above the loader:
   not to generic config parsing
 
 Identity-specific policy:
-- runtime identity must come from explicit override, hook identity, or
-  `ATM_IDENTITY`
+- caller-owned command identity must come from explicit override when supported
+  or invoking-shell `ATM_IDENTITY`
+- caller-owned command entry points must reject unresolved identity before any
+  daemon dispatch
+- downstream caller-owned request DTOs must carry resolved caller identity as a
+  required field
+- `atm-core` must not treat hook files, repo-local config, or daemon ambient
+  `ATM_IDENTITY` as fallback caller identity
 - `atm-core` must not derive a normal sender/actor identity from repo-local
   config in the shared multi-agent checkout model
 - aliases must resolve to canonical member names before membership validation,
@@ -513,10 +512,27 @@ Architectural rules:
   - team discovery
   - member listing
   - `add-member`
+  - `update-member`
   - local team backup
   - local team restore
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
+- `add-member` remains create-only
+- `update-member` is the accepted repair path for mutable existing roster
+  metadata such as `home_dir`, `recipient_pane_id`, `harness`, `agent_type`,
+  and `model`
+- accepted terminology must distinguish:
+  - `home_dir` = durable SQL-backed agent-home directory for the member; for
+    worktree-backed members it preserves the worktree home and the canonical
+    association back to the owning main repo
+  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
+  - `launch_cwd` = startup-only current-directory snapshot used for logging
+- `live_cwd` is runtime-roster state, not operator-settable or durable roster
+  metadata
+- `launch_cwd` is log-only startup context and must not become durable roster
+  metadata
+- accepted implementations must prefer direct roster-row and runtime-roster
+  fields over new directory-state coordinator structs
 - backup excludes transient mailbox `*.lock` sentinels, dotfiles, and restore
   markers from the inbox copy set
 - restore preserves the current team-lead record and current `leadSessionId`
@@ -540,31 +556,13 @@ Architectural rules:
   - read/clear visibility state
   - team roster
 - daemon memory is the live source of truth for agent status
-- current Claude-native inbox schema (`from`, `text`, `timestamp`, `read`,
-  `summary`, `color`) is the primary forward-write contract for ATM 1.2
-- historical ATM additive derivatives (`message_id`, `source_team`,
-  `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `atmAlertKind`,
-  `missingConfigPath`, `metadata.atm.*`) remain read-compatible only
-- derivative fields above must parse without read-time failure, but no new ATM
-  1.2 code may emit them as the primary contract for current Claude inboxes
-- Claude inbox JSONL is ingress/egress compatibility only
-- ATM-authored JSONL export is a bounded compatibility projection over the full
-  durable message body
-- canonical roster `harness` is the behavior gate for compatibility export
-  versus native delivery; model strings are not
-- write-affecting mail events must route through one central delivery-policy
-  coordinator plus dedicated event-family state machines
-- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
-  by design; shared helpers may share side effects but not event legality
-- Phase `Yb` adds the exact typed seam:
-  - `atm_core::delivery_plan::DeliveryPlan`
-  - `atm_core::delivery_plan::ReplyDeliveryPlan`
-  - `atm_core::delivery_execution::execute_delivery_plan(...)`
-  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
-- Phase `Yb` also adds the shared non-Claude execution handoff:
-  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
-  - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
-  - `atm_core::boundary::NonClaudeOutbound`
+- durable store state is the primary forward-write contract for ATM 1.2
+- Claude mailbox JSON is retired from the accepted runtime and must not be a
+  live forward-write contract
+- write-affecting mail events persist first, then emit direct post-send
+  behavior only when the recipient exposes that capability
+- `atm-core` owns the direct post-send seam through
+  `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

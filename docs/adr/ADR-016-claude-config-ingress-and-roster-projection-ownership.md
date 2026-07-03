@@ -4,6 +4,14 @@
 
 Accepted
 
+Phase AD narrowing note:
+- `ADR-019` retires the daemon watcher/reconcile lane from the accepted
+  runtime
+- this ADR still governs the rule that SQLite roster state is canonical and
+  `config.json` is not runtime roster truth
+- any surviving `config.json` import or projection work must be explicit
+  CLI/admin behavior rather than background watcher/reconcile behavior
+
 ## Context
 
 `Phase Z` smoke exposed a mismatch between the intended roster architecture and
@@ -22,7 +30,8 @@ The intended architecture already says:
 
 - only the owning config-ingress subsystem may parse team `config.json`
 - normal runtime paths must not use `config.json` as roster truth
-- watcher / reconcile owns external filesystem change handling
+- no retained runtime path may treat filesystem watch/reconcile as required
+  product behavior
 
 The implementation still needs a single accepted ownership decision for:
 
@@ -58,9 +67,11 @@ ATM roster state in SQLite is the only canonical team roster truth.
   `config.json` reads
 
 3. `config.json` read surfaces
-- watcher / reconcile may parse `config.json` for external-ingest purposes
 - `doctor` may parse `config.json` only to compare it against canonical ATM
   roster truth and report drift
+- explicit CLI/admin repair or import paths may parse `config.json` when they
+  are the documented owner of that action
+- no background watch/reconcile lane is required by the accepted runtime
 - no other normal runtime path may parse `config.json` for roster truth
 
 4. Claude harness send semantics
@@ -74,10 +85,10 @@ ATM roster state in SQLite is the only canonical team roster truth.
   inbox target exists
 
 5. External `config.json` changes
-- when the watcher sees a `config.json` change that was not caused by an
-  ATM-owned write, the change flows through the owned watcher / reconcile lane
-- that lane performs the equivalent of `atm team member add` / roster import
-  into canonical ATM roster truth
+- external `config.json` changes do not imply a required background daemon
+  watch/import lane
+- if ATM imports external `config.json` changes, that import must happen
+  through one explicit CLI/admin-owned path into canonical ATM roster truth
 
 6. Member metadata ownership
 - official Claude Code roster fields such as `tmux_pane_id` are canonical ATM
@@ -166,7 +177,8 @@ Gate failure semantics:
 Implementation later ran through Phase Z follow-on work, but the durable
 contract remains this ADR itself:
 
-- watcher/reconcile is the only allowed reader of Claude config JSON
+- no retained runtime path may treat watcher/reconcile as the required reader
+  of Claude config JSON
 - ATM roster state is the only runtime roster truth
 - Claude projection types stay derivative, not authoritative
 - `SCB-CONFIG-*` static gates and their checked-in allowlist define the
