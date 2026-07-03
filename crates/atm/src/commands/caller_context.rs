@@ -101,7 +101,7 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 mod tests {
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
 
     use super::{
@@ -109,36 +109,13 @@ mod tests {
         resolve_cli_caller_context,
     };
 
-    struct EnvGuard {
-        key: &'static str,
-        previous: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: Option<&str>) -> Self {
-            let previous = std::env::var_os(key);
-            match value {
-                Some(value) => unsafe { std::env::set_var(key, value) },
-                None => unsafe { std::env::remove_var(key) },
-            }
-            Self { key, previous }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.previous.take() {
-                Some(value) => unsafe { std::env::set_var(self.key, value) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
-    }
-
     #[test]
     #[serial(env)]
     fn explicit_overrides_win_over_environment() {
-        let _identity = EnvGuard::set("ATM_IDENTITY", Some(ROLE_TEAM_LEAD));
-        let _team = EnvGuard::set("ATM_TEAM", Some(TEST_TEAM));
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
         let override_team = format!("{TEST_TEAM}-alt");
 
         let context = resolve_cli_caller_context(CallerContextOverrides {
@@ -154,8 +131,10 @@ mod tests {
     #[test]
     #[serial(env)]
     fn environment_supplies_context_when_overrides_absent() {
-        let _identity = EnvGuard::set("ATM_IDENTITY", Some(TEST_SENDER));
-        let _team = EnvGuard::set("ATM_TEAM", Some(TEST_TEAM));
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
 
         let context =
             resolve_cli_caller_context(CallerContextOverrides::default()).expect("caller context");
@@ -167,8 +146,10 @@ mod tests {
     #[test]
     #[serial(env)]
     fn missing_identity_fails_before_dispatch() {
-        let _identity = EnvGuard::set("ATM_IDENTITY", None);
-        let _team = EnvGuard::set("ATM_TEAM", Some(TEST_TEAM));
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
 
         let error = resolve_cli_caller_context(CallerContextOverrides::default())
             .expect_err("missing identity");
@@ -179,8 +160,10 @@ mod tests {
     #[test]
     #[serial(env)]
     fn invalid_explicit_team_uses_team_invalid_contract() {
-        let _identity = EnvGuard::set("ATM_IDENTITY", Some(TEST_SENDER));
-        let _team = EnvGuard::set("ATM_TEAM", Some(TEST_TEAM));
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
 
         let error = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: None,
