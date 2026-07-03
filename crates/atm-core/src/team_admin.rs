@@ -12,10 +12,8 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::address::validate_path_segment;
-use crate::boundary::{
-    ConfigLoadRequest, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-};
-use crate::config::{load_claude_team_config_document, resolve_team};
+use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
+use crate::config::load_claude_team_config_document;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::home;
@@ -65,9 +63,7 @@ pub struct MembersList {
 /// Parameters for listing the members of one team.
 #[derive(Debug, Clone)]
 pub struct MembersQuery {
-    pub home_dir: PathBuf,
-    pub current_dir: PathBuf,
-    pub team_override: Option<TeamName>,
+    pub team: TeamName,
 }
 
 /// Parameters for adding one member to a team roster.
@@ -208,10 +204,8 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    current_dir: PathBuf,
+    current_team: TeamName,
 ) -> Result<TeamsList, AtmError> {
-    let config = load_workspace_config_via_ingress(current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
     list_teams_from_roster_store(roster_store, current_team)
 }
 
@@ -225,10 +219,7 @@ pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
 ) -> Result<MembersList, AtmError> {
-    let config = load_workspace_config_via_ingress(query.current_dir)?;
-    let team = resolve_team(query.team_override.as_deref(), config.as_ref())
-        .ok_or_else(AtmError::team_unavailable)?;
-    list_members_from_roster_store(roster_store, team)
+    list_members_from_roster_store(roster_store, query.team)
 }
 
 /// Add one member record and inbox file to a team.
@@ -242,13 +233,6 @@ pub fn add_member_with_roster_store(
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
     add_member_from_roster_store(roster_store, request)
-}
-
-fn load_workspace_config_via_ingress(
-    current_dir: PathBuf,
-) -> Result<Option<crate::config::AtmConfig>, AtmError> {
-    crate::direct_boundaries::load_workspace_config(ConfigLoadRequest { current_dir })
-        .map(|response| response.config)
 }
 
 fn list_teams_from_roster_store(
@@ -1080,9 +1064,7 @@ mod tests {
         let members = list_members_with_roster_store(
             &roster_store,
             MembersQuery {
-                home_dir: tempdir.path().to_path_buf(),
-                current_dir: tempdir.path().to_path_buf(),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                team: TEST_TEAM.parse().expect("team"),
             },
         )
         .expect("list members");
@@ -1114,7 +1096,7 @@ mod tests {
             ],
         );
 
-        let teams = list_teams_with_roster_store(&roster_store, tempdir.path().to_path_buf())
+        let teams = list_teams_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
             .expect("list teams");
 
         assert_eq!(teams.team.as_str(), TEST_TEAM);

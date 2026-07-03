@@ -6,10 +6,10 @@ use atm_core::{
     error::AtmError,
 };
 use atm_storage::{MessageEnvelope, RosterStore};
-use atm_storage_claude::compat::SourceFileRecord;
 use std::sync::Arc;
 
 use crate::SubsystemObservability;
+use crate::claude_compat::SourceFileRecord;
 use crate::direct_boundaries;
 use crate::notification_runtime::NotificationRuntime;
 use crate::reconcile_runtime::ReconcileRuntime;
@@ -220,12 +220,12 @@ impl crate::reconcile_runtime::InboxIngressPort for DaemonInboxIngress {
 #[cfg(test)]
 mod tests {
     use super::{DaemonInboxIngress, DaemonNotificationSink};
+    use crate::claude_compat;
     use atm_core::boundary::NotificationSink;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::schema::{AtmMessageId, InboxMessage};
     use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
-    use atm_storage_claude::compat;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -277,9 +277,9 @@ mod tests {
         let message = sample_message(TEST_LEAD, "full body that should project to a stub");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+        claude_compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
             .expect("first reexport");
-        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+        claude_compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
             .expect("second reexport");
 
         let import = ingress
@@ -325,9 +325,9 @@ mod tests {
         let message = sample_message(TEST_LEAD, "small body stays fully exported");
         let original_fingerprint = ingress.compute_identity_fingerprint(&message);
 
-        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+        claude_compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
             .expect("first reexport");
-        compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
+        claude_compat::reexport_messages(&inbox_path, std::slice::from_ref(&message))
             .expect("second reexport");
 
         let import = ingress

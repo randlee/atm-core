@@ -8,6 +8,7 @@ use atm_core::observability::{
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
 
+use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -26,6 +27,7 @@ pub struct LogCommand {
 impl LogCommand {
     /// Execute the `atm log` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
+        let _caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         match self.mode {
             LogModeCommand::Snapshot(args) => {
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
@@ -262,6 +264,13 @@ mod tests {
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
+    fn caller_context_env() -> EnvGuard {
+        EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ])
+    }
+
     #[derive(Debug)]
     struct StubObservability {
         // &self query/follow methods require interior mutability once tests store this behind Arc<dyn ObservabilityPort + Send + Sync>.
@@ -388,6 +397,7 @@ mod tests {
 
     #[test]
     fn run_snapshot_succeeds_with_fake_observability_snapshot() {
+        let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 levels: vec![],
@@ -417,6 +427,7 @@ mod tests {
 
     #[test]
     fn run_snapshot_surfaces_observability_query_error() {
+        let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 levels: vec![],
@@ -444,6 +455,7 @@ mod tests {
     #[serial]
     fn run_snapshot_reads_real_retained_log_without_daemon() {
         let tempdir = TempDir::new().expect("tempdir");
+        let _caller = caller_context_env();
         let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())

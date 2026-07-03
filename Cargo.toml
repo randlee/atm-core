@@ -2,7 +2,6 @@
 members = [
     "crates/atm-architecture",
     "crates/atm-storage",
-    "crates/atm-storage-claude",
     "crates/atm-storage-sqlserver-proof",
     "crates/atm-core",
     "crates/atm-runtime",

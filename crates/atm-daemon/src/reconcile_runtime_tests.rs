@@ -16,7 +16,6 @@ use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, InboxMessage};
 use atm_core::types::IsoTimestamp;
 use atm_storage::{RosterMember, RosterSnapshot, RosterStore};
-use atm_storage_claude::compat::SourceFileRecord;
 use chrono::Utc;
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -26,6 +25,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
+
+use crate::claude_compat::SourceFileRecord;
 
 fn unique_home_dir() -> std::path::PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
