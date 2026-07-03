@@ -104,6 +104,7 @@ impl ListCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::ROLE_TEAM_LEAD;
     use atm_core::types::ReadSelection;
 
     use super::ListCommand;
@@ -131,6 +132,7 @@ mod tests {
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
         command.limit = Some(12);
         command.task = Some("TASK-22".to_string());
         command.contains = Some("needle".to_string());

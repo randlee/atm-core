@@ -67,6 +67,7 @@ impl AckCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use tempfile::TempDir;
 
     use super::AckCommand;
@@ -85,8 +86,8 @@ mod tests {
         let command = AckCommand {
             message_id: String::new(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some(TEST_TEAM.to_string()),
+            actor: Some(ROLE_TEAM_LEAD.to_string()),
             json: false,
         };
 
@@ -103,8 +104,8 @@ mod tests {
         let command = AckCommand {
             message_id: "   ".to_string(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some(TEST_TEAM.to_string()),
+            actor: Some(ROLE_TEAM_LEAD.to_string()),
             json: false,
         };
 

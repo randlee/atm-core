@@ -115,14 +115,16 @@ fn parse_duration(raw: &str) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+
     use super::ClearCommand;
 
     #[test]
     fn build_query_rejects_invalid_target_before_core() {
         let command = ClearCommand {
             target: Some("../evil".to_string()),
-            actor_override: None,
-            team: None,
+            actor_override: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
             older_than: None,
             idle_only: false,
             dry_run: false,

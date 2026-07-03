@@ -180,6 +180,7 @@ impl ReadCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::ROLE_TEAM_LEAD;
     use atm_core::types::{AckActivationMode, ReadSelection};
 
     use super::ReadCommand;
@@ -207,6 +208,7 @@ mod tests {
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
         command.message_id = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
         command.no_since_last_seen = true;
         command.no_mark = true;

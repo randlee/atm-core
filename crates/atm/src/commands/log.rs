@@ -264,6 +264,13 @@ mod tests {
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
+    fn caller_context_env() -> EnvGuard {
+        EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ])
+    }
+
     #[derive(Debug)]
     struct StubObservability {
         // &self query/follow methods require interior mutability once tests store this behind Arc<dyn ObservabilityPort + Send + Sync>.
@@ -390,6 +397,7 @@ mod tests {
 
     #[test]
     fn run_snapshot_succeeds_with_fake_observability_snapshot() {
+        let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 levels: vec![],
@@ -419,6 +427,7 @@ mod tests {
 
     #[test]
     fn run_snapshot_surfaces_observability_query_error() {
+        let _caller = caller_context_env();
         let command = LogCommand {
             mode: LogModeCommand::Snapshot(QueryArgs {
                 levels: vec![],
@@ -446,6 +455,7 @@ mod tests {
     #[serial]
     fn run_snapshot_reads_real_retained_log_without_daemon() {
         let tempdir = TempDir::new().expect("tempdir");
+        let _caller = caller_context_env();
         let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
