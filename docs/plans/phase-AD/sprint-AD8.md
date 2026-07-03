@@ -41,11 +41,14 @@ target: integrate/phase-AD
 - `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/atm-core/requirements.md`
-- docs/diagrams/state machines that still treat Claude inbox append as nudge
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/new-message-claude.mmd`
+- `docs/plans/phase-Y/new-message-non-claude.mmd`
+- `docs/atm/flow-diagrams.md`
+- `docs/architecture.md`
+- `docs/atm-core/architecture.md`
 - code/tests that still assume inbox append can serve as post-send context
   injection
-- operator docs that still describe Claude inbox append as an approved mailbox
-  or nudge path
 
 ## Paths To Delete
 
