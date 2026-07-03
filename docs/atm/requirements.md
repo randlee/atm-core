@@ -216,3 +216,7 @@ Required Phase R rules:
   query daemon state through the runtime boundary
 - CLI runtime failures must preserve typed error identity until the rendering
   boundary instead of collapsing into ad hoc panic/unwrap behavior
+- CLI-owned caller-context parsing and precedence must follow the authoritative
+  matrix in `docs/requirements.md` §4.1 exactly, including the `atm doctor`
+  exception and the rule that explicit CLI override wins over env when both are
+  present
