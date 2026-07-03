@@ -226,9 +226,9 @@ mod tests {
         let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
             home_dir: home_dir.clone(),
             current_dir: current_dir.clone(),
-            sender_override: Some(RPC_TEST_ARCH_CTM.parse().expect("sender")),
+            caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
+            caller_team: RPC_TEST_TEAM.parse().expect("team"),
             to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
-            team_override: Some(RPC_TEST_TEAM.parse().expect("team")),
             message_source: SendMessageSource::Inline("body".to_string()),
             summary_override: Some("body".to_string()),
             requires_ack: false,

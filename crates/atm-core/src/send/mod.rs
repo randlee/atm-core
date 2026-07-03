@@ -18,7 +18,6 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
-use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -60,9 +59,9 @@ pub enum SendMessageSource {
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub sender_override: Option<AgentName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub to: AgentAddress,
-    pub team_override: Option<TeamName>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -78,9 +77,9 @@ impl SendRequest {
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        sender_override: Option<&str>,
+        caller_identity: AgentName,
         to: &str,
-        team_override: Option<&str>,
+        caller_team: TeamName,
         message_source: SendMessageSource,
         summary_override: Option<String>,
         requires_ack: bool,
@@ -90,9 +89,9 @@ impl SendRequest {
         Ok(Self {
             home_dir,
             current_dir,
-            sender_override: sender_override.map(str::parse).transpose()?,
+            caller_identity,
+            caller_team,
             to: to.parse()?,
-            team_override: team_override.map(str::parse).transpose()?,
             message_source,
             summary_override,
             requires_ack,
@@ -412,9 +411,7 @@ fn build_send_delivery_plan(
 struct SendExecutionContext {
     config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
-    sender_team: Option<TeamName>,
     canonical_sender: AgentName,
-    display_sender: AgentName,
     inbox_path: PathBuf,
     delivery_snapshot: DeliveryRecipientSnapshot,
     delivery_family: DeliveryEventFamily,
@@ -428,21 +425,8 @@ fn prepare_send_context<
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
     let config = runtime.load_config(&request.current_dir)?;
-    let canonical_sender =
-        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
-    let recipient = resolve_recipient(
-        &request.to,
-        request.team_override.as_deref(),
-        config.as_ref(),
-    )?;
-    let sender_team = config::resolve_team(None, config.as_ref());
-    let display_sender = display_sender_identity(
-        &canonical_sender,
-        request.sender_override.as_ref(),
-        sender_team.as_ref(),
-        &recipient.team,
-        config.as_ref(),
-    );
+    let canonical_sender = request.caller_identity.clone();
+    let recipient = resolve_recipient(&request.to, &request.caller_team, config.as_ref())?;
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
@@ -458,9 +442,7 @@ fn prepare_send_context<
     Ok(SendExecutionContext {
         config,
         recipient,
-        sender_team,
         canonical_sender,
-        display_sender,
         inbox_path,
         delivery_snapshot,
         delivery_family,
@@ -485,14 +467,11 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
-            from: context.display_sender.clone(),
+            from: context.canonical_sender.clone(),
             text: body.to_string(),
             timestamp,
             read: false,
-            source_team: context
-                .sender_team
-                .clone()
-                .or_else(|| Some(context.recipient.team.clone())),
+            source_team: Some(request.caller_team.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
@@ -506,14 +485,11 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         }));
     }
     let envelope = InboxMessage {
-        from: context.display_sender.clone(),
+        from: context.canonical_sender.clone(),
         text: body.to_string(),
         timestamp,
         read: false,
-        source_team: context
-            .sender_team
-            .clone()
-            .or_else(|| Some(context.recipient.team.clone())),
+        source_team: Some(request.caller_team.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         pending_ack_at: requires_ack.then_some(timestamp),
@@ -585,14 +561,14 @@ pub(crate) struct PostSendHookContext<'a> {
 
 fn resolve_recipient(
     target_address: &AgentAddress,
-    team_override: Option<&str>,
+    caller_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
     let team = target_address
         .team
         .as_deref()
         .and_then(|team| team.parse().ok())
-        .or_else(|| config::resolve_team(team_override, config))
+        .or_else(|| Some(caller_team.clone()))
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
@@ -722,29 +698,6 @@ fn validate_thread_append(
     envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
     envelope.acknowledged_at = None;
     Ok(())
-}
-
-fn display_sender_identity(
-    canonical_sender: &AgentName,
-    sender_override: Option<&AgentName>,
-    sender_team: Option<&TeamName>,
-    recipient_team: &TeamName,
-    config: Option<&config::AtmConfig>,
-) -> AgentName {
-    let cross_team = sender_team.is_some_and(|team| team != recipient_team);
-    if !cross_team {
-        return canonical_sender.clone();
-    }
-
-    if let Some(sender_override) = sender_override
-        && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
-    {
-        return sender_override.clone();
-    }
-
-    config::aliases::preferred_alias(canonical_sender.as_str(), config)
-        .map(AgentName::from_validated)
-        .unwrap_or_else(|| canonical_sender.clone())
 }
 
 #[allow(
