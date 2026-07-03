@@ -165,6 +165,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_preserves_team_override() {
         let command = MembersCommand {
             team: Some(TEST_TEAM.to_string()),
@@ -178,6 +179,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_rejects_invalid_team_override() {
         let command = MembersCommand {
             team: Some("../evil".to_string()),
@@ -191,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn run_lists_member_roster_without_daemon() {
         let fixture = Fixture::new();
         let command = MembersCommand {
