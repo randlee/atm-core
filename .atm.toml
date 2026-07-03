@@ -1,6 +1,5 @@
 [atm]
 default_team = "atm-dev"
-identity = "team-lead"
 
 [atm.idle_notify]
 recipient = "team-lead"
@@ -64,5 +63,4 @@ tmux_pane_id = "%2"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
-
 
