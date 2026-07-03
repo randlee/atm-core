@@ -1,9 +1,9 @@
 ---
 id: AD.1
 title: Caller Context Ownership Restore
-status: planned
-branch: feature/pAD-s1-caller-context-ownership-restore
-worktree: ../atm-core-worktrees/feature/pAD-s1-caller-context-ownership-restore
+status: complete
+branch: feature/pAD-s1-caller-identity-ownership-restore
+worktree: ../atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore
 target: integrate/phase-AD
 ---
 
