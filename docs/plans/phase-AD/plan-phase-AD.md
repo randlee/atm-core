@@ -112,8 +112,12 @@ The governing rules are:
 - daemon notification delivery is not a protected subsystem; if notification
   logging remains, ATM should append directly at the event site instead of
   routing through a retained queue/worker service
-- Claude Code no longer uses the Claude backend, so `atm-storage-claude` and
-  Claude inbox-append runtime behavior must be removed from the accepted line
+- Claude Code no longer uses the Claude backend, so `atm-storage-claude` must
+  be removed from the accepted line and Claude inbox-append runtime behavior
+  must be removed as a governing runtime path
+- if a bounded Claude mailbox compatibility export helper survives during this
+  phase, it must be explicit obsolete-only scaffolding and must not participate
+  in caller-context ownership, post-send ownership, or durable read semantics
 - post-send nudge emission must not depend on Claude inbox append success
 - durable message delivery remains allowed, but post-send nudge ownership must
   be narrowed back to one direct seam
@@ -260,6 +264,9 @@ Phase `AD` must freeze and enforce this rule:
   delivery/post-send runtime
 - `atm-storage-claude` is retired from the accepted line because Claude Code no
   longer uses that backend
+- if a retained Claude mailbox compatibility export helper survives
+  temporarily, it is historical compatibility only and must not redefine
+  current send/read/post-send semantics
 - the shared `atm-storage` contract remains the governing backend seam after
   Claude backend retirement
 - any surviving code, tests, docs, or diagrams that still treat inbox append as

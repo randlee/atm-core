@@ -71,5 +71,5 @@ Phase AD is not ready until all of the following are true:
 - release verdict: `READY` on the branch candidate after the required AD.11
   validation commands pass
 - notes: readiness remains fail-closed because the retained validation suite
-  now checks for both the Phase AD readiness record and the
-  `PostSendHookEmitter` boundary inventory
+  now checks the Phase AD readiness record, every AD sprint status, the
+  `PostSendHookEmitter` boundary inventory, and the boundary TOML state

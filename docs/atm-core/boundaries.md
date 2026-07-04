@@ -342,7 +342,7 @@ Purpose:
   behavior after durable message persistence succeeds.
 
 Notes:
-- Phase `AD` introduces this boundary as the replacement for
+- Phase `AD` established this boundary as the replacement for
   `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
   path.
 - `send` / `ack` remain responsible for:
@@ -350,6 +350,8 @@ Notes:
   - deciding whether the recipient exposes post-send capability
   - logging emission failure
   - constructing sender-visible warnings on emission failure
+- accepted send/ack finalization emits post-send from persisted logical
+  messages before any retained compatibility delivery-plan execution
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter

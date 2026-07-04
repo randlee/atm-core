@@ -297,6 +297,15 @@ fn finalize_send_outcome<
         if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
             outcome.warnings.push(warning);
         }
+        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+        hook::emit_post_send_effects(
+            &mut outcome.warnings,
+            context.post_send_config.as_ref(),
+            graft_port,
+            &context.recipient,
+            &context.delivery_snapshot,
+            &post_send_messages,
+        );
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
         let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
@@ -313,14 +322,6 @@ fn finalize_send_outcome<
             &execution,
         )?;
         outcome.warnings.extend(execution.warnings);
-        hook::emit_post_send_effects(
-            &mut outcome.warnings,
-            context.post_send_config.as_ref(),
-            graft_port,
-            &context.recipient,
-            &context.delivery_snapshot,
-            &plan.messages,
-        );
     }
     emit_send_command_event(
         observability,
@@ -430,6 +431,17 @@ fn build_send_delivery_plan(
             })?,
         persistence.warnings.clone(),
     ))
+}
+
+fn post_send_messages_from_persistence(
+    persistence: &DeliveryPersistenceResult,
+    requires_ack: bool,
+) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
+    logical_messages_from_persistence(persistence, requires_ack, false).map_err(|error| {
+        AtmError::mailbox_write(error.to_string()).with_recovery(
+            "Repair the persisted delivery record shape before retrying post-send emission.",
+        )
+    })
 }
 
 struct SendExecutionContext {

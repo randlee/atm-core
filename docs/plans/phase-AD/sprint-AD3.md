@@ -12,7 +12,8 @@ target: integrate/phase-AD
 ## Goal
 
 - retire `atm-storage-claude` and remove all post-send nudge/context-injection
-  logic that still depends on Claude inbox JSON append behavior
+  logic that still depends on Claude inbox JSON append behavior; any retained
+  mailbox append helper must be explicit historical compatibility only
 
 ## Hard Dependencies
 
@@ -97,8 +98,8 @@ target: integrate/phase-AD
 ## Deliverables
 
 - `atm-storage-claude` is removed from the accepted line
-- no accepted runtime path or doc still claims Claude inbox JSON append is a
-  mailbox, nudge, delivery, or context-injection path
+- no accepted runtime path or doc still claims Claude inbox JSON append is the
+  governing mailbox, nudge, delivery, or context-injection path
 - the surviving local nudge path, if any, no longer depends on Claude inbox
   append semantics
 - the shared `atm-storage` contract remains the governing backend seam after
@@ -129,8 +130,11 @@ target: integrate/phase-AD
 - no accepted doc states that Claude inbox JSON append is an approved mailbox,
   delivery, nudge, or context-injection mechanism
 - no accepted runtime code path still depends on Claude inbox append, watcher
-  import, or rebuild behavior for message delivery, read semantics, or
-  post-send emission
+  import, or rebuild behavior for caller-context resolution, durable read
+  semantics, or post-send emission
+- any retained Claude compatibility mailbox append helper is explicitly marked
+  historical compatibility only and does not redefine current send/read
+  semantics
 - the shared backend contract remains intact and documented as future-SQL-ready
 - the accepted docs explicitly state that backend interoperability survives
   with one live concrete backend because the shared contract remains

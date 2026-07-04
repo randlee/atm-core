@@ -572,8 +572,11 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - durable store state is the primary forward-write contract for ATM 1.2
-- Claude inbox-append runtime behavior is retired from the accepted runtime
-  and must not be a live forward-write contract
+- Claude inbox-append runtime behavior is retired from the accepted governing
+  runtime and must not be the live forward-write contract
+- if a retained Claude mailbox compatibility export helper survives
+  temporarily, it is explicit obsolete-only scaffolding rather than the
+  governing delivery contract
 - write-affecting mail events persist first, then emit direct post-send
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through

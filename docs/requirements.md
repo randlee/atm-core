@@ -3489,8 +3489,10 @@ mail correctness.
 
   Required behavior:
   - no retained production path may use Claude inbox `.json` or `.jsonl` files
-    for mailbox delivery, context injection, compatibility export, or
-    background ingress
+    for context injection or background ingress
+  - if a retained Claude mailbox compatibility export helper survives
+    temporarily, it must be explicit historical/obsolete-only scaffolding and
+    must not define current send/read/post-send semantics
   - the accepted line must not ship the former `atm-storage-claude` crate or its
     boundary records as a production backend
   - the shared backend contract remains required after Claude backend

@@ -636,6 +636,54 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
             )
         )
 
+    expected_sprint_statuses = {
+        "AD.1": "complete",
+        "AD.2": "complete",
+        "AD.3": "complete",
+        "AD.4": "complete",
+        "AD.5": "complete",
+        "AD.6": "complete",
+        "AD.7": "complete",
+        "AD.8": "complete",
+        "AD.9": "complete",
+        "AD.10": "complete",
+        "AD.11": "complete",
+    }
+    for sprint_id, expected_status in expected_sprint_statuses.items():
+        sprint_path = root / "docs" / "plans" / "phase-AD" / f"sprint-{sprint_id.replace('.', '')}.md"
+        actual_status = phase_ad_frontmatter_value(sprint_path, "status")
+        if actual_status != expected_status:
+            findings.append(
+                Finding(
+                    check="phase-ad-readiness",
+                    severity="error",
+                    summary=f"{sprint_id} status does not match the readiness contract",
+                    detail=f"{sprint_path.relative_to(root)} has status={actual_status!r}; expected {expected_status!r}",
+                )
+            )
+
+    boundary_state = tomllib.loads(boundary_toml.read_text(encoding="utf-8")).get("status", {}).get("state")
+    if boundary_state != "active":
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="PostSendHookEmitter boundary state does not match the readiness contract",
+                detail=f"boundaries/atm-core/post-send-hook-emitter.toml has state={boundary_state!r}; expected 'active'",
+            )
+        )
+
+
+def phase_ad_frontmatter_value(path: Path, key: str) -> str | None:
+    text = path.read_text(encoding="utf-8")
+    frontmatter_match = re.match(r"---\n(.*?)\n---", text, re.DOTALL)
+    if frontmatter_match is None:
+        return None
+    key_match = re.search(rf"^{re.escape(key)}:\s*(.+)$", frontmatter_match.group(1), re.MULTILINE)
+    if key_match is None:
+        return None
+    return key_match.group(1).strip()
+
 
 def write_findings(root: Path, version: str, findings_path: Path, findings: list[Finding]) -> None:
     payload = {

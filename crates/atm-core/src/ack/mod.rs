@@ -485,6 +485,7 @@ fn finalize_ack_outcome<
         post_send_config: owned.post_send_config,
         warnings: owned.warnings,
     };
+    let post_send_messages = reply_post_send_messages(&context.persisted.persistence)?;
     let plan = build_reply_delivery_plan(&context)?;
     let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
     let mut outcome = AckOutcome {
@@ -517,9 +518,9 @@ fn finalize_ack_outcome<
         &mut outcome.warnings,
         context.post_send_config.as_ref(),
         graft_port,
-        &plan.recipient,
+        context.reply_target,
         context.reply_snapshot,
-        &plan.messages,
+        &post_send_messages,
     );
     record_ack_telemetry(
         observability,
@@ -607,6 +608,16 @@ fn build_reply_delivery_plan(context: &FinalizeAckContext<'_>) -> Result<Deliver
                 &context.persisted.reply_inbox_path,
             ),
     )
+}
+
+fn reply_post_send_messages(
+    persistence: &crate::send::DeliveryPersistenceResult,
+) -> Result<Vec<LogicalMessage>, AtmError> {
+    logical_messages_from_persistence(persistence, false, true).map_err(|error| {
+        AtmError::mailbox_write(error.to_string()).with_recovery(
+            "Repair the persisted reply-delivery record shape before retrying post-send emission.",
+        )
+    })
 }
 
 fn record_ack_telemetry(
