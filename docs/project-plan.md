@@ -622,17 +622,54 @@ Acceptance / Phase Entry Gate:
 - the phase does not close until both disposable and copied-state cross-host
   smoke lanes pass with retained evidence
 
-## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [PLANNED]
+## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [COMPLETE]
 
 Status summary:
-- `Phase AD` is the active release-blocking correction line for the accepted
-  `1.2.3` baseline.
+- `Phase AD` is complete on `integrate/phase-AD` as the release-blocking
+  correction line for the accepted `1.2.3` baseline.
 - it restores caller-owned identity handling so the CLI fails closed when
   identity is absent and the daemon never guesses identity
 - it narrows post-send behavior back to a direct persist-then-emit seam with
   sender-visible warnings on emission failure
 - it deletes retired Claude inbox, reconcile, and notification-runtime paths
   that no longer belong on the accepted line
+- `AD.1` (`feature/pAD-s1-caller-identity-ownership-restore`) is complete:
+  retained caller-owned CLI commands now resolve caller identity and caller
+  team at the CLI boundary, fail closed when either is missing, and carry both
+  fields explicitly to daemon-backed request DTOs.
+- `AD.2` (`feature/pAD-s2-config-identity-removal-and-doctor-repair`) is
+  complete: obsolete config-driven caller identity fallback is retired, doctor
+  remains the identity-free diagnostic exception, and the accepted caller
+  context contract is reflected in CLI and doctor behavior.
+- `AD.3` (`feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`) is
+  complete: the retired Claude backend and Claude JSON inbox nudge path are no
+  longer part of the accepted runtime line.
+- `AD.4` (`feature/pAD-s4-reconcile-runtime-removal`) is complete:
+  `ReconcileRuntime` and the watched-source/import runtime lane are removed
+  from accepted daemon behavior.
+- `AD.5` (`feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`)
+  is complete: daemon notification queue/worker delivery was removed and
+  post-send warning ownership was detached from the old notification-runtime
+  path.
+- `AD.6` (`feature/pAD-s6-post-send-nudge-contract-simplification`) is
+  complete: post-send ownership is reduced to explicit emitter seams with one
+  stable sender-warning contract for emission failure.
+- `AD.7` (`feature/pAD-s7-local-tmux-post-send-emitter`) is complete: local
+  tmux nudges use authoritative SQLite roster pane metadata instead of repo
+  config assumptions.
+- `AD.8` (`feature/pAD-s8-graft-post-send-emitter`) is complete: graft-backed
+  post-send emission is isolated behind the graft advisory boundary with
+  matching governance records and readiness evidence.
+- `AD.9` (`feature/pAD-s9-update-member-cli-and-roster-repair-path`) is
+  complete: `atm teams update-member` is the accepted repair path for pane and
+  member metadata, with `MemberNotFound` aligned to the not-found error family.
+- `AD.10` (`feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`)
+  is complete: durable `home_dir`, runtime `live_cwd`, and log-only
+  `launch_cwd` terminology and doctor projections are cleaned up and made
+  consistent.
+- `AD.11` (`feature/pAD-s11-smoke-and-readiness-closeout`) is complete: smoke
+  artifacts, readiness validation, and closeout evidence converge on one
+  accepted branch tip for the phase release gate.
 
 Planning branch:
 - `plan/post-send-hook-fix`
@@ -658,17 +695,17 @@ Deliverables:
   metadata
 
 Sprint line:
-- `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
-- `AD.2` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
-- `AD.3` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
-- `AD.4` `feature/pAD-s4-reconcile-runtime-removal`
-- `AD.5` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
-- `AD.6` `feature/pAD-s6-post-send-nudge-contract-simplification`
-- `AD.7` `feature/pAD-s7-local-tmux-post-send-emitter`
-- `AD.8` `feature/pAD-s8-graft-post-send-emitter`
-- `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
-- `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
-- `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.1 [COMPLETE]` `feature/pAD-s1-caller-identity-ownership-restore`
+- `AD.2 [COMPLETE]` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
+- `AD.3 [COMPLETE]` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
+- `AD.4 [COMPLETE]` `feature/pAD-s4-reconcile-runtime-removal`
+- `AD.5 [COMPLETE]` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
+- `AD.6 [COMPLETE]` `feature/pAD-s6-post-send-nudge-contract-simplification`
+- `AD.7 [COMPLETE]` `feature/pAD-s7-local-tmux-post-send-emitter`
+- `AD.8 [COMPLETE]` `feature/pAD-s8-graft-post-send-emitter`
+- `AD.9 [COMPLETE]` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
+- `AD.10 [COMPLETE]` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
+- `AD.11 [COMPLETE]` `feature/pAD-s11-smoke-and-readiness-closeout`
 
 Acceptance:
 - the phase closes only through

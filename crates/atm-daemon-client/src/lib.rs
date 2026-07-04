@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
+use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
 use atm_core::protocol;
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
@@ -169,22 +170,17 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
     )
 }
 
+pub fn parse_bootstrap_caller_context() -> Result<CallerContext, AtmError> {
+    resolve_cli_caller_context(CallerContextOverrides::default())
+        .map_err(|error| error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set."))
+}
+
 pub fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
+    Ok(parse_bootstrap_caller_context()?.caller_identity)
 }
 
 pub fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
+    Ok(parse_bootstrap_caller_context()?.caller_team)
 }
 
 #[derive(Debug)]
