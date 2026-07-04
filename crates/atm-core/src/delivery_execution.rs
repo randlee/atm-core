@@ -703,6 +703,7 @@ mod tests {
         EnvGuard::set_many([
             ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
             ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
         ])
     }
 
