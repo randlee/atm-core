@@ -116,6 +116,9 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
+        AtmErrorCode::MemberAlreadyExists | AtmErrorCode::MemberNotFound => {
+            AtmErrorKind::Validation
+        }
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
@@ -149,7 +152,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityHealthOk
         | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
-        AtmErrorCode::WarningSqliteHealthDegraded => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
@@ -166,6 +170,9 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
+        | AtmErrorCode::PostSendGraftUnavailable
         | AtmErrorCode::TestFakeTransportInjectionFailed
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,

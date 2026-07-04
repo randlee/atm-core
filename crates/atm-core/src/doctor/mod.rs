@@ -14,7 +14,7 @@ use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
-use crate::team_admin::{MemberSummary, MembersList};
+use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
 use std::sync::Arc;
 
@@ -326,11 +326,16 @@ fn load_member_roster(
         .map(|config| config.team_members.as_slice())
         .unwrap_or(&[]);
     check_inbox_directory(team, &team_dir.join("inboxes"), findings);
-    record_doctor_roster_drift(team, &team_config, atm_roster, findings);
+    record_doctor_roster_drift(team, &team_config, atm_roster.as_deref(), findings);
+
+    let members = match atm_roster {
+        Some(ref roster) => ordered_roster_member_summaries(roster),
+        None => ordered_member_summaries(&team_config.members, baseline),
+    };
 
     Some(MembersList {
         team: team.clone(),
-        members: ordered_member_summaries(&team_config.members, baseline),
+        members,
     })
 }
 
@@ -391,7 +396,7 @@ fn load_doctor_roster_compare_inputs(
 fn record_doctor_roster_drift(
     team: &TeamName,
     team_config: &crate::schema::TeamConfig,
-    atm_roster: Option<Vec<RosterEntry>>,
+    atm_roster: Option<&[RosterEntry]>,
     findings: &mut Vec<DoctorFinding>,
 ) {
     let present = team_config
@@ -403,8 +408,8 @@ fn record_doctor_roster_drift(
         return;
     };
     let atm_members = atm_roster
-        .into_iter()
-        .map(|member| member.agent_name)
+        .iter()
+        .map(|member| member.agent_name.clone())
         .collect::<BTreeSet<_>>();
 
     for member in atm_members.difference(&present) {
@@ -431,6 +436,47 @@ fn record_doctor_roster_drift(
                 "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
             )),
         });
+    }
+
+    for config_member in &team_config.members {
+        let Some(roster_member) = atm_roster
+            .iter()
+            .find(|member| member.agent_name == config_member.name)
+        else {
+            continue;
+        };
+
+        if roster_member.recipient_pane_id != config_member.tmux_pane_id {
+            findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::WarningRosterDrift,
+                message: format!(
+                    "member '{}' has pane drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                    config_member.name, team, roster_member.recipient_pane_id, config_member.tmux_pane_id
+                ),
+                remediation: Some(format!(
+                    "Repair the authoritative pane id with `atm teams update-member {team} {} --pane-id <pane>` and rerun `atm doctor`.",
+                    config_member.name
+                )),
+            });
+        }
+
+        let roster_home_dir = roster_member_home_dir(roster_member);
+        let config_home_dir = config_member_home_dir(config_member);
+        if roster_home_dir != config_home_dir {
+            findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::WarningRosterDrift,
+                message: format!(
+                    "member '{}' has home-dir drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                    config_member.name, team, roster_home_dir, config_home_dir
+                ),
+                remediation: Some(format!(
+                    "Repair the authoritative member home with `atm teams update-member {team} {} --home-dir <path>` and rerun `atm doctor`.",
+                    config_member.name
+                )),
+            });
+        }
     }
 }
 
@@ -574,7 +620,10 @@ fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> Vec<MemberSummary> {
+fn ordered_member_summaries(
+    members: &[AgentMember],
+    baseline: &[TeamName],
+) -> Vec<crate::team_admin::MemberSummary> {
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
@@ -609,17 +658,35 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     ordered
 }
 
-fn member_summary(member: &AgentMember) -> MemberSummary {
-    MemberSummary {
+fn member_summary(member: &AgentMember) -> crate::team_admin::MemberSummary {
+    crate::team_admin::MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.to_string(),
         agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.display().to_string(),
+        home_dir: member.home_dir.display().to_string(),
         extra: member.extra.clone(),
     }
+}
+
+fn roster_member_home_dir(member: &RosterEntry) -> Option<String> {
+    member
+        .metadata_json
+        .get("home_dir")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            member
+                .metadata_json
+                .get("cwd")
+                .and_then(serde_json::Value::as_str)
+        })
+        .map(ToOwned::to_owned)
+}
+
+fn config_member_home_dir(member: &AgentMember) -> Option<String> {
+    (!member.home_dir.as_os_str().is_empty()).then(|| member.home_dir.display().to_string())
 }
 
 #[cfg(test)]
@@ -751,22 +818,17 @@ mod tests {
         }
     }
 
-    fn test_runtime_with_roster(
-        members: &[&str],
-        notification_sink_path: PathBuf,
-    ) -> LocalServiceRuntime {
+    fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
-            Arc::new(crate::LocalFileNotificationSink::at_path(
-                notification_sink_path,
-            )),
         )
     }
 
     fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
-        test_runtime_with_roster(&[TEST_SENDER], paths.notification_sink_path.clone())
+        let _ = paths;
+        test_runtime_with_roster(&[TEST_SENDER])
     }
 
     fn run_doctor(
@@ -783,7 +845,6 @@ mod tests {
         home_dir: PathBuf,
         current_dir: PathBuf,
         active_log_path: PathBuf,
-        notification_sink_path: PathBuf,
     }
 
     impl TestPaths {
@@ -800,7 +861,6 @@ mod tests {
                 home_dir,
                 current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
-                notification_sink_path: root.join("atm-core-doctor-notifications.jsonl"),
             }
         }
 
@@ -1115,10 +1175,7 @@ mod tests {
     fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
-        let runtime = test_runtime_with_roster(
-            &[TEST_SENDER, ROLE_TEAM_LEAD],
-            paths.notification_sink_path.clone(),
-        );
+        let runtime = test_runtime_with_roster(&[TEST_SENDER, ROLE_TEAM_LEAD]);
         let report = run_doctor_with_runtime(
             query(&paths),
             &StubObservability {
@@ -1146,6 +1203,70 @@ mod tests {
             }),
             "{report:#?}"
         );
+    }
+
+    #[test]
+    fn run_doctor_reports_pane_and_home_dir_drift_from_roster_truth() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        paths.write_raw_team_config(&format!(
+            r#"{{"members":[{{"name":"{TEST_SENDER}","cwd":"/repo/config"}}]}}"#
+        ));
+        let mut roster_member = atm_storage::RosterMember {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: AgentName::from_validated(TEST_SENDER),
+            member_kind: atm_storage::RosterMemberKind::Permanent,
+            harness: atm_storage::RosterHarness::ClaudeCode,
+            agent_type: atm_storage::contract::AgentType::default(),
+            model: atm_storage::ModelName::default(),
+            recipient_pane_id: Some(crate::types::PaneId::from_cli("%9").expect("pane")),
+            metadata_json: serde_json::Map::new(),
+        };
+        roster_member
+            .metadata_json
+            .insert("home_dir".to_string(), serde_json::json!("/repo/roster"));
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedMailStore),
+            Arc::new(TestRosterStore {
+                members: vec![roster_member],
+            }),
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+        );
+
+        let report = run_doctor_with_runtime(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                }),
+            },
+            &runtime,
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.message.contains("pane drift")),
+            "{report:#?}"
+        );
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.message.contains("home-dir drift")),
+            "{report:#?}"
+        );
+        let member_roster = report.member_roster.expect("member roster");
+        assert_eq!(member_roster.members[0].tmux_pane_id.as_deref(), Some("%9"));
+        assert_eq!(member_roster.members[0].home_dir, "/repo/roster");
     }
 
     #[test]

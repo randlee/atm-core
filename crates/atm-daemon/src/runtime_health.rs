@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail,
+    ack::ack_mail_with_runtime_and_graft_port,
     boundary,
     clear::clear_mail,
     doctor::{
@@ -25,7 +25,7 @@ use atm_core::{
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
-    send::send_mail,
+    send::send_mail_with_runtime_and_graft_port,
 };
 
 use crate::AtmHomeDir;
@@ -33,7 +33,6 @@ use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::notification_runtime::{NotificationRuntime, NotificationWorkerLiveness};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -57,7 +56,6 @@ pub(crate) struct DaemonRequestDispatcher {
     // not an arbitrary workspace path.
     home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
-    advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
@@ -65,7 +63,6 @@ pub(crate) struct DaemonRequestDispatcher {
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
-    notification_runtime: NotificationRuntime,
     advisory_runtime: AdvisoryRuntime,
 }
 
@@ -85,23 +82,8 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
             )
-            .field(
-                "notification_worker_liveness",
-                &self.notification_runtime.worker_liveness(),
-            )
             .field("advisory_runtime", &"AdvisoryRuntime")
             .finish()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RuntimeHealthSnapshot {
-    pub(crate) notification_worker_liveness: NotificationWorkerLiveness,
-}
-
-fn project_runtime_health(notification_runtime: &NotificationRuntime) -> RuntimeHealthSnapshot {
-    RuntimeHealthSnapshot {
-        notification_worker_liveness: notification_runtime.worker_liveness(),
     }
 }
 
@@ -335,7 +317,6 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
-        notification_runtime: NotificationRuntime,
     ) -> Self {
         let advisory_runtime_observability = SubsystemObservability::new(
             DaemonSubsystem::AdvisoryRuntime,
@@ -364,7 +345,6 @@ impl DaemonRequestDispatcher {
         Self {
             home_dir,
             observability: Arc::clone(&observability),
-            advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
             service_runtime: runtime_assembly.service_runtime,
@@ -372,7 +352,6 @@ impl DaemonRequestDispatcher {
             roster_store: Some(roster_store),
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
-            notification_runtime,
             advisory_runtime: AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
             ),
@@ -406,20 +385,22 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail(request, self.observability.as_ref())?;
-                if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    self.advisory_runtime_observability.emit_or_warn(
-                        "advisory_enqueue",
-                        "degraded",
-                        "advisory queue overflowed",
-                    );
-                    return Err(error);
-                }
+                let outcome = send_mail_with_runtime_and_graft_port(
+                    request,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    &self.advisory_runtime,
+                )?;
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, self.observability.as_ref())?,
+                    ack_mail_with_runtime_and_graft_port(
+                        request,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        &self.advisory_runtime,
+                    )?,
                 )))
             }
             RequestEnvelope::Heartbeat(request) => {
@@ -617,12 +598,7 @@ impl DaemonRequestDispatcher {
             Err(error) => doctor::health::observability_finding_from_error(&error),
         };
         let daemon_runtime = DaemonRuntimeDoctorReport {
-            findings: vec![
-                daemon_observability_finding,
-                notification_worker_liveness_finding(project_runtime_health(
-                    &self.notification_runtime,
-                )),
-            ],
+            findings: vec![daemon_observability_finding],
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -677,39 +653,6 @@ impl DaemonRequestDispatcher {
         };
         report.runtime_status = Some(runtime_status);
         Ok(report)
-    }
-}
-
-fn notification_worker_liveness_finding(snapshot: RuntimeHealthSnapshot) -> DoctorFinding {
-    match snapshot.notification_worker_liveness {
-        NotificationWorkerLiveness::Live => DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
-            message:
-                "notification worker liveness is projected directly from the runtime seam"
-                    .to_string(),
-            remediation: None,
-        },
-        NotificationWorkerLiveness::Degraded => DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded,
-            message:
-                "notification worker liveness is degraded on the runtime-owned seam".to_string(),
-            remediation: Some(
-                "Inspect the notification runtime retained output path and recover the runtime-owned worker before re-running the develop gate."
-                    .to_string(),
-            ),
-        },
-        NotificationWorkerLiveness::Stopped => DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: atm_core::error_codes::AtmErrorCode::DaemonUnavailable,
-            message:
-                "notification worker liveness is stopped on the runtime-owned seam".to_string(),
-            remediation: Some(
-                "Restart atm-daemon so the notification worker is live before completing the develop gate."
-                    .to_string(),
-            ),
-        },
     }
 }
 
@@ -831,16 +774,9 @@ impl DaemonRequestDispatcher {
             crate::DaemonSubsystem::RuntimeHealth,
             std::sync::Arc::clone(&runtime_observability),
         );
-        let notification_runtime = NotificationRuntime::new_with_observability(
-            crate::SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
-        );
-        notification_runtime.set_liveness_override_for_test(Some(
-            crate::notification_runtime::NotificationWorkerLiveness::Live,
-        ));
         Self {
             home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
-            advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
             service_runtime: runtime_assembly.service_runtime.clone(),
@@ -848,7 +784,6 @@ impl DaemonRequestDispatcher {
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
-            notification_runtime,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
             ),
@@ -859,11 +794,8 @@ impl DaemonRequestDispatcher {
 #[cfg(test)]
 mod tests {
     use super::{
-        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, NotificationWorkerLiveness,
-        SHUTDOWN_FINALIZER_THREADS, project_runtime_health,
+        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
-    use crate::notification_runtime::NotificationRuntime;
-    use crate::{DaemonSubsystem, SubsystemObservability};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
@@ -1029,41 +961,5 @@ mod tests {
             status_cache.member_state_for_test(&team, &trigger_member),
             Some(RuntimeMemberState::Active)
         );
-    }
-
-    #[test]
-    fn runtime_health_projects_worker_liveness_from_notification_runtime() {
-        let runtime = NotificationRuntime::new_with_observability(
-            SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
-        );
-        assert_eq!(
-            project_runtime_health(&runtime).notification_worker_liveness,
-            NotificationWorkerLiveness::Stopped
-        );
-        runtime.start().expect("start notification runtime");
-        assert_eq!(
-            project_runtime_health(&runtime).notification_worker_liveness,
-            NotificationWorkerLiveness::Live
-        );
-        runtime.shutdown().expect("shutdown notification runtime");
-        assert_eq!(
-            project_runtime_health(&runtime).notification_worker_liveness,
-            NotificationWorkerLiveness::Stopped
-        );
-    }
-
-    #[test]
-    fn runtime_health_projection_does_not_inspect_queue_internals() {
-        let tempdir = tempfile::TempDir::new().expect("tempdir");
-        let runtime = NotificationRuntime::new_for_test_with_path(
-            tempdir.path().join("notifications.jsonl"),
-            8,
-        );
-        runtime.start().expect("start notification runtime");
-        assert_eq!(
-            project_runtime_health(&runtime).notification_worker_liveness,
-            NotificationWorkerLiveness::Live
-        );
-        runtime.shutdown().expect("shutdown notification runtime");
     }
 }

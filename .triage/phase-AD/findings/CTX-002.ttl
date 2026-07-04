@@ -1,0 +1,1153 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CTX-002>
+  a triage:Finding ;
+  triage:findingId "CTX-002" ;
+  triage:title "observability.rs::report_fatal_error reads ATM_IDENTITY/ATM_TEAM ambiently" ;
+  triage:description "crates/atm/src/observability.rs:67-77 report_fatal_error reads ATM_IDENTITY/ATM_TEAM via std::env::var directly instead of via caller_context, same silent-fallback pattern as CTX-001. Independently confirmed by arch-qa (ARCH-001), rust-qa-agent (QA-002), and req-qa (ATM-QA-002) during AD.1-QA-1 on PR #449. Pattern extends across workspace: atm-daemon-client, atm-core config module, and doctor health checks all read environment directly." ;
+  triage:category "CTX" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T15:25:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/config-188> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/config-200> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD1/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/config-186> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/config-198> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD2/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD3/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD4/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD5/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD6/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD7/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD8/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD9/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD10/obs-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/daemon-client-173> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/daemon-client-182> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/doctor-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/doctor-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/config-184> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/config-196> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/obs-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CTX-002/AD11/obs-68> ;
+
+  triage:openOn <urn:atm:triage:worktree/AD1/b7ee3554> ;
+  triage:openOn <urn:atm:triage:worktree/AD2/be70a13d> ;
+  triage:openOn <urn:atm:triage:worktree/AD3/94e75df5> ;
+  triage:openOn <urn:atm:triage:worktree/AD4/a41348f4> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/e3a90938> ;
+  triage:openOn <urn:atm:triage:worktree/AD6/836bd918> ;
+  triage:openOn <urn:atm:triage:worktree/AD7/448de229> ;
+  triage:openOn <urn:atm:triage:worktree/AD8/345ab8ce> ;
+  triage:openOn <urn:atm:triage:worktree/AD9/57f1d35e> ;
+  triage:openOn <urn:atm:triage:worktree/AD10/5563bba2> ;
+  triage:openOn <urn:atm:triage:worktree/AD11/d709cb73> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/AD11/d709cb73> .
+
+# AD.1 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD1/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/config-188>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 188 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/config-200>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 200 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+<urn:atm:triage:occurrence/CTX-002/AD1/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/b7ee3554> .
+
+# AD.2 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD2/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/config-186>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 186 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/config-198>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 198 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+<urn:atm:triage:occurrence/CTX-002/AD2/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/be70a13d> .
+
+# AD.3 Occurrences (config removed in this sprint)
+<urn:atm:triage:occurrence/CTX-002/AD3/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+<urn:atm:triage:occurrence/CTX-002/AD3/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+<urn:atm:triage:occurrence/CTX-002/AD3/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+<urn:atm:triage:occurrence/CTX-002/AD3/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+<urn:atm:triage:occurrence/CTX-002/AD3/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+<urn:atm:triage:occurrence/CTX-002/AD3/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/94e75df5> .
+
+# AD.4 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD4/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+<urn:atm:triage:occurrence/CTX-002/AD4/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/a41348f4> .
+
+# AD.5 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD5/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+<urn:atm:triage:occurrence/CTX-002/AD5/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/e3a90938> .
+
+# AD.6 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD6/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+<urn:atm:triage:occurrence/CTX-002/AD6/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/836bd918> .
+
+# AD.7 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD7/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+<urn:atm:triage:occurrence/CTX-002/AD7/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/448de229> .
+
+# AD.8 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD8/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+<urn:atm:triage:occurrence/CTX-002/AD8/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/345ab8ce> .
+
+# AD.9 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD9/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+<urn:atm:triage:occurrence/CTX-002/AD9/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/57f1d35e> .
+
+# AD.10 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD10/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+<urn:atm:triage:occurrence/CTX-002/AD10/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/5563bba2> .
+
+# AD.11 Occurrences
+<urn:atm:triage:occurrence/CTX-002/AD11/daemon-client-173>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 173 ;
+  triage:snippet "std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/daemon-client-182>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 182 ;
+  triage:snippet "std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/doctor-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 30 ;
+  triage:snippet "atm_team: std::env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/doctor-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 34 ;
+  triage:snippet "atm_identity: std::env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/config-184>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "env::var(\"ATM_IDENTITY\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/config-196>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 196 ;
+  triage:snippet "env::var(\"ATM_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/obs-67>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 67 ;
+  triage:snippet "let identity = std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:occurrence/CTX-002/AD11/obs-68>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/observability.rs" ;
+  triage:line 68 ;
+  triage:snippet "let team = std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+# Worktree Snapshots
+<urn:atm:triage:worktree/AD1/b7ee3554>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee3554" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD2/be70a13d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD3/94e75df5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df5" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD4/a41348f4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD5/e3a90938>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AD6/836bd918>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AD7/448de229>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AD8/345ab8ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AD9/57f1d35e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/AD10/5563bba2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/AD11/d709cb73>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:orderIndex 11 .
