@@ -1,0 +1,188 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD5-OBS-002>
+  a triage:Finding ;
+  triage:findingId "AD5-OBS-002" ;
+  triage:title "dead no-op error-handling/rollback remnants left after notification-worker lane deletion" ;
+  triage:description "crates/atm-daemon/src/composition.rs:478-484 -- start_background_lanes/shutdown_background_lanes are now bare Ok(()) no-ops with zero possible error path, a direct remnant of the notification-worker lane deletion in this sprint. Surrounding call sites (begin_shutdown:266-278, begin_startup:284-293, prepare_runtime_with rollback at 323-341) still carry dead error-handling/rollback logic built around an error that can never occur." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "OBS" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T17:33:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-OBS-002/pAD-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-OBS-002/pAD-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s5/8f17a12a> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s6/cf4da69a> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s7/499f890c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s6/cf4da69a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 478 ;
+  triage:snippet "fn start_background_lanes(&self) -> Result<(), AtmError> { Ok(()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s5" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 266 ;
+  triage:snippet "fn begin_shutdown(&self) -> Result<(), AtmError> { ... self.shutdown_background_lanes()?; ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s5" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 284 ;
+  triage:snippet "fn begin_startup(&self) -> Result<(), AtmError> { ... self.start_background_lanes() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s5" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 331 ;
+  triage:snippet "prepare_runtime_with(...) { ... if let Err(shutdown_error) = self.shutdown_background_lanes() { ... } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s5" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 478 ;
+  triage:snippet "fn start_background_lanes(&self) -> Result<(), AtmError> { Ok(()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s6" ;
+  triage:headSha "cf4da69a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s6/cf4da69a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 266 ;
+  triage:snippet "fn begin_shutdown(&self) -> Result<(), AtmError> { ... self.shutdown_background_lanes()?; ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s6" ;
+  triage:headSha "cf4da69a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s6/cf4da69a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s6/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 284 ;
+  triage:snippet "fn begin_startup(&self) -> Result<(), AtmError> { ... self.start_background_lanes() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s6" ;
+  triage:headSha "cf4da69a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s6/cf4da69a> .
+
+<urn:atm:triage:occurrence/AD5-OBS-002/pAD-s6/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 331 ;
+  triage:snippet "prepare_runtime_with(...) { ... if let Err(shutdown_error) = self.shutdown_background_lanes() { ... } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s6" ;
+  triage:headSha "cf4da69a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s6/cf4da69a> .
+
+<urn:atm:triage:worktree/pAD-s1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s1" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s3" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s4/29b96dd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAD-s5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAD-s6/cf4da69a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "cf4da69a" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAD-s7/499f890c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "499f890c" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAD-s8/ec576d26>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "ec576d26" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAD-s9/a703e99c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s9" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "a703e99c" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAD-s10/88941b99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s10" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/pAD-s11/1dc4f9a0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s11" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:orderIndex 11 .
