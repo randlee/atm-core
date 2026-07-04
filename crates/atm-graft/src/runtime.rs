@@ -428,10 +428,11 @@ fn reconnect_live_receive_loop(
 }
 
 fn reregister_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmError> {
-    match ctx
-        .client
-        .register_session(ctx.registration_request.clone())
-    {
+    match register_session_with_validated_batch_limit(
+        &*ctx.client,
+        ctx.registration_request.clone(),
+        ctx.limit,
+    ) {
         Ok(_) => Ok(()),
         Err(register_error) if is_duplicate_registration(&register_error) => Ok(()),
         Err(register_error) => Err(register_error),
@@ -910,6 +911,140 @@ mod tests {
         .expect_err("stream reopen should fail");
 
         assert_eq!(error.message, "simulated advisory-stream reopen failure");
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+        server.join().expect("join server");
+    }
+
+    #[derive(Debug)]
+    struct ReconnectValidationFailureClient {
+        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
+    }
+
+    impl AdvisorySessionPort for ReconnectValidationFailureClient {
+        fn register_session(
+            &self,
+            request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            Ok(AdvisorySessionRegistrationResponse {
+                team: request.team,
+                agent: request.agent,
+                session_id: request.session_id,
+                registered_at: IsoTimestamp::now(),
+                queue_capacity: 1,
+            })
+        }
+
+        fn unregister_session(
+            &self,
+            request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            self.unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .push(request.session_id.clone());
+            Ok(AdvisorySessionUnregistrationResponse {
+                session_id: request.session_id,
+                closed: true,
+            })
+        }
+
+        fn fetch_nudges(
+            &self,
+            _request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            panic!("fetch_nudges is not used by reconnect validation tests")
+        }
+
+        fn drain_nudges(
+            &self,
+            _request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            panic!("drain_nudges is not used by reconnect validation tests")
+        }
+    }
+
+    impl AtmGraftClient for ReconnectValidationFailureClient {
+        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+            panic!("send_message is not used by reconnect validation tests")
+        }
+
+        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+            panic!("read_message is not used by reconnect validation tests")
+        }
+
+        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+            panic!("acknowledge_message is not used by reconnect validation tests")
+        }
+    }
+
+    impl GraftSessionClient for ReconnectValidationFailureClient {
+        fn supports_live_advisory_stream(&self) -> bool {
+            true
+        }
+
+        fn open_advisory_stream(
+            &self,
+            _request: AdvisoryStreamRequest,
+        ) -> Result<ActiveAdvisoryStream, AtmError> {
+            panic!("open_advisory_stream should not run after validation failure")
+        }
+    }
+
+    #[test]
+    fn reconnect_live_receive_loop_cleans_up_when_reregistration_batch_limit_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint_path = tempdir.path().join("reconnect-validation.sock");
+        let listener = ListenerOptions::new()
+            .name(protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"))
+            .create_sync()
+            .expect("create listener");
+        let server = std::thread::spawn(move || {
+            let _stream = listener.accept().expect("accept");
+        });
+        let stream = LocalSocketStream::connect(
+            protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"),
+        )
+        .expect("connect");
+        let client = Arc::new(ReconnectValidationFailureClient {
+            unregister_calls: Mutex::new(Vec::new()),
+        });
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: "test-team".parse().expect("team"),
+            agent: "test-agent".parse().expect("agent"),
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
+            state: AdvisorySessionState::Registered,
+        }));
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let mut ctx = LiveReceiveLoopContext {
+            client: Arc::clone(&client) as Arc<dyn GraftSessionClient>,
+            registration_request: registration_request(),
+            advisory_stream: ActiveAdvisoryStream {
+                stream,
+                request_id: protocol::next_request_id(),
+            },
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
+            reconnect_backoff: Duration::from_millis(1),
+            snapshot,
+            injector: Arc::new(NoopInjector),
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+        };
+
+        let error = reconnect_live_receive_loop(
+            &mut ctx,
+            AtmError::daemon_unavailable("stream read failed"),
+            Duration::from_millis(1),
+        )
+        .expect_err("invalid batch limit must fail after cleanup");
+
+        assert!(error.is_validation());
         assert_eq!(
             client
                 .unregister_calls
