@@ -19,7 +19,9 @@ use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-use crate::schema::{AgentMember, AgentType, HOME_DIR_METADATA_KEY, TeamConfig};
+use crate::schema::{
+    AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, TeamConfig, canonical_home_dir,
+};
 use crate::types::{AgentId, AgentName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/restore.rs"]
@@ -53,28 +55,6 @@ pub struct MemberSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_cwd: Option<String>,
     pub extra: serde_json::Map<String, Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct HomeDirPath(PathBuf);
-
-impl HomeDirPath {
-    pub fn as_path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl AsRef<Path> for HomeDirPath {
-    fn as_ref(&self) -> &Path {
-        self.as_path()
-    }
-}
-
-impl From<PathBuf> for HomeDirPath {
-    fn from(value: PathBuf) -> Self {
-        Self(value)
-    }
 }
 
 /// Result of listing all current members for one team.
@@ -714,8 +694,7 @@ fn member_summary_from_roster(
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
-        home_dir: PathBuf::from(canonical_home_dir(&record.metadata_json).unwrap_or_default())
-            .into(),
+        home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
         live_cwd: runtime_live_cwd(record, caller_identity, live_cwd),
         extra: compatibility_extra_fields(&record.metadata_json),
     }
@@ -793,9 +772,7 @@ fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, 
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
-        home_dir: canonical_home_dir(&record.metadata_json)
-            .unwrap_or_default()
-            .into(),
+        home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
         extra: {
             extra.remove("agentId");
             extra.remove("joinedAt");
@@ -837,10 +814,6 @@ fn compatibility_extra_fields(
     )]
     extra.remove(LEGACY_CWD_METADATA_KEY);
     extra
-}
-
-fn canonical_home_dir(metadata_json: &serde_json::Map<String, Value>) -> Option<String> {
-    metadata_string(metadata_json, HOME_DIR_METADATA_KEY)
 }
 
 fn runtime_live_cwd(

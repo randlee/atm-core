@@ -1142,8 +1142,8 @@ mod tests {
             .expect("recipient");
         assert_eq!(recipient.tmux_pane_id.as_deref(), Some("%12"));
         assert_eq!(
-            recipient.home_dir,
-            std::path::PathBuf::from("/repo/recipient")
+            recipient.home_dir.as_path(),
+            std::path::PathBuf::from("/repo/recipient").as_path()
         );
         assert_eq!(config.extra["leadSessionId"], json!("lead-current"));
     }

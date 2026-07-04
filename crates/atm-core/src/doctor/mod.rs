@@ -11,7 +11,7 @@ use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY};
+use crate::schema::{AgentMember, HomeDirPath, canonical_home_dir};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MembersList, ordered_roster_member_summaries};
@@ -722,7 +722,7 @@ fn member_summary(
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
-        home_dir: member.home_dir.clone().into(),
+        home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
             (Some(identity), Some(path)) if member.name == identity.as_str() => {
                 Some(path.display().to_string())
@@ -733,16 +733,12 @@ fn member_summary(
     }
 }
 
-fn roster_member_home_dir(member: &RosterEntry) -> Option<String> {
-    member
-        .metadata_json
-        .get(HOME_DIR_METADATA_KEY)
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
+fn roster_member_home_dir(member: &RosterEntry) -> Option<HomeDirPath> {
+    canonical_home_dir(&member.metadata_json)
 }
 
-fn config_member_home_dir(member: &AgentMember) -> Option<String> {
-    (!member.home_dir.as_os_str().is_empty()).then(|| member.home_dir.display().to_string())
+fn config_member_home_dir(member: &AgentMember) -> Option<HomeDirPath> {
+    (!member.home_dir.is_empty()).then(|| member.home_dir.clone())
 }
 
 #[cfg(test)]

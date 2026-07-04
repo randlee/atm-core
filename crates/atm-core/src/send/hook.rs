@@ -21,12 +21,7 @@ use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::HOME_DIR_METADATA_KEY;
-#[allow(
-    deprecated,
-    reason = "Phase AD obsolete: derived compatibility field only. The send hook still owns one bounded legacy cwd compatibility read."
-)]
-use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+use crate::schema::compatible_home_dir;
 use crate::service_runtime::append_notification_log;
 use crate::types::{AgentName, TeamName};
 
@@ -603,23 +598,7 @@ fn post_send_event_from_message(
 }
 
 fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
-    metadata
-        .get(HOME_DIR_METADATA_KEY)
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            #[allow(
-                deprecated,
-                reason = "Phase AD obsolete: derived compatibility field only. This bounded fallback remains solely to read pre-AD home metadata until downstream compatibility data is fully cleared."
-            )]
-            let legacy = metadata
-                .get(LEGACY_CWD_METADATA_KEY)
-                .and_then(Value::as_str)
-                .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from);
-            legacy
-        })
+    compatible_home_dir(metadata).map(Into::into)
 }
 
 fn warnings_to_result(warnings: &[WarningEntry]) -> Result<(), AtmError> {
