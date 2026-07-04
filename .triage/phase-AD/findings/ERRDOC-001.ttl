@@ -8,13 +8,13 @@
   triage:description "Repeating pattern across Phase AD: new error code variants added to crates/atm-storage/src/error_codes.rs without corresponding entries in docs/atm-error-codes.md. All 11 sprints contain unregistered codes." ;
   triage:phaseId "phase-AD" ;
   triage:category "ERRDOC" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:severity "important" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-03T18:30:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
   triage:highestOpenBranchOrder 11 ;
   triage:promoteToBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
@@ -83,11 +83,11 @@
   triage:headSha "138e85ea" ;
   triage:orderIndex 9 .
 
-<urn:atm:triage:worktree/AD10/88941b99>
+<urn:atm:triage:worktree/AD10/634feabb>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
-  triage:headSha "88941b99" ;
+  triage:headSha "634feabb" ;
   triage:orderIndex 10 .
 
 <urn:atm:triage:worktree/AD11/1dc4f9a0>
@@ -145,11 +145,24 @@
   triage:headSha "2e151d21" ;
   triage:occursIn <urn:atm:triage:worktree/AD1/2e151d21> .
 
+<urn:atm:triage:occurrence/ERRDOC-001/AD10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 156 ;
+  triage:snippet "Self::WarningRosterDrift => \"ATM_WARNING_ROSTER_DRIFT\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:errorCode "ATM_WARNING_ROSTER_DRIFT" ;
+  triage:headSha "634feabb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/634feabb> .
+
 <urn:atm:triage:finding/ERRDOC-001>
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD10/1> ;
   triage:openOn <urn:atm:triage:worktree/AD1/2e151d21> ;
   triage:openOn <urn:atm:triage:worktree/AD2/490c9d23> ;
   triage:openOn <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
@@ -159,5 +172,5 @@
   triage:openOn <urn:atm:triage:worktree/AD7/0b13b7eb> ;
   triage:openOn <urn:atm:triage:worktree/AD8/f90f04f6> ;
   triage:openOn <urn:atm:triage:worktree/AD9/138e85ea> ;
-  triage:openOn <urn:atm:triage:worktree/AD10/88941b99> ;
+  triage:openOn <urn:atm:triage:worktree/AD10/634feabb> ;
   triage:openOn <urn:atm:triage:worktree/AD11/1dc4f9a0> .
