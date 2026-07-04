@@ -749,6 +749,10 @@ fn agent_member_from_roster_record(record: &RosterEntry) -> AgentMember {
             extra.remove("agentId");
             extra.remove("joinedAt");
             extra.remove(HOME_DIR_METADATA_KEY);
+            #[allow(
+                deprecated,
+                reason = "Phase AD obsolete: derived compatibility field only"
+            )]
             extra.remove(LEGACY_CWD_METADATA_KEY);
             extra
         },
@@ -762,6 +766,10 @@ fn compatibility_extra_fields(
     extra.remove("agentId");
     extra.remove("joinedAt");
     extra.remove(HOME_DIR_METADATA_KEY);
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: derived compatibility field only"
+    )]
     extra.remove(LEGACY_CWD_METADATA_KEY);
     extra
 }
