@@ -1,0 +1,180 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD7-TIMEOUT-001>
+  a triage:Finding ;
+  triage:findingId "AD7-TIMEOUT-001" ;
+  triage:title "Unbounded tmux subprocess calls with no timeout in local post-send emitter" ;
+  triage:description "AD.7-QA-1 verdict (PR #455, important finding) reports unbounded tmux subprocess calls with no timeout in the local-tmux post-send emitter path implemented on feature/pAD-s7-local-tmux-post-send-emitter. Subprocess calls via Command::new(\"tmux\").output() will hang indefinitely if tmux server becomes unresponsive." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AD7" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T17:35:36Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:highestFixedBranch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:promoteToBranch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/2> ;
+  triage:openOn <urn:atm:triage:worktree/s7/0b13b7eb> ;
+  triage:openOn <urn:atm:triage:worktree/s8/f90f04f6> ;
+  triage:openOn <urn:atm:triage:worktree/s9/138e85ea> ;
+  triage:fixedOn <urn:atm:triage:worktree/s10/88941b99> ;
+  triage:fixedOn <urn:atm:triage:worktree/s11/1dc4f9a0> ;
+  triage:absentOn <urn:atm:triage:worktree/s1/2e151d21> ;
+  triage:absentOn <urn:atm:triage:worktree/s2/490c9d23> ;
+  triage:absentOn <urn:atm:triage:worktree/s3/4ff7cfbc> ;
+  triage:absentOn <urn:atm:triage:worktree/s4/29b96dd3> ;
+  triage:absentOn <urn:atm:triage:worktree/s5/8f17a12a> ;
+  triage:absentOn <urn:atm:triage:worktree/s6/0704764e> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 532 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"-l\", message])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/0b13b7eb> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 547 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"Enter\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/0b13b7eb> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 562 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"-l\", message])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/f90f04f6> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 577 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"Enter\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/f90f04f6> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 562 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"-l\", message])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/138e85ea> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 577 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"Enter\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/138e85ea> .
+
+<urn:atm:triage:worktree/s1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/29b96dd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s6/0704764e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/0b13b7eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s8/f90f04f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s9/138e85ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s10/88941b99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/s11/1dc4f9a0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:orderIndex 11 .
