@@ -372,12 +372,6 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for ClearRuntime {}
 
-    impl crate::boundary::NotificationSink for ClearRuntime {
-        fn deliver(&self, _event: crate::protocol::NotificationEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
-
     impl RetainedServiceRuntime for ClearRuntime {
         fn load_config(
             &self,

@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-WATCH-EVENT-SOURCE-REFERENCES"]
 review_gates = ["no_watch_io_outside_boundary"]
 
 [status]
-state = "stub_landed"
-notes = ["callable watch trait and named watch subscription/event DTOs landed in atm_core::boundary", "watch source owns event capture only, not reconcile policy"]
+state = "retired"
+notes = ["Phase AD removed the accepted atm_core boundary trait and daemon construction path for watch polling.", "Named watch DTOs remain historical-only protocol scaffolding until a later cleanup sprint deletes them."]

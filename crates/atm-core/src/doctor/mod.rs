@@ -751,22 +751,17 @@ mod tests {
         }
     }
 
-    fn test_runtime_with_roster(
-        members: &[&str],
-        notification_sink_path: PathBuf,
-    ) -> LocalServiceRuntime {
+    fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
-            Arc::new(crate::LocalFileNotificationSink::at_path(
-                notification_sink_path,
-            )),
         )
     }
 
     fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
-        test_runtime_with_roster(&[TEST_SENDER], paths.notification_sink_path.clone())
+        let _ = paths;
+        test_runtime_with_roster(&[TEST_SENDER])
     }
 
     fn run_doctor(
@@ -783,7 +778,6 @@ mod tests {
         home_dir: PathBuf,
         current_dir: PathBuf,
         active_log_path: PathBuf,
-        notification_sink_path: PathBuf,
     }
 
     impl TestPaths {
@@ -800,7 +794,6 @@ mod tests {
                 home_dir,
                 current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
-                notification_sink_path: root.join("atm-core-doctor-notifications.jsonl"),
             }
         }
 
@@ -1115,10 +1108,7 @@ mod tests {
     fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
-        let runtime = test_runtime_with_roster(
-            &[TEST_SENDER, ROLE_TEAM_LEAD],
-            paths.notification_sink_path.clone(),
-        );
+        let runtime = test_runtime_with_roster(&[TEST_SENDER, ROLE_TEAM_LEAD]);
         let report = run_doctor_with_runtime(
             query(&paths),
             &StubObservability {

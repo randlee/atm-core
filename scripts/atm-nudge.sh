@@ -1,74 +1,49 @@
 #!/usr/bin/env bash
-# atm-nudge.sh <recipient>
+# atm-nudge.sh [recipient]
 #
-# Post-send hook for ATM: nudges a named agent's tmux pane.
-# Lookup strategy (in order):
-#   1. Static map: SESSION:WINDOW.INDEX from ATM_NUDGE_<RECIPIENT_UPPER> env var
-#   2. ATM_IDENTITY env var match via tmux show-environment
-#   3. Pane title match (legacy fallback)
+# Payload-driven post-send hook helper for ATM.
+# The authoritative pane id must come from the ATM_POST_SEND payload.
 
 set -euo pipefail
 
-RECIPIENT="${1:-}"
-if [[ -z "$RECIPIENT" ]]; then
-    echo "usage: atm-nudge.sh <recipient>" >&2
+RECIPIENT_ARG="${1:-}"
+PAYLOAD="${ATM_POST_SEND:-}"
+if [[ -z "$PAYLOAD" ]]; then
+    PAYLOAD="$(cat)"
+fi
+if [[ -z "$PAYLOAD" ]]; then
+    echo "ATM_POST_SEND payload is required" >&2
     exit 1
 fi
 
-TEAM="${ATM_TEAM:-atm-dev}"
+readarray -t PAYLOAD_FIELDS < <(
+    python3 - <<'PY' "$PAYLOAD" "$RECIPIENT_ARG"
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+recipient = payload.get("recipient") or sys.argv[2]
+team = payload.get("team") or ""
+pane = payload.get("recipient_pane_id") or ""
+print(recipient)
+print(team)
+print(pane)
+PY
+)
+
+RECIPIENT="${PAYLOAD_FIELDS[0]:-}"
+TEAM="${PAYLOAD_FIELDS[1]:-${ATM_TEAM:-atm-dev}}"
+PANE_ID="${PAYLOAD_FIELDS[2]:-}"
 MESSAGE="You have unread ATM messages. Run: atm read --team ${TEAM}"
 LOG_FILE="${TMPDIR:-/tmp}/atm-nudge.log"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-# Strategy 1: explicit env override ATM_NUDGE_ARCH_CTM, ATM_NUDGE_TEAM_LEAD, etc.
-ENV_KEY="ATM_NUDGE_$(echo "$RECIPIENT" | tr '[:lower:]-' '[:upper:]_')"
-PANE_TARGET="${!ENV_KEY:-}"
-
-if [[ -n "$PANE_TARGET" ]]; then
-    PANE_ID=$(tmux list-panes -t "$PANE_TARGET" -F '#{pane_id}' 2>/dev/null | head -1)
-fi
-
-# Strategy 2: match by pane command in known session:window
-# Reads ATM_NUDGE_SESSION (default: atm-dev) and ATM_NUDGE_WINDOW (default: agents)
 if [[ -z "${PANE_ID:-}" ]]; then
-    SESSION="${ATM_NUDGE_SESSION:-atm-dev}"
-    WINDOW="${ATM_NUDGE_WINDOW:-agents}"
-    case "$RECIPIENT" in
-        arch-ctm)
-            # Codex runs as node; find the node pane in the agents window
-            PANE_ID=$(tmux list-panes -t "${SESSION}:${WINDOW}" \
-                -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
-                | awk '$2 == "node" { print $1; exit }')
-            ;;
-        team-lead)
-            # First Claude (non-node) pane in agents window
-            PANE_ID=$(tmux list-panes -t "${SESSION}:${WINDOW}" \
-                -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
-                | awk '$2 != "node" { print $1; exit }')
-            ;;
-        quality-mgr)
-            # Last Claude (non-node) pane in agents window
-            PANE_ID=$(tmux list-panes -t "${SESSION}:${WINDOW}" \
-                -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
-                | awk '$2 != "node" { last=$1 } END { print last }')
-            ;;
-    esac
-fi
-
-# Strategy 3: pane title fallback
-if [[ -z "${PANE_ID:-}" ]]; then
-    PANE_ID=$(tmux list-panes -a \
-        -F '#{pane_title}\t#{pane_id}' 2>/dev/null \
-        | awk -F'\t' -v name="$RECIPIENT" '$1 == name { print $2; exit }')
-fi
-
-if [[ -z "${PANE_ID:-}" ]]; then
-    printf '%s recipient=%s not found in any tmux pane\n' "$TIMESTAMP" "$RECIPIENT" >> "$LOG_FILE"
-    exit 0
+    printf '%s recipient=%s missing authoritative pane id in ATM_POST_SEND payload\n' "$TIMESTAMP" "$RECIPIENT" >> "$LOG_FILE"
+    exit 1
 fi
 
 tmux send-keys -t "$PANE_ID" -l "$MESSAGE"
-sleep 0.5
 tmux send-keys -t "$PANE_ID" Enter
 
 printf '%s nudged recipient=%s pane=%s\n' "$TIMESTAMP" "$RECIPIENT" "$PANE_ID" >> "$LOG_FILE"

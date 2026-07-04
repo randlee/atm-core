@@ -446,6 +446,9 @@ Identity-specific policy:
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
+- hook configuration lookup must come from authoritative sender roster home
+  metadata and may use retained `cwd` only as a compatibility fallback until
+  canonical `home_dir` metadata is present for every member
 - recipient non-match is silent
 - hook-decision evaluation must preserve sender, recipient, matched rule
   selector, and execution outcome for troubleshooting

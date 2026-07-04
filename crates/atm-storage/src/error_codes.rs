@@ -78,6 +78,8 @@ pub enum AtmErrorCode {
     WarningStaleMailboxLock,
     WarningHookSkipped,
     WarningHookExecutionFailed,
+    PostSendPaneMissing,
+    PostSendTmuxSendFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
 }
@@ -151,6 +153,8 @@ impl AtmErrorCode {
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
+            Self::PostSendPaneMissing => "ATM_POST_SEND_PANE_MISSING",
+            Self::PostSendTmuxSendFailed => "ATM_POST_SEND_TMUX_SEND_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
         }
@@ -232,6 +236,8 @@ impl FromStr for AtmErrorCode {
             "ATM_WARNING_STALE_MAILBOX_LOCK" => Ok(Self::WarningStaleMailboxLock),
             "ATM_WARNING_HOOK_SKIPPED" => Ok(Self::WarningHookSkipped),
             "ATM_WARNING_HOOK_EXECUTION_FAILED" => Ok(Self::WarningHookExecutionFailed),
+            "ATM_POST_SEND_PANE_MISSING" => Ok(Self::PostSendPaneMissing),
+            "ATM_POST_SEND_TMUX_SEND_FAILED" => Ok(Self::PostSendTmuxSendFailed),
             "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
                 Ok(Self::TestFakeTransportInjectionFailed)
             }
