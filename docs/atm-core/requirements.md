@@ -533,8 +533,7 @@ Required caller-context rules:
   the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
-  roster home metadata and may use retained `cwd` only as a compatibility
-  fallback until canonical `home_dir` metadata is fully populated
+  roster `home_dir` metadata
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -587,6 +586,9 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `add-member` must persist the member's durable `home_dir` on the canonical
+  ATM roster row and project that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` must validate team existence and require an existing member
   before mutating canonical ATM roster truth
 - `update-member` must be the accepted repair path for mutable canonical member

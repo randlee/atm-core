@@ -883,8 +883,7 @@ Post-send-hook rules:
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must use the sender's authoritative ATM roster
-  metadata (`home_dir`, or retained compatibility `cwd`) rather than the
-  caller's live process working directory
+  `home_dir` metadata rather than the caller's live process working directory
 - example payload:
   ```json
   {
@@ -1815,6 +1814,8 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- persist the member's durable `home_dir` on the canonical ATM roster row and
+  project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
 
 `atm teams update-member` must:
@@ -1923,9 +1924,10 @@ follow-up without depending on daemon-only or hook-only state.
 
 `atm members` must:
 - resolve the effective team using the retained team-resolution rules
-- load the local team roster from `config.json`
-- return a structured error when the team or team config is missing
-- show all configured members deterministically, with `team-lead` first when
+- load the local team roster from canonical ATM roster state
+- return a structured error when the team is missing from canonical ATM roster
+  state
+- show all rostered members deterministically, with `team-lead` first when
   present and remaining members in stable local order
 - use these names distinctly:
   - `home_dir`: durable SQL-backed agent-home directory for the member; for
@@ -3520,9 +3522,8 @@ mail correctness.
   Required behavior:
   - running `atm send` from another repository or working directory must not
     silently change whether post-send emission is attempted
-  - hook configuration lookup must follow the sender's canonical roster home
-    metadata and may use retained `cwd` only as a compatibility fallback until
-    `home_dir` migration is complete
+  - hook configuration lookup must follow the sender's canonical roster
+    `home_dir` metadata
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files
