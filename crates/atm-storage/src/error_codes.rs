@@ -90,8 +90,24 @@ pub enum AtmErrorCode {
 }
 
 impl AtmErrorCode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
+    pub fn as_str(self) -> &'static str {
+        if let Some(value) = self.config_or_identity_str() {
+            return value;
+        }
+        if let Some(value) = self.daemon_or_address_str() {
+            return value;
+        }
+        if let Some(value) = self.mailbox_or_validation_str() {
+            return value;
+        }
+        if let Some(value) = self.observability_or_warning_str() {
+            return value;
+        }
+        self.post_send_or_misc_str()
+    }
+
+    fn config_or_identity_str(self) -> Option<&'static str> {
+        Some(match self {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
             Self::ConfigParseFailed => "ATM_CONFIG_PARSE_FAILED",
             Self::ConfigRetiredHookMembersKey => "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY",
@@ -103,6 +119,12 @@ impl AtmErrorCode {
             Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
             Self::MemberAlreadyExists => "ATM_MEMBER_ALREADY_EXISTS",
             Self::MemberNotFound => "ATM_MEMBER_NOT_FOUND",
+            _ => return None,
+        })
+    }
+
+    fn daemon_or_address_str(self) -> Option<&'static str> {
+        Some(match self {
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
             Self::DaemonMayHaveExecuted => "ATM_DAEMON_MAY_HAVE_EXECUTED",
             Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
@@ -125,6 +147,12 @@ impl AtmErrorCode {
             Self::TeamInvalid => "ATM_TEAM_INVALID",
             Self::TeamNotFound => "ATM_TEAM_NOT_FOUND",
             Self::AgentNotFound => "ATM_AGENT_NOT_FOUND",
+            _ => return None,
+        })
+    }
+
+    fn mailbox_or_validation_str(self) -> Option<&'static str> {
+        Some(match self {
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
             Self::MailboxRecoveredMessageSetTooLarge => {
                 "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE"
@@ -142,6 +170,12 @@ impl AtmErrorCode {
             Self::WaitTimeout => "ATM_WAIT_TIMEOUT",
             Self::AckInvalidState => "ATM_ACK_INVALID_STATE",
             Self::ClearInvalidState => "ATM_CLEAR_INVALID_STATE",
+            _ => return None,
+        })
+    }
+
+    fn observability_or_warning_str(self) -> Option<&'static str> {
+        Some(match self {
             Self::ObservabilityEmitFailed => "ATM_OBSERVABILITY_EMIT_FAILED",
             Self::ObservabilityQueryFailed => "ATM_OBSERVABILITY_QUERY_FAILED",
             Self::ObservabilityFollowFailed => "ATM_OBSERVABILITY_FOLLOW_FAILED",
@@ -163,12 +197,19 @@ impl AtmErrorCode {
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
+            _ => return None,
+        })
+    }
+
+    fn post_send_or_misc_str(self) -> &'static str {
+        match self {
             Self::PostSendPaneMissing => "ATM_POST_SEND_PANE_MISSING",
             Self::PostSendTmuxSendFailed => "ATM_POST_SEND_TMUX_SEND_FAILED",
             Self::PostSendGraftUnavailable => "ATM_POST_SEND_GRAFT_UNAVAILABLE",
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
+            _ => unreachable!("all AtmErrorCode variants must be covered by as_str helpers"),
         }
     }
 }
