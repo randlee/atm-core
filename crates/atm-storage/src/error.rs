@@ -208,7 +208,7 @@ impl AtmError {
     pub fn member_not_found(member: &str, team: &str) -> Self {
         Self::new_with_code(
             AtmErrorCode::MemberNotFound,
-            AtmErrorKind::Validation,
+            AtmErrorKind::AgentNotFound,
             format!("member '{member}' was not found in team '{team}'"),
         )
         .with_recovery(
@@ -578,7 +578,7 @@ impl AtmErrorKind {
 
 #[cfg(test)]
 mod tests {
-    use super::{AtmError, AtmErrorKind};
+    use super::{AtmError, AtmErrorCode, AtmErrorKind};
     use std::error::Error;
     use std::fmt;
 
@@ -627,5 +627,13 @@ mod tests {
         assert!(rendered.contains("Source: parent source"));
         assert!(rendered.contains("Caused by: leaf source"));
         assert!(rendered.contains("Backtrace:"));
+    }
+
+    #[test]
+    fn member_not_found_uses_agent_not_found_kind() {
+        let error = AtmError::member_not_found("test-agent", "test-team");
+
+        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert!(error.is_agent_not_found());
     }
 }

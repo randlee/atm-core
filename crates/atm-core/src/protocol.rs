@@ -116,9 +116,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
-        AtmErrorCode::MemberAlreadyExists | AtmErrorCode::MemberNotFound => {
-            AtmErrorKind::Validation
-        }
+        AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
+        AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
@@ -905,6 +904,7 @@ mod tests {
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
@@ -1002,5 +1002,15 @@ mod tests {
         assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
         assert_eq!(round_trip.message, error.message);
         assert_eq!(round_trip.recovery, error.recovery);
+    }
+
+    #[test]
+    fn protocol_error_envelope_round_trips_member_not_found_as_agent_not_found() {
+        let error = AtmError::member_not_found(TEST_SENDER, TEST_TEAM);
+        let envelope = ProtocolErrorEnvelope::from_error(&error);
+        let round_trip = envelope.into_atm_error();
+
+        assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
+        assert!(round_trip.is_agent_not_found());
     }
 }

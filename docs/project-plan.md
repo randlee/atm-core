@@ -622,11 +622,11 @@ Acceptance / Phase Entry Gate:
 - the phase does not close until both disposable and copied-state cross-host
   smoke lanes pass with retained evidence
 
-## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [PLANNED]
+## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [COMPLETE]
 
 Status summary:
-- `Phase AD` is the active release-blocking correction line for the accepted
-  `1.2.3` baseline.
+- `Phase AD` is complete on `integrate/phase-AD` as the release-blocking
+  correction line for the accepted `1.2.3` baseline.
 - it restores caller-owned identity handling so the CLI fails closed when
   identity is absent and the daemon never guesses identity
 - it narrows post-send behavior back to a direct persist-then-emit seam with
@@ -658,17 +658,17 @@ Deliverables:
   metadata
 
 Sprint line:
-- `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
-- `AD.2` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
-- `AD.3` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
-- `AD.4` `feature/pAD-s4-reconcile-runtime-removal`
-- `AD.5` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
-- `AD.6` `feature/pAD-s6-post-send-nudge-contract-simplification`
-- `AD.7` `feature/pAD-s7-local-tmux-post-send-emitter`
-- `AD.8` `feature/pAD-s8-graft-post-send-emitter`
-- `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
-- `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
-- `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.1 [COMPLETE]` `feature/pAD-s1-caller-identity-ownership-restore`
+- `AD.2 [COMPLETE]` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
+- `AD.3 [COMPLETE]` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
+- `AD.4 [COMPLETE]` `feature/pAD-s4-reconcile-runtime-removal`
+- `AD.5 [COMPLETE]` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
+- `AD.6 [COMPLETE]` `feature/pAD-s6-post-send-nudge-contract-simplification`
+- `AD.7 [COMPLETE]` `feature/pAD-s7-local-tmux-post-send-emitter`
+- `AD.8 [COMPLETE]` `feature/pAD-s8-graft-post-send-emitter`
+- `AD.9 [COMPLETE]` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
+- `AD.10 [COMPLETE]` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
+- `AD.11 [COMPLETE]` `feature/pAD-s11-smoke-and-readiness-closeout`
 
 Acceptance:
 - the phase closes only through
