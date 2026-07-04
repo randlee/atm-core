@@ -254,7 +254,7 @@ fn emit_plan_transitions(
 fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
     match (target, target.recipient_snapshot().harness) {
         (DeliveryTarget::ClaudeCode { .. }, DeliveryHarnessPath::ClaudeCode)
-        | (DeliveryTarget::NonClaude { .. }, DeliveryHarnessPath::NonClaude) => Ok(()),
+        | (DeliveryTarget::NonClaude { .. }, _) => Ok(()),
         (DeliveryTarget::ClaudeCode { recipient, .. }, DeliveryHarnessPath::NonClaude) => {
             Err(AtmError::validation(format!(
                 "unsupported delivery plan target: ClaudeCode target for non-Claude harness {}@{}",
@@ -262,15 +262,6 @@ fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
             ))
             .with_recovery(
                 "Build the delivery plan through the state machine so non-Claude recipients stay on the non-Claude outbound path.",
-            ))
-        }
-        (DeliveryTarget::NonClaude { recipient }, DeliveryHarnessPath::ClaudeCode) => {
-            Err(AtmError::validation(format!(
-                "unsupported delivery plan target: NonClaude target for Claude Code harness {}@{}",
-                recipient.agent, recipient.team
-            ))
-            .with_recovery(
-                "Build the delivery plan through the state machine so Claude Code recipients stay on the compatibility inbox append path.",
             ))
         }
     }
