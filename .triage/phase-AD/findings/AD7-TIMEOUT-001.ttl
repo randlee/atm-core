@@ -5,30 +5,33 @@
   a triage:Finding ;
   triage:findingId "AD7-TIMEOUT-001" ;
   triage:title "Unbounded tmux subprocess calls with no timeout in local post-send emitter" ;
-  triage:description "AD.7-QA-1 verdict (PR #455, important finding) reports unbounded tmux subprocess calls with no timeout in the local-tmux post-send emitter path implemented on feature/pAD-s7-local-tmux-post-send-emitter. Subprocess calls via Command::new(\"tmux\").output() will hang indefinitely if tmux server becomes unresponsive." ;
+  triage:description "AD.7-QA-1 verdict (PR #455, important finding) reports unbounded tmux subprocess calls with no timeout in the local-tmux post-send emitter path. Subprocess calls via Command::new(\"tmux\").output() will hang indefinitely if tmux server becomes unresponsive. Verified via code inspection on all branches s7-s11 that no timeout wrapper exists." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "AD7" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-03T17:35:36Z"^^xsd:dateTime ;
-  triage:highestOpenBranch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
-  triage:highestFixedBranch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
-  triage:promoteToBranch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:triagedAt "2026-07-03T19:45:22Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:promoteToBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s7/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s8/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD7-TIMEOUT-001/s11/2> ;
   triage:openOn <urn:atm:triage:worktree/s7/0b13b7eb> ;
   triage:openOn <urn:atm:triage:worktree/s8/f90f04f6> ;
   triage:openOn <urn:atm:triage:worktree/s9/138e85ea> ;
-  triage:fixedOn <urn:atm:triage:worktree/s10/88941b99> ;
-  triage:fixedOn <urn:atm:triage:worktree/s11/1dc4f9a0> ;
+  triage:openOn <urn:atm:triage:worktree/s10/88941b99> ;
+  triage:openOn <urn:atm:triage:worktree/s11/1dc4f9a0> ;
   triage:absentOn <urn:atm:triage:worktree/s1/2e151d21> ;
   triage:absentOn <urn:atm:triage:worktree/s2/490c9d23> ;
   triage:absentOn <urn:atm:triage:worktree/s3/4ff7cfbc> ;
@@ -101,6 +104,50 @@
   triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
   triage:headSha "138e85ea" ;
   triage:occursIn <urn:atm:triage:worktree/s9/138e85ea> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 562 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"-l\", message])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/88941b99> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 577 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"Enter\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/88941b99> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 562 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"-l\", message])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/1dc4f9a0> .
+
+<urn:atm:triage:occurrence/AD7-TIMEOUT-001/s11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 577 ;
+  triage:snippet "let output = Command::new(\"tmux\").args([\"send-keys\", \"-t\", pane_id.as_str(), \"Enter\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/1dc4f9a0> .
 
 <urn:atm:triage:worktree/s1/2e151d21>
   a triage:WorktreeSnapshot ;
