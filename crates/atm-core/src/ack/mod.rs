@@ -518,7 +518,10 @@ fn finalize_ack_outcome<
         &mut outcome.warnings,
         context.post_send_config.as_ref(),
         graft_port,
-        context.reply_target,
+        &ResolvedRecipient {
+            agent: context.reply_target.agent.clone(),
+            team: context.reply_target.team.clone(),
+        },
         context.reply_snapshot,
         &post_send_messages,
     );
