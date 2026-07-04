@@ -323,7 +323,7 @@ class TestReadPaneFromRoster(unittest.TestCase):
             stderr="",
         )
         with patch("subprocess.run", return_value=process):
-            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {"sender": "team-lead"})
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {"sender": TEST_TEAM_LEAD})
         self.assertEqual(result.pane_id, "%17")
         self.assertEqual(result.source_path, "atm members --team <team> --json")
 
