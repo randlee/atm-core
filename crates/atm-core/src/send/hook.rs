@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -14,24 +14,17 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
+use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, qualified_sender_identity};
 use crate::boundary::{GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent};
 use crate::config::types::HookRecipient;
 use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::HOME_DIR_METADATA_KEY;
-#[allow(
-    deprecated,
-    reason = "Phase AD obsolete: derived compatibility field only. The send hook still owns one bounded legacy cwd compatibility read."
-)]
-use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+use crate::schema::compatible_home_dir;
 use crate::service_runtime::append_notification_log;
-use crate::types::{AgentName, PaneId, TeamName};
+use crate::types::{AgentName, TeamName};
 
-use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
-
-const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 #[cfg(test)]
@@ -117,9 +110,9 @@ impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
             return Err(error);
         };
 
-        let message = tmux_nudge_message(&event.recipient_team);
-        run_tmux_send_keys(pane_id, &message, event)?;
-        run_tmux_send_enter(pane_id, event)?;
+        let message = super::hook_tmux::tmux_nudge_message(&event.recipient_team);
+        super::hook_tmux::run_tmux_send_keys(pane_id, &message, event)?;
+        super::hook_tmux::run_tmux_send_enter(pane_id, event)?;
         Ok(())
     }
 }
@@ -558,113 +551,6 @@ fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::
     configured.matches(candidate)
 }
 
-fn tmux_nudge_message(team: &TeamName) -> String {
-    format!("You have unread ATM messages. Run: atm read --team {team}")
-}
-
-fn run_tmux_send_keys(
-    pane_id: &PaneId,
-    message: &str,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    let output = tmux_command()
-        .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
-        .output()
-        .map_err(|error| {
-            tmux_send_failed_error(
-                pane_id,
-                event,
-                format!("failed to start tmux send-keys: {error}"),
-                Some(error),
-            )
-        })?;
-    ensure_tmux_success(output, pane_id, event, "send literal nudge")
-}
-
-fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    let output = tmux_command()
-        .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
-        .output()
-        .map_err(|error| {
-            tmux_send_failed_error(
-                pane_id,
-                event,
-                format!("failed to start tmux send-keys Enter: {error}"),
-                Some(error),
-            )
-        })?;
-    ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
-}
-
-fn tmux_command() -> Command {
-    #[cfg(test)]
-    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
-        return Command::new(program);
-    }
-    Command::new("tmux")
-}
-
-fn ensure_tmux_success(
-    output: Output,
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    action: &str,
-) -> Result<(), AtmError> {
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let detail = if stderr.is_empty() {
-        format!("tmux exited unsuccessfully while trying to {action}")
-    } else {
-        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
-    };
-    Err(tmux_send_failed_error(
-        pane_id,
-        event,
-        detail,
-        None::<std::io::Error>,
-    ))
-}
-
-fn tmux_send_failed_error<E>(
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    message: String,
-    source: Option<E>,
-) -> AtmError
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let error = AtmError::new_with_code(
-        AtmErrorCode::PostSendTmuxSendFailed,
-        AtmErrorKind::Internal,
-        format!(
-            "local tmux post-send emission failed for {}@{} pane {}: {message}",
-            event.recipient, event.recipient_team, pane_id
-        ),
-    )
-    .with_recovery(format!(
-        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
-        pane_id, event.recipient_team, event.recipient
-    ));
-    warn!(
-        code = %AtmErrorCode::PostSendTmuxSendFailed,
-        sender = %event.sender,
-        recipient = %event.recipient,
-        recipient_team = %event.recipient_team,
-        pane_id = %pane_id,
-        message_id = %event.message_id,
-        error = %message,
-        "local tmux post-send emission failed"
-    );
-    match source {
-        Some(source) => error.with_source(source),
-        None => error,
-    }
-}
-
 fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     NotificationEvent {
         kind: NotificationKind::Delivery,
@@ -712,23 +598,7 @@ fn post_send_event_from_message(
 }
 
 fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
-    metadata
-        .get(HOME_DIR_METADATA_KEY)
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            #[allow(
-                deprecated,
-                reason = "Phase AD obsolete: derived compatibility field only. This bounded fallback remains solely to read pre-AD home metadata until downstream compatibility data is fully cleared."
-            )]
-            let legacy = metadata
-                .get(LEGACY_CWD_METADATA_KEY)
-                .and_then(Value::as_str)
-                .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from);
-            legacy
-        })
+    compatible_home_dir(metadata).map(Into::into)
 }
 
 fn warnings_to_result(warnings: &[WarningEntry]) -> Result<(), AtmError> {
@@ -978,21 +848,22 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use serde_json::{Map, json};
     use tempfile::tempdir;
     use tracing::Level;
 
     use super::{
-        HookCancellationToken, LocalTmuxPostSendEmitter, POST_SEND_HOOK_MAX_STDOUT_BYTES,
-        PostSendHookResultLevel, TMUX_PROGRAM_ENV, finish_abandoned_post_send_hook_stdout_capture,
-        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, sender_config_root, tmux_nudge_message,
+        GraftPostSendEmitter, HookCancellationToken, LocalTmuxPostSendEmitter,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, TMUX_PROGRAM_ENV,
+        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
+        hook_result_log_level, load_post_send_config_for_sender, parse_post_send_hook_result,
+        sender_config_root,
     };
     use crate::boundary::{
-        PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use crate::config::AtmConfig;
     use crate::config::types::HookRecipient;
@@ -1005,6 +876,7 @@ mod tests {
     )]
     use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
     use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
+    use crate::send::hook_tmux::tmux_nudge_message;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -1130,6 +1002,27 @@ mod tests {
             F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
         {
             unreachable!("config lookup test does not commit workflow state")
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingGraftPort {
+        delivered: std::sync::Mutex<Vec<PostSendHookEvent>>,
+        fail_message: Option<String>,
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
+
+    impl GraftPostSendPort for RecordingGraftPort {
+        fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+            if let Some(message) = &self.fail_message {
+                return Err(AtmError::daemon_unavailable(message.clone()));
+            }
+            self.delivered
+                .lock()
+                .expect("graft deliveries")
+                .push(event.clone());
+            Ok(())
         }
     }
 
@@ -1334,5 +1227,75 @@ mod tests {
         assert!(logged.contains("%9"));
         assert!(logged.contains(&tmux_nudge_message(&TeamName::from_validated("test-team"))));
         assert!(logged.contains("Enter"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn local_tmux_post_send_emitter_times_out_hung_tmux() {
+        let tempdir = tempdir().expect("tempdir");
+        #[cfg(windows)]
+        let tmux_path = tempdir.path().join("tmux.cmd");
+        #[cfg(not(windows))]
+        let tmux_path = tempdir.path().join("tmux");
+        #[cfg(windows)]
+        fs::write(
+            &tmux_path,
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\nfor /f \"tokens=1-4 delims=:.\" %%a in (\"%time%\") do (\r\n  set /a start=%%a*3600+%%b*60+%%c\r\n)\r\n:loop\r\nfor /f \"tokens=1-4 delims=:.\" %%a in (\"%time%\") do (\r\n  set /a now=%%a*3600+%%b*60+%%c\r\n)\r\nif !now! lss !start! set /a now+=86400\r\nset /a elapsed=now-start\r\nif !elapsed! lss 30 goto loop\r\nexit /b 0\r\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &tmux_path,
+            "#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&tmux_path, perms).expect("chmod");
+        }
+
+        let tmux_bin = tmux_path.to_str().expect("utf8 tmux path").to_owned();
+        let _env = EnvGuard::set_many([(TMUX_PROGRAM_ENV, Some(tmux_bin.as_str()))]);
+
+        let started_at = Instant::now();
+        let error = LocalTmuxPostSendEmitter
+            .emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))))
+            .expect_err("hung tmux must time out");
+
+        assert!(started_at.elapsed() < Duration::from_secs(8));
+        assert_eq!(error.code, AtmErrorCode::PostSendTmuxSendFailed);
+        assert!(error.message.contains("timed out"));
+    }
+
+    #[test]
+    fn graft_post_send_emitter_delegates_to_graft_port() {
+        let port = RecordingGraftPort::default();
+        let event = tmux_event(Some(PaneId::from_cli("%9").expect("pane")));
+
+        GraftPostSendEmitter::new(&port)
+            .emit(&event)
+            .expect("graft send");
+
+        let delivered = port.delivered.lock().expect("graft deliveries");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0], event);
+    }
+
+    #[test]
+    fn graft_post_send_emitter_surfaces_port_failure() {
+        let port = RecordingGraftPort {
+            delivered: std::sync::Mutex::new(Vec::new()),
+            fail_message: Some("synthetic graft failure".to_string()),
+        };
+
+        let error = GraftPostSendEmitter::new(&port)
+            .emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))))
+            .expect_err("graft failure");
+
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(error.message.contains("synthetic graft failure"));
     }
 }

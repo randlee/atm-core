@@ -226,7 +226,6 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
-    use std::sync::MutexGuard;
 
     use tempfile::TempDir;
 
@@ -240,13 +239,15 @@ mod tests {
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
-    use crate::test_support::{TEST_SENDER, TEST_TEAM, lock_env, remove_env_var, set_env_var};
+    use crate::test_support::{
+        EnvLockGuard, TEST_SENDER, TEST_TEAM, lock_env, remove_env_var, set_env_var,
+    };
     use crate::types::{AgentName, TeamName};
 
     struct LocalEnvGuard {
         key: &'static str,
         original: Option<OsString>,
-        _guard: MutexGuard<'static, ()>,
+        _guard: EnvLockGuard,
     }
 
     impl LocalEnvGuard {
@@ -307,7 +308,7 @@ mod tests {
     #[cfg(unix)]
     struct LocalEnvSet {
         restorations: Vec<(&'static str, Option<OsString>)>,
-        _guard: MutexGuard<'static, ()>,
+        _guard: EnvLockGuard,
     }
 
     impl Drop for LocalEnvGuard {

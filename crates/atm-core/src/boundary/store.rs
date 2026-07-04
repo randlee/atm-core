@@ -58,10 +58,10 @@ pub fn roster_member_record_from_claude_code_member(
             Value::Number(serde_json::Number::from(joined_at)),
         );
     }
-    if !member.home_dir.as_os_str().is_empty() {
+    if !member.home_dir.is_empty() {
         metadata_json.insert(
             HOME_DIR_METADATA_KEY.to_string(),
-            Value::String(member.home_dir.display().to_string()),
+            Value::String(member.home_dir.as_path().display().to_string()),
         );
     }
 

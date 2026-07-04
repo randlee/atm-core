@@ -32,6 +32,7 @@ uuid.workspace = true
 fs2 = "0.4"
 same-file = "1"
 sc-observability-types.workspace = true
+parking_lot = "0.12"
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }

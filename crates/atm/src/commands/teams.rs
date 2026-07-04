@@ -261,12 +261,18 @@ mod tests {
         }
     }
 
-    fn update_member_command(json: bool) -> TeamsCommand {
+    fn temp_test_path(label: &str) -> (TempDir, PathBuf) {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join(label);
+        (tempdir, path)
+    }
+
+    fn update_member_command(json: bool, home_dir: PathBuf) -> TeamsCommand {
         TeamsCommand {
             command: Some(TeamsSubcommand::UpdateMember(UpdateMemberCommand {
                 team: TEST_TEAM.to_string(),
                 member: TEST_SENDER.to_string(),
-                home_dir: Some(PathBuf::from("/tmp/repaired-home")),
+                home_dir: Some(home_dir),
                 harness: Some("codex-cli".to_string()),
                 agent_type: Some("worker".to_string()),
                 model: Some("gpt-5".to_string()),
@@ -423,14 +429,14 @@ mod tests {
             json: false,
         };
 
-        let atm_home_dir = PathBuf::from("/tmp/atm-home");
-        let member_home_dir = PathBuf::from("/tmp/member-home");
+        let (_atm_home_guard, atm_home_dir) = temp_test_path("atm-home");
+        let (_member_home_guard, member_home_dir) = temp_test_path("member-home");
         let request = command
             .build_request(atm_home_dir.clone(), member_home_dir.clone())
             .expect("request");
 
-        assert_eq!(request.atm_home_dir, atm_home_dir);
-        assert_eq!(request.member_home_dir, member_home_dir);
+        assert_eq!(request.atm_home_dir.as_ref(), atm_home_dir.as_path());
+        assert_eq!(request.member_home_dir.as_ref(), member_home_dir.as_path());
         assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
     }
 
@@ -451,10 +457,11 @@ mod tests {
 
     #[test]
     fn update_member_build_request_preserves_target_and_caller_context() {
+        let (_member_home_guard, member_home_dir) = temp_test_path("member-home");
         let command = UpdateMemberCommand {
             team: TEST_TEAM.to_string(),
             member: TEST_SENDER.to_string(),
-            home_dir: Some(PathBuf::from("/tmp/member-home")),
+            home_dir: Some(member_home_dir.clone()),
             harness: Some("codex-cli".to_string()),
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
@@ -473,7 +480,10 @@ mod tests {
         assert_eq!(request.member.0.as_str(), TEST_SENDER);
         assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(request.caller_team.as_str(), TEST_TEAM);
-        assert_eq!(request.home_dir, Some(PathBuf::from("/tmp/member-home")));
+        assert_eq!(
+            request.home_dir.as_ref().map(AsRef::as_ref),
+            Some(member_home_dir.as_path())
+        );
         assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
     }
 
@@ -498,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn teams_run_lists_discovered_teams_without_daemon() {
         let fixture = Fixture::new();
         let command = TeamsCommand {
@@ -514,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn backup_and_restore_dry_run_execute_without_daemon() {
         let fixture = Fixture::new();
 
@@ -553,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn add_member_executes_without_default_runtime_factory() {
         let fixture = Fixture::new();
 
@@ -573,15 +583,16 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn update_member_executes_without_default_runtime_factory() {
         let fixture = Fixture::new();
+        let repaired_home_dir = fixture.current_dir.join("repaired-home");
 
         fixture.with_env_and_cwd(|| {
             UpdateMemberCommand {
                 team: TEST_TEAM.to_string(),
                 member: TEST_SENDER.to_string(),
-                home_dir: Some(PathBuf::from("/tmp/repaired-home")),
+                home_dir: Some(repaired_home_dir),
                 harness: Some("codex-cli".to_string()),
                 agent_type: Some("worker".to_string()),
                 model: Some("gpt-5".to_string()),
@@ -603,7 +614,8 @@ mod tests {
     #[serial(env)]
     fn update_member_requires_identity_from_environment() {
         let fixture = Fixture::new();
-        let command = update_member_command(true);
+        let (_repair_guard, repaired_home_dir) = temp_test_path("repaired-home");
+        let command = update_member_command(true, repaired_home_dir);
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
             ("ATM_IDENTITY", None),
@@ -624,7 +636,8 @@ mod tests {
     #[serial(env)]
     fn update_member_requires_team_from_environment_not_positional_target() {
         let fixture = Fixture::new();
-        let command = update_member_command(true);
+        let (_repair_guard, repaired_home_dir) = temp_test_path("repaired-home");
+        let command = update_member_command(true, repaired_home_dir);
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
             ("ATM_IDENTITY", Some(TEST_SENDER)),
@@ -645,7 +658,8 @@ mod tests {
     #[serial(env)]
     fn update_member_rejects_invalid_identity_before_mutation() {
         let fixture = Fixture::new();
-        let command = update_member_command(true);
+        let (_repair_guard, repaired_home_dir) = temp_test_path("repaired-home");
+        let command = update_member_command(true, repaired_home_dir);
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
             ("ATM_IDENTITY", Some("../bad")),
@@ -666,7 +680,8 @@ mod tests {
     #[serial(env)]
     fn update_member_rejects_invalid_team_before_mutation() {
         let fixture = Fixture::new();
-        let command = update_member_command(true);
+        let (_repair_guard, repaired_home_dir) = temp_test_path("repaired-home");
+        let command = update_member_command(true, repaired_home_dir);
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
             ("ATM_IDENTITY", Some(TEST_SENDER)),

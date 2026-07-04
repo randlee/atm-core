@@ -70,7 +70,10 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
             )
             .with_source(source)
     })?;
-    let _ = atm_home()?;
+    {
+        let _env_lock = lock_env();
+        let _ = atm_home()?;
+    }
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: path.as_ref().to_path_buf(),
         config_current_dir,

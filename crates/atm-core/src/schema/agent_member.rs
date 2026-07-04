@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -9,6 +9,60 @@ pub use atm_storage::contract::AgentType;
 pub const HOME_DIR_METADATA_KEY: &str = "home_dir";
 #[deprecated(note = "Phase AD obsolete: derived compatibility field only")]
 pub const LEGACY_CWD_METADATA_KEY: &str = "cwd";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct HomeDirPath(PathBuf);
+
+impl HomeDirPath {
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.as_os_str().is_empty()
+    }
+}
+
+impl AsRef<Path> for HomeDirPath {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
+    }
+}
+
+impl From<PathBuf> for HomeDirPath {
+    fn from(value: PathBuf) -> Self {
+        Self(value)
+    }
+}
+
+impl From<HomeDirPath> for PathBuf {
+    fn from(value: HomeDirPath) -> Self {
+        value.0
+    }
+}
+
+pub fn canonical_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
+    metadata_home_dir(metadata_json, HOME_DIR_METADATA_KEY)
+}
+
+#[allow(
+    deprecated,
+    reason = "Phase AD obsolete: bounded fallback remains only to read pre-AD compatibility metadata."
+)]
+pub fn compatible_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
+    canonical_home_dir(metadata_json)
+        .or_else(|| metadata_home_dir(metadata_json, LEGACY_CWD_METADATA_KEY))
+}
+
+fn metadata_home_dir(metadata_json: &Map<String, Value>, key: &str) -> Option<HomeDirPath> {
+    metadata_json
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| PathBuf::from(value).into())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,7 +94,7 @@ pub struct AgentMember {
     /// Durable agent-home directory imported from or projected back into
     /// compatibility config documents.
     #[serde(default, alias = "cwd", rename = "home_dir")]
-    pub home_dir: PathBuf,
+    pub home_dir: HomeDirPath,
 
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -55,7 +109,7 @@ impl AgentMember {
             model: ModelName::default(),
             joined_at: None,
             tmux_pane_id: None,
-            home_dir: PathBuf::new(),
+            home_dir: HomeDirPath::default(),
             extra: Map::new(),
         }
     }
@@ -63,9 +117,14 @@ impl AgentMember {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
-    use super::{AgentMember, AgentType};
+    use serde_json::{Map, Value};
+
+    use super::{
+        AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, canonical_home_dir,
+        compatible_home_dir,
+    };
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
@@ -80,7 +139,7 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert_eq!(member.home_dir, PathBuf::new());
+        assert_eq!(member.home_dir, HomeDirPath::default());
         assert!(member.extra.is_empty());
     }
 
@@ -109,7 +168,10 @@ mod tests {
         assert_eq!(member.model.as_str(), "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
-        assert_eq!(member.home_dir, PathBuf::from("/workspace"));
+        assert_eq!(
+            member.home_dir.as_path(),
+            PathBuf::from("/workspace").as_path()
+        );
         assert_eq!(member.extra["color"], serde_json::json!("blue"));
 
         let encoded = serde_json::to_string(&member).expect("encode");
@@ -124,7 +186,10 @@ mod tests {
                 .expect("member");
 
         assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
-        assert_eq!(member.home_dir, PathBuf::from("/workspace"));
+        assert_eq!(
+            member.home_dir.as_path(),
+            PathBuf::from("/workspace").as_path()
+        );
     }
 
     #[test]
@@ -139,6 +204,38 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert_eq!(member.home_dir, PathBuf::new());
+        assert_eq!(member.home_dir, HomeDirPath::default());
+    }
+
+    #[test]
+    fn canonical_home_dir_reads_typed_metadata() {
+        let metadata =
+            Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), Value::from("/repo/home"))]);
+
+        assert_eq!(
+            canonical_home_dir(&metadata)
+                .as_ref()
+                .map(HomeDirPath::as_path),
+            Some(Path::new("/repo/home"))
+        );
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: bounded fallback remains only for pre-AD compatibility metadata."
+    )]
+    fn compatible_home_dir_falls_back_to_legacy_cwd() {
+        let metadata = Map::from_iter([(
+            super::LEGACY_CWD_METADATA_KEY.to_string(),
+            Value::from("/repo/cwd"),
+        )]);
+
+        assert_eq!(
+            compatible_home_dir(&metadata)
+                .as_ref()
+                .map(HomeDirPath::as_path),
+            Some(Path::new("/repo/cwd"))
+        );
     }
 }
