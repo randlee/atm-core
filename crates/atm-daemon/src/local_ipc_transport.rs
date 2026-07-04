@@ -43,7 +43,13 @@ use shutdown::{
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
+// Give terminate/reload a brief grace window to deliver a typed rejection
+// before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+// Test hooks keep shutdown deadlines short so the transport suite verifies
+// drain/cancel behavior without waiting on production-scale timing.
+#[cfg(test)]
+const TEST_GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_millis(500);
 const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 
 #[derive(Debug, Default)]
@@ -1008,7 +1014,7 @@ mod tests {
                 dispatcher,
                 RuntimeServeHooks {
                     endpoint_guard,
-                    graceful_drain_deadline: Duration::from_millis(500),
+                    graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
                     force_cancel_deadline: Duration::from_secs(2),
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
@@ -1065,7 +1071,7 @@ mod tests {
                 dispatcher,
                 RuntimeServeHooks {
                     endpoint_guard,
-                    graceful_drain_deadline: Duration::from_millis(500),
+                    graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
                     force_cancel_deadline: Duration::from_secs(2),
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
@@ -1157,7 +1163,7 @@ mod tests {
                 dispatcher,
                 RuntimeServeHooks {
                     endpoint_guard,
-                    graceful_drain_deadline: Duration::from_millis(500),
+                    graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
                     force_cancel_deadline: Duration::from_secs(2),
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
