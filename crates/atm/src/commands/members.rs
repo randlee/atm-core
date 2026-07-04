@@ -4,10 +4,12 @@
 )]
 
 use anyhow::Result;
-use atm_core::home;
 use atm_core::team_admin::{self, MembersQuery};
 use clap::Args;
 
+use crate::commands::caller_context::{
+    CallerContextOverrides, CallerTeamOverride, resolve_cli_caller_context,
+};
 use crate::commands::retained_roster::with_retained_roster_store;
 use crate::observability::CliObservability;
 use crate::output;
@@ -25,25 +27,21 @@ pub struct MembersCommand {
 impl MembersCommand {
     /// Execute the `atm members` command.
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
-        let home_dir = home::atm_home()?;
-        let current_dir = std::env::current_dir()?;
         let json = self.json;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query()?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::list_members_with_roster_store(roster_store, query)
         })?;
         output::print_members_result(&outcome, json)
     }
 
-    fn build_query(
-        self,
-        home_dir: std::path::PathBuf,
-        current_dir: std::path::PathBuf,
-    ) -> Result<MembersQuery> {
+    fn build_query(self) -> Result<MembersQuery> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: None,
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
         Ok(MembersQuery {
-            home_dir,
-            current_dir,
-            team_override: self.team.map(|value| value.parse()).transpose()?,
+            team: caller_context.caller_team,
         })
     }
 }
@@ -157,6 +155,7 @@ mod tests {
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
             let _env = EnvGuard::set_many([
                 ("ATM_HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                ("ATM_IDENTITY", Some(TEST_SENDER)),
                 ("ATM_TEAM", None),
                 ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
             ]);
@@ -166,44 +165,35 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_preserves_team_override() {
         let command = MembersCommand {
             team: Some(TEST_TEAM.to_string()),
             json: true,
         };
-        let tempdir = TempDir::new().expect("tempdir");
-        let home_dir = tempdir.path().join("home");
-        let current_dir = tempdir.path().join("cwd");
+        let _identity = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
 
-        let query = command
-            .build_query(home_dir.clone(), current_dir.clone())
-            .expect("query");
+        let query = command.build_query().expect("query");
 
-        assert_eq!(
-            query.team_override.as_ref().map(|value| value.as_str()),
-            Some(TEST_TEAM)
-        );
-        assert_eq!(query.home_dir, home_dir);
-        assert_eq!(query.current_dir, current_dir);
+        assert_eq!(query.team.as_str(), TEST_TEAM);
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_rejects_invalid_team_override() {
         let command = MembersCommand {
             team: Some("../evil".to_string()),
             json: false,
         };
-        let tempdir = TempDir::new().expect("tempdir");
+        let _identity = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
 
-        let error = command
-            .build_query(tempdir.path().join("home"), tempdir.path().join("cwd"))
-            .expect_err("invalid team");
+        let error = command.build_query().expect_err("invalid team");
 
         assert!(error.to_string().contains("team name"));
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn run_lists_member_roster_without_daemon() {
         let fixture = Fixture::new();
         let command = MembersCommand {

@@ -1,3 +1,8 @@
+#![allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller-owned context fallback is forbidden in production, but the retired helper module remains test-visible until the later deletion sprint removes it entirely."
+)]
+
 pub mod hook;
 
 use crate::config::AtmConfig;

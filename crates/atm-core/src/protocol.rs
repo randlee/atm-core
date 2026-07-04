@@ -112,9 +112,9 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
         | AtmErrorCode::ConfigTeamMissing => AtmErrorKind::Config,
-        AtmErrorCode::IdentityUnavailable | AtmErrorCode::WarningIdentityDrift => {
-            AtmErrorKind::Identity
-        }
+        AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityInvalid
+        | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::DaemonMayHaveExecuted
@@ -166,7 +166,9 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::TestFakeTransportInjectionFailed => AtmErrorKind::Validation,
+        | AtmErrorCode::TestFakeTransportInjectionFailed
+        | AtmErrorCode::TeamInvalid
+        | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
     }
 }
 
@@ -387,8 +389,65 @@ pub fn request_from_frame_payload(
             "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
         ));
     }
-    let request = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
+    let request = match frame.message_kind {
+        MessageKind::SendComposeRequest
+        | MessageKind::SendAcknowledgeRequest
+        | MessageKind::ListRequest
+        | MessageKind::ReceiveRequest
+        | MessageKind::ClearRequest => {
+            let value = serde_json::from_slice::<serde_json::Value>(&frame.bytes)
+                .map_err(AtmError::from)?;
+            validate_required_caller_context_fields(&value)?;
+            serde_json::from_value(value).map_err(AtmError::from)?
+        }
+        _ => serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?,
+    };
     Ok((frame.request_id, request))
+}
+
+fn validate_required_caller_context_fields(value: &serde_json::Value) -> Result<(), AtmError> {
+    let object = value.as_object().ok_or_else(|| {
+        AtmError::caller_context_request_invalid(
+            "daemon request payload must be a JSON object with caller_identity and caller_team",
+        )
+    })?;
+    parse_required_caller_identity(object)?;
+    parse_required_caller_team(object)?;
+    Ok(())
+}
+
+fn parse_required_caller_identity(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<AgentName, AtmError> {
+    let value = object.get("caller_identity").ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request is missing caller_identity")
+    })?;
+    let raw = value.as_str().ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request caller_identity must be a string")
+    })?;
+    raw.parse::<AgentName>().map_err(|error| {
+        AtmError::caller_context_request_invalid(format!(
+            "daemon request caller_identity is invalid: {}",
+            error.message
+        ))
+    })
+}
+
+fn parse_required_caller_team(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<TeamName, AtmError> {
+    let value = object.get("caller_team").ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request is missing caller_team")
+    })?;
+    let raw = value.as_str().ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request caller_team must be a string")
+    })?;
+    raw.parse::<TeamName>().map_err(|error| {
+        AtmError::caller_context_request_invalid(format!(
+            "daemon request caller_team is invalid: {}",
+            error.message
+        ))
+    })
 }
 
 pub fn response_to_frame_payload(
