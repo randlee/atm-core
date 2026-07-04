@@ -85,22 +85,37 @@ pub(crate) fn register_session_with_validated_batch_limit(
     if let Err(validation_error) =
         validate_batch_limit_against_capacity(batch_limit, response.queue_capacity)
     {
-        return match client.unregister_session(AdvisorySessionUnregistrationRequest {
-            session_id: request.session_id.clone(),
-        }) {
-            Ok(cleanup) if cleanup.closed => Err(validation_error),
-            Ok(_) => Err(AtmError::daemon_unavailable(format!(
-                "graft advisory session {} remained registered after batch-limit validation failed",
-                request.session_id
-            ))
-            .with_source(validation_error)
-            .with_recovery(
-                "Restart the graft session after the daemon unregister path can close invalid registrations reliably.",
-            )),
-            Err(cleanup_error) => Err(validation_error.with_source(cleanup_error)),
-        };
+        return Err(cleanup_registered_session_after_error(
+            client,
+            &request.session_id,
+            "graft batch-limit validation",
+            validation_error,
+        ));
     }
     Ok(response)
+}
+
+pub(crate) fn cleanup_registered_session_after_error(
+    client: &dyn AdvisorySessionPort,
+    session_id: &atm_core::graft::AdvisorySessionId,
+    failed_step: &str,
+    original_error: AtmError,
+) -> AtmError {
+    let original_code = original_error.code;
+    let original_message = original_error.message.clone();
+    match client.unregister_session(AdvisorySessionUnregistrationRequest {
+        session_id: session_id.clone(),
+    }) {
+        Ok(cleanup) if cleanup.closed => original_error,
+        Ok(_) => AtmError::daemon_advisory_session_cleanup_failed(format!(
+            "graft advisory session {session_id} may still be registered after {failed_step} failed ({original_code}: {original_message}); daemon unregister completed without closing the session"
+        ))
+        .with_source(original_error),
+        Err(cleanup_error) => AtmError::daemon_advisory_session_cleanup_failed(format!(
+            "graft advisory session {session_id} may still be registered after {failed_step} failed ({original_code}: {original_message}); daemon unregister failed during cleanup"
+        ))
+        .with_source(cleanup_error),
+    }
 }
 
 pub(crate) fn join_receive_loop_with_deadline(
@@ -383,11 +398,29 @@ fn reconnect_live_receive_loop(
         return Ok(backoff);
     }
     reregister_live_receive_loop(ctx)?;
-    ctx.advisory_stream = ctx.client.open_advisory_stream(AdvisoryStreamRequest {
-        registration: ctx.registration_request.clone(),
-        limit: ctx.limit,
+    let advisory_stream = ctx
+        .client
+        .open_advisory_stream(AdvisoryStreamRequest {
+            registration: ctx.registration_request.clone(),
+            limit: ctx.limit,
+        })
+        .map_err(|error| {
+            cleanup_registered_session_after_error(
+                &*ctx.client,
+                &ctx.registration_request.session_id,
+                "graft advisory-stream reconnect",
+                error,
+            )
+        })?;
+    ctx.advisory_stream = advisory_stream;
+    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref()).map_err(|error| {
+        cleanup_registered_session_after_error(
+            &*ctx.client,
+            &ctx.registration_request.session_id,
+            "graft advisory-stream reconnect state publication",
+            error,
+        )
     })?;
-    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
     Ok(std::cmp::min(
         backoff.saturating_mul(2),
         MAX_LIVE_RECONNECT_BACKOFF,
@@ -472,19 +505,34 @@ mod tests {
         AdvisorySessionState, AdvisorySessionUnregistrationRequest,
         AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AtmGraftClient,
     };
+    use atm_core::protocol;
     use atm_core::read::{ReadOutcome, ReadQuery};
     use atm_core::send::{SendOutcome, SendRequest};
     use atm_core::types::IsoTimestamp;
+    use interprocess::local_socket::prelude::*;
+    use interprocess::local_socket::{ListenerOptions, Stream as LocalSocketStream};
+    use tempfile::TempDir;
 
     use super::{
-        ReceiveLoopContext, attempt_receive_loop_reregistration, read_snapshot,
-        register_session_with_validated_batch_limit,
+        LiveReceiveLoopContext, ReceiveLoopContext, attempt_receive_loop_reregistration,
+        read_snapshot, reconnect_live_receive_loop, register_session_with_validated_batch_limit,
     };
-    use crate::{GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot};
+    use crate::{
+        GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot,
+        transport::ActiveAdvisoryStream,
+    };
+
+    #[derive(Debug, Clone, Copy)]
+    enum UnregisterBehavior {
+        Closed,
+        NotClosed,
+        Error,
+    }
 
     #[derive(Debug)]
     struct RecordingSessionClient {
         queue_capacity: usize,
+        unregister_behavior: UnregisterBehavior,
         unregister_calls: Mutex<Vec<AdvisorySessionId>>,
     }
 
@@ -492,6 +540,18 @@ mod tests {
         fn new(queue_capacity: usize) -> Self {
             Self {
                 queue_capacity,
+                unregister_behavior: UnregisterBehavior::Closed,
+                unregister_calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn with_unregister_behavior(
+            queue_capacity: usize,
+            unregister_behavior: UnregisterBehavior,
+        ) -> Self {
+            Self {
+                queue_capacity,
+                unregister_behavior,
                 unregister_calls: Mutex::new(Vec::new()),
             }
         }
@@ -533,10 +593,19 @@ mod tests {
                 .lock()
                 .expect("unregister calls")
                 .push(request.session_id.clone());
-            Ok(AdvisorySessionUnregistrationResponse {
-                session_id: request.session_id,
-                closed: true,
-            })
+            match self.unregister_behavior {
+                UnregisterBehavior::Closed => Ok(AdvisorySessionUnregistrationResponse {
+                    session_id: request.session_id,
+                    closed: true,
+                }),
+                UnregisterBehavior::NotClosed => Ok(AdvisorySessionUnregistrationResponse {
+                    session_id: request.session_id,
+                    closed: false,
+                }),
+                UnregisterBehavior::Error => {
+                    Err(AtmError::daemon_unavailable("simulated unregister failure"))
+                }
+            }
         }
 
         fn fetch_nudges(
@@ -613,6 +682,66 @@ mod tests {
     }
 
     #[test]
+    fn register_session_with_invalid_batch_limit_reports_not_closed_cleanup_failure() {
+        let client =
+            RecordingSessionClient::with_unregister_behavior(1, UnregisterBehavior::NotClosed);
+        let error = register_session_with_validated_batch_limit(
+            &client,
+            registration_request(),
+            AdvisoryBatchLimit::new(8).expect("limit"),
+        )
+        .expect_err("batch-limit validation should fail");
+
+        assert!(!error.is_validation());
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionCleanupFailed
+        );
+        assert!(error.message.contains("without closing the session"));
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn register_session_with_invalid_batch_limit_reports_unregister_cleanup_failure() {
+        let client = RecordingSessionClient::with_unregister_behavior(1, UnregisterBehavior::Error);
+        let error = register_session_with_validated_batch_limit(
+            &client,
+            registration_request(),
+            AdvisoryBatchLimit::new(8).expect("limit"),
+        )
+        .expect_err("batch-limit validation should fail");
+
+        assert!(!error.is_validation());
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionCleanupFailed
+        );
+        assert!(
+            error
+                .message
+                .contains("daemon unregister failed during cleanup")
+        );
+        let source = error.source.as_ref().expect("cleanup source").to_string();
+        assert!(source.contains("simulated unregister failure"));
+        assert!(source.contains("atm-daemon binary is installed"));
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
     fn reregistration_cleans_up_registered_slot_when_batch_limit_validation_fails() {
         let client = Arc::new(RecordingSessionClient::new(1));
         let registration = registration_request();
@@ -654,5 +783,141 @@ mod tests {
             read_snapshot(&snapshot).expect("snapshot").state,
             AdvisorySessionState::Disconnected
         );
+    }
+
+    #[derive(Debug)]
+    struct ReconnectFailureClient {
+        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
+    }
+
+    impl AdvisorySessionPort for ReconnectFailureClient {
+        fn register_session(
+            &self,
+            request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            Ok(AdvisorySessionRegistrationResponse {
+                team: request.team,
+                agent: request.agent,
+                session_id: request.session_id,
+                registered_at: IsoTimestamp::now(),
+                queue_capacity: 16,
+            })
+        }
+
+        fn unregister_session(
+            &self,
+            request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            self.unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .push(request.session_id.clone());
+            Ok(AdvisorySessionUnregistrationResponse {
+                session_id: request.session_id,
+                closed: true,
+            })
+        }
+
+        fn fetch_nudges(
+            &self,
+            _request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            panic!("fetch_nudges is not used by reconnect tests")
+        }
+
+        fn drain_nudges(
+            &self,
+            _request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            panic!("drain_nudges is not used by reconnect tests")
+        }
+    }
+
+    impl AtmGraftClient for ReconnectFailureClient {
+        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+            panic!("send_message is not used by reconnect tests")
+        }
+
+        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+            panic!("read_message is not used by reconnect tests")
+        }
+
+        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+            panic!("acknowledge_message is not used by reconnect tests")
+        }
+    }
+
+    impl GraftSessionClient for ReconnectFailureClient {
+        fn supports_live_advisory_stream(&self) -> bool {
+            true
+        }
+
+        fn open_advisory_stream(
+            &self,
+            _request: AdvisoryStreamRequest,
+        ) -> Result<ActiveAdvisoryStream, AtmError> {
+            Err(AtmError::daemon_unavailable(
+                "simulated advisory-stream reopen failure",
+            ))
+        }
+    }
+
+    #[test]
+    fn reconnect_live_receive_loop_cleans_up_when_stream_reopen_fails() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint_path = tempdir.path().join("reconnect.sock");
+        let listener = ListenerOptions::new()
+            .name(protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"))
+            .create_sync()
+            .expect("create listener");
+        let server = std::thread::spawn(move || {
+            let _stream = listener.accept().expect("accept");
+        });
+        let stream = LocalSocketStream::connect(
+            protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"),
+        )
+        .expect("connect");
+        let client = Arc::new(ReconnectFailureClient {
+            unregister_calls: Mutex::new(Vec::new()),
+        });
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: "test-team".parse().expect("team"),
+            agent: "test-agent".parse().expect("agent"),
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
+            state: AdvisorySessionState::Registered,
+        }));
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let mut ctx = LiveReceiveLoopContext {
+            client: Arc::clone(&client) as Arc<dyn GraftSessionClient>,
+            registration_request: registration_request(),
+            advisory_stream: ActiveAdvisoryStream {
+                stream,
+                request_id: protocol::next_request_id(),
+            },
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
+            reconnect_backoff: Duration::from_millis(1),
+            snapshot,
+            injector: Arc::new(NoopInjector),
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+        };
+
+        let error = reconnect_live_receive_loop(
+            &mut ctx,
+            AtmError::daemon_unavailable("stream read failed"),
+            Duration::from_millis(1),
+        )
+        .expect_err("stream reopen should fail");
+
+        assert_eq!(error.message, "simulated advisory-stream reopen failure");
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+        server.join().expect("join server");
     }
 }
