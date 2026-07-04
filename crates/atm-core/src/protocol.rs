@@ -750,6 +750,10 @@ pub enum NotificationKind {
 }
 
 impl fmt::Display for NotificationKind {
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete transport strings remain stable for historical reconcile/watch decoding and formatting support."
+    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
             Self::Delivery => "delivery",
