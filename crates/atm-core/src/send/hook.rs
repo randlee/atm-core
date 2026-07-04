@@ -20,6 +20,7 @@ use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::schema::{HOME_DIR_METADATA_KEY, LEGACY_CWD_METADATA_KEY};
 use crate::service_runtime::append_notification_log;
 use crate::types::{AgentName, PaneId, TeamName};
 
@@ -707,13 +708,13 @@ fn post_send_event_from_message(
 
 fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
     metadata
-        .get("home_dir")
+        .get(HOME_DIR_METADATA_KEY)
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
         .or_else(|| {
             metadata
-                .get("cwd")
+                .get(LEGACY_CWD_METADATA_KEY)
                 .and_then(Value::as_str)
                 .filter(|value| !value.trim().is_empty())
                 .map(PathBuf::from)
@@ -988,7 +989,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{InboxMessage, TeamConfig};
+    use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, LEGACY_CWD_METADATA_KEY, TeamConfig};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -1187,13 +1188,15 @@ mod tests {
 
     #[test]
     fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
-        let home_dir_metadata = Map::from_iter([("home_dir".to_string(), json!("/repo/home"))]);
+        let home_dir_metadata =
+            Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), json!("/repo/home"))]);
         assert_eq!(
             sender_config_root(&home_dir_metadata),
             Some(PathBuf::from("/repo/home"))
         );
 
-        let cwd_only_metadata = Map::from_iter([("cwd".to_string(), json!("/repo/cwd"))]);
+        let cwd_only_metadata =
+            Map::from_iter([(LEGACY_CWD_METADATA_KEY.to_string(), json!("/repo/cwd"))]);
         assert_eq!(
             sender_config_root(&cwd_only_metadata),
             Some(PathBuf::from("/repo/cwd"))
@@ -1213,7 +1216,7 @@ mod tests {
                 model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::from_iter([(
-                    "cwd".to_string(),
+                    LEGACY_CWD_METADATA_KEY.to_string(),
                     json!(config_root.display().to_string()),
                 )]),
             }),

@@ -178,6 +178,10 @@ fn run() -> Result<(), AtmError> {
         }
     };
 
+    if let Ok(launch_cwd) = std::env::current_dir() {
+        tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
+    }
+
     match cli.run(&observability) {
         Ok(()) => Ok(()),
         Err(error) => Err(report_and_map_service_error(&observability, error)),
