@@ -1473,6 +1473,11 @@ uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
 optionally emit one structured stdout result for observability, and never rolls
 back a successful message write on failure or timeout.
 
+Hook configuration lookup note:
+- send/ack must resolve post-send hook configuration from the sender's
+  authoritative ATM roster home metadata, using retained `cwd` only as a
+  compatibility fallback until all members publish canonical `home_dir`
+
 Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`

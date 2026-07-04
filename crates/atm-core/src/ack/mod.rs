@@ -131,7 +131,6 @@ fn ack_mail_with_runtime_impl<
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<AckOutcome, AtmError> {
-    let config = runtime.load_config(&request.current_dir)?;
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
     let team_dir = runtime.team_dir(&request.home_dir, &team)?;
@@ -145,14 +144,7 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    ack_mail_with_runtime_sqlite(
-        request,
-        observability,
-        runtime,
-        config.as_ref(),
-        actor,
-        team,
-    )
+    ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team)
 }
 
 fn ack_mail_with_runtime_sqlite<
@@ -161,11 +153,24 @@ fn ack_mail_with_runtime_sqlite<
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    config: Option<&crate::config::AtmConfig>,
     actor: AgentName,
     team: TeamName,
 ) -> Result<AckOutcome, AtmError> {
     let delivery_policy = DeliveryPolicyCoordinator::new();
+    let (post_send_config, warnings) =
+        match crate::send::hook::load_post_send_config_for_sender(runtime, &team, &actor) {
+            Ok(config) => (config, Vec::new()),
+            Err(error) => (
+                None,
+                vec![crate::send::WarningEntry::new(
+                    format!(
+                        "warning: post-send hook config lookup failed for {}@{}: {}.",
+                        actor, team, error.message
+                    ),
+                    error.primary_recovery().map(str::to_owned),
+                )],
+            ),
+        };
     let source = load_ack_source(
         runtime,
         &request.home_dir,
@@ -192,7 +197,6 @@ fn ack_mail_with_runtime_sqlite<
     finalize_ack_outcome(
         runtime,
         observability,
-        config,
         FinalizeAckContext {
             actor: &actor,
             team: &team,
@@ -200,6 +204,8 @@ fn ack_mail_with_runtime_sqlite<
             reply_target: &reply_target,
             reply_snapshot: &reply_snapshot,
             persisted: &persisted,
+            post_send_config,
+            warnings,
         },
     )
 }
@@ -225,6 +231,8 @@ struct FinalizeAckContext<'a> {
     reply_target: &'a ReplyTarget,
     reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     persisted: &'a PersistedAckReply,
+    post_send_config: Option<crate::config::AtmConfig>,
+    warnings: Vec<crate::send::WarningEntry>,
 }
 
 struct AckPersistenceContext<'a> {
@@ -445,11 +453,10 @@ fn finalize_ack_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    config: Option<&crate::config::AtmConfig>,
     context: FinalizeAckContext<'_>,
 ) -> Result<AckOutcome, AtmError> {
     let plan = build_reply_delivery_plan(&context)?;
-    let execution = execute_reply_delivery_plan(runtime, config, &plan)?;
+    let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
         team: context.team.clone(),
@@ -459,7 +466,7 @@ fn finalize_ack_outcome<
         reply_target: context.reply_target.clone(),
         reply_message_id: context.persisted.reply_message_id,
         reply_text: context.persisted.reply_text.clone(),
-        warnings: Vec::new(),
+        warnings: context.warnings,
     };
     outcome.warnings.extend(plan.warnings.iter().cloned());
     emit_reply_delivery_plan_transitions(
@@ -476,6 +483,13 @@ fn finalize_ack_outcome<
         &execution,
     )?;
     outcome.warnings.extend(execution.warnings);
+    crate::send::hook::emit_post_send_effects(
+        &mut outcome.warnings,
+        context.post_send_config.as_ref(),
+        &plan.recipient,
+        &plan.messages,
+        context.reply_snapshot.recipient_pane_id.as_ref(),
+    );
     record_ack_telemetry(
         observability,
         context.actor,
@@ -547,7 +561,6 @@ impl AckReplyStateMachine {
                 agent: reply_target.agent.clone(),
                 team: reply_target.team.clone(),
             },
-            reply_snapshot.recipient_pane_id.clone(),
             messages,
             warnings,
         )
@@ -1080,7 +1093,6 @@ mod tests {
         assert_eq!(plan.messages.len(), 2);
         assert_eq!(plan.messages[0].envelope, original);
         assert_eq!(plan.messages[1].envelope, companion);
-        assert_eq!(plan.notifications.len(), 2);
         assert_eq!(plan.warnings.len(), 1);
         match plan.delivery_target {
             DeliveryTarget::ClaudeCode { .. } => {}
@@ -1142,7 +1154,6 @@ mod tests {
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            None,
             FinalizeAckContext {
                 actor: &"sender".parse::<AgentName>().expect("agent"),
                 team: &team,
@@ -1150,6 +1161,8 @@ mod tests {
                 reply_target: &reply_target,
                 reply_snapshot: &reply_snapshot,
                 persisted: &persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
             },
         )
         .expect("finalize ack outcome");
