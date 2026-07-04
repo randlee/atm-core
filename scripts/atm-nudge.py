@@ -321,24 +321,42 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
     payload = payload or {}
     is_ack = payload.get("is_ack") is True
     message_id = str(payload.get("message_id", "")).strip()
+    description = ""
+    for key in ("description", "summary"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            description = value.strip()
+            break
     if is_ack:
         acknowledgement = (
             f"message {message_id} acknowledged"
             if message_id
             else "message acknowledged"
         )
+        message_context = (
+            f"<message-id>{message_id}</message-id>" if message_id else ""
+        )
         return (
             f"<atm><action>read atm --team {team}</action>"
             f"<action>ack the message</action>"
+            f"{message_context}"
             f"<action>{acknowledgement}</action>"
             f"<action>complete associated work immediately</action>"
             f'<when idle="immediate" busy="complete tasks based on established priority"/>'
             f'<console announce="concise" pause="false"/></atm>'
         )
 
+    message_context = (
+        f"<message-id>{message_id}</message-id>" if message_id else ""
+    )
+    description_context = (
+        f"<description>{description}</description>" if description else ""
+    )
     return (
         f"<atm><action>read atm --team {team}</action>"
         f"<action>ack the message</action>"
+        f"{message_context}"
+        f"{description_context}"
         f"<action>execute the assigned task</action>"
         f'<when idle="immediate" busy="after-current-task"/>'
         f'<console announce="concise" pause="false"/></atm>'
