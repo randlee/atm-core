@@ -412,15 +412,32 @@ fn record_doctor_roster_drift(
         .map(|member| member.agent_name.clone())
         .collect::<BTreeSet<_>>();
 
-    for member in atm_members.difference(&present) {
+    record_roster_membership_drift(team, &present, &atm_members, findings);
+    record_roster_member_metadata_drift(team, &team_config.members, atm_roster, findings);
+}
+
+fn record_roster_membership_drift(
+    team: &TeamName,
+    config_members: &BTreeSet<AgentName>,
+    roster_members: &BTreeSet<AgentName>,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for member in roster_members.difference(config_members) {
         push_missing_config_member_finding(team, member.as_str(), findings);
     }
 
-    for member in present.difference(&atm_members) {
+    for member in config_members.difference(roster_members) {
         push_missing_roster_member_finding(team, member.as_str(), findings);
     }
+}
 
-    for config_member in &team_config.members {
+fn record_roster_member_metadata_drift(
+    team: &TeamName,
+    config_members: &[crate::schema::AgentMember],
+    atm_roster: &[RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for config_member in config_members {
         let Some(roster_member) = atm_roster
             .iter()
             .find(|member| member.agent_name == config_member.name)
