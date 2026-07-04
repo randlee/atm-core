@@ -115,7 +115,8 @@ fn parse_duration(raw: &str) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+    use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_TEAM};
+    use serial_test::serial;
 
     use super::ClearCommand;
 
@@ -136,5 +137,51 @@ mod tests {
             .expect_err("invalid target");
 
         assert!(error.to_string().contains("agent name"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = ClearCommand {
+            target: None,
+            actor_override: None,
+            team: None,
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+            json: false,
+        };
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), "sender-a");
+        assert_eq!(query.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let command = ClearCommand {
+            target: None,
+            actor_override: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+            json: false,
+        };
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(query.caller_team.as_str(), TEST_TEAM);
     }
 }

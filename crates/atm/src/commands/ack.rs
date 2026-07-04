@@ -67,7 +67,9 @@ impl AckCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::EnvGuard;
     use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::AckCommand;
@@ -135,5 +137,53 @@ mod tests {
         assert_eq!(Some(request.caller_team.as_str()), Some("test-team"));
         assert_eq!(Some(request.caller_identity.as_str()), Some("sender-a"));
         assert_eq!(request.reply_body, "received");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = AckCommand {
+            message_id: VALID_MESSAGE_ID.to_string(),
+            reply: "received".to_string(),
+            team: None,
+            actor: None,
+            json: false,
+        };
+
+        let (_tempdir, home_dir, current_dir) = test_paths();
+        let request = command
+            .build_request(home_dir, current_dir)
+            .expect("request");
+
+        assert_eq!(request.caller_identity.as_str(), "sender-a");
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let command = AckCommand {
+            message_id: VALID_MESSAGE_ID.to_string(),
+            reply: "received".to_string(),
+            team: Some(TEST_TEAM.to_string()),
+            actor: Some(ROLE_TEAM_LEAD.to_string()),
+            json: false,
+        };
+
+        let (_tempdir, home_dir, current_dir) = test_paths();
+        let request = command
+            .build_request(home_dir, current_dir)
+            .expect("request");
+
+        assert_eq!(request.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
     }
 }

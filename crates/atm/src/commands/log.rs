@@ -494,4 +494,34 @@ mod tests {
 
         command.run(&observability).expect("snapshot run");
     }
+
+    #[test]
+    #[serial(env)]
+    fn run_snapshot_fails_without_caller_context() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_LOG", Some("info")),
+        ]);
+        let observability =
+            CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
+                .expect("observability");
+        let command = LogCommand {
+            mode: LogModeCommand::Snapshot(QueryArgs {
+                levels: vec![CliLogLevel::Info],
+                matches: vec!["command=send".to_string()],
+                since: None,
+                limit: Some(5),
+                json: true,
+            }),
+        };
+
+        let error = command.run(&observability).expect_err("missing identity");
+
+        assert_eq!(
+            error.downcast_ref::<AtmError>().map(|atm| atm.code),
+            Some(atm_core::error_codes::AtmErrorCode::IdentityUnavailable)
+        );
+    }
 }

@@ -964,14 +964,15 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        HookCancellationToken, LocalTmuxPostSendEmitter, POST_SEND_HOOK_MAX_STDOUT_BYTES,
-        PostSendHookResultLevel, finish_abandoned_post_send_hook_stdout_capture,
-        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, sender_config_root, tmux_nudge_message,
+        GraftPostSendEmitter, HookCancellationToken, LocalTmuxPostSendEmitter,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
+        hook_result_log_level, load_post_send_config_for_sender, parse_post_send_hook_result,
+        sender_config_root, tmux_nudge_message,
     };
     use crate::boundary::{
-        PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use crate::config::AtmConfig;
     use crate::config::types::HookRecipient;
@@ -1104,6 +1105,27 @@ mod tests {
             F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
         {
             unreachable!("config lookup test does not commit workflow state")
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingGraftPort {
+        delivered: std::sync::Mutex<Vec<PostSendHookEvent>>,
+        fail_message: Option<String>,
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
+
+    impl GraftPostSendPort for RecordingGraftPort {
+        fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+            if let Some(message) = &self.fail_message {
+                return Err(AtmError::daemon_unavailable(message.clone()));
+            }
+            self.delivered
+                .lock()
+                .expect("graft deliveries")
+                .push(event.clone());
+            Ok(())
         }
     }
 
@@ -1294,5 +1316,34 @@ mod tests {
         assert!(logged.contains("%9"));
         assert!(logged.contains(&tmux_nudge_message(&TeamName::from_validated("test-team"))));
         assert!(logged.contains("Enter"));
+    }
+
+    #[test]
+    fn graft_post_send_emitter_delegates_to_graft_port() {
+        let port = RecordingGraftPort::default();
+        let event = tmux_event(Some(PaneId::from_cli("%9").expect("pane")));
+
+        GraftPostSendEmitter::new(&port)
+            .emit(&event)
+            .expect("graft send");
+
+        let delivered = port.delivered.lock().expect("graft deliveries");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0], event);
+    }
+
+    #[test]
+    fn graft_post_send_emitter_surfaces_port_failure() {
+        let port = RecordingGraftPort {
+            delivered: std::sync::Mutex::new(Vec::new()),
+            fail_message: Some("synthetic graft failure".to_string()),
+        };
+
+        let error = GraftPostSendEmitter::new(&port)
+            .emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))))
+            .expect_err("graft failure");
+
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(error.message.contains("synthetic graft failure"));
     }
 }

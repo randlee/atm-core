@@ -119,6 +119,8 @@ mod tests {
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::SendMessageSource;
+    use atm_core::test_support::EnvGuard;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     const TEST_TEAM: &str = "test-team";
@@ -242,6 +244,64 @@ mod tests {
             SendMessageSource::Inline(message) => assert_eq!(message, "hello from send"),
             other => panic!("expected inline message source, got {other:?}"),
         }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            from: None,
+            team: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("request");
+
+        assert_eq!(request.caller_identity.as_str(), "sender-a");
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            from: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("request");
+
+        assert_eq!(request.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
     }
 
     #[test]

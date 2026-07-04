@@ -581,6 +581,62 @@ def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
         maybe_file_dep_currency_issue(root, stale)
 
 
+def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
+    readiness_path = root / "docs" / "plans" / "phase-AD" / "readiness.md"
+    smoke_normal = root / "reports" / "smoke" / "smoke.md"
+    smoke_thorough = root / "reports" / "smoke" / "smoke-thorough.md"
+    boundary_toml = root / "boundaries" / "atm-core" / "post-send-hook-emitter.toml"
+    boundary_inventory = root / "docs" / "atm-core" / "boundaries.md"
+
+    missing = [
+        path
+        for path in (readiness_path, smoke_normal, smoke_thorough, boundary_toml, boundary_inventory)
+        if not path.exists()
+    ]
+    if missing:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="phase AD readiness artifacts are missing",
+                detail=", ".join(str(path.relative_to(root)) for path in missing),
+            )
+        )
+        return
+
+    readiness_text = readiness_path.read_text(encoding="utf-8")
+    boundary_text = boundary_inventory.read_text(encoding="utf-8")
+    required_readiness_markers = (
+        "# Phase AD Readiness",
+        "`AD.11`",
+        "release verdict: `READY`",
+        "`reports/smoke/smoke.md`",
+        "`reports/smoke/smoke-thorough.md`",
+    )
+    missing_markers = [
+        marker for marker in required_readiness_markers if marker not in readiness_text
+    ]
+    if missing_markers:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="phase AD readiness document is incomplete",
+                detail=", ".join(missing_markers),
+            )
+        )
+
+    if "## PostSendHookEmitter" not in boundary_text:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="PostSendHookEmitter boundary inventory entry is missing",
+                detail="docs/atm-core/boundaries.md does not contain the PostSendHookEmitter heading",
+            )
+        )
+
+
 def write_findings(root: Path, version: str, findings_path: Path, findings: list[Finding]) -> None:
     payload = {
         "generatedAt": utc_now(),
@@ -608,6 +664,7 @@ def build_parser() -> argparse.ArgumentParser:
             "inventory",
             "cargo-lock-drift",
             "dependency-currency",
+            "phase-ad-readiness",
         ),
     )
     parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
@@ -644,6 +701,7 @@ def main(argv: list[str] | None = None) -> int:
             enforce_release_window=explicit_version,
         ),
         "dependency-currency": lambda: validate_dependency_currency(root, findings),
+        "phase-ad-readiness": lambda: validate_phase_ad_readiness(root, findings),
     }
 
     findings_path = root / args.findings
@@ -658,6 +716,7 @@ def main(argv: list[str] | None = None) -> int:
                 "inventory",
                 "cargo-lock-drift",
                 "dependency-currency",
+                "phase-ad-readiness",
             ):
                 print(f"== validate {target} ==")
                 actions[target]()

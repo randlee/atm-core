@@ -1,7 +1,7 @@
 ---
 id: AD.11
 title: Smoke And Readiness Closeout
-status: planned
+status: complete
 branch: feature/pAD-s11-smoke-and-readiness-closeout
 worktree: ../atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout
 target: integrate/phase-AD

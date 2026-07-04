@@ -180,8 +180,10 @@ impl ReadCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::EnvGuard;
     use atm_core::test_support::ROLE_TEAM_LEAD;
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use serial_test::serial;
 
     use super::ReadCommand;
 
@@ -235,6 +237,42 @@ mod tests {
 
         let warnings = command.deprecation_warnings();
         assert_eq!(warnings.len(), 4);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let query = base_command()
+            .build_query(".".into(), ".".into())
+            .expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("env-team")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("override-team")
+        );
     }
 
     fn base_command() -> ReadCommand {

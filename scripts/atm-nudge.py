@@ -155,6 +155,9 @@ def _pane_team(pane: dict[str, object]) -> str | None:
 
 def read_pane_from_toml(recipient: str, team: str) -> PaneLookup:
     """Read the authoritative pane from the repo-local .atm.toml."""
+    # Phase AD obsolete: pane truth lives in SQLite roster state. Retained only
+    # as a compatibility seam until the daemon-owned post-send path stops
+    # routing through this historical script.
     if tomllib is None:
         return PaneLookup(
             None,

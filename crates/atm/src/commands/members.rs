@@ -171,7 +171,10 @@ mod tests {
             team: Some(TEST_TEAM.to_string()),
             json: true,
         };
-        let _identity = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
+        let _identity = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some("other-team")),
+        ]);
 
         let query = command.build_query().expect("query");
 

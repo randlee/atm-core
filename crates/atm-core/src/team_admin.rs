@@ -354,7 +354,7 @@ fn add_member_from_roster_store(
     let inbox_path =
         home::inbox_path_from_home(&request.atm_home_dir, &request.team, &request.member)?;
     let created_inbox = ensure_inbox_exists(&inbox_path)?;
-    existing_roster.push(build_member_add_roster_record(&request)?);
+    existing_roster.push(build_member_add_roster_record(&request));
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
     let projected_config = project_team_config_from_roster(current_extra, &existing_roster);
 
@@ -382,6 +382,7 @@ fn update_member_from_roster_store(
     atm_home_dir: &Path,
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
+    validate_update_member_caller(roster_store, &request)?;
     let team_dir = home::team_dir_from_home(atm_home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
@@ -453,7 +454,35 @@ fn ensure_member_absent(
     Ok(())
 }
 
-fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEntry, AtmError> {
+fn validate_update_member_caller(
+    roster_store: &dyn RosterStore,
+    request: &UpdateMemberRequest,
+) -> Result<(), AtmError> {
+    if request.caller_team != request.team {
+        return Err(AtmError::validation(format!(
+            "caller team '{}' does not match update-member target team '{}'",
+            request.caller_team, request.team
+        ))
+        .with_recovery(
+            "Run `atm teams update-member` from the target team's ATM shell, or set ATM_TEAM to the same team named in the positional target argument.",
+        ));
+    }
+
+    let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
+    if caller_entry.is_none() {
+        return Err(AtmError::member_not_found(
+            request.caller_identity.as_str(),
+            request.team.as_str(),
+        )
+        .with_recovery(
+            "Repair the caller roster entry first or rerun `atm teams update-member` as an existing member of the target team.",
+        ));
+    }
+
+    Ok(())
+}
+
+fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
     let normalized_tmux_pane_id = request.tmux_pane_id.clone();
     let mut extra = serde_json::Map::new();
     if normalized_tmux_pane_id.is_some() {
@@ -473,7 +502,7 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEn
         json!(request.member_home_dir.display().to_string()),
     );
 
-    Ok(RosterEntry {
+    RosterEntry {
         team_name: request.team.clone(),
         agent_name: request.member.clone(),
         member_kind: RosterMemberKind::Permanent,
@@ -482,7 +511,7 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEn
         model: request.model.clone(),
         recipient_pane_id: normalized_tmux_pane_id,
         metadata_json: extra,
-    })
+    }
 }
 
 fn replace_roster_for_member_add(
@@ -1321,7 +1350,13 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
-        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+            ],
+        );
 
         update_member_with_roster_store(
             &roster_store,
@@ -1343,8 +1378,11 @@ mod tests {
         let roster = roster_store
             .load_roster(&TEST_TEAM.parse().expect("team"))
             .expect("load roster");
-        assert_eq!(roster.len(), 1);
-        let member = &roster[0];
+        assert_eq!(roster.len(), 2);
+        let member = roster
+            .iter()
+            .find(|member| member.agent_name == TEST_SENDER)
+            .expect("sender member");
         assert_eq!(member.harness, RosterHarness::CodexCli);
         assert_eq!(member.recipient_pane_id.as_deref(), Some("%22"));
         assert_eq!(
@@ -1367,16 +1405,73 @@ mod tests {
     }
 
     #[test]
-    fn update_member_rejects_missing_existing_member() {
+    fn update_member_rejects_caller_team_mismatch_before_mutation() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
 
         let error = update_member_with_roster_store(
             &roster_store,
             tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: "other-team".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_SENDER.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree")),
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+            },
+        )
+        .expect_err("caller team mismatch");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("caller team"));
+    }
+
+    #[test]
+    fn update_member_rejects_caller_missing_from_target_roster() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_RECIPIENT)]);
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_RECIPIENT.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree")),
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+            },
+        )
+        .expect_err("missing caller");
+
+        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert!(error.message.contains(TEST_SENDER));
+    }
+
+    #[test]
+    fn update_member_rejects_missing_existing_member() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD)]);
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
