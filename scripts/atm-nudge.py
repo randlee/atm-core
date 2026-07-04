@@ -597,11 +597,12 @@ def main(argv: list[str]) -> int:
         return 0
 
     roster = read_pane_from_roster(recipient, team, payload)
-    toml = read_pane_from_toml(recipient, team)
 
     if roster.pane_id:
         nudge_pane(roster.pane_id, recipient, message)
         return 0
+
+    toml = read_pane_from_toml(recipient, team)
 
     if toml.pane_id:
         nudge_pane(toml.pane_id, recipient, message)

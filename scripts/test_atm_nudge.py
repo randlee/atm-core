@@ -434,6 +434,43 @@ class TestMainBehavior(unittest.TestCase):
         self.assertEqual(stderr_json, {})
         self.assertEqual(stdout_json, {})
 
+    def test_roster_match_skips_toml_fallback_lookup(self):
+        with (
+            patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
+            patch.object(_MOD, "read_post_send_payload", return_value={}),
+            patch.object(
+                _MOD,
+                "read_pane_from_roster",
+                return_value=PaneLookup(
+                    "%5",
+                    None,
+                    None,
+                    "atm members --team <team> --json",
+                ),
+            ),
+            patch.object(_MOD, "read_pane_from_toml") as mock_toml,
+            patch.object(_MOD, "nudge_pane") as mock_nudge,
+            patch.object(_MOD, "emit_json_stderr"),
+            patch.object(_MOD, "emit_hook_result"),
+            patch.object(_MOD, "log"),
+        ):
+            rc = _MOD.main(["atm-nudge.py", TEST_AGENT])
+
+        self.assertEqual(rc, 0)
+        mock_toml.assert_not_called()
+        mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
+
+    def test_roster_pane_wins_when_roster_and_toml_disagree(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            [TEST_AGENT],
+            PaneLookup("%5", None, None, "atm members --team <team> --json"),
+            PaneLookup("%9", None, None, "/repo/.atm.toml"),
+        )
+        self.assertEqual(rc, 0)
+        mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
+        self.assertEqual(stderr_json, {})
+        self.assertEqual(stdout_json, {})
+
     def test_toml_fallback_still_nudges_and_warns(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
