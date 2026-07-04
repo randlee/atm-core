@@ -24,7 +24,7 @@ Record the accepted closure state for Phase AD:
 | `AD.6` | `complete` | `feature/pAD-s6-post-send-nudge-contract-simplification` | `PostSendHookEmitter` boundary is documented and enforced as the governing seam |
 | `AD.7` | `complete` | `feature/pAD-s7-local-tmux-post-send-emitter` | local tmux nudges use authoritative roster pane metadata instead of repo-local pane truth |
 | `AD.8` | `complete` | `feature/pAD-s8-graft-post-send-emitter` | graft-backed post-send emission is isolated behind the graft port and does not leak into core ownership |
-| `AD.9` | `complete` | `feature/pAD-s9-update-member-cli-and-roster-repair-path` | `update-member` is the accepted roster-repair path and `.atm.toml` pane truth is obsolete |
+| `AD.9` | `complete` | `feature/pAD-s9-update-member-cli-and-roster-repair-path` | `update-member` is the accepted roster-repair path, canonical roster pane state is primary, and any `.atm.toml` pane mapping is compatibility fallback only |
 | `AD.10` | `complete` | `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup` | durable `home_dir`, runtime `live_cwd`, and log-only `launch_cwd` terminology is enforced consistently |
 | `AD.11` | `complete` | `feature/pAD-s11-smoke-and-readiness-closeout` | smoke artifacts, readiness gate, and promoted AD.9 findings close on one accepted evidence line |
 
