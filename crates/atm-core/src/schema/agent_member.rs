@@ -33,9 +33,10 @@ pub struct AgentMember {
     #[serde(default)]
     pub tmux_pane_id: Option<PaneId>,
 
-    /// Retained working directory path for the agent process, copied from `config.json` roster state.
-    #[serde(default)]
-    pub cwd: PathBuf,
+    /// Durable agent-home directory imported from or projected back into the
+    /// Claude compatibility `cwd` field.
+    #[serde(default, alias = "home_dir", rename = "cwd")]
+    pub home_dir: PathBuf,
 
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -50,7 +51,7 @@ impl AgentMember {
             model: ModelName::default(),
             joined_at: None,
             tmux_pane_id: None,
-            cwd: PathBuf::new(),
+            home_dir: PathBuf::new(),
             extra: Map::new(),
         }
     }
@@ -75,7 +76,7 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert_eq!(member.cwd, PathBuf::new());
+        assert_eq!(member.home_dir, PathBuf::new());
         assert!(member.extra.is_empty());
     }
 
@@ -104,7 +105,7 @@ mod tests {
         assert_eq!(member.model.as_str(), "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
-        assert_eq!(member.cwd, PathBuf::from("/workspace"));
+        assert_eq!(member.home_dir, PathBuf::from("/workspace"));
         assert_eq!(member.extra["color"], serde_json::json!("blue"));
 
         let encoded = serde_json::to_string(&member).expect("encode");
@@ -124,6 +125,6 @@ mod tests {
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
         assert_eq!(member.tmux_pane_id, None);
-        assert_eq!(member.cwd, PathBuf::new());
+        assert_eq!(member.home_dir, PathBuf::new());
     }
 }

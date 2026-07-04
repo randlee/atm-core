@@ -80,6 +80,8 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::MemberAlreadyExists
+        | AtmErrorCode::MemberNotFound
         | AtmErrorCode::AddressParseFailed
         | AtmErrorCode::TeamUnavailable
         | AtmErrorCode::TeamInvalid

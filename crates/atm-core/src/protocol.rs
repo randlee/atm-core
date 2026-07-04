@@ -116,6 +116,9 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
+        AtmErrorCode::MemberAlreadyExists | AtmErrorCode::MemberNotFound => {
+            AtmErrorKind::Validation
+        }
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge

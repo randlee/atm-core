@@ -7,10 +7,14 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
-use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
+use atm_core::team_admin::{
+    self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult, UpdateMemberRequest,
+};
 use clap::{Args, Subcommand};
 
-use crate::commands::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
+use crate::commands::caller_context::{
+    CallerContext, CallerContextOverrides, resolve_cli_caller_context,
+};
 use crate::commands::retained_roster::with_retained_roster_store;
 use crate::observability::CliObservability;
 use crate::output;
@@ -28,6 +32,7 @@ pub struct TeamsCommand {
 #[derive(Debug, Subcommand)]
 enum TeamsSubcommand {
     AddMember(AddMemberCommand),
+    UpdateMember(UpdateMemberCommand),
     Backup(BackupCommand),
     Restore(RestoreCommand),
 }
@@ -45,6 +50,33 @@ struct AddMemberCommand {
 
     #[arg(long)]
     cwd: Option<PathBuf>,
+
+    #[arg(
+        long = "pane-id",
+        help = "tmux pane id in '%<number>' form or a bare numeric pane id"
+    )]
+    pane_id: Option<String>,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct UpdateMemberCommand {
+    team: String,
+    member: String,
+
+    #[arg(long)]
+    home_dir: Option<PathBuf>,
+
+    #[arg(long)]
+    harness: Option<String>,
+
+    #[arg(long)]
+    agent_type: Option<String>,
+
+    #[arg(long)]
+    model: Option<String>,
 
     #[arg(
         long = "pane-id",
@@ -94,6 +126,7 @@ impl TeamsCommand {
                 output::print_teams_result(&outcome, self.json)
             }
             Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
+            Some(TeamsSubcommand::UpdateMember(command)) => command.run(home_dir, caller_context),
             Some(TeamsSubcommand::Backup(command)) => command.run(home_dir),
             Some(TeamsSubcommand::Restore(command)) => command.run(home_dir),
         }
@@ -143,6 +176,32 @@ impl BackupCommand {
     }
 }
 
+impl UpdateMemberCommand {
+    fn run(self, atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
+        let json = self.json;
+        let request = self.build_request(caller_context)?;
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::update_member_with_roster_store(roster_store, &atm_home_dir, request)
+        })?;
+        output::print_update_member_result(&outcome, json)
+    }
+
+    fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
+        UpdateMemberRequest::new(
+            caller_context.caller_identity,
+            caller_context.caller_team,
+            &self.team,
+            &self.member,
+            self.home_dir,
+            self.harness,
+            self.agent_type,
+            self.model,
+            self.pane_id,
+        )
+        .map_err(Into::into)
+    }
+}
+
 impl RestoreCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
         let json = self.json;
@@ -174,7 +233,10 @@ mod tests {
     use tempfile::TempDir;
 
     use super::TeamsCommand;
-    use super::{AddMemberCommand, BackupCommand, RestoreCommand};
+    use super::{
+        AddMemberCommand, BackupCommand, RestoreCommand, TeamsSubcommand, UpdateMemberCommand,
+    };
+    use crate::commands::caller_context::CallerContext;
     use crate::observability::CliObservability;
 
     struct Fixture {
@@ -192,6 +254,22 @@ mod tests {
             let original = std::env::current_dir().expect("current dir");
             std::env::set_current_dir(path).expect("set current dir");
             Self { original }
+        }
+    }
+
+    fn update_member_command(json: bool) -> TeamsCommand {
+        TeamsCommand {
+            command: Some(TeamsSubcommand::UpdateMember(UpdateMemberCommand {
+                team: TEST_TEAM.to_string(),
+                member: TEST_SENDER.to_string(),
+                home_dir: Some(PathBuf::from("/tmp/repaired-home")),
+                harness: Some("codex-cli".to_string()),
+                agent_type: Some("worker".to_string()),
+                model: Some("gpt-5".to_string()),
+                pane_id: Some("%19".to_string()),
+                json,
+            })),
+            json: false,
         }
     }
 
@@ -345,6 +423,34 @@ mod tests {
     }
 
     #[test]
+    fn update_member_build_request_preserves_target_and_caller_context() {
+        let command = UpdateMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            home_dir: Some(PathBuf::from("/tmp/member-home")),
+            harness: Some("codex-cli".to_string()),
+            agent_type: Some("worker".to_string()),
+            model: Some("gpt-5".to_string()),
+            pane_id: Some("17".to_string()),
+            json: true,
+        };
+
+        let request = command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+            })
+            .expect("request");
+
+        assert_eq!(request.team.as_str(), TEST_TEAM);
+        assert_eq!(request.member.0.as_str(), TEST_SENDER);
+        assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+        assert_eq!(request.home_dir, Some(PathBuf::from("/tmp/member-home")));
+        assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
+    }
+
+    #[test]
     fn restore_build_request_preserves_from_path_and_dry_run() {
         let tempdir = TempDir::new().expect("tempdir");
         let backup_path = tempdir.path().join("backup");
@@ -437,5 +543,116 @@ mod tests {
             .run(fixture.home_dir.clone())
             .expect("add-member run");
         });
+    }
+
+    #[test]
+    #[serial]
+    fn update_member_executes_without_default_runtime_factory() {
+        let fixture = Fixture::new();
+
+        fixture.with_env_and_cwd(|| {
+            UpdateMemberCommand {
+                team: TEST_TEAM.to_string(),
+                member: TEST_SENDER.to_string(),
+                home_dir: Some(PathBuf::from("/tmp/repaired-home")),
+                harness: Some("codex-cli".to_string()),
+                agent_type: Some("worker".to_string()),
+                model: Some("gpt-5".to_string()),
+                pane_id: Some("%19".to_string()),
+                json: true,
+            }
+            .run(
+                fixture.home_dir.clone(),
+                CallerContext {
+                    caller_identity: TEST_SENDER.parse().expect("caller"),
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                },
+            )
+            .expect("update-member run");
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn update_member_requires_identity_from_environment() {
+        let fixture = Fixture::new();
+        let command = update_member_command(true);
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+            ("ATM_IDENTITY", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+        ]);
+        let _cwd = CwdGuard::change_to(&fixture.current_dir);
+
+        let error = command
+            .run(&CliObservability::fallback())
+            .expect_err("missing identity");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::IdentityUnavailable);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn update_member_requires_team_from_environment_not_positional_target() {
+        let fixture = Fixture::new();
+        let command = update_member_command(true);
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", None),
+            ("HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+        ]);
+        let _cwd = CwdGuard::change_to(&fixture.current_dir);
+
+        let error = command
+            .run(&CliObservability::fallback())
+            .expect_err("missing team");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::TeamUnavailable);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn update_member_rejects_invalid_identity_before_mutation() {
+        let fixture = Fixture::new();
+        let command = update_member_command(true);
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+            ("ATM_IDENTITY", Some("../bad")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+        ]);
+        let _cwd = CwdGuard::change_to(&fixture.current_dir);
+
+        let error = command
+            .run(&CliObservability::fallback())
+            .expect_err("invalid identity");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::IdentityInvalid);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn update_member_rejects_invalid_team_before_mutation() {
+        let fixture = Fixture::new();
+        let command = update_member_command(true);
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some("../bad")),
+            ("HOME", Some(fixture.home_dir.to_str().expect("utf8"))),
+        ]);
+        let _cwd = CwdGuard::change_to(&fixture.current_dir);
+
+        let error = command
+            .run(&CliObservability::fallback())
+            .expect_err("invalid team");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::TeamInvalid);
     }
 }

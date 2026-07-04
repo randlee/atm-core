@@ -27,6 +27,8 @@ pub enum AtmErrorCode {
     IdentityUnavailable,
     IdentityInvalid,
     IdentityConflict,
+    MemberAlreadyExists,
+    MemberNotFound,
     DaemonUnavailable,
     DaemonMayHaveExecuted,
     DaemonLifecycleWedge,
@@ -98,6 +100,8 @@ impl AtmErrorCode {
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
             Self::IdentityInvalid => "ATM_IDENTITY_INVALID",
             Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
+            Self::MemberAlreadyExists => "ATM_MEMBER_ALREADY_EXISTS",
+            Self::MemberNotFound => "ATM_MEMBER_NOT_FOUND",
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
             Self::DaemonMayHaveExecuted => "ATM_DAEMON_MAY_HAVE_EXECUTED",
             Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
@@ -192,6 +196,8 @@ fn parse_config_or_identity_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_IDENTITY_UNAVAILABLE" => AtmErrorCode::IdentityUnavailable,
         "ATM_IDENTITY_INVALID" => AtmErrorCode::IdentityInvalid,
         "ATM_IDENTITY_CONFLICT" => AtmErrorCode::IdentityConflict,
+        "ATM_MEMBER_ALREADY_EXISTS" => AtmErrorCode::MemberAlreadyExists,
+        "ATM_MEMBER_NOT_FOUND" => AtmErrorCode::MemberNotFound,
         _ => return None,
     })
 }
