@@ -1,0 +1,272 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD5-SEND-001>
+  a triage:Finding ;
+  triage:findingId "AD5-SEND-001" ;
+  triage:title "send::tests assertion-count-mismatch failures on PR #453 (HOME env-var race across test_support.rs and home.rs)" ;
+  triage:description "PR #453 (AD.5-QA-1) CI failures exhibit test assertion count mismatches in send module (ubuntu line 666: left=3 right=2; windows line 818: left=2 right=1). Root cause initially attributed (informally by team-lead during AD.5-QA-1) to 'notification-runtime removal changed assertion counts'. AD.8-QA-1 verdict re-analyzed and identified real cause: unsynchronized environment-variable mutation mutexes between test_support.rs (public env_lock at lines 20-23) and home.rs (local env_lock at lines 250-253 in test module). Both provide OnceLock-based static LOCK variables that independently serialize environment mutations. When tests run in parallel (cargo test without --test-threads=1), test_support.rs::EnvGuard sets HOME via one lock while home.rs tests or code paths attempt HOME mutations via a different, uncoordinated lock, creating a TOCTOU race. This causes HOME env var resolution to return inconsistent paths, leading to notifications being written to or read from wrong directories, resulting in unexpected event counts." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:readinessBlocking true ;
+  triage:readinessBlockingBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:qa1Evidence "AD.11-QA-1: cargo test --workspace fails deterministically with env_lock race (rust-qa-agent verified); blocks phase readiness claim" ;
+  triage:triagedAt "2026-07-03T20:15:00Z"^^xsd:dateTime ;
+  triage:rootCauseVerified true ;
+  triage:rootCauseExplanation "Two independent static OnceLock<Mutex<()>> variables with the same function name (env_lock) in different modules (test_support.rs and home.rs test module) provide NO actual synchronization across modules. When parallel tests execute: (1) test_support.rs::EnvGuard::set_many([('HOME', ...)]) acquires test_support.rs's LOCK and mutates HOME; (2) concurrent code in home.rs or other modules reads HOME but may use home.rs's separate LOCK if calling into home.rs test helpers; (3) no global synchronization means both code paths run concurrently, creating classic TOCTOU race on the HOME env var. Result: HOME path resolution becomes non-deterministic, file I/O operations target wrong directories, notification event counts diverge from test expectations. Pattern parallels FTQ-001/002/003 env-lock races (in caller_context.rs), but distinct root location and failure signature (send module assertion counts vs caller_context direct lock contention)." ;
+  triage:distinguishedFromFtq "AD5-SEND-001 is distinct from FTQ-001/002/003. FTQ findings address private EnvGuard in caller_context.rs; AD5-SEND-001 addresses separate env_lock in home.rs test module. Both are env-lock coordination defects but in different code locations. FTQ-001 correctionNote explicitly notes PR #453 failures are 'NOT THE ENVGUARD RACE' and require separate investigation; AD5-SEND-001 is that separate investigation." ;
+  triage:affectedTestFiles "send::tests (send/tests.rs lines 666 and 818)" ;
+  triage:pr453FailureSignatureUbuntu "send::tests::send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary line 666: assertion left=3 right=2 (expected 2 notification events, found 3)" ;
+  triage:pr453FailureSignatureWindows "send::tests::send_claude_success_appends_original_via_compat_inbox_writer line 818: assertion left=2 right=1 (expected 1 notification event, found 2)" ;
+  triage:pr453FailureMechanism "Both failures are notification event count mismatches, consistent with HOME env-var race causing I/O to divergent directories: extra notification events from previous test runs leak into current test's temp home directory, or expected events written to wrong location entirely." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-SEND-001/AD11/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD.1/2e151d21> ;
+  triage:openOn <urn:atm:triage:worktree/AD.2/490c9d23> ;
+  triage:openOn <urn:atm:triage:worktree/AD.3/4ff7cfbc> ;
+  triage:openOn <urn:atm:triage:worktree/AD.4/29b96dd3> ;
+  triage:openOn <urn:atm:triage:worktree/AD.5/8f17a12a> ;
+  triage:openOn <urn:atm:triage:worktree/AD.6/0704764e> ;
+  triage:openOn <urn:atm:triage:worktree/AD.7/0b13b7eb> ;
+  triage:openOn <urn:atm:triage:worktree/AD.8/f90f04f6> ;
+  triage:openOn <urn:atm:triage:worktree/AD.9/138e85ea> ;
+  triage:openOn <urn:atm:triage:worktree/AD.10/88941b99> ;
+  triage:openOn <urn:atm:triage:worktree/AD.11/1dc4f9a0> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD.11/1dc4f9a0> .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.1/2e151d21> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.2/490c9d23> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.3/4ff7cfbc> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.4/29b96dd3> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.5/8f17a12a> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.6/0704764e> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.7/0b13b7eb> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.8/f90f04f6> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.9/138e85ea> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.10/88941b99> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+
+<urn:atm:triage:occurrence/AD5-SEND-001/AD11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 250 ;
+  triage:snippet "fn env_lock() -> &'static Mutex<()> { static LOCK: OnceLock<Mutex<()>> = OnceLock::new(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.11/1dc4f9a0> ;
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" ;
+  triage:qa1ReadinessBlockingSeverity "blocking" ;
+  triage:qa1Evidence "AD.11-QA-1 reproducible: cargo test --workspace deterministically fails with env_lock race; rust-qa-agent verified; blocks phase readiness claim" .
+
+<urn:atm:triage:worktree/AD.1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 ;
+  triage:sprintId "AD.1" .
+
+<urn:atm:triage:worktree/AD.2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 ;
+  triage:sprintId "AD.2" .
+
+<urn:atm:triage:worktree/AD.3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 ;
+  triage:sprintId "AD.3" .
+
+<urn:atm:triage:worktree/AD.4/29b96dd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:orderIndex 4 ;
+  triage:sprintId "AD.4" .
+
+<urn:atm:triage:worktree/AD.5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 ;
+  triage:sprintId "AD.5" .
+
+<urn:atm:triage:worktree/AD.6/0704764e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:orderIndex 6 ;
+  triage:sprintId "AD.6" .
+
+<urn:atm:triage:worktree/AD.7/0b13b7eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:orderIndex 7 ;
+  triage:sprintId "AD.7" .
+
+<urn:atm:triage:worktree/AD.8/f90f04f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:orderIndex 8 ;
+  triage:sprintId "AD.8" .
+
+<urn:atm:triage:worktree/AD.9/138e85ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:orderIndex 9 ;
+  triage:sprintId "AD.9" .
+
+<urn:atm:triage:worktree/AD.10/88941b99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:orderIndex 10 ;
+  triage:sprintId "AD.10" .
+
+<urn:atm:triage:worktree/AD.11/1dc4f9a0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:orderIndex 11 ;
+  triage:sprintId "AD.11" .

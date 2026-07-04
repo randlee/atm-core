@@ -254,7 +254,7 @@ fn emit_plan_transitions(
 fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
     match (target, target.recipient_snapshot().harness) {
         (DeliveryTarget::ClaudeCode { .. }, DeliveryHarnessPath::ClaudeCode)
-        | (DeliveryTarget::NonClaude { .. }, DeliveryHarnessPath::NonClaude) => Ok(()),
+        | (DeliveryTarget::NonClaude { .. }, _) => Ok(()),
         (DeliveryTarget::ClaudeCode { recipient, .. }, DeliveryHarnessPath::NonClaude) => {
             Err(AtmError::validation(format!(
                 "unsupported delivery plan target: ClaudeCode target for non-Claude harness {}@{}",
@@ -262,15 +262,6 @@ fn validate_delivery_target(target: &DeliveryTarget) -> Result<(), AtmError> {
             ))
             .with_recovery(
                 "Build the delivery plan through the state machine so non-Claude recipients stay on the non-Claude outbound path.",
-            ))
-        }
-        (DeliveryTarget::NonClaude { recipient }, DeliveryHarnessPath::ClaudeCode) => {
-            Err(AtmError::validation(format!(
-                "unsupported delivery plan target: NonClaude target for Claude Code harness {}@{}",
-                recipient.agent, recipient.team
-            ))
-            .with_recovery(
-                "Build the delivery plan through the state machine so Claude Code recipients stay on the compatibility inbox append path.",
             ))
         }
     }
@@ -629,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_delivery_plan_rejects_non_claude_target_for_claude_harness() {
+    fn execute_delivery_plan_allows_non_claude_target_for_claude_harness() {
         let runtime = NoopRuntime;
         let message = logical_message();
         let plan = DeliveryPlan::new(
@@ -646,13 +637,9 @@ mod tests {
             Vec::new(),
         );
 
-        let error = execute_delivery_plan(&runtime, None, &plan).expect_err("fail closed");
-        assert!(error.is_validation());
-        assert!(
-            error
-                .message
-                .contains("NonClaude target for Claude Code harness")
-        );
+        let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
+        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
+        assert!(result.warnings.is_empty());
     }
 
     #[test]

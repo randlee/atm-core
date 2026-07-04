@@ -38,6 +38,12 @@ pub fn roster_member_record_from_claude_code_member(
     team_name: TeamName,
     member: AgentMember,
 ) -> RosterEntry {
+    let harness = member
+        .extra
+        .get("harness")
+        .and_then(Value::as_str)
+        .and_then(roster_harness_from_metadata)
+        .unwrap_or(RosterHarness::CodexCli);
     let recipient_pane_id = member.tmux_pane_id;
     let mut metadata_json = member.extra;
     if !member.agent_id.is_empty() {
@@ -63,7 +69,7 @@ pub fn roster_member_record_from_claude_code_member(
         team_name,
         agent_name: member.name,
         member_kind: RosterMemberKind::Permanent,
-        harness: RosterHarness::ClaudeCode,
+        harness,
         agent_type: member.agent_type,
         model: member.model,
         recipient_pane_id,
@@ -89,7 +95,6 @@ impl ProjectionRoster {
     pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterEntry]) -> Self {
         let members = records
             .iter()
-            .filter(|record| record.harness == RosterHarness::ClaudeCode)
             .map(|record| ProjectedRosterEntry {
                 member_name: record.agent_name.clone(),
                 harness: record.harness,
@@ -105,6 +110,16 @@ impl ProjectionRoster {
         self.members
             .iter()
             .any(|entry| entry.member_name == *member)
+    }
+}
+
+fn roster_harness_from_metadata(value: &str) -> Option<RosterHarness> {
+    match value {
+        "claude-code" => Some(RosterHarness::ClaudeCode),
+        "codex-cli" => Some(RosterHarness::CodexCli),
+        "gemini-cli" => Some(RosterHarness::GeminiCli),
+        "opencode" => Some(RosterHarness::Opencode),
+        _ => None,
     }
 }
 

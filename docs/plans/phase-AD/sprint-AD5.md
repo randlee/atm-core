@@ -1,7 +1,7 @@
 ---
 id: AD.5
 title: Notification Runtime Removal And Post-Send NotificationSink Detachment
-status: planned
+status: complete
 branch: feature/pAD-s5-notification-runtime-removal-and-post-send-detachment
 worktree: ../atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment
 target: integrate/phase-AD

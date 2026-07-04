@@ -23,7 +23,7 @@ pub fn env_lock() -> &'static Mutex<()> {
 }
 
 #[cfg(any(test, feature = "test-utils"))]
-fn lock_env() -> MutexGuard<'static, ()> {
+pub fn lock_env() -> MutexGuard<'static, ()> {
     // Some tests intentionally panic while the env guard is live to prove
     // restoration behavior. Recover the guard so later serialized env tests do
     // not fail due to lock poisoning.

@@ -1,7 +1,7 @@
 ---
 id: AD.4
 title: Reconcile Runtime Removal
-status: planned
+status: complete
 branch: feature/pAD-s4-reconcile-runtime-removal
 worktree: ../atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal
 target: integrate/phase-AD

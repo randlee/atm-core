@@ -2,8 +2,6 @@ use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
-#[cfg(unix)]
-use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -326,7 +324,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
         .expect("task inbox message");
     assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
     assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
-    assert!(task_message.pending_ack_at.is_none());
+    assert!(task_message.pending_ack_at.is_some());
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
@@ -606,9 +604,8 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
@@ -631,7 +628,6 @@ fn send_times_out_under_bounded_lock_contention() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -669,7 +665,6 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -749,17 +744,17 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     )
     .expect("send ULID-authored message");
 
-    let inbox_before = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
-        .expect("raw inbox before read");
-    let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
-    let message_id = physical_before["message_id"]
-        .as_str()
-        .expect("message id")
-        .to_string();
-    let logical_message_id = message_id
-        .parse::<AtmMessageId>()
-        .expect("logical message id");
-    assert_eq!(physical_before["read"], false);
+    let inbox_before = fixture.inbox_contents(PRIMARY_AGENT);
+    let physical_before = inbox_before
+        .iter()
+        .find(|message| message.text == "hello sidecar")
+        .expect("store-backed inbox before read");
+    let logical_message_id = physical_before.message_id.expect("logical message id");
+    assert!(!physical_before.read);
+    assert!(
+        !fixture.primary_inbox_path(PRIMARY_AGENT).exists(),
+        "AD.3 should not recreate the retired primary compatibility inbox file on send",
+    );
 
     let read_query = fixture
         .read_query(PRIMARY_AGENT)
@@ -773,15 +768,20 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         "read outcome should include the ULID-authored message"
     );
 
-    let inbox_after = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
-        .expect("raw inbox after read");
-    assert_eq!(inbox_after, inbox_before);
-    let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
-    assert_eq!(physical_after["message_id"], message_id);
-    assert_eq!(physical_after["read"], false);
+    let inbox_after = fixture.inbox_contents(PRIMARY_AGENT);
+    let physical_after = inbox_after
+        .iter()
+        .find(|message| message.text == "hello sidecar")
+        .expect("store-backed inbox after read");
+    assert_eq!(physical_after.message_id, Some(logical_message_id));
+    assert!(physical_after.read);
     assert!(
         !sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT)).exists(),
         "read-only ULID sidecar path must not leave a lock sentinel behind",
+    );
+    assert!(
+        !fixture.primary_inbox_path(PRIMARY_AGENT).exists(),
+        "AD.3 read-sidecar flow should not create the retired compatibility inbox file",
     );
     assert!(
         outcome
@@ -804,9 +804,8 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     fixture.write_origin_inbox(
@@ -840,9 +839,8 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let observability = NullObservability;
     let started = Instant::now();
 
@@ -862,20 +860,6 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
-}
-
-// Serializes process-environment mutation inside this test module. This is
-// process-local only; it does not coordinate with other test processes.
-#[cfg(unix)]
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
-    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
-    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
-    // mailbox lock behavior. Keep a single process-wide mutex in addition to
-    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
-    // continuing with inconsistent shared state.
-    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 struct Fixture {
@@ -986,8 +970,32 @@ impl Fixture {
         self.workflow_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
+    #[allow(
+        deprecated,
+        reason = "mailbox locking tests still inspect the retained sqlite runtime through legacy core boundary shims"
+    )]
     fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<InboxMessage> {
-        read_jsonl(self.primary_inbox_path_for_team(team, agent))
+        let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+        let mail_store = assembly.mail_store_arc();
+        let team = team.parse::<TeamName>().expect("team");
+        let agent_name = agent.parse::<AgentName>().expect("agent");
+        let mut metadata_rows = mail_store
+            .query_mailbox_metadata(&team, &agent_name, None)
+            .expect("mailbox rows");
+        metadata_rows.sort_by(|left, right| {
+            left.message_at
+                .cmp(&right.message_at)
+                .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+        });
+        metadata_rows
+            .into_iter()
+            .filter_map(|row| {
+                mail_store
+                    .load_message(&team, &agent_name, &row.message_key)
+                    .expect("message record")
+            })
+            .map(|record| record.envelope)
+            .collect()
     }
 
     fn workflow_state_contents_for_team(&self, team: &str, agent: &str) -> serde_json::Value {
@@ -1272,25 +1280,6 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<InboxMessage> {
         .into_iter()
         .map(|value| serde_json::from_value(value).expect("message envelope"))
         .collect()
-}
-
-fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
-    let values: Vec<serde_json::Value> = if raw.trim().is_empty() {
-        Vec::new()
-    } else {
-        match raw.chars().find(|ch| !ch.is_whitespace()) {
-            Some('[') => serde_json::from_str(raw).expect("json array"),
-            _ => raw
-                .lines()
-                .map(|line| serde_json::from_str(line).expect("json line"))
-                .collect(),
-        }
-    };
-
-    values
-        .into_iter()
-        .find(|line| line["text"] == text)
-        .expect("matching inbox json line")
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[InboxMessage]) {
