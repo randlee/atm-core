@@ -376,7 +376,7 @@ Notes:
   - durable message persistence succeeds first
   - recipient-specific post-send emission happens directly through the accepted
     post-send emitter seam
-- retained notification logging, when enabled, appends directly to the
+  - retained notification logging, when enabled, appends directly to the
     notification log with no `NotificationSink` substitution
 - Non-Claude outbound payload delivery still uses the dedicated
   `NonClaudeOutbound` boundary rather than any notification surface.
