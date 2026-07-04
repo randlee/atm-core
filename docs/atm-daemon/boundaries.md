@@ -11,9 +11,10 @@ Current design assumption:
   `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
   boundary violation guarded by both the boundary TOMLs and
   `cargo test --package atm-architecture`
-- Runtime test doubles now exist for the watch/reconcile/notifier lanes so
-  boundary tests can exercise the daemon-owned runtimes without bypassing the
-  declared contracts.
+- Phase AD retired the watch/reconcile runtime lanes; any retained
+  watch/reconcile/notifier references in older planning material are
+  historical only and must not be treated as accepted production subsystem
+  contracts or live test-double seams.
 - Phase `Y.3` tightened the retained runtime shape so normal compatibility
   rewrites now hang off one post-durability runtime refresh owner; `ack` and
   `clear` state transitions must not reintroduce daemon-bypassing source-inbox
@@ -61,6 +62,9 @@ daemon-private ownership map is:
   - `RuntimeStatusCache`, roster hydration, reload assembly, and
     `atm doctor` runtime-health projection
 - `peer_transport`
+
+Historical pre-AD planning names that no longer describe the accepted current
+daemon-private ownership map:
 - `watch_runtime`
 - `reconcile_runtime`
 - `notification_runtime`
