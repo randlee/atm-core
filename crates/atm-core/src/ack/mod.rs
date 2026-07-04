@@ -697,6 +697,16 @@ mod tests {
     #[derive(Default)]
     struct RecordingGraftPort {
         events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
+        fail: bool,
+    }
+
+    impl RecordingGraftPort {
+        fn failing() -> Self {
+            Self {
+                events: Mutex::new(Vec::new()),
+                fail: true,
+            }
+        }
     }
 
     impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
@@ -710,6 +720,13 @@ mod tests {
                 .lock()
                 .expect("graft events lock")
                 .push(event.clone());
+            if self.fail {
+                return Err(crate::error::AtmError::new_with_code(
+                    crate::error_codes::AtmErrorCode::PostSendGraftUnavailable,
+                    crate::error::AtmErrorKind::DaemonUnavailable,
+                    "simulated graft delivery failure",
+                ));
+            }
             Ok(())
         }
     }
@@ -1329,6 +1346,94 @@ mod tests {
         assert!(events[0].is_ack);
         assert_eq!(events[0].recipient.as_str(), ROLE_TEAM_LEAD);
         assert_eq!(events[0].recipient_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    fn finalize_ack_outcome_warns_when_graft_post_send_delivery_fails() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let reply_message = InboxMessage {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            text: reply_text.clone(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team.clone()),
+            summary: None,
+            message_id: Some(reply_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: Some(request_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message: reply_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        };
+        let reply_snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let reply_target = ReplyTarget::new(agent, team.clone());
+        let persisted = PersistedAckReply {
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+            reply_inbox_path: tempdir.path().join("reply.jsonl"),
+            persistence,
+        };
+        let runtime = AckRuntime {
+            outbound_deliveries: Mutex::new(Vec::new()),
+        };
+        let graft_port = RecordingGraftPort::failing();
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            Some(&graft_port),
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team,
+                request_message_id,
+                reply_target,
+                reply_snapshot,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
+            },
+        )
+        .expect("finalize ack outcome");
+
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("warning: post-send emission failed")
+        );
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ATM_POST_SEND_GRAFT_UNAVAILABLE")
+        );
+        assert_eq!(
+            graft_port.events.lock().expect("graft events lock").len(),
+            1
+        );
     }
 
     #[test]

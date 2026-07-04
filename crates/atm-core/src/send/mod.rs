@@ -35,6 +35,10 @@ mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
+#[allow(
+    dead_code,
+    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
+)]
 mod hook_tmux;
 pub(crate) mod input;
 mod missing_config_notice;
@@ -736,5 +740,7 @@ pub(super) fn qualified_sender_identity(
         .unwrap_or_else(|| sender.to_string())
 }
 
+#[cfg(test)]
+mod graft_warning_tests;
 #[cfg(test)]
 mod tests;

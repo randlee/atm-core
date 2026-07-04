@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -21,14 +21,13 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::service_runtime::append_notification_log;
-use crate::types::{AgentName, TeamName};
-
-pub(super) use super::hook_tmux::tmux_nudge_message;
-use super::hook_tmux::{run_tmux_send_enter, run_tmux_send_keys};
+use crate::types::{AgentName, PaneId, TeamName};
 use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, qualified_sender_identity};
 
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
+#[cfg(test)]
+const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
@@ -551,6 +550,112 @@ fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::
     configured.matches(candidate)
 }
 
+fn tmux_nudge_message(team: &TeamName) -> String {
+    format!("You have unread ATM messages. Run: atm read --team {team}")
+}
+
+fn run_tmux_send_keys(
+    pane_id: &PaneId,
+    message: &str,
+    event: &PostSendHookEvent,
+) -> Result<(), AtmError> {
+    let output = tmux_command()
+        .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send literal nudge")
+}
+
+fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    let output = tmux_command()
+        .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys Enter: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
+}
+
+fn tmux_command() -> Command {
+    #[cfg(test)]
+    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
+        return Command::new(program);
+    }
+    Command::new("tmux")
+}
+
+fn ensure_tmux_success(
+    output: Output,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    action: &str,
+) -> Result<(), AtmError> {
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = if stderr.is_empty() {
+        format!("tmux exited unsuccessfully while trying to {action}")
+    } else {
+        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
+    };
+    Err(tmux_send_failed_error(
+        pane_id,
+        event,
+        detail,
+        None::<std::io::Error>,
+    ))
+}
+
+fn tmux_send_failed_error<E>(
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    message: String,
+    source: Option<E>,
+) -> AtmError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let error = AtmError::new_with_code(
+        AtmErrorCode::PostSendTmuxSendFailed,
+        AtmErrorKind::Internal,
+        format!(
+            "local tmux post-send emission failed for {}@{} pane {}: {message}",
+            event.recipient, event.recipient_team, pane_id
+        ),
+    )
+    .with_recovery(format!(
+        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
+        pane_id, event.recipient_team, event.recipient
+    ));
+    warn!(
+        code = %AtmErrorCode::PostSendTmuxSendFailed,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
+        pane_id = %pane_id,
+        message_id = %event.message_id,
+        error = %message,
+        "local tmux post-send emission failed"
+    );
+    match source {
+        Some(source) => error.with_source(source),
+        None => error,
+    }
+}
 fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     NotificationEvent {
         kind: NotificationKind::Delivery,
@@ -867,7 +972,7 @@ mod tests {
 
     use super::{
         GraftPostSendEmitter, HookCancellationToken, LocalTmuxPostSendEmitter,
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, TMUX_PROGRAM_ENV,
         finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
         hook_result_log_level, load_post_send_config_for_sender, parse_post_send_hook_result,
         sender_config_root, tmux_nudge_message,
@@ -1206,15 +1311,10 @@ mod tests {
             fs::set_permissions(&tmux_path, perms).expect("chmod");
         }
 
-        let mut path_entries = vec![tempdir.path().to_path_buf()];
-        if let Some(path) = std::env::var_os("PATH") {
-            path_entries.extend(std::env::split_paths(&path));
-        }
-        let shim_path = std::env::join_paths(path_entries).expect("join shim path");
-        let shim_path = shim_path.to_str().expect("utf8 shim path").to_owned();
         let tmux_log = tmux_log.to_str().expect("utf8 tmux log").to_owned();
+        let tmux_bin = tmux_path.to_str().expect("utf8 tmux path").to_owned();
         let _env = EnvGuard::set_many([
-            ("PATH", Some(shim_path.as_str())),
+            (TMUX_PROGRAM_ENV, Some(tmux_bin.as_str())),
             ("ATM_TEST_TMUX_LOG", Some(tmux_log.as_str())),
         ]);
 
