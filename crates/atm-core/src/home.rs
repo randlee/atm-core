@@ -332,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn atm_home_prefers_atm_home_env() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_home =
@@ -344,7 +344,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn atm_home_falls_back_to_home_dir() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn team_and_inbox_paths_use_claude_team_layout() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_home =
@@ -398,7 +398,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_runtime_dir_uses_os_home_not_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home_dir = TempDir::new().expect("atm home tempdir");
@@ -425,7 +425,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_db_dir_uses_os_home_not_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
@@ -455,7 +455,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_mail_db_path_uses_os_home_not_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
@@ -496,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_prefers_atm_log_dir_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_log_dir =
@@ -508,7 +508,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_succeeds_without_home_env() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -526,7 +526,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_uses_os_home_not_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
@@ -593,7 +593,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_non_absolute_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -610,7 +610,7 @@ mod tests {
     /// (`cargo xwin check`) rather than native test execution.
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_does_not_require_home_relative_claude_validation() {
         let home_dir = TempDir::new().expect("home");
         let override_dir = home_dir.path().join(".claude").join("logs");
@@ -628,7 +628,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_does_not_require_home_relative_daemon_overlap_validation() {
         let home_dir = TempDir::new().expect("home");
         let override_dir = home_dir.path().join(".atm").join("daemon").join("logs");
@@ -646,7 +646,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_non_utf8_override() {
         use std::os::unix::ffi::OsStringExt;
 
@@ -669,7 +669,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_overlong_override() {
         let home_dir = TempDir::new().expect("home");
         let too_long = format!("/{}", "a".repeat(MAX_HOST_LOG_DIR_UTF8_BYTES));
