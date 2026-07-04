@@ -6,6 +6,10 @@ use serde_json::{Map, Value};
 use crate::types::{AgentId, AgentName, ModelName, PaneId};
 pub use atm_storage::contract::AgentType;
 
+pub const HOME_DIR_METADATA_KEY: &str = "home_dir";
+#[deprecated(note = "Phase AD obsolete: derived compatibility field only")]
+pub const LEGACY_CWD_METADATA_KEY: &str = "cwd";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentMember {
@@ -33,9 +37,9 @@ pub struct AgentMember {
     #[serde(default)]
     pub tmux_pane_id: Option<PaneId>,
 
-    /// Durable agent-home directory imported from or projected back into the
-    /// Claude compatibility `cwd` field.
-    #[serde(default, alias = "home_dir", rename = "cwd")]
+    /// Durable agent-home directory imported from or projected back into
+    /// compatibility config documents.
+    #[serde(default, alias = "cwd", rename = "home_dir")]
     pub home_dir: PathBuf,
 
     #[serde(flatten)]
@@ -90,7 +94,7 @@ mod tests {
             "model":"claude-sonnet-4-5",
             "joinedAt":1770765919076,
             "tmuxPaneId":"%1",
-            "cwd":"/workspace",
+            "home_dir":"/workspace",
             "color":"blue"
         }}"#
         );
@@ -111,6 +115,16 @@ mod tests {
         let encoded = serde_json::to_string(&member).expect("encode");
         let decoded: AgentMember = serde_json::from_str(&encoded).expect("decode");
         assert_eq!(decoded, member);
+    }
+
+    #[test]
+    fn parse_legacy_cwd_record_maps_to_home_dir() {
+        let member: AgentMember =
+            serde_json::from_str(&format!(r#"{{"name":"{TEST_SENDER}","cwd":"/workspace"}}"#))
+                .expect("member");
+
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
+        assert_eq!(member.home_dir, PathBuf::from("/workspace"));
     }
 
     #[test]

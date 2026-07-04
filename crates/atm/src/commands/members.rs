@@ -36,12 +36,15 @@ impl MembersCommand {
     }
 
     fn build_query(self) -> Result<MembersQuery> {
+        let current_dir = std::env::current_dir()?;
         let caller_context = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         Ok(MembersQuery {
             team: caller_context.caller_team,
+            caller_identity: Some(caller_context.caller_identity),
+            live_cwd: Some(current_dir),
         })
     }
 }

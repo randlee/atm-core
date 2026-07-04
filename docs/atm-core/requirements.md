@@ -533,8 +533,7 @@ Required caller-context rules:
   the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
-  roster home metadata and may use retained `cwd` only as a compatibility
-  fallback until canonical `home_dir` metadata is fully populated
+  roster `home_dir` metadata
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -587,6 +586,9 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `add-member` must persist the member's durable `home_dir` on the canonical
+  ATM roster row and project that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` must validate team existence and require an existing member
   before mutating canonical ATM roster truth
 - `update-member` must be the accepted repair path for mutable canonical member
@@ -598,8 +600,11 @@ Required service rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - no accepted `atm-core` surface may use bare `cwd` when `live_cwd` or
   `launch_cwd` is the real meaning
 - `atm-core` must prefer extending existing roster-row and runtime-roster

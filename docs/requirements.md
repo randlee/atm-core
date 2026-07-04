@@ -883,8 +883,7 @@ Post-send-hook rules:
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must use the sender's authoritative ATM roster
-  metadata (`home_dir`, or retained compatibility `cwd`) rather than the
-  caller's live process working directory
+  `home_dir` metadata rather than the caller's live process working directory
 - example payload:
   ```json
   {
@@ -1815,6 +1814,8 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- persist the member's durable `home_dir` on the canonical ATM roster row and
+  project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
 
 `atm teams update-member` must:
@@ -1923,19 +1924,24 @@ follow-up without depending on daemon-only or hook-only state.
 
 `atm members` must:
 - resolve the effective team using the retained team-resolution rules
-- load the local team roster from `config.json`
-- return a structured error when the team or team config is missing
-- show all configured members deterministically, with `team-lead` first when
+- load the local team roster from canonical ATM roster state
+- return a structured error when the team is missing from canonical ATM roster
+  state
+- show all rostered members deterministically, with `team-lead` first when
   present and remaining members in stable local order
 - use these names distinctly:
   - `home_dir`: durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd`: runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd`: startup-only current-directory snapshot used for logging
+  - `live_cwd`: runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to the
+    displayed member; never durable roster metadata
+  - `launch_cwd`: startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id
+  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
+  the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -3520,9 +3526,8 @@ mail correctness.
   Required behavior:
   - running `atm send` from another repository or working directory must not
     silently change whether post-send emission is attempted
-  - hook configuration lookup must follow the sender's canonical roster home
-    metadata and may use retained `cwd` only as a compatibility fallback until
-    `home_dir` migration is complete
+  - hook configuration lookup must follow the sender's canonical roster
+    `home_dir` metadata
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files

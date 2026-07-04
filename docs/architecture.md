@@ -1204,7 +1204,8 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
-- current team member roster from `config.json`
+- current team member roster projected from canonical ATM roster truth and
+  ordered against the live `config.json` baseline
 - observability health
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
@@ -1259,14 +1260,20 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the retained local roster-metadata repair path for
   existing members and must not create new members implicitly
 - accepted terminology must distinguish:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - operator repair paths may repair `home_dir` but must not treat `live_cwd` or
   `launch_cwd` as durable roster metadata
 - accepted implementations must prefer direct roster-row and runtime-roster
@@ -1475,8 +1482,7 @@ back a successful message write on failure or timeout.
 
 Hook configuration lookup note:
 - send/ack must resolve post-send hook configuration from the sender's
-  authoritative ATM roster home metadata, using retained `cwd` only as a
-  compatibility fallback until all members publish canonical `home_dir`
+  authoritative ATM roster `home_dir` metadata
 
 Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place

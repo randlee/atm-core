@@ -447,8 +447,7 @@ Identity-specific policy:
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
 - hook configuration lookup must come from authoritative sender roster home
-  metadata and may use retained `cwd` only as a compatibility fallback until
-  canonical `home_dir` metadata is present for every member
+  `home_dir` metadata
 - recipient non-match is silent
 - hook-decision evaluation must preserve sender, recipient, matched rule
   selector, and execution outcome for troubleshooting
@@ -528,6 +527,9 @@ Architectural rules:
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
 - `add-member` remains create-only
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the accepted repair path for mutable existing roster
   metadata such as `home_dir`, `recipient_pane_id`, `harness`, `agent_type`,
   and `model`
@@ -535,10 +537,13 @@ Architectural rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
-- `live_cwd` is runtime-roster state, not operator-settable or durable roster
-  metadata
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
+- `live_cwd` is runtime-only caller-member state, not operator-settable or
+  durable roster metadata
 - `launch_cwd` is log-only startup context and must not become durable roster
   metadata
 - accepted implementations must prefer direct roster-row and runtime-roster

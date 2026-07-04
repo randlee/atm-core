@@ -1,7 +1,7 @@
 ---
 id: AD.10
 title: Directory Metadata And Doctor Contract Cleanup
-status: planned
+status: complete
 branch: feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup
 worktree: ../atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup
 target: integrate/phase-AD
@@ -52,12 +52,14 @@ log::info!(launch_cwd = %startup_cwd.display(), "atm process started");
 ```
 
 - canonical durable member directory metadata is `home_dir` only
-- `live_cwd` is runtime-observed state only and must not be persisted on the
-  canonical roster row
+- `live_cwd` is a runtime-only overlay for the invoking ATM member when the
+  active CLI/doctor process can bind `ATM_IDENTITY` to the displayed member;
+  it must not be persisted on the canonical roster row
 - `launch_cwd` is startup log context only and must not be persisted on the
   canonical roster row or runtime roster row
-- modify doctor/member output so it uses `home_dir`, `live_cwd`, and
-  `launch_cwd` consistently and never reports bare `cwd`
+- modify doctor/member output so it uses durable `home_dir` plus optional
+  runtime-only `live_cwd` consistently and never reports bare `cwd`;
+  `launch_cwd` remains log-only
 
 ## Obsolescence Instructions
 
@@ -75,11 +77,12 @@ log::info!(launch_cwd = %startup_cwd.display(), "atm process started");
 ## Deliverables
 
 - canonical member schema uses durable `home_dir` instead of durable `cwd`
-- `live_cwd` is runtime-only state and is not persisted as canonical member
-  metadata
+- `live_cwd` is runtime-only caller-member state and is not persisted as
+  canonical member metadata
 - `launch_cwd` is log-only startup context and is not persisted
-- doctor and member output use `home_dir`, `live_cwd`, and `launch_cwd`
-  consistently without bare `cwd`
+- doctor and member output use `home_dir` and optional `live_cwd`
+  consistently without bare `cwd`; `launch_cwd` is emitted only in startup
+  logs
 - no new directory-state coordinator or compatibility-only directory struct is
   introduced where direct roster/runtime fields are sufficient
 
@@ -103,7 +106,8 @@ log::info!(launch_cwd = %startup_cwd.display(), "atm process started");
 
 - no accepted canonical member shape persists bare `cwd`
 - doctor and `atm members` output use `home_dir` for durable member location
-- any surfaced `live_cwd` is explicitly runtime-only and not persisted
+- any surfaced `live_cwd` is explicitly runtime-only, caller-member scoped,
+  and not persisted
 - no accepted path persists `launch_cwd` beyond startup logging
 - no accepted AD doc uses bare `cwd` ambiguously where `home_dir` or
   `live_cwd` is intended

@@ -1057,7 +1057,7 @@ mod tests {
         recipient.recipient_pane_id = Some(crate::types::PaneId::from_cli("%12").expect("pane"));
         recipient
             .metadata_json
-            .insert("cwd".to_string(), json!("/repo/recipient"));
+            .insert("home_dir".to_string(), json!("/repo/recipient"));
         roster_store.seed_team(
             TEST_TEAM,
             vec![
