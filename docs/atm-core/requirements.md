@@ -299,8 +299,10 @@ Required `atm-core` crate rules:
   - inbox ingress
   - inbox export
   - config ingress
-  - watcher / reconcile (historical only; retired per `ADR-019`, see §10.1)
   - notifier-facing service integration
+- `atm-core` must not retain watch/reconcile as accepted boundary traits after
+  `AD.4`; any surviving watch/reconcile DTOs are historical-only protocol
+  scaffolding until a later deletion sprint removes them
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - one unified mutable message-state surface

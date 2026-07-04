@@ -137,8 +137,8 @@ Initial crate requirement IDs:
   one actor-owned request lane. Satisfies:
   `REQ-CORE-BOUNDARY-002`, `REQ-DAEMON-RUNTIME-004`.
   Phase AD note:
-  - daemon watch/reconcile and notification-runtime lanes are retired from the
-    accepted runtime rather than preserved as the active closure of this rule
+  - daemon watch/reconcile lanes are retired from the accepted runtime rather
+    than preserved as the active closure of this rule
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host
@@ -435,8 +435,8 @@ Required runtime rules:
   - request execution ownership
   - runtime status / reload / doctor projection
   - peer transport
-- historical watch / reconcile / notification-runtime lanes are not part of
-  the accepted runtime requirement set
+- historical watch / reconcile lanes are not part of the accepted runtime
+  requirement set
 - if temporary deletion scaffolding remains while `AD.4` / `AD.5` are in
   flight, it must be marked obsolete and must not be described as a required
   production partition

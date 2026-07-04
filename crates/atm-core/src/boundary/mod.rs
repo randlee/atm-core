@@ -3,10 +3,7 @@
 use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
-pub use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
-    WatchSubscriptionRequest,
-};
+pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -142,22 +139,4 @@ pub trait StatusSource: sealed::Sealed {
     ///
     /// Returns `AtmError` when a runtime status snapshot cannot be collected.
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
-}
-
-/// BOUNDARY-WatchEventSource — see docs/atm-core/boundaries.md.
-pub trait WatchEventSource: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when watch subscriptions cannot be created or events
-    /// cannot be delivered as a batch.
-    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError>;
-}
-
-/// BOUNDARY-ReconcileCoordinator — see docs/atm-core/boundaries.md.
-pub trait ReconcileCoordinator: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when reconcile policy cannot be executed for the
-    /// request input.
-    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError>;
 }
