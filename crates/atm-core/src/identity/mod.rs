@@ -5,6 +5,7 @@
 
 pub mod hook;
 
+use crate::caller_context::read_cli_identity_from_env;
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::types::AgentName;
@@ -62,9 +63,9 @@ pub(crate) fn resolve_sender_identity(
 /// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
 /// `ATM_IDENTITY` is not set in the current environment.
 pub(crate) fn resolve_runtime_sender_identity(
-    config: Option<&AtmConfig>,
+    _config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
-    crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
+    read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)
 }
 
 fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
