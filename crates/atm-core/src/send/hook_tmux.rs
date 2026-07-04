@@ -11,6 +11,9 @@ use crate::types::{PaneId, TeamName};
 
 use super::POST_SEND_HOOK_TIMEOUT;
 
+#[cfg(test)]
+const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
+
 pub(super) fn tmux_nudge_message(team: &TeamName) -> String {
     format!("You have unread ATM messages. Run: atm read --team {team}")
 }
@@ -22,7 +25,7 @@ pub(super) fn run_tmux_send_keys(
 ) -> Result<(), AtmError> {
     let output = run_tmux_command(
         {
-            let mut command = Command::new("tmux");
+            let mut command = tmux_command();
             command.args(["send-keys", "-t", pane_id.as_str(), "-l", message]);
             command
         },
@@ -39,7 +42,7 @@ pub(super) fn run_tmux_send_enter(
 ) -> Result<(), AtmError> {
     let output = run_tmux_command(
         {
-            let mut command = Command::new("tmux");
+            let mut command = tmux_command();
             command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
             command
         },
@@ -66,6 +69,14 @@ fn run_tmux_command(
         )
     })?;
     wait_for_tmux_output(child, pane_id, event, tmux_action)
+}
+
+fn tmux_command() -> Command {
+    #[cfg(test)]
+    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
+        return Command::new(program);
+    }
+    Command::new("tmux")
 }
 
 fn wait_for_tmux_output(
