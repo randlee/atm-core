@@ -76,7 +76,7 @@ fn build_restore_execution_plan(
     }
 
     let recreated_shell = load_recreated_lead_shell_state(&team_dir)?;
-    let canonical_roster = super::load_team_roster(roster_store, &request.team)?;
+    let canonical_roster = super::projection::load_team_roster(roster_store, &request.team)?;
     if canonical_roster.is_empty() {
         return Err(AtmError::team_not_found(&request.team));
     }
@@ -146,11 +146,11 @@ fn apply_restore_execution_plan(
 ) -> Result<RestoreOutcome, AtmError> {
     apply_restored_inboxes(&plan.team_dir, &plan.backup_dir, &plan.inboxes_to_restore)?;
 
-    let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
+    let tasks_dir = super::filesystem::tasks_dir_from_home(&request.home_dir, &request.team)?;
     restore_task_state_from_backup(&plan.backup_dir.join("tasks"), &tasks_dir)?;
-    super::write_team_config(&plan.team_dir, &plan.updated_config).map_err(|error| {
-        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
-    })?;
+    super::filesystem::write_team_config(&plan.team_dir, &plan.updated_config).map_err(
+        |error| error.with_recovery("Check team config permissions and rerun `atm teams restore`."),
+    )?;
 
     Ok(RestoreOutcome {
         action: "restore",
@@ -208,8 +208,10 @@ fn build_restored_team_config(
         .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
         .cloned()
         .collect::<Vec<_>>();
-    let mut updated_config =
-        super::project_team_config_from_roster(serde_json::Map::new(), &non_lead_roster)?;
+    let mut updated_config = super::projection::project_team_config_from_roster(
+        serde_json::Map::new(),
+        &non_lead_roster,
+    )?;
     updated_config
         .members
         .insert(0, recreated_shell.lead_member.clone());
@@ -236,7 +238,7 @@ fn locate_backup_dir(
         return Ok(path.to_path_buf());
     }
 
-    let root = super::backup_root_from_home(home_dir, team)?;
+    let root = super::filesystem::backup_root_from_home(home_dir, team)?;
     if !root.exists() {
         return Err(AtmError::missing_document(format!(
             "no backup found for team '{}'",
@@ -370,7 +372,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
-    super::copy_regular_files_strict(src, &staging, |name| {
+    super::filesystem::copy_regular_files_strict(src, &staging, |name| {
         name == ".highwatermark" || name.ends_with(".json")
     })?;
 
