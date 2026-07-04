@@ -14,7 +14,7 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
-use crate::boundary::{PostSendHookEmitter, PostSendHookEvent};
+use crate::boundary::{GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent};
 use crate::config::types::HookRecipient;
 use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
@@ -118,14 +118,34 @@ impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
     }
 }
 
+pub(crate) struct GraftPostSendEmitter<'a> {
+    port: &'a dyn GraftPostSendPort,
+}
+
+impl<'a> GraftPostSendEmitter<'a> {
+    pub(crate) fn new(port: &'a dyn GraftPostSendPort) -> Self {
+        Self { port }
+    }
+}
+
+impl crate::boundary::sealed::Sealed for GraftPostSendEmitter<'_> {}
+
+impl PostSendHookEmitter for GraftPostSendEmitter<'_> {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        self.port.deliver_post_send(event)
+    }
+}
+
 pub(crate) fn emit_post_send_effects(
     warnings: &mut Vec<WarningEntry>,
     config: Option<&AtmConfig>,
+    graft_port: Option<&dyn GraftPostSendPort>,
     recipient: &ResolvedRecipient,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     messages: &[crate::delivery_plan::LogicalMessage],
 ) {
     let hook_emitter = config.map(ConfiguredPostSendHookEmitter::new);
+    let graft_emitter = graft_port.map(GraftPostSendEmitter::new);
     let tmux_emitter = delivery_snapshot
         .local_tmux_post_send
         .then_some(LocalTmuxPostSendEmitter);
@@ -145,6 +165,16 @@ pub(crate) fn emit_post_send_effects(
             ));
         }
         if let Some(emitter) = tmux_emitter.as_ref()
+            && let Err(error) = emitter.emit(&event)
+        {
+            warnings.push(post_send_warning(
+                "post-send emission failed",
+                &event,
+                &error,
+            ));
+        }
+        if delivery_snapshot.graft_post_send
+            && let Some(emitter) = graft_emitter.as_ref()
             && let Err(error) = emitter.emit(&event)
         {
             warnings.push(post_send_warning(
@@ -662,6 +692,12 @@ fn post_send_event_from_message(
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
         message_id: message.message_id(),
+        message: message
+            .envelope
+            .summary
+            .clone()
+            .filter(|summary| !summary.trim().is_empty())
+            .unwrap_or_else(|| message.envelope.text.clone()),
         requires_ack: message.requires_ack,
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
@@ -1208,6 +1244,7 @@ mod tests {
             recipient: AgentName::from_validated("recipient"),
             recipient_team: TeamName::from_validated("test-team"),
             message_id: crate::schema::AtmMessageId::new(),
+            message: "hello".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
+use crate::boundary::GraftPostSendPort;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
@@ -121,7 +122,16 @@ pub fn ack_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime)
+    ack_mail_with_runtime_impl(request, observability, runtime, None)
+}
+
+pub fn ack_mail_with_runtime_and_graft_port(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    graft_port: &dyn GraftPostSendPort,
+) -> Result<AckOutcome, AtmError> {
+    ack_mail_with_runtime_impl(request, observability, runtime, Some(graft_port))
 }
 
 fn ack_mail_with_runtime_impl<
@@ -130,6 +140,7 @@ fn ack_mail_with_runtime_impl<
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    graft_port: Option<&dyn GraftPostSendPort>,
 ) -> Result<AckOutcome, AtmError> {
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
@@ -145,17 +156,18 @@ fn ack_mail_with_runtime_impl<
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
     ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team)
+        .and_then(|context| finalize_ack_outcome(runtime, observability, graft_port, context))
 }
 
 fn ack_mail_with_runtime_sqlite<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: AckRequest,
-    observability: &dyn ObservabilityPort,
+    _observability: &dyn ObservabilityPort,
     runtime: &R,
     actor: AgentName,
     team: TeamName,
-) -> Result<AckOutcome, AtmError> {
+) -> Result<FinalizeAckContextOwned, AtmError> {
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let (post_send_config, warnings) =
         match crate::send::hook::load_post_send_config_for_sender(runtime, &team, &actor) {
@@ -194,20 +206,16 @@ fn ack_mail_with_runtime_sqlite<
             reply_target: &reply_target,
         },
     )?;
-    finalize_ack_outcome(
-        runtime,
-        observability,
-        FinalizeAckContext {
-            actor: &actor,
-            team: &team,
-            request_message_id: request.message_id,
-            reply_target: &reply_target,
-            reply_snapshot: &reply_snapshot,
-            persisted: &persisted,
-            post_send_config,
-            warnings,
-        },
-    )
+    Ok(FinalizeAckContextOwned {
+        actor,
+        team,
+        request_message_id: request.message_id,
+        reply_target,
+        reply_snapshot,
+        persisted,
+        post_send_config,
+        warnings,
+    })
 }
 
 #[derive(Clone)]
@@ -231,6 +239,17 @@ struct FinalizeAckContext<'a> {
     reply_target: &'a ReplyTarget,
     reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     persisted: &'a PersistedAckReply,
+    post_send_config: Option<crate::config::AtmConfig>,
+    warnings: Vec<crate::send::WarningEntry>,
+}
+
+struct FinalizeAckContextOwned {
+    actor: AgentName,
+    team: TeamName,
+    request_message_id: AtmMessageId,
+    reply_target: ReplyTarget,
+    reply_snapshot: crate::delivery_policy::DeliveryRecipientSnapshot,
+    persisted: PersistedAckReply,
     post_send_config: Option<crate::config::AtmConfig>,
     warnings: Vec<crate::send::WarningEntry>,
 }
@@ -453,8 +472,19 @@ fn finalize_ack_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    context: FinalizeAckContext<'_>,
+    graft_port: Option<&dyn GraftPostSendPort>,
+    owned: FinalizeAckContextOwned,
 ) -> Result<AckOutcome, AtmError> {
+    let context = FinalizeAckContext {
+        actor: &owned.actor,
+        team: &owned.team,
+        request_message_id: owned.request_message_id,
+        reply_target: &owned.reply_target,
+        reply_snapshot: &owned.reply_snapshot,
+        persisted: &owned.persisted,
+        post_send_config: owned.post_send_config,
+        warnings: owned.warnings,
+    };
     let plan = build_reply_delivery_plan(&context)?;
     let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
     let mut outcome = AckOutcome {
@@ -486,6 +516,7 @@ fn finalize_ack_outcome<
     crate::send::hook::emit_post_send_effects(
         &mut outcome.warnings,
         context.post_send_config.as_ref(),
+        graft_port,
         &plan.recipient,
         context.reply_snapshot,
         &plan.messages,
@@ -630,7 +661,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
+        AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
     use crate::boundary::{
@@ -643,7 +674,7 @@ mod tests {
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow::WorkflowStateFile;
     use serde_json::Map;
@@ -660,6 +691,43 @@ mod tests {
                 .iter()
                 .flat_map(|request| request.messages.clone())
                 .collect()
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingGraftPort {
+        events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
+        fail: bool,
+    }
+
+    impl RecordingGraftPort {
+        fn failing() -> Self {
+            Self {
+                events: Mutex::new(Vec::new()),
+                fail: true,
+            }
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
+
+    impl crate::boundary::GraftPostSendPort for RecordingGraftPort {
+        fn deliver_post_send(
+            &self,
+            event: &crate::boundary::PostSendHookEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            self.events
+                .lock()
+                .expect("graft events lock")
+                .push(event.clone());
+            if self.fail {
+                return Err(crate::error::AtmError::new_with_code(
+                    crate::error_codes::AtmErrorCode::PostSendGraftUnavailable,
+                    crate::error::AtmErrorKind::DaemonUnavailable,
+                    "simulated graft delivery failure",
+                ));
+            }
+            Ok(())
         }
     }
 
@@ -1094,6 +1162,7 @@ mod tests {
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            graft_post_send: false,
             roster_backed: true,
         };
         let machine = AckReplyStateMachine::from_persistence(&persistence).expect("state machine");
@@ -1155,6 +1224,7 @@ mod tests {
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            graft_post_send: false,
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone());
@@ -1172,13 +1242,14 @@ mod tests {
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            FinalizeAckContext {
-                actor: &"sender".parse::<AgentName>().expect("agent"),
-                team: &team,
+            None,
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team: team.clone(),
                 request_message_id,
-                reply_target: &reply_target,
-                reply_snapshot: &reply_snapshot,
-                persisted: &persisted,
+                reply_target,
+                reply_snapshot,
+                persisted,
                 post_send_config: None,
                 warnings: Vec::new(),
             },
@@ -1190,6 +1261,179 @@ mod tests {
         assert_eq!(outbound_messages[0], reply_message);
         assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.reply_text, reply_text);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn ack_reply_graft_post_send_dispatches_to_graft_port() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let _env = EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+        ]);
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let reply_message = InboxMessage {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            text: reply_text.clone(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team.clone()),
+            summary: None,
+            message_id: Some(reply_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: Some(request_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message: reply_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        };
+        let reply_snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone());
+        let persisted = PersistedAckReply {
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+            reply_inbox_path: tempdir.path().join("reply.jsonl"),
+            persistence,
+        };
+        let runtime = AckRuntime {
+            outbound_deliveries: Mutex::new(Vec::new()),
+        };
+        let graft_port = RecordingGraftPort::default();
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            Some(&graft_port),
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team,
+                request_message_id,
+                reply_target,
+                reply_snapshot,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
+            },
+        )
+        .expect("finalize ack outcome");
+
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        let events = graft_port.events.lock().expect("graft events lock");
+        assert_eq!(events.len(), 1);
+        assert!(events[0].is_ack);
+        assert_eq!(events[0].recipient.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(events[0].recipient_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    fn finalize_ack_outcome_warns_when_graft_post_send_delivery_fails() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let reply_message = InboxMessage {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            text: reply_text.clone(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team.clone()),
+            summary: None,
+            message_id: Some(reply_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: Some(request_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message: reply_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        };
+        let reply_snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let reply_target = ReplyTarget::new(agent, team.clone());
+        let persisted = PersistedAckReply {
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+            reply_inbox_path: tempdir.path().join("reply.jsonl"),
+            persistence,
+        };
+        let runtime = AckRuntime {
+            outbound_deliveries: Mutex::new(Vec::new()),
+        };
+        let graft_port = RecordingGraftPort::failing();
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            Some(&graft_port),
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team,
+                request_message_id,
+                reply_target,
+                reply_snapshot,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
+            },
+        )
+        .expect("finalize ack outcome");
+
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("warning: post-send emission failed")
+        );
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ATM_POST_SEND_GRAFT_UNAVAILABLE")
+        );
+        assert_eq!(
+            graft_port.events.lock().expect("graft events lock").len(),
+            1
+        );
     }
 
     #[test]
@@ -1251,6 +1495,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
         )
         .expect_err("missing ATM roster member should fail");
 
@@ -1320,6 +1565,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
         )
         .expect("valid ATM roster member should ack successfully");
 

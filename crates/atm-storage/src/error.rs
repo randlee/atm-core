@@ -249,6 +249,17 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_advisory_session_cleanup_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonAdvisorySessionCleanupFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect advisory-session lifecycle logs, clean up any orphaned graft session, and retry only after the daemon unregister path is healthy.",
+        )
+    }
+
     pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonLaunchGateRejected,

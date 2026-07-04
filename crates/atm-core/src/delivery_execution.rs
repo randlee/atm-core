@@ -569,6 +569,7 @@ mod tests {
             harness,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            graft_post_send: false,
             roster_backed: true,
         }
     }

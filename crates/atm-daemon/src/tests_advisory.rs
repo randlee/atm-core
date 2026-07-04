@@ -1,13 +1,16 @@
-use atm_core::boundary::ReplaySource;
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ack::AckRequest;
+use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
 use atm_core::graft::{
     AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
     AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+use atm_core::protocol::{
+    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+};
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::ROLE_TEAM_LEAD;
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::open_sqlite_boundary;
 use tempfile::TempDir;
 
@@ -43,6 +46,30 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .expect("replace roster");
 }
 
+fn install_test_roster_with_harness(db_path: &std::path::Path, members: &[(&str, RosterHarness)]) {
+    let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
+    let roster_store = assembly.roster_store_arc();
+    let team = TEST_TEAM.parse::<TeamName>().expect("team");
+    let members = members
+        .iter()
+        .map(|(name, harness)| {
+            let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
+                team.clone(),
+                AgentMember::with_name((*name).parse().expect("member")),
+            );
+            record.harness = *harness;
+            record
+        })
+        .collect::<Vec<_>>();
+    roster_store
+        .replace_roster(
+            &team,
+            &members,
+            Some(&replay_source_static("daemon-graft-test")),
+        )
+        .expect("replace roster");
+}
+
 fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
     std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
@@ -61,9 +88,16 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
 }
 
 fn advisory_registration_request(session_id: &str) -> AdvisorySessionRegistrationRequest {
+    advisory_registration_request_for(ROLE_TEAM_LEAD, session_id)
+}
+
+fn advisory_registration_request_for(
+    agent: &str,
+    session_id: &str,
+) -> AdvisorySessionRegistrationRequest {
     AdvisorySessionRegistrationRequest {
         team: TEST_TEAM.parse().expect("team"),
-        agent: ROLE_TEAM_LEAD.parse().expect("agent"),
+        agent: agent.parse().expect("agent"),
         session_id: AdvisorySessionId::new(session_id).expect("session id"),
         pid: std::process::id(),
         started_at: IsoTimestamp::now(),
@@ -84,6 +118,11 @@ fn advisory_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
     (tempdir, dispatcher)
+}
+
+fn write_workspace_config(workspace_dir: &std::path::Path) {
+    std::fs::create_dir_all(workspace_dir).expect("workspace dir");
+    std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
 }
 
 #[test]
@@ -182,6 +221,151 @@ fn dispatcher_routes_advisory_drain_requests() {
             assert!(drain.nudges.is_empty());
             assert_eq!(drain.remaining, 0);
             assert_eq!(drain.dropped_count, 0);
+        }
+        other => panic!("expected advisory drain response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_send_queues_graft_post_send_event_for_registered_non_claude_recipient() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    write_workspace_config(&workspace_dir);
+    let db_path = tempdir.path().join("mail.db");
+    install_test_roster_with_harness(
+        &db_path,
+        &[
+            (ROLE_TEAM_LEAD, RosterHarness::ClaudeCode),
+            ("qa-a", RosterHarness::CodexCli),
+        ],
+    );
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let registration = advisory_registration_request_for("qa-a", "session-send");
+    dispatcher
+        .dispatch(RequestEnvelope::AdvisoryRegister(registration.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello graft".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
+        )))
+        .expect("send response");
+
+    let outcome = match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        other => panic!("expected send response, got {other:?}"),
+    };
+    assert!(outcome.warnings.is_empty());
+
+    let drain = dispatcher
+        .dispatch(RequestEnvelope::AdvisoryDrain(AdvisoryDrainRequest {
+            session_id: registration.session_id.clone(),
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("drain response");
+    match drain {
+        ResponseEnvelope::AdvisoryDrain(drain) => {
+            assert_eq!(drain.nudges.len(), 1);
+            assert_eq!(drain.nudges[0].message_id, outcome.message_id);
+            assert_eq!(drain.nudges[0].message, "hello graft");
+        }
+        other => panic!("expected advisory drain response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_ack_queues_graft_post_send_event_for_registered_reply_target() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    write_workspace_config(&workspace_dir);
+    let db_path = tempdir.path().join("mail.db");
+    install_test_roster_with_harness(
+        &db_path,
+        &[
+            (ROLE_TEAM_LEAD, RosterHarness::ClaudeCode),
+            ("qa-a", RosterHarness::CodexCli),
+        ],
+    );
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let registration = advisory_registration_request_for("qa-a", "session-ack");
+    dispatcher
+        .dispatch(RequestEnvelope::AdvisoryRegister(registration.clone()))
+        .expect("register response");
+
+    let source_response = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                "qa-a".parse().expect("caller"),
+                "team-lead@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("please ack".to_string()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("source send request"),
+        )))
+        .expect("source send response");
+    let source_message_id = match source_response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
+        other => panic!("expected send response, got {other:?}"),
+    };
+
+    let ack_response = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+            AckRequest {
+                home_dir: atm_home.clone(),
+                current_dir: workspace_dir.clone(),
+                caller_identity: ROLE_TEAM_LEAD.parse::<AgentName>().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id: source_message_id,
+                reply_body: "ack reply".to_string(),
+            },
+        )))
+        .expect("ack response");
+
+    let ack_outcome = match ack_response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        other => panic!("expected ack response, got {other:?}"),
+    };
+    assert!(ack_outcome.warnings.is_empty());
+
+    let drain = dispatcher
+        .dispatch(RequestEnvelope::AdvisoryDrain(AdvisoryDrainRequest {
+            session_id: registration.session_id.clone(),
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("drain response");
+    match drain {
+        ResponseEnvelope::AdvisoryDrain(drain) => {
+            assert_eq!(drain.nudges.len(), 1);
+            assert_eq!(drain.nudges[0].message_id, ack_outcome.reply_message_id);
+            assert_eq!(drain.nudges[0].message, "ack reply");
         }
         other => panic!("expected advisory drain response, got {other:?}"),
     }
