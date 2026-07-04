@@ -198,6 +198,7 @@ mod tests {
     use crate::config::RawPostSendHookRule;
     use crate::config::types::HookRecipient;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::lock_env;
 
     fn config_root_fixture() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempdir().expect("tempdir");
@@ -266,9 +267,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_home_tilde_path() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let home = {
+            let _env_lock = lock_env();
+            crate::home::user_home().expect("user home")
+        };
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec!["~/hooks/notify.sh".into()],
@@ -283,9 +288,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_windows_style_home_tilde_path() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let home = {
+            let _env_lock = lock_env();
+            crate::home::user_home().expect("user home")
+        };
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec![r"~\hooks\notify.cmd".into()],
@@ -300,9 +309,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_bare_home_tilde() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let home = {
+            let _env_lock = lock_env();
+            crate::home::user_home().expect("user home")
+        };
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec!["~".into()],
