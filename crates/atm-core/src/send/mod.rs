@@ -34,6 +34,7 @@ mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
+mod hook_tmux;
 pub(crate) mod input;
 mod missing_config_notice;
 mod persistence;

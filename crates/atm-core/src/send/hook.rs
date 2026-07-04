@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -21,11 +21,13 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::service_runtime::append_notification_log;
-use crate::types::{AgentName, PaneId, TeamName};
+use crate::types::{AgentName, TeamName};
 
+pub(super) use super::hook_tmux::tmux_nudge_message;
+use super::hook_tmux::{run_tmux_send_enter, run_tmux_send_keys};
 use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
 
-const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -548,193 +550,6 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
 
 fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::AgentName) -> bool {
     configured.matches(candidate)
-}
-
-fn tmux_nudge_message(team: &TeamName) -> String {
-    format!("You have unread ATM messages. Run: atm read --team {team}")
-}
-
-fn run_tmux_send_keys(
-    pane_id: &PaneId,
-    message: &str,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    let output = run_tmux_command(
-        {
-            let mut command = Command::new("tmux");
-            command.args(["send-keys", "-t", pane_id.as_str(), "-l", message]);
-            command
-        },
-        pane_id,
-        event,
-        "send-keys",
-    )?;
-    ensure_tmux_success(output, pane_id, event, "send literal nudge")
-}
-
-fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    let output = run_tmux_command(
-        {
-            let mut command = Command::new("tmux");
-            command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
-            command
-        },
-        pane_id,
-        event,
-        "send-keys Enter",
-    )?;
-    ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
-}
-
-fn run_tmux_command(
-    mut command: Command,
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    tmux_action: &str,
-) -> Result<Output, AtmError> {
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command.spawn().map_err(|error| {
-        tmux_send_failed_error(
-            pane_id,
-            event,
-            format!("failed to start tmux {tmux_action}: {error}"),
-            Some(error),
-        )
-    })?;
-    wait_for_tmux_output(child, pane_id, event, tmux_action)
-}
-
-fn wait_for_tmux_output(
-    mut child: Child,
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    tmux_action: &str,
-) -> Result<Output, AtmError> {
-    let started_at = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                return child.wait_with_output().map_err(|error| {
-                    tmux_send_failed_error(
-                        pane_id,
-                        event,
-                        format!("failed to collect tmux {tmux_action} output: {error}"),
-                        Some(error),
-                    )
-                });
-            }
-            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
-            }
-            Ok(None) => {
-                terminate_tmux_child(&mut child, pane_id, event, tmux_action);
-                let _ = child.wait_with_output();
-                return Err(tmux_send_failed_error(
-                    pane_id,
-                    event,
-                    format!(
-                        "tmux {tmux_action} timed out after {}s",
-                        POST_SEND_HOOK_TIMEOUT.as_secs()
-                    ),
-                    None::<std::io::Error>,
-                ));
-            }
-            Err(error) => {
-                terminate_tmux_child(&mut child, pane_id, event, tmux_action);
-                let _ = child.wait_with_output();
-                return Err(tmux_send_failed_error(
-                    pane_id,
-                    event,
-                    format!("failed while waiting for tmux {tmux_action}: {error}"),
-                    Some(error),
-                ));
-            }
-        }
-    }
-}
-
-fn terminate_tmux_child(
-    child: &mut Child,
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    tmux_action: &str,
-) {
-    if let Err(error) = child.kill()
-        && error.kind() != std::io::ErrorKind::InvalidInput
-    {
-        warn!(
-            code = %AtmErrorCode::PostSendTmuxSendFailed,
-            sender = %event.sender,
-            recipient = %event.recipient,
-            recipient_team = %event.recipient_team,
-            message_id = %event.message_id,
-            pane_id = %pane_id,
-            tmux_action,
-            %error,
-            "failed to terminate timed-out tmux subprocess"
-        );
-    }
-}
-
-fn ensure_tmux_success(
-    output: Output,
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    action: &str,
-) -> Result<(), AtmError> {
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let detail = if stderr.is_empty() {
-        format!("tmux exited unsuccessfully while trying to {action}")
-    } else {
-        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
-    };
-    Err(tmux_send_failed_error(
-        pane_id,
-        event,
-        detail,
-        None::<std::io::Error>,
-    ))
-}
-
-fn tmux_send_failed_error<E>(
-    pane_id: &PaneId,
-    event: &PostSendHookEvent,
-    message: String,
-    source: Option<E>,
-) -> AtmError
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let error = AtmError::new_with_code(
-        AtmErrorCode::PostSendTmuxSendFailed,
-        AtmErrorKind::Internal,
-        format!(
-            "local tmux post-send emission failed for {}@{} pane {}: {message}",
-            event.recipient, event.recipient_team, pane_id
-        ),
-    )
-    .with_recovery(format!(
-        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
-        pane_id, event.recipient_team, event.recipient
-    ));
-    warn!(
-        code = %AtmErrorCode::PostSendTmuxSendFailed,
-        sender = %event.sender,
-        recipient = %event.recipient,
-        recipient_team = %event.recipient_team,
-        pane_id = %pane_id,
-        message_id = %event.message_id,
-        error = %message,
-        "local tmux post-send emission failed"
-    );
-    match source {
-        Some(source) => error.with_source(source),
-        None => error,
-    }
 }
 
 fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
