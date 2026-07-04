@@ -270,7 +270,6 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
-        self.shutdown_background_lanes();
         Ok(())
     }
 
@@ -286,7 +285,6 @@ impl RuntimeComposition {
         );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         self.resume_startup_replay()?;
-        self.start_background_lanes();
         Ok(())
     }
 
@@ -318,15 +316,10 @@ impl RuntimeComposition {
         Err(error)
     }
 
-    fn prepare_runtime_with<F>(
-        &self,
-        rollback_message: &'static str,
-        prepare_runtime: F,
-    ) -> Result<PreparedRuntimeServer, AtmError>
+    fn prepare_runtime_with<F>(&self, prepare_runtime: F) -> Result<PreparedRuntimeServer, AtmError>
     where
         F: FnOnce(&LocalIpcServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
     {
-        let _ = rollback_message;
         prepare_runtime(&self.server_transport)
     }
 
@@ -373,10 +366,7 @@ impl RuntimeComposition {
         self.begin_startup()
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
-            .prepare_runtime_with(
-                "daemon background lane shutdown failed during runtime preparation rollback",
-                |server_transport| server_transport.prepare_runtime(),
-            )
+            .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
@@ -391,10 +381,9 @@ impl RuntimeComposition {
         self.begin_startup()
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
-            .prepare_runtime_with(
-                "daemon background lane shutdown failed during test runtime preparation rollback",
-                |server_transport| server_transport.prepare_runtime_at_socket_path(socket_path),
-            )
+            .prepare_runtime_with(|server_transport| {
+                server_transport.prepare_runtime_at_socket_path(socket_path)
+            })
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
             self.request_dispatcher.preflush_observability_shutdown();
@@ -463,10 +452,6 @@ impl RuntimeComposition {
         self.request_dispatcher.finalize_observability_shutdown();
         result
     }
-
-    fn start_background_lanes(&self) {}
-
-    fn shutdown_background_lanes(&self) {}
 }
 
 fn build_host_ownership_adapter(

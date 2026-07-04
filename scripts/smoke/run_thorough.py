@@ -10,8 +10,8 @@ from run_thorough_graft import graft_commands
 
 THOROUGH_ROWS = [
     SuiteRowSpec(
-        id="AD11-SEND-ENV-001",
-        flow="send command uses environment caller context when overrides are absent",
+        id="AD11-CMD-SEND-001",
+        flow="send command preserves caller-context ownership across environment and explicit override paths",
         commands=[
             [
                 "cargo",
@@ -20,12 +20,19 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_request_uses_environment_when_overrides_are_absent",
             ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "build_request_prefers_cli_overrides_over_environment",
+            ],
         ],
-        pass_note="send caller-context resolution stays bound to environment when explicit overrides are absent",
+        pass_note="send stays bound to the shared caller-context contract across environment and explicit override paths",
     ),
     SuiteRowSpec(
-        id="AD11-READ-ENV-001",
-        flow="read command uses environment caller context when overrides are absent",
+        id="AD11-CMD-READ-001",
+        flow="read command preserves caller-context ownership across environment and explicit override paths",
         commands=[
             [
                 "cargo",
@@ -34,12 +41,128 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_query_uses_environment_when_overrides_are_absent",
             ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "build_query_prefers_cli_overrides_over_environment",
+            ],
         ],
-        pass_note="read caller-context resolution stays bound to environment when explicit overrides are absent",
+        pass_note="read stays bound to the shared caller-context contract across environment and explicit override paths",
     ),
     SuiteRowSpec(
-        id="AD11-MEMBERS-ENV-001",
-        flow="members command remains daemon-independent under environment-only caller context",
+        id="AD11-CMD-ACK-001",
+        flow="ack command preserves caller-context ownership across environment and explicit override paths",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::ack::tests::build_request_uses_environment_when_overrides_are_absent",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::ack::tests::build_request_prefers_cli_overrides_over_environment",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="ack stays bound to the shared caller-context contract across environment and explicit override paths",
+    ),
+    SuiteRowSpec(
+        id="AD11-CMD-LIST-001",
+        flow="list command preserves retained filters while keeping caller-context ownership explicit",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::list::tests::build_query_preserves_limit_and_filters",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::list::tests::build_query_uses_environment_when_overrides_are_absent",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::list::tests::build_query_prefers_cli_overrides_over_environment",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="list preserves retained filters while staying bound to explicit caller-context ownership",
+    ),
+    SuiteRowSpec(
+        id="AD11-CMD-CLEAR-001",
+        flow="clear command preserves caller-context ownership across environment and explicit override paths",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::clear::tests::build_query_uses_environment_when_overrides_are_absent",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::clear::tests::build_query_prefers_cli_overrides_over_environment",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="clear stays bound to the shared caller-context contract across environment and explicit override paths",
+    ),
+    SuiteRowSpec(
+        id="AD11-CMD-LOG-001",
+        flow="log command remains daemon-independent with caller-context enforcement at the CLI boundary",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::log::tests::run_snapshot_reads_real_retained_log_without_daemon",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::log::tests::run_snapshot_fails_without_caller_context",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="log remains daemon-independent and still fails locally when caller context is unavailable",
+    ),
+    SuiteRowSpec(
+        id="AD11-CMD-MEMBERS-001",
+        flow="members command remains daemon-independent while preserving explicit team override handling",
         commands=[
             [
                 "cargo",
@@ -50,12 +173,21 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::members::tests::build_query_preserves_team_override",
+                "--",
+                "--exact",
+            ],
         ],
-        pass_note="members remains daemon-independent while using the shared caller-context resolver",
+        pass_note="members remains daemon-independent while preserving retained caller-team semantics",
     ),
     SuiteRowSpec(
-        id="AD11-TEAMS-ENV-001",
-        flow="teams command remains daemon-independent under environment-only caller context",
+        id="AD11-CMD-TEAMS-001",
+        flow="teams list command remains daemon-independent on the retained CLI surface",
         commands=[
             [
                 "cargo",
@@ -67,72 +199,37 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="teams remains daemon-independent while using the shared caller-context resolver",
+        pass_note="teams list remains daemon-independent on the retained CLI surface",
     ),
     SuiteRowSpec(
-        id="AD11-LOG-ENV-001",
-        flow="log command remains daemon-independent under environment-only caller context",
+        id="AD11-CMD-TEAMS-ADD-MEMBER-001",
+        flow="teams add-member preserves the retained home-dir payload contract",
         commands=[
             [
                 "cargo",
                 "test",
                 "-p",
                 "agent-team-mail",
-                "commands::log::tests::run_snapshot_reads_real_retained_log_without_daemon",
+                "commands::teams::tests::add_member_build_request_preserves_atm_and_member_home_dirs",
                 "--",
                 "--exact",
             ],
         ],
-        pass_note="log remains daemon-independent while using the shared caller-context resolver",
+        pass_note="teams add-member preserves the retained home-dir payload contract",
     ),
     SuiteRowSpec(
-        id="AD11-SEND-OVERRIDE-001",
-        flow="send command prefers explicit CLI caller-context overrides over environment values",
+        id="AD11-CMD-TEAMS-UPDATE-MEMBER-001",
+        flow="teams update-member preserves caller context and fails locally when mandatory caller context is missing",
         commands=[
             [
                 "cargo",
                 "test",
                 "-p",
                 "agent-team-mail",
-                "build_request_prefers_cli_overrides_over_environment",
-            ],
-        ],
-        pass_note="send remains bound to explicit CLI caller context when provided",
-    ),
-    SuiteRowSpec(
-        id="AD11-READ-OVERRIDE-001",
-        flow="read command prefers explicit CLI caller-context overrides over environment values",
-        commands=[
-            [
-                "cargo",
-                "test",
-                "-p",
-                "agent-team-mail",
-                "build_query_prefers_cli_overrides_over_environment",
-            ],
-        ],
-        pass_note="read remains bound to explicit CLI caller context when provided",
-    ),
-    SuiteRowSpec(
-        id="AD11-MEMBERS-OVERRIDE-001",
-        flow="members command preserves explicit team override",
-        commands=[
-            [
-                "cargo",
-                "test",
-                "-p",
-                "agent-team-mail",
-                "commands::members::tests::build_query_preserves_team_override",
+                "commands::teams::tests::update_member_build_request_preserves_target_and_caller_context",
                 "--",
                 "--exact",
             ],
-        ],
-        pass_note="members preserves explicit CLI team override instead of ambient environment values",
-    ),
-    SuiteRowSpec(
-        id="AD11-UPDATE-MEMBER-IDENTITY-LOCAL-001",
-        flow="update-member fails locally when caller identity is unavailable",
-        commands=[
             [
                 "cargo",
                 "test",
@@ -142,13 +239,6 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
-        ],
-        pass_note="update-member rejects missing caller identity locally before any retained execution",
-    ),
-    SuiteRowSpec(
-        id="AD11-UPDATE-MEMBER-TEAM-LOCAL-001",
-        flow="update-member fails locally when caller team is unavailable",
-        commands=[
             [
                 "cargo",
                 "test",
@@ -159,27 +249,61 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="update-member rejects missing caller team locally before any retained execution",
+        pass_note="teams update-member preserves caller context and still fails locally when mandatory caller context is missing",
     ),
     SuiteRowSpec(
-        id="AD11-LOG-LOCAL-001",
-        flow="log command fails locally when caller context is unavailable",
+        id="AD11-CMD-TEAMS-BACKUP-001",
+        flow="teams backup preserves retained team scoping and remains daemon-independent in dry-run execution",
         commands=[
             [
                 "cargo",
                 "test",
                 "-p",
                 "agent-team-mail",
-                "commands::log::tests::run_snapshot_fails_without_caller_context",
+                "commands::teams::tests::backup_build_request_preserves_team",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::teams::tests::backup_and_restore_dry_run_execute_without_daemon",
                 "--",
                 "--exact",
             ],
         ],
-        pass_note="log fails at CLI entry instead of guessing or dispatching into retained execution",
+        pass_note="teams backup preserves retained team scoping and remains daemon-independent in dry-run execution",
     ),
     SuiteRowSpec(
-        id="AD11-DOCTOR-TEAM-001",
-        flow="doctor preserves optional team override without caller identity",
+        id="AD11-CMD-TEAMS-RESTORE-001",
+        flow="teams restore preserves retained path and dry-run behavior without requiring the daemon",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::teams::tests::restore_build_request_preserves_from_path_and_dry_run",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::teams::tests::backup_and_restore_dry_run_execute_without_daemon",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="teams restore preserves retained path and dry-run behavior without requiring the daemon",
+    ),
+    SuiteRowSpec(
+        id="AD11-CMD-DOCTOR-001",
+        flow="doctor remains identity-free while preserving optional team scoping and the direct local path",
         commands=[
             [
                 "cargo",
@@ -190,13 +314,6 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
-        ],
-        pass_note="doctor preserves optional team scoping without caller identity",
-    ),
-    SuiteRowSpec(
-        id="AD11-DOCTOR-DIRECT-001",
-        flow="doctor still executes the direct local path without caller identity",
-        commands=[
             [
                 "cargo",
                 "test",
@@ -207,10 +324,10 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="doctor still executes the direct local path without caller identity",
+        pass_note="doctor remains identity-free while preserving optional team scoping and the direct local path",
     ),
     SuiteRowSpec(
-        id="AD11-POSTSEND-PANE-001",
+        id="AD11-POSTSEND-LOCAL-TMUX-001",
         flow="local tmux post-send requires and uses authoritative pane metadata",
         commands=[
             [
@@ -235,7 +352,7 @@ THOROUGH_ROWS = [
         pass_note="local tmux post-send remains bound to authoritative roster pane metadata",
     ),
     SuiteRowSpec(
-        id="AD11-POSTSEND-WARN-001",
+        id="AD11-POSTSEND-WARNING-001",
         flow="sender-visible warning fallback survives failed post-send emission",
         commands=[
             [
