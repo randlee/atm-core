@@ -30,16 +30,14 @@ Record the accepted closure state for Phase AD:
 
 ## Evidence
 
-- `reports/smoke/smoke.md`
-  - normal Phase AD smoke evidence for caller-context, doctor, and local
-    post-send lanes
-- `reports/smoke/smoke-thorough.md`
-  - thorough Phase AD smoke evidence for cross-repo sender-home and graft
-    emission lanes
-- `boundaries/atm-core/post-send-hook-emitter.toml`
-  - authoritative boundary record for `PostSendHookEmitter`
-- `docs/atm-core/boundaries.md`
-  - inventory entry for `PostSendHookEmitter`
+| Sprint / Gate | Evidence | Meaning |
+| --- | --- | --- |
+| general smoke | `reports/smoke/smoke.md` | normal Phase AD smoke evidence for caller-context, doctor, and local post-send lanes |
+| general smoke | `reports/smoke/smoke-thorough.md` | thorough Phase AD smoke evidence for cross-repo sender-home and graft emission lanes |
+| `AD.6` governance | `boundaries/atm-core/post-send-hook-emitter.toml` | authoritative boundary record for `PostSendHookEmitter` |
+| `AD.6` governance | `docs/atm-core/boundaries.md` | inventory entry for `PostSendHookEmitter` |
+| `AD.8` governance | `boundaries/atm-core/graft-post-send-port.toml` | authoritative boundary record for `GraftPostSendPort` |
+| `AD.8` governance | `docs/atm-core/boundaries.md` | inventory entry for `GraftPostSendPort` and its allowlisted daemon implementation |
 
 ## Phase Exit Criteria
 
@@ -59,6 +57,8 @@ Phase AD is not ready until all of the following are true:
   post-send config lookup ownership
 - graft-backed post-send behavior is mediated only by the graft port / emitter
   seam
+- `GraftPostSendPort` governance exists in both the machine-readable boundary
+  record and the boundary inventory
 - no accepted Phase AD gate depends on daemon ambient identity, queued
   notification-runtime behavior, or historical Claude mailbox append logic
 
@@ -72,4 +72,5 @@ Phase AD is not ready until all of the following are true:
   validation commands pass
 - notes: readiness remains fail-closed because the retained validation suite
   now checks the Phase AD readiness record, every AD sprint status, the
-  `PostSendHookEmitter` boundary inventory, and the boundary TOML state
+  `PostSendHookEmitter` / `GraftPostSendPort` boundary inventories, and both
+  boundary TOML states
