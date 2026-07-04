@@ -2189,11 +2189,13 @@ Single-write-path guardrail:
   write path
 
 Current owner-layer boundaries:
-- Claude-owned inbox compatibility surface:
-  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
-  delegate through injected store adapters; low-level source-file discovery,
-  lock/reload orchestration, and persistence remain internal leaf helpers
-  behind that seam during the Phase R store transition
+- Historical Claude-owned inbox compatibility surface:
+  AD.3 retired the Claude inbox append backend and the old nudge/context
+  injection path. The retained mailbox commands now cross the
+  `RetainedServiceRuntime` seam and delegate through injected store adapters;
+  low-level source-file discovery, lock/reload orchestration, and persistence
+  remain internal leaf helpers behind that seam during the Phase R store
+  transition.
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
