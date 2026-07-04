@@ -361,6 +361,7 @@ fn build_append_warning(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
 
     use serde_json::Map;
@@ -380,9 +381,10 @@ mod tests {
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
     };
+    use crate::protocol::NotificationEvent;
     use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     struct NoopRuntime;
