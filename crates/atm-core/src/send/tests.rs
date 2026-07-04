@@ -366,6 +366,7 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
         harness,
         recipient_pane_id: None,
         local_tmux_post_send: false,
+        graft_post_send: false,
         roster_backed: true,
     }
 }
@@ -633,9 +634,13 @@ fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
 
-    let error =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect_err("recovered Claude append failure must fail hard");
+    let error = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect_err("recovered Claude append failure must fail hard");
 
     assert!(error.is_mailbox_write());
     assert!(error.message.contains("append failed"));
@@ -739,9 +744,13 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     let home_dir = tempdir.path().join("home");
     let _env = install_home_env(&home_dir);
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
@@ -759,9 +768,13 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     let home_dir = tempdir.path().join("home");
     let _env = install_home_env(&home_dir);
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert!(outcome.warnings.is_empty());
@@ -800,9 +813,13 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
     let home_dir = tempdir.path().join("home");
     let _env = install_home_env(&home_dir);
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert!(outcome.warnings.is_empty());
@@ -842,9 +859,13 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
     let tempdir = tempdir().expect("tempdir");
     fs::write(tempdir.path().join("config.json"), r#"{"members":[]}"#).expect("config");
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(
@@ -865,9 +886,13 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
 
-    let error =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect_err("empty atm roster must fail");
+    let error = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect_err("empty atm roster must fail");
 
     assert!(error.is_agent_not_found());
     assert_eq!(
@@ -903,9 +928,13 @@ fn send_append_failure_routes_to_post_send_hook_fallback() {
     let home_dir = tempdir.path().join("home");
     let _env = install_home_env(&home_dir);
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);

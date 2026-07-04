@@ -149,7 +149,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityHealthOk
         | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
-        AtmErrorCode::WarningSqliteHealthDegraded => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
@@ -168,6 +169,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningHookExecutionFailed
         | AtmErrorCode::PostSendPaneMissing
         | AtmErrorCode::PostSendTmuxSendFailed
+        | AtmErrorCode::PostSendGraftUnavailable
         | AtmErrorCode::TestFakeTransportInjectionFailed
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,

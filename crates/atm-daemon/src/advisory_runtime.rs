@@ -3,6 +3,7 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread;
 use std::time::Duration;
 
+use atm_core::PostSendHookEvent;
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::graft::{
@@ -12,7 +13,6 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
 };
 use atm_core::protocol::ResponseEnvelope;
-use atm_core::send::SendOutcome;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
 #[cfg(test)]
@@ -260,34 +260,44 @@ impl AdvisoryRuntime {
         }
     }
 
-    pub(crate) fn enqueue_nudge_for_recipient(
-        &self,
-        outcome: &SendOutcome,
-    ) -> Result<(), AtmError> {
+    fn deliver_post_send_impl(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
         let mut state = self.lock_state_write()?;
-        let nudge = advisory_nudge_from_outcome(outcome)?;
+        let nudge = advisory_nudge_from_event(event)?;
         let mut matched = false;
         let mut overflowed = false;
         for (session_id, session) in state.sessions.iter_mut() {
-            if session.team == outcome.team && session.agent == outcome.agent {
+            if session.team == event.recipient_team && session.agent == event.recipient {
                 matched = true;
                 if let EnqueueSessionResult::Overflow =
-                    self.enqueue_nudge_for_session(session_id, session, outcome, &nudge)
+                    self.enqueue_nudge_for_session(session_id, session, event, &nudge)
                 {
                     overflowed = true;
                 }
             }
         }
-        self.emit_enqueue_outcome(matched, overflowed, outcome);
-        if overflowed {
-            return Err(
-                AtmError::daemon_unavailable(
-                    "advisory queue is full; at least one registered session did not receive the event",
-                )
-                .with_recovery(
-                    "Drain or fetch advisory events from the active session before retrying the send operation.",
+        self.emit_enqueue_outcome(matched, overflowed, event);
+        if !matched {
+            return Err(AtmError::new_with_code(
+                atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable,
+                atm_core::error::AtmErrorKind::Validation,
+                format!(
+                    "recipient {}@{} has no active graft advisory session",
+                    event.recipient, event.recipient_team
                 ),
-            );
+            )
+            .with_recovery(
+                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
+            ));
+        }
+        if overflowed {
+            return Err(AtmError::new_with_code(
+                atm_core::error_codes::AtmErrorCode::PostSendAdvisoryDeliveryFailed,
+                atm_core::error::AtmErrorKind::DaemonUnavailable,
+                "advisory queue is full; at least one registered graft session did not receive the post-send event",
+            )
+            .with_recovery(
+                "Drain or fetch graft advisory events from the active session before retrying if a fresh nudge is still required.",
+            ));
         }
         Ok(())
     }
@@ -296,7 +306,7 @@ impl AdvisoryRuntime {
         &self,
         session_id: &atm_core::graft::AdvisorySessionId,
         session: &mut RegisteredAdvisorySession,
-        outcome: &SendOutcome,
+        event: &PostSendHookEvent,
         nudge: &AdvisoryEvent,
     ) -> EnqueueSessionResult {
         if session.nudges.len() < self.max_nudges_per_session {
@@ -304,7 +314,7 @@ impl AdvisoryRuntime {
             return EnqueueSessionResult::Queued;
         }
         session.dropped_count = session.dropped_count.saturating_add(1);
-        self.emit_queue_overflow_event(session_id, session.dropped_count, outcome);
+        self.emit_queue_overflow_event(session_id, session.dropped_count, event);
         EnqueueSessionResult::Overflow
     }
 
@@ -312,49 +322,54 @@ impl AdvisoryRuntime {
         &self,
         session_id: &atm_core::graft::AdvisorySessionId,
         dropped_count: usize,
-        outcome: &SendOutcome,
+        post_send: &PostSendHookEvent,
     ) {
-        let event = advisory_runtime_event(
+        let daemon_event = advisory_runtime_event(
             self.observability.event(
                 "enqueue_nudge",
                 "degraded",
                 "advisory queue rejected an event because the bounded session queue is full",
             ),
-            outcome,
+            post_send,
         );
-        self.observability.emit_event_or_warn(event);
+        self.observability.emit_event_or_warn(daemon_event);
         tracing::debug!(
             session_id = %session_id,
-            team = %outcome.team,
-            agent = %outcome.agent,
+            team = %post_send.recipient_team,
+            agent = %post_send.recipient,
             cap = self.max_nudges_per_session,
             dropped_count,
             "advisory queue rejected an event because the bounded session queue is full"
         );
     }
 
-    fn emit_enqueue_outcome(&self, matched: bool, overflowed: bool, outcome: &SendOutcome) {
-        if !matched {
-            return;
-        }
+    fn emit_enqueue_outcome(&self, matched: bool, overflowed: bool, post_send: &PostSendHookEvent) {
         let message = if overflowed {
             "advisory runtime enqueued at least one nudge and dropped at least one due to queue pressure"
-        } else {
+        } else if matched {
             "advisory runtime queued a nudge for a registered session"
+        } else {
+            "advisory runtime found no registered graft advisory session for the post-send event"
         };
-        let outcome_label = if overflowed { "degraded" } else { "ok" };
-        let event = advisory_runtime_event(
+        let outcome_label = if overflowed {
+            "degraded"
+        } else if matched {
+            "ok"
+        } else {
+            "noop"
+        };
+        let daemon_event = advisory_runtime_event(
             self.observability
                 .event("enqueue_nudge", outcome_label, message)
-                .with_recipient(outcome.agent.clone())
-                .with_sender(outcome.sender.clone()),
-            outcome,
+                .with_recipient(post_send.recipient.clone())
+                .with_sender(post_send.sender.clone()),
+            post_send,
         );
-        self.observability.emit_event_or_warn(event);
+        self.observability.emit_event_or_warn(daemon_event);
         tracing::debug!(
-            team = %outcome.team,
-            agent = %outcome.agent,
-            message_id = %outcome.message_id,
+            team = %post_send.recipient_team,
+            agent = %post_send.recipient,
+            message_id = %post_send.message_id,
             "queued advisory event for registered session"
         );
     }
@@ -387,30 +402,33 @@ enum EnqueueSessionResult {
     Overflow,
 }
 
-fn advisory_nudge_from_outcome(outcome: &SendOutcome) -> Result<AdvisoryEvent, AtmError> {
-    let message = outcome
-        .message
-        .clone()
-        .or_else(|| outcome.summary.clone())
-        .unwrap_or_default();
+fn advisory_nudge_from_event(event: &PostSendHookEvent) -> Result<AdvisoryEvent, AtmError> {
     Ok(AdvisoryEvent {
-        message_id: outcome.message_id,
-        from: outcome.sender.clone(),
-        message: AdvisoryMessage::new(message)?,
+        message_id: event.message_id,
+        from: event.sender.clone(),
+        message: AdvisoryMessage::new(event.message.clone())?,
         received_at: IsoTimestamp::now(),
-        task_id: outcome.task_id.clone(),
+        task_id: event.task_id.clone(),
     })
 }
 
-fn advisory_runtime_event(event: DaemonEvent, outcome: &SendOutcome) -> DaemonEvent {
+fn advisory_runtime_event(event: DaemonEvent, post_send: &PostSendHookEvent) -> DaemonEvent {
     let mut event = event
-        .with_team(outcome.team.clone())
-        .with_agent(outcome.agent.clone())
-        .with_message_id(outcome.message_id);
-    if let Some(task_id) = outcome.task_id.clone() {
+        .with_team(post_send.recipient_team.clone())
+        .with_agent(post_send.recipient.clone())
+        .with_message_id(post_send.message_id);
+    if let Some(task_id) = post_send.task_id.clone() {
         event = event.with_task_id(task_id);
     }
     event
+}
+
+impl atm_core::boundary::sealed::Sealed for AdvisoryRuntime {}
+
+impl atm_core::boundary::GraftPostSendPort for AdvisoryRuntime {
+    fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        self.deliver_post_send_impl(event)
+    }
 }
 
 #[cfg(test)]
@@ -420,16 +438,17 @@ mod tests {
     use std::time::Duration;
 
     use super::AdvisoryRuntime;
-    use atm_core::boundary;
+    use atm_core::PostSendHookEvent;
+    use atm_core::boundary::{self, GraftPostSendPort};
     use atm_core::error::AtmError;
+    use atm_core::error_codes::AtmErrorCode;
     use atm_core::graft::{
         AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
         AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
         AdvisoryStreamRequest, AdvisoryStreamResponse,
     };
     use atm_core::protocol::ResponseEnvelope;
-    use atm_core::send::{SendCommandOutcome, SendOutcome, WarningEntry};
-    use atm_core::types::{CommandAction, IsoTimestamp};
+    use atm_core::types::IsoTimestamp;
 
     fn registration_request() -> AdvisorySessionRegistrationRequest {
         AdvisorySessionRegistrationRequest {
@@ -441,20 +460,18 @@ mod tests {
         }
     }
 
-    fn send_outcome(body: &str) -> SendOutcome {
-        SendOutcome {
-            action: CommandAction::Send,
-            team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
+    fn post_send_event(body: &str) -> PostSendHookEvent {
+        PostSendHookEvent {
             sender: "sender".parse().expect("sender"),
-            outcome: SendCommandOutcome::Sent,
+            sender_team: "sender-team".parse().expect("sender team"),
+            recipient: "test-agent".parse().expect("recipient"),
+            recipient_team: "test-team".parse().expect("team"),
             message_id: atm_core::schema::AtmMessageId::new(),
+            message: body.to_string(),
             requires_ack: false,
+            is_ack: false,
             task_id: None,
-            summary: Some("summary".to_string()),
-            message: Some(body.to_string()),
-            warnings: Vec::<WarningEntry>::new(),
-            dry_run: false,
+            recipient_pane_id: None,
         }
     }
 
@@ -482,10 +499,10 @@ mod tests {
             .register_session(request.clone())
             .expect("register session");
         runtime
-            .enqueue_nudge_for_recipient(&send_outcome("first"))
+            .deliver_post_send(&post_send_event("first"))
             .expect("enqueue first");
         runtime
-            .enqueue_nudge_for_recipient(&send_outcome("second"))
+            .deliver_post_send(&post_send_event("second"))
             .expect("enqueue second");
 
         let fetch = runtime
@@ -528,18 +545,15 @@ mod tests {
             .register_session(request.clone())
             .expect("register session");
         runtime
-            .enqueue_nudge_for_recipient(&send_outcome("first"))
+            .deliver_post_send(&post_send_event("first"))
             .expect("enqueue first");
         runtime
-            .enqueue_nudge_for_recipient(&send_outcome("second"))
+            .deliver_post_send(&post_send_event("second"))
             .expect("enqueue second");
         let error = runtime
-            .enqueue_nudge_for_recipient(&send_outcome("third"))
+            .deliver_post_send(&post_send_event("third"))
             .expect_err("overflow should reject new event");
-        assert_eq!(
-            error.message,
-            "advisory queue is full; at least one registered session did not receive the event"
-        );
+        assert_eq!(error.code, AtmErrorCode::PostSendAdvisoryDeliveryFailed);
 
         let drain = runtime
             .drain_nudges(AdvisoryDrainRequest {
@@ -595,7 +609,7 @@ mod tests {
         });
 
         runtime
-            .enqueue_nudge_for_recipient(&send_outcome("streamed"))
+            .deliver_post_send(&post_send_event("streamed"))
             .expect("enqueue nudge");
 
         let batch = batch_rx
@@ -615,5 +629,14 @@ mod tests {
         join.join()
             .expect("join advisory stream thread")
             .expect("stream loop should exit cleanly");
+    }
+
+    #[test]
+    fn unregistered_recipient_returns_graft_unavailable() {
+        let runtime = AdvisoryRuntime::with_limits_for_test(2, 2);
+        let error = runtime
+            .deliver_post_send(&post_send_event("hello"))
+            .expect_err("missing graft session should surface as unavailable");
+        assert_eq!(error.code, AtmErrorCode::PostSendGraftUnavailable);
     }
 }
