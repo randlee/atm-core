@@ -376,10 +376,36 @@ Notes:
   - durable message persistence succeeds first
   - recipient-specific post-send emission happens directly through the accepted
     post-send emitter seam
-  - retained notification logging, when enabled, appends directly to the
+- retained notification logging, when enabled, appends directly to the
     notification log with no `NotificationSink` substitution
 - Non-Claude outbound payload delivery still uses the dedicated
   `NonClaudeOutbound` boundary rather than any notification surface.
+
+## ClaudeCompatibilityMailboxWriter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml](../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml)
+
+Historical status:
+- retired from the accepted runtime by `AD.3`
+- any surviving references are historical boundary records only
+
+Purpose:
+- Historical boundary record only. Phase `AD.3` retired the
+  `ClaudeCompatibilityMailboxWriter` executor seam from the accepted send/ack
+  runtime.
+
+Notes:
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- The deleted seam previously owned:
+  - `execute_claude_delivery(...)`
+  - direct `append_claude_inbox_message(...)` / recovered message-set append
+    execution
+- Accepted send/ack delivery now routes through the retained
+  `NonClaudeOutbound` seam only.
+- Repair-only inbox rebuild/export support remains outside the live send/ack
+  executor and must not be treated as a surviving delivery boundary.
 
 ## NonClaudeOutbound
 
