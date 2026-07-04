@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD6-TAXONOMY-001>
+  a triage:Finding ;
+  triage:findingId "AD6-TAXONOMY-001" ;
+  triage:title "Required post-send error-code taxonomy entirely absent" ;
+  triage:description "quality-mgr's AD.6-QA-1 verdict reports the required post-send error-code taxonomy variants PostSendPaneMissing/PostSendTmuxSendFailed/PostSendGraftUnavailable/PostSendAdvisoryDeliveryFailed are entirely absent from the codebase, despite sprint-AD6.md requiring this taxonomy as a shared contract that AD.7 (tmux emitter) and AD.8 (graft emitter) sprints build on." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD6-TAXONOMY-001/AD6/missing> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD6-TAXONOMY-001/AD7/incomplete> ;
+  triage:openOn <urn:atm:triage:worktree/AD6/0704764e> ;
+  triage:openOn <urn:atm:triage:worktree/AD7/0b13b7eb> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD8/f90f04f6> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD9/138e85ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD8/f90f04f6> ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AD6-TAXONOMY-001/AD6/missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:snippet "enum AtmErrorCode { ... } - PostSendPaneMissing, PostSendTmuxSendFailed, PostSendGraftUnavailable, PostSendAdvisoryDeliveryFailed entirely absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/0704764e> .
+
+<urn:atm:triage:occurrence/AD6-TAXONOMY-001/AD7/incomplete>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:snippet "enum AtmErrorCode includes PostSendPaneMissing and PostSendTmuxSendFailed but lacks PostSendGraftUnavailable and PostSendAdvisoryDeliveryFailed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/0b13b7eb> .
+
+<urn:atm:triage:worktree/AD6/0704764e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AD7/0b13b7eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AD8/f90f04f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AD9/138e85ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:orderIndex 9 .

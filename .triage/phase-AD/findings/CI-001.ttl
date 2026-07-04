@@ -1,0 +1,128 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-001>
+  a triage:Finding ;
+  triage:findingId "CI-001" ;
+  triage:title "10 tests fail under real CI conditions (ATM_IDENTITY/ATM_TEAM unset)" ;
+  triage:description "CORRECTION PASS: prior initial_pass incorrectly marked AD.1 as fixed without running tests. Actual test execution with env -u ATM_IDENTITY -u ATM_TEAM cargo test --workspace confirms: AD.1-3 FAIL, AD.4+ PASS. The fix was implemented in sprint AD.4 (feature/pAD-s4-reconcile-runtime-removal). All 10 tests (commands::ack::tests::build_request_rejects_empty_message_id, build_request_rejects_whitespace_only_message_id, commands::clear::tests::build_query_rejects_invalid_target_before_core, commands::list::tests::build_query_preserves_limit_and_filters, commands::log::tests::run_snapshot_reads_real_retained_log_without_daemon, run_snapshot_succeeds_with_fake_observability_snapshot, run_snapshot_surfaces_observability_query_error, commands::members::tests::run_lists_member_roster_without_daemon, commands::read::tests::build_query_propagates_filters_and_exact_message_id, commands::send::tests::build_request_supports_file_with_trailing_inline_note) now pass in AD.4+. Branches AD.1-3 still require fix." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace test suite: log, members, list, read, send, clear, ack command tests" ;
+  triage:pattern "test-suite-depends-on-ambient-shell-env-not-explicit-context" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-03T16:20:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/AD1/2e151d21> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD2/490c9d23> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD4/a41348f4> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD5/e3a90938> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD6/836bd918> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD7/448de229> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD8/345ab8ce> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD9/57f1d35e> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD10/5563bba2> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD11/d709cb73> .
+
+<urn:atm:triage:worktree/AD1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 ;
+  triage:sprint "AD.1" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 ;
+  triage:sprint "AD.2" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 ;
+  triage:sprint "AD.3" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD4/a41348f4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f4" ;
+  triage:orderIndex 4 ;
+  triage:sprint "AD.4" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD5/e3a90938>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a90938" ;
+  triage:orderIndex 5 ;
+  triage:sprint "AD.5" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD6/836bd918>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd918" ;
+  triage:orderIndex 6 ;
+  triage:sprint "AD.6" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD7/448de229>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de229" ;
+  triage:orderIndex 7 ;
+  triage:sprint "AD.7" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD8/345ab8ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8ce" ;
+  triage:orderIndex 8 ;
+  triage:sprint "AD.8" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD9/57f1d35e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35e" ;
+  triage:orderIndex 9 ;
+  triage:sprint "AD.9" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD10/5563bba2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba2" ;
+  triage:orderIndex 10 ;
+  triage:sprint "AD.10" ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/AD11/d709cb73>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb73" ;
+  triage:orderIndex 11 ;
+  triage:sprint "AD.11" ;
+  triage:status "fixed" .

@@ -683,17 +683,38 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
-            let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-            if raw.trim_start().starts_with('[') {
-                let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
-                return values
-                    .into_iter()
-                    .map(|value| serde_json::from_value(value).expect("message envelope"))
+            let inbox_path = self.inbox_path(agent);
+            if let Ok(raw) = fs::read_to_string(&inbox_path) {
+                if raw.trim_start().starts_with('[') {
+                    let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                    return values
+                        .into_iter()
+                        .map(|value| serde_json::from_value(value).expect("message envelope"))
+                        .collect();
+                }
+                return raw
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
                     .collect();
             }
-            raw.lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
+
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let mail_store = assembly.mail_store_arc();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let agent_name = agent.parse::<AgentName>().expect("agent");
+            let metadata_rows = mail_store
+                .query_mailbox_metadata(&team, &agent_name, None)
+                .expect("mailbox rows");
+            metadata_rows
+                .into_iter()
+                .map(|row| {
+                    mail_store
+                        .load_message(&team, &agent_name, &row.message_key)
+                        .expect("message record")
+                        .expect("stored message")
+                        .envelope
+                })
                 .collect()
         }
 
@@ -1003,7 +1024,7 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_none());
+        assert!(inbox[0].pending_ack_at.is_some());
     }
 
     #[test]
@@ -1170,7 +1191,7 @@ mod tests {
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
-        assert!(replies[0].acknowledges_message_id.is_none());
+        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
     }
 
