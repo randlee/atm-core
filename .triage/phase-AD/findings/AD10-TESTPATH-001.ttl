@@ -1,0 +1,136 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD10-TESTPATH-001>
+  a triage:Finding ;
+  triage:findingId "AD10-TESTPATH-001" ;
+  triage:title "Hardcoded /tmp/ test paths in AD.10 tests" ;
+  triage:description "AD.10-QA-1 verdict (minor, PR #458) reports AD.10's own new tests use hardcoded /tmp/ paths instead of a portable tempdir helper, a cross-platform-guidelines violation pattern." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AD10" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/9> ;
+  triage:openOn <urn:atm:triage:worktree/s11/5a964add> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/5a964add> ;
+  triage:highestOpenBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:highestOpenOrderIndex 11 .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1250 ;
+  triage:snippet "json!(\"/tmp/worker\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1265 ;
+  triage:snippet "assert_eq!(members.members[0].home_dir, \"/tmp/worker\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 1310 ;
+  triage:snippet "json!(\"/tmp/team-lead\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 269 ;
+  triage:snippet "home_dir: Some(PathBuf::from(\"/tmp/repaired-home\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 426 ;
+  triage:snippet "let atm_home_dir = PathBuf::from(\"/tmp/atm-home\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 427 ;
+  triage:snippet "let member_home_dir = PathBuf::from(\"/tmp/member-home\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 457 ;
+  triage:snippet "home_dir: Some(PathBuf::from(\"/tmp/member-home\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 476 ;
+  triage:snippet "assert_eq!(request.home_dir, Some(PathBuf::from(\"/tmp/member-home\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:occurrence/AD10-TESTPATH-001/s11/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 584 ;
+  triage:snippet "home_dir: Some(PathBuf::from(\"/tmp/repaired-home\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/5a964add> .
+
+<urn:atm:triage:worktree/s11/5a964add>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "5a964add" ;
+  triage:orderIndex 11 .

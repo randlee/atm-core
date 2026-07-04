@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-DOC-STATUS-001>
+  a triage:Finding ;
+  triage:findingId "AD-DOC-STATUS-001" ;
+  triage:title "sprint-doc frontmatter left at status:planned after sprint implementation lands" ;
+  triage:description "QA gate rule requires sprint-doc frontmatter to read `status: complete` before QA-1 can PASS. Pattern confirmed as repeatable: AD.4 and AD.5 both flagged with identical issue (status still `planned` despite implementation landed)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T17:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOC-STATUS-001/AD4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOC-STATUS-001/AD5/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD4/29b96dd> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/8f17a12> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD4/29b96dd> ;
+  triage:notes "Per-branch closure required: each affected sprint's own branch must be fixed (one-line frontmatter edit per branch). Standing practice recommendation: arch-ctm should set `status: complete` once sprint's own validation passes, preventing this recurring on AD.6-AD.11." .
+
+<urn:atm:triage:occurrence/AD-DOC-STATUS-001/AD4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD4.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/29b96dd> .
+
+<urn:atm:triage:occurrence/AD-DOC-STATUS-001/AD5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD5.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12> .
+
+<urn:atm:triage:worktree/AD4/29b96dd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD5/8f17a12>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12" ;
+  triage:orderIndex 5 .

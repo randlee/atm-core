@@ -510,6 +510,7 @@ pub(crate) fn sqlite_failure_transition_names(
     new_message_sqlite_failure_transitions(harness)
 }
 
+#[cfg(test)]
 pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
     &[
         "delivery_policy.new_message.received",

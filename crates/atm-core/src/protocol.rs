@@ -747,10 +747,15 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 #[serde(rename_all = "snake_case")]
 pub enum NotificationKind {
     Delivery,
+    #[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
     ReconcileComplete,
 }
 
 impl fmt::Display for NotificationKind {
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete transport strings remain stable for historical reconcile/watch decoding and formatting support."
+    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
             Self::Delivery => "delivery",
@@ -854,6 +859,7 @@ pub struct RuntimeStatusSnapshot {
 
 /// Watch subscription request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct WatchSubscriptionRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
@@ -862,12 +868,14 @@ pub struct WatchSubscriptionRequest {
 
 /// Watch event batch transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct WatchEventBatch {
     pub paths: Vec<PathBuf>,
 }
 
 /// Reconcile request transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct ReconcileRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
@@ -876,6 +884,7 @@ pub struct ReconcileRequest {
 
 /// Reconcile outcome transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct ReconcileResult {
     pub observed_paths: usize,
     pub imported_sources: usize,

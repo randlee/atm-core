@@ -226,7 +226,7 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
-    use std::sync::{Mutex, MutexGuard, OnceLock};
+    use std::sync::MutexGuard;
 
     use tempfile::TempDir;
 
@@ -240,23 +240,8 @@ mod tests {
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM, lock_env, remove_env_var, set_env_var};
     use crate::types::{AgentName, TeamName};
-
-    /// Process-wide mutex that serializes `std::env::set_var` / `remove_var`
-    /// calls in tests. Required because these functions are unsafe in
-    /// multi-threaded processes; concurrent env mutation produces undefined
-    /// behavior.
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn lock_env() -> MutexGuard<'static, ()> {
-        env_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
 
     struct LocalEnvGuard {
         key: &'static str,
@@ -268,9 +253,7 @@ mod tests {
         fn set_raw(key: &'static str, value: &str) -> Self {
             let guard = lock_env();
             let original = std::env::var_os(key);
-            // SAFETY: this helper serializes all environment mutation with the
-            // local process-wide mutex it holds for the full guard lifetime.
-            unsafe { std::env::set_var(key, value) };
+            set_env_var(key, value);
             Self {
                 key,
                 original,
@@ -286,14 +269,30 @@ mod tests {
                 .map(|(key, value)| {
                     let original = std::env::var_os(key);
                     match value {
-                        Some(value) => {
-                            // SAFETY: serialized by the local env mutex above.
-                            unsafe { std::env::set_var(key, value) };
-                        }
-                        None => {
-                            // SAFETY: serialized by the local env mutex above.
-                            unsafe { std::env::remove_var(key) };
-                        }
+                        Some(value) => set_env_var(key, value),
+                        None => remove_env_var(key),
+                    }
+                    (key, original)
+                })
+                .collect();
+            LocalEnvSet {
+                restorations,
+                _guard: guard,
+            }
+        }
+
+        #[cfg(unix)]
+        fn set_many_os<const N: usize>(
+            changes: [(&'static str, Option<OsString>); N],
+        ) -> LocalEnvSet {
+            let guard = lock_env();
+            let restorations = changes
+                .into_iter()
+                .map(|(key, value)| {
+                    let original = std::env::var_os(key);
+                    match value {
+                        Some(value) => set_env_var(key, value),
+                        None => remove_env_var(key),
                     }
                     (key, original)
                 })
@@ -314,14 +313,8 @@ mod tests {
     impl Drop for LocalEnvGuard {
         fn drop(&mut self) {
             match self.original.take() {
-                Some(value) => {
-                    // SAFETY: the guard still holds the local env mutex.
-                    unsafe { std::env::set_var(self.key, value) }
-                }
-                None => {
-                    // SAFETY: the guard still holds the local env mutex.
-                    unsafe { std::env::remove_var(self.key) }
-                }
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
             }
         }
     }
@@ -331,14 +324,8 @@ mod tests {
         fn drop(&mut self) {
             for (key, original) in self.restorations.iter_mut().rev() {
                 match original.take() {
-                    Some(value) => {
-                        // SAFETY: the guard still holds the local env mutex.
-                        unsafe { std::env::set_var(key, value) }
-                    }
-                    None => {
-                        // SAFETY: the guard still holds the local env mutex.
-                        unsafe { std::env::remove_var(key) }
-                    }
+                    Some(value) => set_env_var(key, value),
+                    None => remove_env_var(key),
                 }
             }
         }
@@ -664,13 +651,16 @@ mod tests {
         use std::os::unix::ffi::OsStringExt;
 
         let home_dir = TempDir::new().expect("home");
-        let _home = LocalEnvGuard::set_raw("HOME", home_dir.path().to_str().expect("utf8 path"));
-        let _atm_log_dir = Utf8EnvGuard {
-            key: "ATM_LOG_DIR",
-            original: std::env::var_os("ATM_LOG_DIR"),
-        };
-        // SAFETY: the test helper serializes environment mutation in-process.
-        unsafe { std::env::set_var("ATM_LOG_DIR", OsString::from_vec(vec![0x66, 0x6f, 0x80])) };
+        let _env = LocalEnvGuard::set_many_os([
+            (
+                "HOME",
+                Some(OsString::from(home_dir.path().to_str().expect("utf8 path"))),
+            ),
+            (
+                "ATM_LOG_DIR",
+                Some(OsString::from_vec(vec![0x66, 0x6f, 0x80])),
+            ),
+        ]);
 
         let error = host_log_dir().expect_err("non-utf8 override should fail");
         assert!(error.is_config());
@@ -691,27 +681,5 @@ mod tests {
         let error = host_log_dir().expect_err("overlong ATM_LOG_DIR should fail");
         assert!(error.is_config());
         assert!(error.message.contains("4096"));
-    }
-
-    #[cfg(unix)]
-    struct Utf8EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    #[cfg(unix)]
-    impl Drop for Utf8EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => {
-                    // SAFETY: the shared test env guard serializes process environment mutation.
-                    unsafe { std::env::set_var(self.key, value) }
-                }
-                None => {
-                    // SAFETY: the shared test env guard serializes process environment mutation.
-                    unsafe { std::env::remove_var(self.key) }
-                }
-            }
-        }
     }
 }
