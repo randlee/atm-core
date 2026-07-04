@@ -2508,7 +2508,8 @@ Historical Claude-owned shared inbox compatibility previously existed for:
   top-level JSON array of inbox messages
 
 Phase `AD` rule:
-- Claude context injection through inbox append is retired per `ADR-019`
+- Phase `AD.3` completes retirement of Claude context injection through inbox
+  append per `ADR-019`
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
