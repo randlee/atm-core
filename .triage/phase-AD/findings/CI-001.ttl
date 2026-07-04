@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "CI-001" ;
   triage:title "10 tests fail under real CI conditions (ATM_IDENTITY/ATM_TEAM unset)" ;
-  triage:description "CORRECTION PASS: prior initial_pass incorrectly marked AD.1 as fixed without running tests. Actual test execution with env -u ATM_IDENTITY -u ATM_TEAM cargo test --workspace confirms: AD.1-3 FAIL, AD.4+ PASS. The fix was implemented in sprint AD.4 (feature/pAD-s4-reconcile-runtime-removal). All 10 tests (commands::ack::tests::build_request_rejects_empty_message_id, build_request_rejects_whitespace_only_message_id, commands::clear::tests::build_query_rejects_invalid_target_before_core, commands::list::tests::build_query_preserves_limit_and_filters, commands::log::tests::run_snapshot_reads_real_retained_log_without_daemon, run_snapshot_succeeds_with_fake_observability_snapshot, run_snapshot_surfaces_observability_query_error, commands::members::tests::run_lists_member_roster_without_daemon, commands::read::tests::build_query_propagates_filters_and_exact_message_id, commands::send::tests::build_request_supports_file_with_trailing_inline_note) now pass in AD.4+. Branches AD.1-3 still require fix." ;
+  triage:description "CORRECTION PASS: prior initial_pass incorrectly marked AD.1 as fixed without running tests. Initial test execution with env -u ATM_IDENTITY -u ATM_TEAM cargo test --workspace confirmed AD.1-3 FAIL and AD.4+ PASS, proving the fix first landed in sprint AD.4 (feature/pAD-s4-reconcile-runtime-removal). All 10 named tests now pass on the accepted Phase AD line, and the earlier AD.1-3 failures were later eliminated by merge-forward into the closed integration branch." ;
   triage:phaseId "phase-AD" ;
   triage:triageMode "followup_pass" ;
   triage:category "CI" ;
@@ -17,6 +17,7 @@
   triage:dispatchReady false ;
   triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
   triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot." ;
   triage:triagedAt "2026-07-03T16:20:00Z"^^xsd:dateTime ;
   triage:fixedOn <urn:atm:triage:worktree/AD1/2e151d21> ;
   triage:fixedOn <urn:atm:triage:worktree/AD2/490c9d23> ;
