@@ -48,7 +48,7 @@ const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 // Test hooks keep shutdown deadlines short so the transport suite verifies
 // drain/cancel behavior without waiting on production-scale timing.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 const TEST_GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_millis(500);
 const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 
