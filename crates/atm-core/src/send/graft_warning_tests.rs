@@ -147,6 +147,10 @@ fn send_non_claude_warns_when_graft_post_send_delivery_fails() {
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
+    assert_eq!(
+        outcome.warnings[0].code,
+        Some(AtmErrorCode::PostSendGraftUnavailable)
+    );
     assert!(
         outcome.warnings[0]
             .message
@@ -160,5 +164,11 @@ fn send_non_claude_warns_when_graft_post_send_delivery_fails() {
     assert_eq!(
         graft_port.events.lock().expect("graft events lock").len(),
         1
+    );
+    let notification_path =
+        crate::home::host_runtime_dir_from_home(&home_dir).join("notifications.jsonl");
+    assert!(
+        !notification_path.exists(),
+        "notification log should not append when graft post-send emission fails"
     );
 }

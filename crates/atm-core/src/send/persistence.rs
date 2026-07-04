@@ -67,7 +67,8 @@ fn recover_after_sqlite_failure(
         original_message,
         sqlite_error,
     );
-    let warning = WarningEntry::new(
+    let warning = WarningEntry::with_code(
+        sqlite_error.code,
         format!(
             "error: SQLite persistence failed for delivery to {}@{}: {}.",
             recipient.agent, recipient.team, sqlite_error

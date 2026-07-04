@@ -1,10 +1,16 @@
 use super::AtmConfig;
+use crate::error::AtmError;
+use crate::types::AgentName;
 
 pub fn resolve_agent(value: &str, config: Option<&AtmConfig>) -> String {
     config
         .and_then(|config| config.aliases.get(value))
         .cloned()
         .unwrap_or_else(|| value.to_string())
+}
+
+pub fn resolve_agent_name(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
+    resolve_agent(value, config).parse()
 }
 
 #[allow(
@@ -24,7 +30,7 @@ pub fn preferred_alias(canonical: &str, config: Option<&AtmConfig>) -> Option<St
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{preferred_alias, resolve_agent};
+    use super::{preferred_alias, resolve_agent, resolve_agent_name};
     use crate::config::AtmConfig;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::TEST_SENDER;
@@ -40,6 +46,19 @@ mod tests {
 
         assert_eq!(resolve_agent("tl", Some(&config)), ROLE_TEAM_LEAD);
         assert_eq!(resolve_agent(ROLE_TEAM_LEAD, Some(&config)), ROLE_TEAM_LEAD);
+    }
+
+    #[test]
+    fn resolve_agent_name_rejects_invalid_alias_target() {
+        let mut aliases = BTreeMap::new();
+        aliases.insert("tl".to_string(), "../bad-agent".to_string());
+        let config = AtmConfig {
+            aliases,
+            ..Default::default()
+        };
+
+        let error = resolve_agent_name("tl", Some(&config)).expect_err("invalid alias target");
+        assert!(error.is_address());
     }
 
     #[test]

@@ -82,13 +82,13 @@ Phase-AB planning note:
 - the execution integration branch is `integrate/phase-AB`
 
 Phase-AD planning note:
-- `Phase AD` is the active release-blocking correction line for caller
+- `Phase AD` is the completed release-blocking correction line for caller
   identity ownership, direct post-send emission, and deletion of retired
   Claude/reconcile/notification-runtime paths
 - the authoritative planning document is
   [`docs/plans/phase-AD/plan-phase-AD.md`](./plans/phase-AD/plan-phase-AD.md)
 - the planning branch is `plan/post-send-hook-fix`
-- the execution integration branch is `integrate/phase-AD`
+- the execution integration branch was `integrate/phase-AD`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -129,8 +129,8 @@ Status:
   to `atm-runtime`.
 - Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
   execution after the accepted Phase Z baseline.
-- Phase AD is the active planning line for release-blocking caller-identity,
-  post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
+- Phase AD is complete on the integrated release-blocking caller-identity,
+  post-send, and retired-subsystem cleanup line on top of the accepted `1.2.3`
   baseline.
 - the current merged workspace contains:
   - `crates/atm-architecture`

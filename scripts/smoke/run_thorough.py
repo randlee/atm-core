@@ -10,8 +10,8 @@ from run_thorough_graft import graft_commands
 
 THOROUGH_ROWS = [
     SuiteRowSpec(
-        id="AD11-ENV-001",
-        flow="env-only caller context for retained command surfaces",
+        id="AD11-SEND-ENV-001",
+        flow="send command uses environment caller context when overrides are absent",
         commands=[
             [
                 "cargo",
@@ -20,6 +20,13 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_request_uses_environment_when_overrides_are_absent",
             ],
+        ],
+        pass_note="send caller-context resolution stays bound to environment when explicit overrides are absent",
+    ),
+    SuiteRowSpec(
+        id="AD11-READ-ENV-001",
+        flow="read command uses environment caller context when overrides are absent",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -27,6 +34,13 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_query_uses_environment_when_overrides_are_absent",
             ],
+        ],
+        pass_note="read caller-context resolution stays bound to environment when explicit overrides are absent",
+    ),
+    SuiteRowSpec(
+        id="AD11-MEMBERS-ENV-001",
+        flow="members command remains daemon-independent under environment-only caller context",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -36,6 +50,13 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="members remains daemon-independent while using the shared caller-context resolver",
+    ),
+    SuiteRowSpec(
+        id="AD11-TEAMS-ENV-001",
+        flow="teams command remains daemon-independent under environment-only caller context",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -45,6 +66,13 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="teams remains daemon-independent while using the shared caller-context resolver",
+    ),
+    SuiteRowSpec(
+        id="AD11-LOG-ENV-001",
+        flow="log command remains daemon-independent under environment-only caller context",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -55,11 +83,11 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="env-only caller context succeeds for retained CLI surfaces that require it, and daemon-independent retained command paths stay operational",
+        pass_note="log remains daemon-independent while using the shared caller-context resolver",
     ),
     SuiteRowSpec(
-        id="AD11-OVERRIDE-001",
-        flow="explicit CLI caller-context overrides win when supported",
+        id="AD11-SEND-OVERRIDE-001",
+        flow="send command prefers explicit CLI caller-context overrides over environment values",
         commands=[
             [
                 "cargo",
@@ -68,6 +96,13 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_request_prefers_cli_overrides_over_environment",
             ],
+        ],
+        pass_note="send remains bound to explicit CLI caller context when provided",
+    ),
+    SuiteRowSpec(
+        id="AD11-READ-OVERRIDE-001",
+        flow="read command prefers explicit CLI caller-context overrides over environment values",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -75,6 +110,13 @@ THOROUGH_ROWS = [
                 "agent-team-mail",
                 "build_query_prefers_cli_overrides_over_environment",
             ],
+        ],
+        pass_note="read remains bound to explicit CLI caller context when provided",
+    ),
+    SuiteRowSpec(
+        id="AD11-MEMBERS-OVERRIDE-001",
+        flow="members command preserves explicit team override",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -85,11 +127,11 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="commands with retained override surfaces stay bound to explicit CLI caller context instead of ambient environment values",
+        pass_note="members preserves explicit CLI team override instead of ambient environment values",
     ),
     SuiteRowSpec(
-        id="AD11-LOCAL-001",
-        flow="caller-context failures stay local before retained execution",
+        id="AD11-UPDATE-MEMBER-IDENTITY-LOCAL-001",
+        flow="update-member fails locally when caller identity is unavailable",
         commands=[
             [
                 "cargo",
@@ -100,6 +142,13 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="update-member rejects missing caller identity locally before any retained execution",
+    ),
+    SuiteRowSpec(
+        id="AD11-UPDATE-MEMBER-TEAM-LOCAL-001",
+        flow="update-member fails locally when caller team is unavailable",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -109,6 +158,13 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="update-member rejects missing caller team locally before any retained execution",
+    ),
+    SuiteRowSpec(
+        id="AD11-LOG-LOCAL-001",
+        flow="log command fails locally when caller context is unavailable",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -119,11 +175,11 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="missing caller identity or caller team still fails at CLI entry instead of guessing or dispatching into retained execution",
+        pass_note="log fails at CLI entry instead of guessing or dispatching into retained execution",
     ),
     SuiteRowSpec(
-        id="AD11-DOCTOR-001",
-        flow="doctor remains identity-free and optional-team scoped",
+        id="AD11-DOCTOR-TEAM-001",
+        flow="doctor preserves optional team override without caller identity",
         commands=[
             [
                 "cargo",
@@ -134,6 +190,13 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="doctor preserves optional team scoping without caller identity",
+    ),
+    SuiteRowSpec(
+        id="AD11-DOCTOR-DIRECT-001",
+        flow="doctor still executes the direct local path without caller identity",
+        commands=[
             [
                 "cargo",
                 "test",
@@ -144,11 +207,11 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="doctor still executes without caller identity or caller team while preserving explicit team scoping",
+        pass_note="doctor still executes the direct local path without caller identity",
     ),
     SuiteRowSpec(
-        id="AD11-POSTSEND-001",
-        flow="local tmux post-send and sender-visible warning fallback",
+        id="AD11-POSTSEND-PANE-001",
+        flow="local tmux post-send requires and uses authoritative pane metadata",
         commands=[
             [
                 "cargo",
@@ -168,6 +231,22 @@ THOROUGH_ROWS = [
                 "--",
                 "--exact",
             ],
+        ],
+        pass_note="local tmux post-send remains bound to authoritative roster pane metadata",
+    ),
+    SuiteRowSpec(
+        id="AD11-POSTSEND-WARN-001",
+        flow="sender-visible warning fallback survives failed post-send emission",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::hook::tests::local_tmux_post_send_emitter_uses_authoritative_pane_id",
+                "--",
+                "--exact",
+            ],
             [
                 "cargo",
                 "test",
@@ -178,7 +257,32 @@ THOROUGH_ROWS = [
                 "--exact",
             ],
         ],
-        pass_note="local tmux nudges still use authoritative pane metadata and forced emission failure still degrades into sender-visible warning behavior",
+        pass_note="failed post-send emission still degrades into a sender-visible warning after durable send success",
+    ),
+    SuiteRowSpec(
+        id="AD11-ROSTER-REPAIR-001",
+        flow="fixture evidence preserves repaired pane metadata through team-admin and doctor projections",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "team_admin::tests::update_member_repairs_existing_roster_metadata_and_projects_config",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "doctor::tests::run_doctor_reports_pane_and_home_dir_drift_from_roster_truth",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="fixture-backed smoke evidence proves pane repair survives the accepted team-admin and doctor projection paths",
     ),
     SuiteRowSpec(
         id="AD11-XREPO-001",

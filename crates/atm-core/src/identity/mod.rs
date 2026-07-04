@@ -69,7 +69,7 @@ pub(crate) fn resolve_runtime_sender_identity(
 }
 
 fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
-    crate::config::aliases::resolve_agent(value, config).parse()
+    crate::config::aliases::resolve_agent_name(value, config)
 }
 
 #[cfg(test)]

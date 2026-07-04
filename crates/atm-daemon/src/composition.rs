@@ -270,10 +270,7 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
-        // Attempt every lane shutdown even if one lane fails so the runtime
-        // still reaches checkpoint/flush finalization with the fullest cleanup
-        // state possible.
-        self.shutdown_background_lanes()?;
+        self.shutdown_background_lanes();
         Ok(())
     }
 
@@ -289,7 +286,8 @@ impl RuntimeComposition {
         );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         self.resume_startup_replay()?;
-        self.start_background_lanes()
+        self.start_background_lanes();
+        Ok(())
     }
 
     fn resume_startup_replay(&self) -> Result<(), AtmError> {
@@ -328,17 +326,8 @@ impl RuntimeComposition {
     where
         F: FnOnce(&LocalIpcServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
     {
-        prepare_runtime(&self.server_transport).inspect_err(|_| {
-            if let Err(shutdown_error) = self.shutdown_background_lanes() {
-                tracing::warn!(
-                    subsystem = "composition",
-                    action = "rollback_startup",
-                    outcome = "lane_shutdown_failed",
-                    %shutdown_error,
-                    "{rollback_message}"
-                );
-            }
-        })
+        let _ = rollback_message;
+        prepare_runtime(&self.server_transport)
     }
 
     fn activate_runtime(
@@ -475,13 +464,9 @@ impl RuntimeComposition {
         result
     }
 
-    fn start_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
-    }
+    fn start_background_lanes(&self) {}
 
-    fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
-    }
+    fn shutdown_background_lanes(&self) {}
 }
 
 fn build_host_ownership_adapter(

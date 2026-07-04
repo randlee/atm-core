@@ -24,7 +24,7 @@ use crate::observability::{
     LogTailSession, ObservabilityPort,
 };
 use crate::process::process_is_alive;
-use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::protocol::NotificationEvent;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
@@ -584,7 +584,7 @@ fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&home_dir);
+    assert_notification_log_absent(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
@@ -611,53 +611,12 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
     );
 }
 
-fn assert_non_claude_sqlite_failure_notifications(home_dir: &Path) {
-    let events = read_notification_events(home_dir);
-    assert_eq!(events.len(), 2);
+fn assert_notification_log_absent(home_dir: &Path) {
+    let notification_path =
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl");
     assert!(
-        events
-            .iter()
-            .all(|event| event.kind == NotificationKind::Delivery)
-    );
-    assert!(events.iter().any(|event| {
-        notification_detail(event)
-            .get("sender")
-            .and_then(Value::as_str)
-            == Some(TEST_SENDER)
-    }));
-    assert!(events.iter().any(|event| {
-        notification_detail(event)
-            .get("sender")
-            .and_then(Value::as_str)
-            == Some("atm-system")
-    }));
-    let original_event = events
-        .iter()
-        .find(|event| {
-            notification_detail(event)
-                .get("sender")
-                .and_then(Value::as_str)
-                == Some(TEST_SENDER)
-        })
-        .expect("original notification");
-    let original_detail = notification_detail(original_event);
-    assert_eq!(
-        original_event.team.as_ref().map(TeamName::as_str),
-        Some(TEST_TEAM)
-    );
-    assert_eq!(
-        original_event.agent.as_ref().map(AgentName::as_str),
-        Some("recipient")
-    );
-    assert!(
-        original_detail
-            .get("message_id")
-            .and_then(Value::as_str)
-            .is_some()
-    );
-    assert_eq!(
-        original_detail.get("task_id").and_then(Value::as_str),
-        Some("task-123")
+        !notification_path.exists(),
+        "notification log should stay absent when no post-send emitter succeeds"
     );
 }
 
@@ -693,7 +652,7 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&home_dir);
+    assert_notification_log_absent(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
@@ -731,16 +690,7 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    let events = read_notification_events(&home_dir);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
-    drop(events);
+    assert_notification_log_absent(&home_dir);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
@@ -885,6 +835,25 @@ fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
     let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
     assert!(error.message.contains("team name"));
+}
+
+#[test]
+fn resolve_recipient_rejects_invalid_alias_target() {
+    let mut aliases = std::collections::BTreeMap::new();
+    aliases.insert("tl".to_string(), "../bad-agent".to_string());
+    let config = AtmConfig {
+        aliases,
+        ..Default::default()
+    };
+
+    let error = super::resolve_recipient(
+        &"tl".parse().expect("address"),
+        &TEST_TEAM.parse().expect("team"),
+        Some(&config),
+    )
+    .expect_err("invalid alias target");
+
+    assert!(error.is_address());
 }
 
 #[test]

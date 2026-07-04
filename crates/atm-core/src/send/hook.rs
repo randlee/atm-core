@@ -154,38 +154,46 @@ pub(crate) fn emit_post_send_effects(
             message,
             delivery_snapshot.recipient_pane_id.as_ref(),
         );
-        if let Err(error) = append_notification_log(&notification_event(&event)) {
-            warnings.push(WarningEntry::new(
+        let mut emitted = false;
+        if let Some(emitter) = tmux_emitter.as_ref() {
+            match emitter.emit(&event) {
+                Ok(()) => emitted = true,
+                Err(error) => warnings.push(post_send_warning(
+                    "post-send emission failed",
+                    &event,
+                    &error,
+                )),
+            }
+        }
+        if delivery_snapshot.graft_post_send
+            && let Some(emitter) = graft_emitter.as_ref()
+        {
+            match emitter.emit(&event) {
+                Ok(()) => emitted = true,
+                Err(error) => warnings.push(post_send_warning(
+                    "post-send emission failed",
+                    &event,
+                    &error,
+                )),
+            }
+        }
+        if let Some(emitter) = hook_emitter.as_ref() {
+            match emitter.emit(&event) {
+                Ok(()) => emitted = true,
+                Err(error) => {
+                    warnings.push(post_send_warning("post-send hook failed", &event, &error))
+                }
+            }
+        }
+        if emitted && let Err(error) = append_notification_log(&notification_event(&event)) {
+            warnings.push(WarningEntry::with_code(
+                error.code,
                 format!(
                     "warning: notification delivery failed for {}@{}: {error}",
                     recipient.agent, recipient.team
                 ),
                 error.primary_recovery().map(str::to_owned),
             ));
-        }
-        if let Some(emitter) = tmux_emitter.as_ref()
-            && let Err(error) = emitter.emit(&event)
-        {
-            warnings.push(post_send_warning(
-                "post-send emission failed",
-                &event,
-                &error,
-            ));
-        }
-        if delivery_snapshot.graft_post_send
-            && let Some(emitter) = graft_emitter.as_ref()
-            && let Err(error) = emitter.emit(&event)
-        {
-            warnings.push(post_send_warning(
-                "post-send emission failed",
-                &event,
-                &error,
-            ));
-        }
-        if let Some(emitter) = hook_emitter.as_ref()
-            && let Err(error) = emitter.emit(&event)
-        {
-            warnings.push(post_send_warning("post-send hook failed", &event, &error));
         }
     }
 }
@@ -626,7 +634,8 @@ fn warnings_to_result(warnings: &[WarningEntry]) -> Result<(), AtmError> {
 }
 
 fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
-    WarningEntry::new(
+    WarningEntry::with_code(
+        error.code,
         format!(
             "warning: {prefix} for {}@{} message {} ({}): {}.",
             event.recipient, event.recipient_team, event.message_id, error.code, error.message

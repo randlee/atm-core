@@ -350,8 +350,9 @@ Notes:
   - deciding whether the recipient exposes post-send capability
   - logging emission failure
   - constructing sender-visible warnings on emission failure
-- accepted send/ack finalization emits post-send from persisted logical
-  messages before any retained compatibility delivery-plan execution
+- accepted send/ack finalization emits post-send directly from persisted
+  logical messages on the accepted runtime with no retained compatibility
+  delivery-plan executor on this path
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter

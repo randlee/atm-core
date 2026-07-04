@@ -8,6 +8,7 @@
 mod active_connection_registry;
 mod advisory_runtime;
 mod boundary_adapters;
+#[cfg(test)]
 mod claude_compat;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
