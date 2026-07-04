@@ -619,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_delivery_plan_rejects_non_claude_target_for_claude_harness() {
+    fn execute_delivery_plan_allows_non_claude_target_for_claude_harness() {
         let runtime = NoopRuntime;
         let message = logical_message();
         let plan = DeliveryPlan::new(
@@ -636,13 +636,9 @@ mod tests {
             Vec::new(),
         );
 
-        let error = execute_delivery_plan(&runtime, None, &plan).expect_err("fail closed");
-        assert!(error.is_validation());
-        assert!(
-            error
-                .message
-                .contains("NonClaude target for Claude Code harness")
-        );
+        let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
+        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
+        assert!(result.warnings.is_empty());
     }
 
     #[test]
