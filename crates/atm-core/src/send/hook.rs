@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -21,7 +21,7 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::service_runtime::append_notification_log;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, PaneId, TeamName};
 
 use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
 
@@ -79,16 +79,60 @@ impl PostSendHookEmitter for ConfiguredPostSendHookEmitter<'_> {
     }
 }
 
+pub(crate) struct LocalTmuxPostSendEmitter;
+
+impl crate::boundary::sealed::Sealed for LocalTmuxPostSendEmitter {}
+
+impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        let Some(pane_id) = event.recipient_pane_id.as_ref() else {
+            let error = AtmError::new_with_code(
+                AtmErrorCode::PostSendPaneMissing,
+                AtmErrorKind::Validation,
+                format!(
+                    "recipient {}@{} has tmux-backed post-send capability but no pane id",
+                    event.recipient, event.recipient_team
+                ),
+            )
+            .with_recovery(format!(
+                "Repair the roster row with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
+                event.recipient_team, event.recipient
+            ));
+            warn!(
+                code = %AtmErrorCode::PostSendPaneMissing,
+                sender = %event.sender,
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                "local tmux post-send emission is missing authoritative pane metadata"
+            );
+            return Err(error);
+        };
+
+        let message = tmux_nudge_message(&event.recipient_team);
+        run_tmux_send_keys(pane_id, &message, event)?;
+        run_tmux_send_enter(pane_id, event)?;
+        Ok(())
+    }
+}
+
 pub(crate) fn emit_post_send_effects(
     warnings: &mut Vec<WarningEntry>,
     config: Option<&AtmConfig>,
     recipient: &ResolvedRecipient,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     messages: &[crate::delivery_plan::LogicalMessage],
-    recipient_pane_id: Option<&crate::types::PaneId>,
 ) {
-    let emitter = config.map(ConfiguredPostSendHookEmitter::new);
+    let hook_emitter = config.map(ConfiguredPostSendHookEmitter::new);
+    let tmux_emitter = delivery_snapshot
+        .local_tmux_post_send
+        .then_some(LocalTmuxPostSendEmitter);
     for message in messages {
-        let event = post_send_event_from_message(recipient, message, recipient_pane_id);
+        let event = post_send_event_from_message(
+            recipient,
+            message,
+            delivery_snapshot.recipient_pane_id.as_ref(),
+        );
         if let Err(error) = append_notification_log(&notification_event(&event)) {
             warnings.push(WarningEntry::new(
                 format!(
@@ -98,16 +142,19 @@ pub(crate) fn emit_post_send_effects(
                 error.primary_recovery().map(str::to_owned),
             ));
         }
-        if let Some(emitter) = emitter.as_ref()
+        if let Some(emitter) = tmux_emitter.as_ref()
             && let Err(error) = emitter.emit(&event)
         {
-            warnings.push(WarningEntry::new(
-                format!(
-                    "warning: post-send hook failed for {}@{} message {}: {}.",
-                    event.recipient, event.recipient_team, event.message_id, error.message
-                ),
-                error.primary_recovery().map(str::to_owned),
+            warnings.push(post_send_warning(
+                "post-send emission failed",
+                &event,
+                &error,
             ));
+        }
+        if let Some(emitter) = hook_emitter.as_ref()
+            && let Err(error) = emitter.emit(&event)
+        {
+            warnings.push(post_send_warning("post-send hook failed", &event, &error));
         }
     }
 }
@@ -473,6 +520,105 @@ fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::
     configured.matches(candidate)
 }
 
+fn tmux_nudge_message(team: &TeamName) -> String {
+    format!("You have unread ATM messages. Run: atm read --team {team}")
+}
+
+fn run_tmux_send_keys(
+    pane_id: &PaneId,
+    message: &str,
+    event: &PostSendHookEvent,
+) -> Result<(), AtmError> {
+    let output = Command::new("tmux")
+        .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send literal nudge")
+}
+
+fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    let output = Command::new("tmux")
+        .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys Enter: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
+}
+
+fn ensure_tmux_success(
+    output: Output,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    action: &str,
+) -> Result<(), AtmError> {
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = if stderr.is_empty() {
+        format!("tmux exited unsuccessfully while trying to {action}")
+    } else {
+        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
+    };
+    Err(tmux_send_failed_error(
+        pane_id,
+        event,
+        detail,
+        None::<std::io::Error>,
+    ))
+}
+
+fn tmux_send_failed_error<E>(
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    message: String,
+    source: Option<E>,
+) -> AtmError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let error = AtmError::new_with_code(
+        AtmErrorCode::PostSendTmuxSendFailed,
+        AtmErrorKind::Internal,
+        format!(
+            "local tmux post-send emission failed for {}@{} pane {}: {message}",
+            event.recipient, event.recipient_team, pane_id
+        ),
+    )
+    .with_recovery(format!(
+        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
+        pane_id, event.recipient_team, event.recipient
+    ));
+    warn!(
+        code = %AtmErrorCode::PostSendTmuxSendFailed,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
+        pane_id = %pane_id,
+        message_id = %event.message_id,
+        error = %message,
+        "local tmux post-send emission failed"
+    );
+    match source {
+        Some(source) => error.with_source(source),
+        None => error,
+    }
+}
+
 fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     NotificationEvent {
         kind: NotificationKind::Delivery,
@@ -550,6 +696,16 @@ fn warnings_to_result(warnings: &[WarningEntry]) -> Result<(), AtmError> {
         error = error.with_recovery(recovery.to_string());
     }
     Err(error)
+}
+
+fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
+    WarningEntry::new(
+        format!(
+            "warning: {prefix} for {}@{} message {} ({}): {}.",
+            event.recipient, event.recipient_team, event.message_id, error.code, error.message
+        ),
+        error.primary_recovery().map(str::to_owned),
+    )
 }
 
 fn spawn_post_send_hook_stdout_reader(
@@ -763,27 +919,33 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     use serde_json::{Map, json};
+    use tempfile::tempdir;
     use tracing::Level;
 
     use super::{
-        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
-        hook_result_log_level, load_post_send_config_for_sender, parse_post_send_hook_result,
-        sender_config_root,
+        HookCancellationToken, LocalTmuxPostSendEmitter, POST_SEND_HOOK_MAX_STDOUT_BYTES,
+        PostSendHookResultLevel, finish_abandoned_post_send_hook_stdout_capture,
+        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
+        parse_post_send_hook_result, sender_config_root, tmux_nudge_message,
     };
-    use crate::boundary::{ProjectionAppendMode, RosterEntry, RosterHarness, RosterMemberKind};
+    use crate::boundary::{
+        PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode, RosterEntry, RosterHarness,
+        RosterMemberKind,
+    };
     use crate::config::AtmConfig;
     use crate::config::types::HookRecipient;
     use crate::error::AtmError;
+    use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{InboxMessage, TeamConfig};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
-    use crate::test_support::TEST_SENDER;
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::test_support::{EnvGuard, TEST_SENDER};
+    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
     use crate::workflow::WorkflowStateFile;
 
     struct ConfigLookupRuntime {
@@ -1027,5 +1189,73 @@ mod tests {
             loaded.as_ref().map(|config| &config.config_root),
             Some(&config_root)
         );
+    }
+
+    fn tmux_event(recipient_pane_id: Option<PaneId>) -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_team: TeamName::from_validated("test-team"),
+            recipient: AgentName::from_validated("recipient"),
+            recipient_team: TeamName::from_validated("test-team"),
+            message_id: crate::schema::AtmMessageId::new(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id,
+        }
+    }
+
+    #[test]
+    fn local_tmux_post_send_emitter_requires_authoritative_pane_id() {
+        let emitter = LocalTmuxPostSendEmitter;
+        let error = emitter
+            .emit(&tmux_event(None))
+            .expect_err("missing pane must fail");
+
+        assert_eq!(error.code, AtmErrorCode::PostSendPaneMissing);
+        assert!(error.message.contains("no pane id"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn local_tmux_post_send_emitter_uses_authoritative_pane_id() {
+        let tempdir = tempdir().expect("tempdir");
+        let tmux_log = tempdir.path().join("tmux.log");
+        let tmux_path = tempdir.path().join("tmux");
+        fs::write(
+            &tmux_path,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"{}\"\nexit 0\n",
+                tmux_log.display()
+            ),
+        )
+        .expect("write tmux shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&tmux_path, perms).expect("chmod");
+        }
+
+        let shim_path = match std::env::var_os("PATH") {
+            Some(path) => format!(
+                "{}:{}",
+                tempdir.path().display(),
+                PathBuf::from(path).display()
+            ),
+            None => tempdir.path().display().to_string(),
+        };
+        let _env = EnvGuard::set_raw("PATH", &shim_path);
+
+        let result =
+            LocalTmuxPostSendEmitter.emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))));
+
+        result.expect("tmux send");
+        let logged = fs::read_to_string(&tmux_log).expect("tmux log");
+        assert!(logged.contains("send-keys"));
+        assert!(logged.contains("%9"));
+        assert!(logged.contains(&tmux_nudge_message(&TeamName::from_validated("test-team"))));
+        assert!(logged.contains("Enter"));
     }
 }

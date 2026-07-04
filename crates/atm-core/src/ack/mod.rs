@@ -487,8 +487,8 @@ fn finalize_ack_outcome<
         &mut outcome.warnings,
         context.post_send_config.as_ref(),
         &plan.recipient,
+        context.reply_snapshot,
         &plan.messages,
-        context.reply_snapshot.recipient_pane_id.as_ref(),
     );
     record_ack_telemetry(
         observability,
@@ -1077,6 +1077,7 @@ mod tests {
             team: team.clone(),
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
+            local_tmux_post_send: false,
             roster_backed: true,
         };
         let machine = AckReplyStateMachine::from_persistence(&persistence).expect("state machine");
@@ -1137,6 +1138,7 @@ mod tests {
             team: team.clone(),
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
+            local_tmux_post_send: false,
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone());

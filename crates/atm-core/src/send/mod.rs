@@ -296,8 +296,8 @@ fn finalize_send_outcome<
             &mut outcome.warnings,
             context.post_send_config.as_ref(),
             &context.recipient,
+            &context.delivery_snapshot,
             &plan.messages,
-            context.delivery_snapshot.recipient_pane_id.as_ref(),
         );
     }
     emit_send_command_event(

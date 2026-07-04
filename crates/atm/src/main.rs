@@ -131,6 +131,8 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::WarningStaleMailboxLock
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
         | AtmErrorCode::InternalError => 1,
     }
 }

@@ -140,6 +140,8 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 - `ATM_WARNING_HOOK_SKIPPED` (retired for filter non-match)
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
+- `ATM_POST_SEND_PANE_MISSING`
+- `ATM_POST_SEND_TMUX_SEND_FAILED`
 
 #### 5.8.1 `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 
@@ -212,6 +214,33 @@ Error codes should describe the failure class, not a specific prose message.
   - must not roll back or convert a successful send into a command failure
   - may be accompanied by lower-level OS/process details and any structured
     hook result that was successfully parsed before failure
+
+#### 5.8.5 `ATM_POST_SEND_PANE_MISSING`
+
+- code: `ATM_POST_SEND_PANE_MISSING`
+- description: a recipient marked for local tmux-backed post-send emission has
+  no authoritative pane id in canonical roster state
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must be logged with sender, recipient, recipient team, and message id
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - recovery should direct the operator to repair pane metadata through
+    `atm teams update-member`
+
+#### 5.8.6 `ATM_POST_SEND_TMUX_SEND_FAILED`
+
+- code: `ATM_POST_SEND_TMUX_SEND_FAILED`
+- description: ATM attempted local tmux-backed post-send emission but `tmux
+  send-keys` failed or rejected the target pane
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must be logged with sender, recipient, recipient team, pane id, and tmux
+    failure detail
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - recovery should direct the operator to verify the pane still exists and
+    repair stale pane metadata through `atm teams update-member`
 
 ### 5.9 Mailbox Lock Read-Only Filesystem
 
