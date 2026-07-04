@@ -85,6 +85,73 @@ pub enum AtmErrorCode {
 }
 
 impl AtmErrorCode {
+    const ALL: [Self; 64] = [
+        Self::ConfigHomeUnavailable,
+        Self::ConfigParseFailed,
+        Self::ConfigRetiredHookMembersKey,
+        Self::ConfigRetiredLegacyHookKeys,
+        Self::ConfigTeamParseFailed,
+        Self::ConfigTeamMissing,
+        Self::IdentityUnavailable,
+        Self::IdentityInvalid,
+        Self::IdentityConflict,
+        Self::DaemonUnavailable,
+        Self::DaemonMayHaveExecuted,
+        Self::DaemonLifecycleWedge,
+        Self::DaemonLaunchGateRejected,
+        Self::DaemonServingStateRejected,
+        Self::DaemonStaleOwnerRecoveryFailed,
+        Self::DaemonAutoStartFailed,
+        Self::DaemonAdvisorySessionAlreadyRegistered,
+        Self::DaemonAdvisorySessionNotRegistered,
+        Self::RemoteDeliveryOutcomeUnknown,
+        Self::AddressParseFailed,
+        Self::TeamUnavailable,
+        Self::TeamInvalid,
+        Self::TeamNotFound,
+        Self::AgentNotFound,
+        Self::MailboxReadFailed,
+        Self::MailboxRecoveredMessageSetTooLarge,
+        Self::MailboxWriteFailed,
+        Self::MailboxLockFailed,
+        Self::MailboxLockReadOnlyFilesystem,
+        Self::MailboxLockTimeout,
+        Self::InternalError,
+        Self::MessageValidationFailed,
+        Self::CallerContextRequestInvalid,
+        Self::SerializationFailed,
+        Self::FilePolicyRejected,
+        Self::FileReferenceRewriteFailed,
+        Self::WaitTimeout,
+        Self::AckInvalidState,
+        Self::ClearInvalidState,
+        Self::ObservabilityEmitFailed,
+        Self::ObservabilityQueryFailed,
+        Self::ObservabilityFollowFailed,
+        Self::ObservabilityHealthFailed,
+        Self::ObservabilityBootstrapFailed,
+        Self::ObservabilityHealthOk,
+        Self::WarningInvalidTeamMemberSkipped,
+        Self::WarningMailboxRecordSkipped,
+        Self::WarningMalformedAtmFieldIgnored,
+        Self::WarningObservabilityHealthDegraded,
+        Self::WarningSqliteHealthDegraded,
+        Self::WarningOriginInboxEntrySkipped,
+        Self::WarningMissingTeamConfigFallback,
+        Self::WarningSendAlertStateDegraded,
+        Self::WarningIdentityDrift,
+        Self::WarningRosterDrift,
+        Self::WarningBaselineMemberMissing,
+        Self::WarningRestoreInProgress,
+        Self::WarningStaleMailboxLock,
+        Self::WarningHookSkipped,
+        Self::WarningHookExecutionFailed,
+        Self::PostSendPaneMissing,
+        Self::PostSendTmuxSendFailed,
+        Self::TestFakeTransportInjectionFailed,
+        Self::HelpTopicNotFound,
+    ];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
@@ -165,85 +232,11 @@ impl FromStr for AtmErrorCode {
     type Err = UnknownAtmErrorCode;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "ATM_CONFIG_HOME_UNAVAILABLE" => Ok(Self::ConfigHomeUnavailable),
-            "ATM_CONFIG_PARSE_FAILED" => Ok(Self::ConfigParseFailed),
-            "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY" => Ok(Self::ConfigRetiredHookMembersKey),
-            "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS" => Ok(Self::ConfigRetiredLegacyHookKeys),
-            "ATM_CONFIG_TEAM_PARSE_FAILED" => Ok(Self::ConfigTeamParseFailed),
-            "ATM_CONFIG_TEAM_MISSING" => Ok(Self::ConfigTeamMissing),
-            "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
-            "ATM_IDENTITY_INVALID" => Ok(Self::IdentityInvalid),
-            "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
-            "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
-            "ATM_DAEMON_MAY_HAVE_EXECUTED" => Ok(Self::DaemonMayHaveExecuted),
-            "ATM_DAEMON_LIFECYCLE_WEDGE" => Ok(Self::DaemonLifecycleWedge),
-            "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
-            "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),
-            "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => Ok(Self::DaemonStaleOwnerRecoveryFailed),
-            "ATM_DAEMON_AUTO_START_FAILED" => Ok(Self::DaemonAutoStartFailed),
-            "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {
-                Ok(Self::DaemonAdvisorySessionAlreadyRegistered)
-            }
-            "ATM_DAEMON_ADVISORY_SESSION_NOT_REGISTERED" => {
-                Ok(Self::DaemonAdvisorySessionNotRegistered)
-            }
-            "ATM_REMOTE_OUTCOME_UNKNOWN" => Ok(Self::RemoteDeliveryOutcomeUnknown),
-            "ATM_ADDRESS_PARSE_FAILED" => Ok(Self::AddressParseFailed),
-            "ATM_TEAM_UNAVAILABLE" => Ok(Self::TeamUnavailable),
-            "ATM_TEAM_INVALID" => Ok(Self::TeamInvalid),
-            "ATM_TEAM_NOT_FOUND" => Ok(Self::TeamNotFound),
-            "ATM_AGENT_NOT_FOUND" => Ok(Self::AgentNotFound),
-            "ATM_MAILBOX_READ_FAILED" => Ok(Self::MailboxReadFailed),
-            "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE" => {
-                Ok(Self::MailboxRecoveredMessageSetTooLarge)
-            }
-            "ATM_MAILBOX_WRITE_FAILED" => Ok(Self::MailboxWriteFailed),
-            "ATM_MAILBOX_LOCK_FAILED" => Ok(Self::MailboxLockFailed),
-            "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => Ok(Self::MailboxLockReadOnlyFilesystem),
-            "ATM_MAILBOX_LOCK_TIMEOUT" => Ok(Self::MailboxLockTimeout),
-            "ATM_INTERNAL_ERROR" => Ok(Self::InternalError),
-            "ATM_MESSAGE_VALIDATION_FAILED" => Ok(Self::MessageValidationFailed),
-            "ATM_CALLER_CONTEXT_REQUEST_INVALID" => Ok(Self::CallerContextRequestInvalid),
-            "ATM_SERIALIZATION_FAILED" => Ok(Self::SerializationFailed),
-            "ATM_FILE_POLICY_REJECTED" => Ok(Self::FilePolicyRejected),
-            "ATM_FILE_REFERENCE_REWRITE_FAILED" => Ok(Self::FileReferenceRewriteFailed),
-            "ATM_WAIT_TIMEOUT" => Ok(Self::WaitTimeout),
-            "ATM_ACK_INVALID_STATE" => Ok(Self::AckInvalidState),
-            "ATM_CLEAR_INVALID_STATE" => Ok(Self::ClearInvalidState),
-            "ATM_OBSERVABILITY_EMIT_FAILED" => Ok(Self::ObservabilityEmitFailed),
-            "ATM_OBSERVABILITY_QUERY_FAILED" => Ok(Self::ObservabilityQueryFailed),
-            "ATM_OBSERVABILITY_FOLLOW_FAILED" => Ok(Self::ObservabilityFollowFailed),
-            "ATM_OBSERVABILITY_HEALTH_FAILED" => Ok(Self::ObservabilityHealthFailed),
-            "ATM_OBSERVABILITY_BOOTSTRAP_FAILED" => Ok(Self::ObservabilityBootstrapFailed),
-            "ATM_OBSERVABILITY_HEALTH_OK" => Ok(Self::ObservabilityHealthOk),
-            "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => Ok(Self::WarningInvalidTeamMemberSkipped),
-            "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => Ok(Self::WarningMailboxRecordSkipped),
-            "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED" => Ok(Self::WarningMalformedAtmFieldIgnored),
-            "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED" => {
-                Ok(Self::WarningObservabilityHealthDegraded)
-            }
-            "ATM_WARNING_SQLITE_HEALTH_DEGRADED" => Ok(Self::WarningSqliteHealthDegraded),
-            "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED" => Ok(Self::WarningOriginInboxEntrySkipped),
-            "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK" => {
-                Ok(Self::WarningMissingTeamConfigFallback)
-            }
-            "ATM_WARNING_SEND_ALERT_STATE_DEGRADED" => Ok(Self::WarningSendAlertStateDegraded),
-            "ATM_WARNING_IDENTITY_DRIFT" => Ok(Self::WarningIdentityDrift),
-            "ATM_WARNING_ROSTER_DRIFT" => Ok(Self::WarningRosterDrift),
-            "ATM_WARNING_BASELINE_MEMBER_MISSING" => Ok(Self::WarningBaselineMemberMissing),
-            "ATM_WARNING_RESTORE_IN_PROGRESS" => Ok(Self::WarningRestoreInProgress),
-            "ATM_WARNING_STALE_MAILBOX_LOCK" => Ok(Self::WarningStaleMailboxLock),
-            "ATM_WARNING_HOOK_SKIPPED" => Ok(Self::WarningHookSkipped),
-            "ATM_WARNING_HOOK_EXECUTION_FAILED" => Ok(Self::WarningHookExecutionFailed),
-            "ATM_POST_SEND_PANE_MISSING" => Ok(Self::PostSendPaneMissing),
-            "ATM_POST_SEND_TMUX_SEND_FAILED" => Ok(Self::PostSendTmuxSendFailed),
-            "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
-                Ok(Self::TestFakeTransportInjectionFailed)
-            }
-            "ATM_HELP_TOPIC_NOT_FOUND" => Ok(Self::HelpTopicNotFound),
-            _ => Err(UnknownAtmErrorCode(value.to_owned())),
-        }
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|code| code.as_str() == value)
+            .ok_or_else(|| UnknownAtmErrorCode(value.to_owned()))
     }
 }
 
