@@ -447,8 +447,7 @@ Identity-specific policy:
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
 - hook configuration lookup must come from authoritative sender roster home
-  metadata and may use retained `cwd` only as a compatibility fallback until
-  canonical `home_dir` metadata is present for every member
+  `home_dir` metadata
 - recipient non-match is silent
 - hook-decision evaluation must preserve sender, recipient, matched rule
   selector, and execution outcome for troubleshooting
@@ -528,6 +527,9 @@ Architectural rules:
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
 - `add-member` remains create-only
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the accepted repair path for mutable existing roster
   metadata such as `home_dir`, `recipient_pane_id`, `harness`, `agent_type`,
   and `model`

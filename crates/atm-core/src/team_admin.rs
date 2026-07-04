@@ -72,32 +72,32 @@ pub struct MemberName(pub AgentName);
 /// Parameters for adding one member to a team roster.
 #[derive(Debug, Clone)]
 pub struct AddMemberRequest {
-    pub home_dir: PathBuf,
+    pub atm_home_dir: PathBuf,
     pub team: TeamName,
     pub member: AgentName,
     pub agent_type: AgentType,
     pub model: ModelName,
-    pub cwd: PathBuf,
+    pub member_home_dir: PathBuf,
     pub tmux_pane_id: Option<PaneId>,
 }
 
 impl AddMemberRequest {
     pub fn new(
-        home_dir: PathBuf,
+        atm_home_dir: PathBuf,
         team: &str,
         member: &str,
         agent_type: String,
         model: String,
-        cwd: PathBuf,
+        member_home_dir: PathBuf,
         tmux_pane_id: Option<String>,
     ) -> Result<Self, AtmError> {
         Ok(Self {
-            home_dir,
+            atm_home_dir,
             team: team.parse()?,
             member: member.parse()?,
             agent_type: parse_agent_type(agent_type)?,
             model: ModelName::new(model)?,
-            cwd,
+            member_home_dir,
             tmux_pane_id: normalize_tmux_pane_id(tmux_pane_id.as_deref())?,
         })
     }
@@ -351,7 +351,8 @@ fn add_member_from_roster_store(
         mut existing_roster,
     } = load_member_add_context(roster_store, &request)?;
 
-    let inbox_path = home::inbox_path_from_home(&request.home_dir, &request.team, &request.member)?;
+    let inbox_path =
+        home::inbox_path_from_home(&request.atm_home_dir, &request.team, &request.member)?;
     let created_inbox = ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request)?);
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
@@ -420,7 +421,7 @@ fn load_member_add_context(
     roster_store: &dyn RosterStore,
     request: &AddMemberRequest,
 ) -> Result<MemberAddContext, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
+    let team_dir = home::team_dir_from_home(&request.atm_home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
     }
@@ -469,7 +470,7 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEn
     );
     extra.insert(
         "home_dir".to_string(),
-        json!(request.cwd.display().to_string()),
+        json!(request.member_home_dir.display().to_string()),
     );
 
     Ok(RosterEntry {
@@ -740,7 +741,7 @@ fn compatibility_extra_fields(
 }
 
 fn canonical_home_dir(metadata_json: &serde_json::Map<String, Value>) -> Option<String> {
-    metadata_string(metadata_json, "home_dir").or_else(|| metadata_string(metadata_json, "cwd"))
+    metadata_string(metadata_json, "home_dir")
 }
 
 fn metadata_string(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
@@ -1148,12 +1149,12 @@ mod tests {
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
             },
         )
@@ -1191,12 +1192,12 @@ mod tests {
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
             },
         )
@@ -1283,12 +1284,12 @@ mod tests {
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
             },
         )

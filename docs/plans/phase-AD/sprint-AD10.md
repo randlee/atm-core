@@ -1,7 +1,7 @@
 ---
 id: AD.10
 title: Directory Metadata And Doctor Contract Cleanup
-status: planned
+status: complete
 branch: feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup
 worktree: ../atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup
 target: integrate/phase-AD

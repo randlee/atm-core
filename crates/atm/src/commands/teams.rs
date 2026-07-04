@@ -48,8 +48,8 @@ struct AddMemberCommand {
     #[arg(long, default_value = "unknown")]
     model: String,
 
-    #[arg(long)]
-    cwd: Option<PathBuf>,
+    #[arg(long = "home-dir")]
+    home_dir: Option<PathBuf>,
 
     #[arg(
         long = "pane-id",
@@ -134,27 +134,31 @@ impl TeamsCommand {
 }
 
 impl AddMemberCommand {
-    fn run(self, home_dir: PathBuf) -> Result<()> {
+    fn run(self, atm_home_dir: PathBuf) -> Result<()> {
         let json = self.json;
-        let cwd = match self.cwd.clone() {
+        let member_home_dir = match self.home_dir.clone() {
             Some(path) => path,
             None => std::env::current_dir()?,
         };
-        let request = self.build_request(home_dir, cwd)?;
+        let request = self.build_request(atm_home_dir, member_home_dir)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
         output::print_add_member_result(&outcome, json)
     }
 
-    fn build_request(self, home_dir: PathBuf, cwd: PathBuf) -> Result<AddMemberRequest> {
+    fn build_request(
+        self,
+        atm_home_dir: PathBuf,
+        member_home_dir: PathBuf,
+    ) -> Result<AddMemberRequest> {
         AddMemberRequest::new(
-            home_dir,
+            atm_home_dir,
             &self.team,
             &self.member,
             self.agent_type,
             self.model,
-            cwd,
+            member_home_dir,
             self.pane_id,
         )
         .map_err(Into::into)
@@ -374,7 +378,7 @@ mod tests {
             member: TEST_SENDER.to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
-            cwd: None,
+            home_dir: None,
             pane_id: None,
             json: false,
         };
@@ -394,7 +398,7 @@ mod tests {
             member: "../evil".to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
-            cwd: None,
+            home_dir: None,
             pane_id: None,
             json: false,
         };
@@ -405,6 +409,29 @@ mod tests {
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
         assert_eq!(atm_error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn add_member_build_request_preserves_atm_and_member_home_dirs() {
+        let command = AddMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            home_dir: None,
+            pane_id: Some("17".to_string()),
+            json: false,
+        };
+
+        let atm_home_dir = PathBuf::from("/tmp/atm-home");
+        let member_home_dir = PathBuf::from("/tmp/member-home");
+        let request = command
+            .build_request(atm_home_dir.clone(), member_home_dir.clone())
+            .expect("request");
+
+        assert_eq!(request.atm_home_dir, atm_home_dir);
+        assert_eq!(request.member_home_dir, member_home_dir);
+        assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
     }
 
     #[test]
@@ -536,7 +563,7 @@ mod tests {
                 member: "new-member".to_string(),
                 agent_type: "general-purpose".to_string(),
                 model: "unknown".to_string(),
-                cwd: Some(fixture.current_dir.clone()),
+                home_dir: Some(fixture.current_dir.clone()),
                 pane_id: Some("%17".to_string()),
                 json: true,
             }

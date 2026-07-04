@@ -413,29 +413,11 @@ fn record_doctor_roster_drift(
         .collect::<BTreeSet<_>>();
 
     for member in atm_members.difference(&present) {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningRosterDrift,
-            message: format!(
-                "ATM roster member '{member}' is missing from team config.json for '{team}'"
-            ),
-            remediation: Some(format!(
-                "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
-            )),
-        });
+        push_missing_config_member_finding(team, member.as_str(), findings);
     }
 
     for member in present.difference(&atm_members) {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningRosterDrift,
-            message: format!(
-                "Claude team member '{member}' is missing from ATM roster truth for '{team}'"
-            ),
-            remediation: Some(format!(
-                "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
-            )),
-        });
+        push_missing_roster_member_finding(team, member.as_str(), findings);
     }
 
     for config_member in &team_config.members {
@@ -446,37 +428,76 @@ fn record_doctor_roster_drift(
             continue;
         };
 
-        if roster_member.recipient_pane_id != config_member.tmux_pane_id {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningRosterDrift,
-                message: format!(
-                    "member '{}' has pane drift for '{}': ATM roster has {:?}, config.json has {:?}",
-                    config_member.name, team, roster_member.recipient_pane_id, config_member.tmux_pane_id
-                ),
-                remediation: Some(format!(
-                    "Repair the authoritative pane id with `atm teams update-member {team} {} --pane-id <pane>` and rerun `atm doctor`.",
-                    config_member.name
-                )),
-            });
-        }
+        record_member_metadata_drift(team, config_member, roster_member, findings);
+    }
+}
 
-        let roster_home_dir = roster_member_home_dir(roster_member);
-        let config_home_dir = config_member_home_dir(config_member);
-        if roster_home_dir != config_home_dir {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningRosterDrift,
-                message: format!(
-                    "member '{}' has home-dir drift for '{}': ATM roster has {:?}, config.json has {:?}",
-                    config_member.name, team, roster_home_dir, config_home_dir
-                ),
-                remediation: Some(format!(
-                    "Repair the authoritative member home with `atm teams update-member {team} {} --home-dir <path>` and rerun `atm doctor`.",
-                    config_member.name
-                )),
-            });
-        }
+fn push_missing_config_member_finding(
+    team: &TeamName,
+    member: &str,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRosterDrift,
+        message: format!("ATM roster member '{member}' is missing from team config.json for '{team}'"),
+        remediation: Some(format!(
+            "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
+        )),
+    });
+}
+
+fn push_missing_roster_member_finding(
+    team: &TeamName,
+    member: &str,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRosterDrift,
+        message: format!("Claude team member '{member}' is missing from ATM roster truth for '{team}'"),
+        remediation: Some(format!(
+            "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
+        )),
+    });
+}
+
+fn record_member_metadata_drift(
+    team: &TeamName,
+    config_member: &crate::schema::AgentMember,
+    roster_member: &RosterEntry,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    if roster_member.recipient_pane_id != config_member.tmux_pane_id {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningRosterDrift,
+            message: format!(
+                "member '{}' has pane drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                config_member.name, team, roster_member.recipient_pane_id, config_member.tmux_pane_id
+            ),
+            remediation: Some(format!(
+                "Repair the authoritative pane id with `atm teams update-member {team} {} --pane-id <pane>` and rerun `atm doctor`.",
+                config_member.name
+            )),
+        });
+    }
+
+    let roster_home_dir = roster_member_home_dir(roster_member);
+    let config_home_dir = config_member_home_dir(config_member);
+    if roster_home_dir != config_home_dir {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningRosterDrift,
+            message: format!(
+                "member '{}' has home-dir drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                config_member.name, team, roster_home_dir, config_home_dir
+            ),
+            remediation: Some(format!(
+                "Repair the authoritative member home with `atm teams update-member {team} {} --home-dir <path>` and rerun `atm doctor`.",
+                config_member.name
+            )),
+        });
     }
 }
 
@@ -676,12 +697,6 @@ fn roster_member_home_dir(member: &RosterEntry) -> Option<String> {
         .metadata_json
         .get("home_dir")
         .and_then(serde_json::Value::as_str)
-        .or_else(|| {
-            member
-                .metadata_json
-                .get("cwd")
-                .and_then(serde_json::Value::as_str)
-        })
         .map(ToOwned::to_owned)
 }
 
@@ -1210,7 +1225,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         paths.write_raw_team_config(&format!(
-            r#"{{"members":[{{"name":"{TEST_SENDER}","cwd":"/repo/config"}}]}}"#
+            r#"{{"members":[{{"name":"{TEST_SENDER}","home_dir":"/repo/config"}}]}}"#
         ));
         let mut roster_member = atm_storage::RosterMember {
             team_name: TEST_TEAM.parse().expect("team"),

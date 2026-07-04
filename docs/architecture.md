@@ -1204,7 +1204,8 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
-- current team member roster from `config.json`
+- current team member roster projected from canonical ATM roster truth and
+  ordered against the live `config.json` baseline
 - observability health
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
@@ -1259,6 +1260,9 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the retained local roster-metadata repair path for
   existing members and must not create new members implicitly
 - accepted terminology must distinguish:
@@ -1475,8 +1479,7 @@ back a successful message write on failure or timeout.
 
 Hook configuration lookup note:
 - send/ack must resolve post-send hook configuration from the sender's
-  authoritative ATM roster home metadata, using retained `cwd` only as a
-  compatibility fallback until all members publish canonical `home_dir`
+  authoritative ATM roster `home_dir` metadata
 
 Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
