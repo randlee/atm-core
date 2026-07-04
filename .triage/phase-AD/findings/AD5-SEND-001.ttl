@@ -14,7 +14,10 @@
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-03T19:30:00Z"^^xsd:dateTime ;
+  triage:readinessBlocking true ;
+  triage:readinessBlockingBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:qa1Evidence "AD.11-QA-1: cargo test --workspace fails deterministically with env_lock race (rust-qa-agent verified); blocks phase readiness claim" ;
+  triage:triagedAt "2026-07-03T20:15:00Z"^^xsd:dateTime ;
   triage:rootCauseVerified true ;
   triage:rootCauseExplanation "Two independent static OnceLock<Mutex<()>> variables with the same function name (env_lock) in different modules (test_support.rs and home.rs test module) provide NO actual synchronization across modules. When parallel tests execute: (1) test_support.rs::EnvGuard::set_many([('HOME', ...)]) acquires test_support.rs's LOCK and mutates HOME; (2) concurrent code in home.rs or other modules reads HOME but may use home.rs's separate LOCK if calling into home.rs test helpers; (3) no global synchronization means both code paths run concurrently, creating classic TOCTOU race on the HOME env var. Result: HOME path resolution becomes non-deterministic, file I/O operations target wrong directories, notification event counts diverge from test expectations. Pattern parallels FTQ-001/002/003 env-lock races (in caller_context.rs), but distinct root location and failure signature (send module assertion counts vs caller_context direct lock contention)." ;
   triage:distinguishedFromFtq "AD5-SEND-001 is distinct from FTQ-001/002/003. FTQ findings address private EnvGuard in caller_context.rs; AD5-SEND-001 addresses separate env_lock in home.rs test module. Both are env-lock coordination defects but in different code locations. FTQ-001 correctionNote explicitly notes PR #453 failures are 'NOT THE ENVGUARD RACE' and require separate investigation; AD5-SEND-001 is that separate investigation." ;
@@ -44,7 +47,7 @@
   triage:openOn <urn:atm:triage:worktree/AD.9/138e85ea> ;
   triage:openOn <urn:atm:triage:worktree/AD.10/88941b99> ;
   triage:openOn <urn:atm:triage:worktree/AD.11/1dc4f9a0> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD.1/2e151d21> .
+  triage:promoteTo <urn:atm:triage:worktree/AD.11/1dc4f9a0> .
 
 <urn:atm:triage:occurrence/AD5-SEND-001/AD1/1>
   a triage:Occurrence ;
@@ -176,7 +179,9 @@
   triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
   triage:headSha "1dc4f9a0" ;
   triage:occursIn <urn:atm:triage:worktree/AD.11/1dc4f9a0> ;
-  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" .
+  triage:failureScope "test-time env-var race; production code unaffected but test isolation violated" ;
+  triage:qa1ReadinessBlockingSeverity "blocking" ;
+  triage:qa1Evidence "AD.11-QA-1 reproducible: cargo test --workspace deterministically fails with env_lock race; rust-qa-agent verified; blocks phase readiness claim" .
 
 <urn:atm:triage:worktree/AD.1/2e151d21>
   a triage:WorktreeSnapshot ;
