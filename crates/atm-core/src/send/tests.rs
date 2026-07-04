@@ -60,11 +60,11 @@ fn message(
     }
 }
 
-fn notification_detail(event: &NotificationEvent) -> Value {
+pub(super) fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
-fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
+pub(super) fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
     fs::read_to_string(
         crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl"),
     )
@@ -74,7 +74,7 @@ fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
     .collect()
 }
 
-fn install_home_env(home_dir: &Path) -> EnvGuard {
+pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
     EnvGuard::set_many([
         ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
@@ -98,20 +98,18 @@ fn assert_recovered_payload_texts(
     );
 }
 
-struct TestRuntime {
+pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    appended_messages: Mutex<Vec<InboxMessage>>,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+    pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
+    pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
 }
 
 impl TestRuntime {
-    fn new(
+    pub(super) fn new(
         commit_error_message: Option<&'static str>,
         append_error_message: Option<&'static str>,
         recipient_harness: DeliveryHarnessPath,
@@ -389,7 +387,7 @@ fn outbound_message() -> InboxMessage {
     }
 }
 
-fn send_request(home_dir: &Path) -> SendRequest {
+pub(super) fn send_request(home_dir: &Path) -> SendRequest {
     SendRequest {
         home_dir: home_dir.to_path_buf(),
         current_dir: home_dir.to_path_buf(),
@@ -452,39 +450,6 @@ impl ObservabilityPort for RecordingObservability {
             detail: Some("test observer".to_string()),
         })
     }
-}
-
-#[derive(Default)]
-struct RecordingGraftPort {
-    events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
-}
-
-impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
-
-impl crate::boundary::GraftPostSendPort for RecordingGraftPort {
-    fn deliver_post_send(
-        &self,
-        event: &crate::boundary::PostSendHookEvent,
-    ) -> Result<(), AtmError> {
-        self.events
-            .lock()
-            .expect("graft events lock")
-            .push(event.clone());
-        Ok(())
-    }
-}
-
-#[test]
-fn load_send_alert_state_parse_errors_are_config_errors() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = alert_state::state_path(tempdir.path());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("state dir");
-    }
-    fs::write(&path, "{not-json").expect("state file");
-
-    let error = alert_state::load(&path).expect_err("malformed state");
-    assert!(error.is_config());
 }
 
 #[test]
@@ -781,59 +746,6 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_non_claude_sqlite_failure_delivery(&runtime);
     assert_non_claude_sqlite_failure_notifications(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn send_non_claude_success_delivers_original_via_outbound_boundary() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
-    let observability = RecordingObservability::default();
-    let graft_port = RecordingGraftPort::default();
-    let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
-
-    let outcome = super::send_mail_with_runtime_impl(
-        send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        Some(&graft_port),
-    )
-    .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert!(outcome.warnings.is_empty());
-    assert!(
-        runtime
-            .appended_messages
-            .lock()
-            .expect("append lock")
-            .is_empty()
-    );
-    let deliveries = runtime
-        .non_claude_deliveries
-        .lock()
-        .expect("non-claude deliveries lock");
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].messages.len(), 1);
-    assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
-    drop(deliveries);
-    let events = read_notification_events(&home_dir);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
-    drop(events);
-    let graft_events = graft_port.events.lock().expect("graft events lock");
-    assert_eq!(graft_events.len(), 1);
-    assert_eq!(graft_events[0].sender.as_str(), TEST_SENDER);
-    assert_eq!(graft_events[0].recipient.as_str(), "recipient");
-    assert_eq!(graft_events[0].recipient_team.as_str(), TEST_TEAM);
-    assert_eq!(graft_events[0].message, "hello");
 }
 
 #[test]

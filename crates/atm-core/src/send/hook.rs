@@ -28,6 +28,8 @@ use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
+#[cfg(test)]
+const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
@@ -559,7 +561,7 @@ fn run_tmux_send_keys(
     message: &str,
     event: &PostSendHookEvent,
 ) -> Result<(), AtmError> {
-    let output = Command::new("tmux")
+    let output = tmux_command()
         .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
         .output()
         .map_err(|error| {
@@ -574,7 +576,7 @@ fn run_tmux_send_keys(
 }
 
 fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    let output = Command::new("tmux")
+    let output = tmux_command()
         .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
         .output()
         .map_err(|error| {
@@ -586,6 +588,14 @@ fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<()
             )
         })?;
     ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
+}
+
+fn tmux_command() -> Command {
+    #[cfg(test)]
+    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
+        return Command::new(program);
+    }
+    Command::new("tmux")
 }
 
 fn ensure_tmux_success(
@@ -965,7 +975,7 @@ mod tests {
 
     use super::{
         HookCancellationToken, LocalTmuxPostSendEmitter, POST_SEND_HOOK_MAX_STDOUT_BYTES,
-        PostSendHookResultLevel, finish_abandoned_post_send_hook_stdout_capture,
+        PostSendHookResultLevel, TMUX_PROGRAM_ENV, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
         parse_post_send_hook_result, sender_config_root, tmux_nudge_message,
     };
@@ -1282,15 +1292,10 @@ mod tests {
             fs::set_permissions(&tmux_path, perms).expect("chmod");
         }
 
-        let mut path_entries = vec![tempdir.path().to_path_buf()];
-        if let Some(path) = std::env::var_os("PATH") {
-            path_entries.extend(std::env::split_paths(&path));
-        }
-        let shim_path = std::env::join_paths(path_entries).expect("join shim path");
-        let shim_path = shim_path.to_str().expect("utf8 shim path").to_owned();
         let tmux_log = tmux_log.to_str().expect("utf8 tmux log").to_owned();
+        let tmux_bin = tmux_path.to_str().expect("utf8 tmux path").to_owned();
         let _env = EnvGuard::set_many([
-            ("PATH", Some(shim_path.as_str())),
+            (TMUX_PROGRAM_ENV, Some(tmux_bin.as_str())),
             ("ATM_TEST_TMUX_LOG", Some(tmux_log.as_str())),
         ]);
 

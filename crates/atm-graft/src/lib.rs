@@ -41,9 +41,10 @@ mod runtime;
 mod transport;
 
 use runtime::{
-    LiveReceiveLoopContext, ReceiveLoopContext, join_receive_loop_with_deadline, load_graft_config,
-    read_snapshot, register_session_with_validated_batch_limit, run_live_receive_loop,
-    run_receive_loop, set_session_state,
+    LiveReceiveLoopContext, ReceiveLoopContext, cleanup_registered_session_after_error,
+    join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+    register_session_with_validated_batch_limit, run_live_receive_loop, run_receive_loop,
+    set_session_state,
 };
 use transport::{ActiveAdvisoryStream, GraftLocalIpcClientTransport, unexpected_response};
 
@@ -376,6 +377,9 @@ pub struct GraftSession {
     join_handle: Option<JoinHandle<Result<(), AtmError>>>,
 }
 
+type GraftReceiveLoopHandle = JoinHandle<Result<(), AtmError>>;
+type GraftReceiveLoopWorker = (Sender<()>, GraftReceiveLoopHandle);
+
 impl fmt::Debug for GraftSession {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let snapshot = match self.snapshot() {
@@ -462,11 +466,50 @@ impl GraftSession {
             &snapshot,
             AdvisorySessionState::Registered,
             observability.as_ref(),
-        )?;
+        )
+        .map_err(|error| {
+            cleanup_registered_session_after_error(
+                client.as_ref(),
+                &options.session_id,
+                "graft activation state publication",
+                error,
+            )
+        })?;
 
-        let worker_client = Arc::clone(&client);
-        let worker_snapshot = Arc::clone(&snapshot);
-        let worker_observability = Arc::clone(&observability);
+        let (stop_tx, join_handle) = Self::start_graft_receive_loop(
+            client.as_ref(),
+            &options,
+            Arc::clone(&client),
+            Arc::clone(&snapshot),
+            injector,
+            Arc::clone(&observability),
+        )
+        .map_err(|error| {
+            cleanup_registered_session_after_error(
+                client.as_ref(),
+                &options.session_id,
+                "graft receive-loop startup",
+                error,
+            )
+        })?;
+
+        Ok(Self {
+            client,
+            snapshot,
+            observability,
+            stop_tx: Some(stop_tx),
+            join_handle: Some(join_handle),
+        })
+    }
+
+    fn start_graft_receive_loop(
+        client: &dyn GraftSessionClient,
+        options: &GraftSessionOptions,
+        worker_client: Arc<dyn GraftSessionClient>,
+        worker_snapshot: Arc<RwLock<SessionSnapshot>>,
+        injector: Arc<dyn HostNudgeInjector>,
+        worker_observability: Arc<dyn GraftObservability>,
+    ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let registration_request = options.registration_request();
         let drain_request = AdvisoryDrainRequest {
             session_id: options.session_id.clone(),
@@ -478,8 +521,8 @@ impl GraftSession {
         };
         let (stop_tx, stop_rx) = mpsc::channel();
         let join_handle = spawn_graft_receive_loop(
-            client.as_ref(),
-            &options,
+            client,
+            options,
             worker_client,
             registration_request,
             advisory_stream_request,
@@ -489,14 +532,7 @@ impl GraftSession {
             worker_observability,
             stop_rx,
         )?;
-
-        Ok(Self {
-            client,
-            snapshot,
-            observability,
-            stop_tx: Some(stop_tx),
-            join_handle: Some(join_handle),
-        })
+        Ok((stop_tx, join_handle))
     }
 
     pub fn snapshot(&self) -> Result<SessionSnapshot, AtmError> {
@@ -1390,5 +1426,114 @@ mod tests {
 
         assert!(error.is_validation());
         assert_eq!(*unregister_count.lock().expect("unregister count"), 1);
+    }
+
+    #[derive(Debug, Default)]
+    struct ActivationFailureClient {
+        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
+    }
+
+    impl AtmGraftClient for ActivationFailureClient {
+        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+            panic!("unexpected send_message call in activation cleanup test")
+        }
+
+        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+            panic!("unexpected read_message call in activation cleanup test")
+        }
+
+        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+            panic!("unexpected acknowledge_message call in activation cleanup test")
+        }
+    }
+
+    impl AdvisorySessionPort for ActivationFailureClient {
+        fn register_session(
+            &self,
+            request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            Ok(AdvisorySessionRegistrationResponse {
+                team: request.team,
+                agent: request.agent,
+                session_id: request.session_id,
+                registered_at: IsoTimestamp::now(),
+                queue_capacity: 64,
+            })
+        }
+
+        fn unregister_session(
+            &self,
+            request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            self.unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .push(request.session_id.clone());
+            Ok(AdvisorySessionUnregistrationResponse {
+                session_id: request.session_id,
+                closed: true,
+            })
+        }
+
+        fn fetch_nudges(
+            &self,
+            _request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            panic!("unexpected fetch_nudges call in activation cleanup test")
+        }
+
+        fn drain_nudges(
+            &self,
+            _request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            panic!("unexpected drain_nudges call in activation cleanup test")
+        }
+    }
+
+    impl GraftSessionClient for ActivationFailureClient {
+        fn supports_live_advisory_stream(&self) -> bool {
+            true
+        }
+
+        fn open_advisory_stream(
+            &self,
+            _request: AdvisoryStreamRequest,
+        ) -> Result<ActiveAdvisoryStream, AtmError> {
+            Err(AtmError::daemon_unavailable(
+                "simulated activation advisory-stream failure",
+            ))
+        }
+    }
+
+    #[test]
+    fn session_activation_cleans_up_registered_slot_when_receive_loop_start_fails() {
+        let root = TempDir::new().expect("tempdir");
+        let client = Arc::new(ActivationFailureClient::default());
+
+        let error = GraftSession::activate_with_graft_config(
+            Arc::clone(&client) as Arc<dyn GraftSessionClient>,
+            Some(GraftConfig { enabled: true }),
+            GraftSessionOptions::for_current_process(
+                root.path(),
+                TEST_TEAM.parse().expect("team"),
+                TEST_LEAD.parse().expect("agent"),
+            ),
+            Arc::new(CollectingInjector::default()),
+            Arc::new(NoopGraftObservability),
+        )
+        .expect_err("activation should fail when advisory stream startup fails");
+
+        assert_eq!(
+            error.message,
+            "simulated activation advisory-stream failure"
+        );
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
     }
 }
