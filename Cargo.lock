@@ -36,6 +36,7 @@ dependencies = [
  "fs2",
  "interprocess",
  "libc",
+ "parking_lot",
  "same-file",
  "sc-observability-types",
  "serde",

@@ -498,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn teams_run_lists_discovered_teams_without_daemon() {
         let fixture = Fixture::new();
         let command = TeamsCommand {
@@ -514,7 +514,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn backup_and_restore_dry_run_execute_without_daemon() {
         let fixture = Fixture::new();
 
@@ -553,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn add_member_executes_without_default_runtime_factory() {
         let fixture = Fixture::new();
 
@@ -573,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn update_member_executes_without_default_runtime_factory() {
         let fixture = Fixture::new();
 
