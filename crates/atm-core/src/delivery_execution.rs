@@ -361,6 +361,7 @@ fn build_append_warning(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
 
     use serde_json::Map;
@@ -380,9 +381,10 @@ mod tests {
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
     };
+    use crate::protocol::NotificationEvent;
     use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     struct NoopRuntime;
@@ -600,6 +602,25 @@ mod tests {
         }
     }
 
+    fn notification_log_path(home_dir: &Path) -> std::path::PathBuf {
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl")
+    }
+
+    fn read_logged_notifications(home_dir: &Path) -> Vec<NotificationEvent> {
+        fs::read_to_string(notification_log_path(home_dir))
+            .expect("notifications")
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("notification event"))
+            .collect()
+    }
+
+    fn install_home_env(home_dir: &Path) -> EnvGuard {
+        EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+        ])
+    }
     #[test]
     fn execute_delivery_plan_rejects_claude_target_for_non_claude_harness() {
         let runtime = NoopRuntime;

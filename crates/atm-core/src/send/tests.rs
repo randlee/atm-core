@@ -69,6 +69,7 @@ fn install_home_env(home_dir: &Path) -> EnvGuard {
     EnvGuard::set_many([
         ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
+        ("ATM_LOG_DIR", None),
     ])
 }
 
