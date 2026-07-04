@@ -440,9 +440,11 @@ Required runtime rules:
 - if temporary deletion scaffolding remains while `AD.4` / `AD.5` are in
   flight, it must be marked obsolete and must not be described as a required
   production partition
-- background-lane startup rollback and shutdown must attempt every lane needed
-  for cleanup and must not leave partial runtime ownership after the first lane
-  failure
+- historical note: the removed Phase AD background-lane hooks previously
+  carried an explicit rollback-safety rule
+- current code no longer has those background-lane startup/shutdown hooks, so
+  the live requirement is the broader one above: runtime cleanup must not
+  leave partial ownership behind on failure
 - signal handlers must be installed before listeners are opened
 - the host runtime-control source must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened

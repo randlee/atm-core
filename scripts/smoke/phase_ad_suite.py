@@ -75,7 +75,7 @@ def run_row(root: Path, spec: SuiteRowSpec) -> SmokeRow:
         )
         if completed.returncode != 0:
             row.verdict = "FAIL"
-            row.notes = f"command failed: {shlex.join(command)}"
+            row.notes = f"first failing command: {shlex.join(command)}"
             row.observed_behavior = build_failure_observation(completed)
             row.expected_behavior = "all targeted validation commands exit 0"
             row.likely_root_cause = "one or more targeted AD.11 evidence checks regressed"

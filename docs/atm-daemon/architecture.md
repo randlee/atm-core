@@ -577,12 +577,14 @@ Required ownership rules:
       thread shape
   - shutdown/drain clears tracked request work only after the request finishes
     or a forced-cancel path has run
-- background-lane startup and shutdown must remain rollback-safe and must not
-  stop after the first lane error if more cleanup is still possible
-  - if lane startup fails after earlier lanes have already started, cleanup
-    runs in reverse start order until every started lane has been asked to stop
-  - after partial-start cleanup, the runtime must hold no lane-specific worker
-    ownership before it returns the startup failure
+- historical note: Phase AD previously required background-lane startup and
+  shutdown rollback safety while those lanes still existed in
+  `composition.rs`
+  - fix `0b39908d` removed the no-op background-lane hooks entirely, so this
+    is no longer a live runtime rule tied to current code
+  - future runtime partitions must still obey the same general ownership rule:
+    partial startup must not leave orphaned runtime ownership behind on
+    failure
 - bounded caches must be bounded in actual retained cardinality, not only by
   state demotion labels
 
