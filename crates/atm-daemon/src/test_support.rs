@@ -1,5 +1,6 @@
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
+use atm_core::error::AtmError;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
@@ -10,6 +11,10 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::local_ipc_deadline::{
+    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
+    run_owned_local_ipc_with_deadline,
+};
 use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
@@ -17,6 +22,12 @@ const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
     std::time::Duration::from_millis(1);
 const TEST_LOCAL_IPC_CONNECT_RETRY_MAX_DELAY: std::time::Duration =
     std::time::Duration::from_millis(25);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TestLocalIpcDeadlineSupport {
+    pub(crate) read: DeadlineSupport,
+    pub(crate) write: DeadlineSupport,
+}
 
 pub(crate) struct LifecycleFlagResetGuard {
     lifecycle: LifecycleControlSourceAdapter,
@@ -200,25 +211,92 @@ pub(crate) fn connect_local_ipc_with_timeout(
     }
 }
 
-pub(crate) fn configure_test_local_ipc_timeouts(stream: &LocalSocketStream) {
-    apply_test_deadline(
+pub(crate) fn configure_test_local_ipc_timeouts(
+    stream: &LocalSocketStream,
+) -> TestLocalIpcDeadlineSupport {
+    let write = apply_test_deadline(
         stream.set_send_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
         "set send timeout",
     );
-    apply_test_deadline(
+    let read = apply_test_deadline(
         stream.set_recv_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
         "set recv timeout",
     );
+    TestLocalIpcDeadlineSupport { read, write }
 }
 
-fn apply_test_deadline(result: std::io::Result<()>, context: &str) {
-    if let Err(error) = result {
-        #[cfg(windows)]
-        {
-            if error.kind() == std::io::ErrorKind::Unsupported {
-                return;
-            }
-        }
-        panic!("{context}: {error}");
-    }
+pub(crate) fn write_test_frame_with_deadline(
+    stream: LocalSocketStream,
+    deadline_support: TestLocalIpcDeadlineSupport,
+    frame: atm_core::protocol::FramePayload,
+    write_error: &'static str,
+    flush_error: &'static str,
+) -> LocalSocketStream {
+    let (stream, ()) = run_owned_local_ipc_with_deadline(
+        stream,
+        OwnedLocalIpcDeadlineConfig {
+            deadline: TEST_LOCAL_IPC_REQUEST_DEADLINE,
+            support: deadline_support.write,
+            worker_name: "test-local-ipc-write-helper",
+            timeout_error: AtmError::daemon_unavailable(
+                "test local IPC write exceeded the bounded request deadline",
+            )
+            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
+            disconnect_error: AtmError::daemon_unavailable(
+                "test local IPC write helper disconnected before returning a result",
+            )
+            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
+            spawn_error_message: "failed to spawn test local IPC write helper",
+            spawn_error_recovery:
+                "Inspect the daemon test runtime; the bounded local IPC write helper could not be created.",
+        },
+        move |stream| {
+            atm_core::protocol::write_frame(stream, &frame, write_error)?;
+            std::io::Write::flush(stream).map_err(|source| {
+                AtmError::daemon_unavailable(flush_error)
+                    .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs.")
+                    .with_source(source)
+            })
+        },
+    )
+    .unwrap_or_else(|error| panic!("bounded test local IPC write failed: {error}"));
+    stream
+}
+
+pub(crate) fn read_test_frame_with_deadline(
+    stream: LocalSocketStream,
+    deadline_support: TestLocalIpcDeadlineSupport,
+    read_error: &'static str,
+    oversize_error: &'static str,
+) -> (LocalSocketStream, Option<atm_core::protocol::FramePayload>) {
+    run_owned_local_ipc_with_deadline(
+        stream,
+        OwnedLocalIpcDeadlineConfig {
+            deadline: TEST_LOCAL_IPC_REQUEST_DEADLINE,
+            support: deadline_support.read,
+            worker_name: "test-local-ipc-read-helper",
+            timeout_error: AtmError::daemon_unavailable(
+                "test local IPC read exceeded the bounded request deadline",
+            )
+            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
+            disconnect_error: AtmError::daemon_unavailable(
+                "test local IPC read helper disconnected before returning a frame",
+            )
+            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
+            spawn_error_message: "failed to spawn test local IPC read helper",
+            spawn_error_recovery:
+                "Inspect the daemon test runtime; the bounded local IPC read helper could not be created.",
+        },
+        move |stream| atm_core::protocol::read_frame(stream, read_error, oversize_error),
+    )
+    .unwrap_or_else(|error| panic!("bounded test local IPC read failed: {error}"))
+}
+
+fn apply_test_deadline(result: std::io::Result<()>, context: &str) -> DeadlineSupport {
+    apply_optional_deadline(
+        result,
+        "failed to apply test local IPC deadline",
+        "Inspect the daemon test runtime; the same-host test socket could not apply its bounded local IPC deadline.",
+    )
+    .unwrap_or_else(|error| panic!("{context}: {error}"))
 }

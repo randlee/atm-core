@@ -30,7 +30,6 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -41,6 +40,7 @@ use tempfile::TempDir;
 use crate::test_support::connect_local_ipc_with_timeout;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+    read_test_frame_with_deadline, write_test_frame_with_deadline,
 };
 
 const TEST_TEAM: &str = "test-team";
@@ -126,7 +126,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
+    let deadline_support = configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: tempdir.path().join("home"),
         current_dir: tempdir.path().join("cwd"),
@@ -134,12 +134,20 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     });
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
+    stream = write_test_frame_with_deadline(
+        stream,
+        deadline_support,
+        frame,
+        "write doctor frame",
+        "flush doctor frame",
+    );
+    let (_resumed_stream, response_frame) = read_test_frame_with_deadline(
+        stream,
+        deadline_support,
+        "read doctor frame",
+        "doctor frame too large",
+    );
+    let response_frame = response_frame.expect("response frame");
     let (response_id, response) =
         atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
     assert_eq!(response_id, request_id);
@@ -203,7 +211,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
+    let deadline_support = configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),
         current_dir: atm_home.clone(),
@@ -211,12 +219,20 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     });
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
+    stream = write_test_frame_with_deadline(
+        stream,
+        deadline_support,
+        frame,
+        "write doctor frame",
+        "flush doctor frame",
+    );
+    let (_resumed_stream, response_frame) = read_test_frame_with_deadline(
+        stream,
+        deadline_support,
+        "read doctor frame",
+        "doctor frame too large",
+    );
+    let response_frame = response_frame.expect("response frame");
     let (response_id, response) =
         atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
     assert_eq!(response_id, request_id);

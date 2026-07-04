@@ -3,6 +3,11 @@ use super::*;
 use std::fs;
 use std::time::Instant;
 
+use crate::local_ipc_deadline::{
+    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
+    run_owned_local_ipc_with_deadline,
+};
+
 pub(super) fn finalize_serve_loop<BeginShutdown, FinalizeShutdown>(
     begin_shutdown: &BeginShutdown,
     finalize_shutdown: &FinalizeShutdown,
@@ -159,17 +164,64 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
 }
 
 pub(super) fn write_shutdown_response(
-    stream: &mut LocalSocketStream,
+    mut stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
-    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
-    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let Some(frame) = atm_core::protocol::read_frame(
+    let read_deadline_support = match apply_optional_deadline(
+        stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon shutdown rejection read deadline",
+        "Restart the daemon; the shutdown rejection socket could not apply its bounded read deadline.",
+    ) {
+        Ok(support) => support,
+        Err(error) => {
+            tracing::debug!(
+                %error,
+                "daemon shutdown rejection read deadline was unavailable; using helper-thread fallback"
+            );
+            DeadlineSupport::Unsupported
+        }
+    };
+    let write_deadline_support = match apply_optional_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon shutdown rejection write deadline",
+        "Restart the daemon; the shutdown rejection socket could not apply its bounded write deadline.",
+    ) {
+        Ok(support) => support,
+        Err(error) => {
+            tracing::debug!(
+                %error,
+                "daemon shutdown rejection write deadline was unavailable; using helper-thread fallback"
+            );
+            DeadlineSupport::Unsupported
+        }
+    };
+    let (resumed_stream, frame) = run_owned_local_ipc_with_deadline(
         stream,
-        "failed to read daemon request frame during shutdown rejection",
-        "daemon request frame exceeded the maximum supported size during shutdown rejection",
-    )?
-    else {
+        OwnedLocalIpcDeadlineConfig {
+            deadline: REQUEST_DEADLINE,
+            support: read_deadline_support,
+            worker_name: "local-ipc-shutdown-read-helper",
+            timeout_error: AtmError::daemon_unavailable(
+                "daemon shutdown rejection request read exceeded the runtime deadline",
+            )
+            .with_recovery("Retry the ATM command after the daemon restarts."),
+            disconnect_error: AtmError::daemon_unavailable(
+                "daemon shutdown rejection read helper disconnected before returning a frame",
+            )
+            .with_recovery("Retry the ATM command after the daemon restarts."),
+            spawn_error_message: "failed to spawn daemon shutdown rejection read helper",
+            spawn_error_recovery: "Restart the daemon; the shutdown rejection read helper could not be created.",
+        },
+        |stream| {
+            atm_core::protocol::read_frame(
+                stream,
+                "failed to read daemon request frame during shutdown rejection",
+                "daemon request frame exceeded the maximum supported size during shutdown rejection",
+            )
+        },
+    )?;
+    stream = resumed_stream;
+    let Some(frame) = frame else {
         return Ok(ShutdownResponseOutcome::NoFrame);
     };
     let Ok((request_id, _request)) = codec.request_from_frame(frame) else {
@@ -180,18 +232,45 @@ pub(super) fn write_shutdown_response(
             .with_recovery("Retry the ATM command after the daemon restarts."),
     ));
     let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(
+    let _ = run_owned_local_ipc_with_deadline(
         stream,
-        &frame,
-        "failed to write daemon shutdown rejection response frame",
-    )?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon shutdown rejection response frame")
+        OwnedLocalIpcDeadlineConfig {
+            deadline: REQUEST_DEADLINE,
+            support: write_deadline_support,
+            worker_name: "local-ipc-shutdown-write-helper",
+            timeout_error: AtmError::daemon_unavailable(
+                "daemon shutdown rejection response write exceeded the runtime deadline",
+            )
             .with_recovery(
                 "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
+            ),
+            disconnect_error: AtmError::daemon_unavailable(
+                "daemon shutdown rejection write helper disconnected before returning a result",
             )
-            .with_source(source)
-    })?;
+            .with_recovery(
+                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
+            ),
+            spawn_error_message: "failed to spawn daemon shutdown rejection write helper",
+            spawn_error_recovery:
+                "Restart the daemon; the shutdown rejection write helper could not be created.",
+        },
+        move |stream| {
+            atm_core::protocol::write_frame(
+                stream,
+                &frame,
+                "failed to write daemon shutdown rejection response frame",
+            )?;
+            stream.flush().map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "failed to flush daemon shutdown rejection response frame",
+                )
+                .with_recovery(
+                    "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
+                )
+                .with_source(source)
+            })
+        },
+    )?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 

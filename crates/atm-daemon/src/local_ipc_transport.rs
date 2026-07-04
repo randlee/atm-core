@@ -21,6 +21,10 @@ use crate::active_connection_registry::ActiveConnectionRegistry;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+use crate::local_ipc_deadline::{
+    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
+    run_owned_local_ipc_with_deadline,
+};
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
 
@@ -639,7 +643,7 @@ where
 
 fn handle_accepted_stream<'scope, ReloadRuntimeView>(
     scope: &'scope thread::Scope<'scope, '_>,
-    mut stream: LocalSocketStream,
+    stream: LocalSocketStream,
     context: &AcceptLoopContext<'_>,
     reload_runtime_view: &ReloadRuntimeView,
     terminate_probe_pending: &mut bool,
@@ -660,7 +664,7 @@ where
     }
     if context.lifecycle_control.terminate_requested() || context.shutdown_beacon.is_tripped() {
         return handle_shutdown_probe(
-            &mut stream,
+            stream,
             context.lifecycle_control,
             context.shutdown_beacon,
             context.codec,
@@ -669,13 +673,14 @@ where
         );
     }
     *terminate_probe_pending = false;
-    if reject_connection_when_capped(
-        &mut stream,
+    let Some(stream) = reject_connection_when_capped(
+        stream,
         context.codec,
         context.registry.active_connections(),
-    )? {
+    )?
+    else {
         return Ok(AcceptLoopOutcome::Continue);
-    }
+    };
     spawn_connection_worker(
         scope,
         stream,
@@ -732,7 +737,7 @@ where
 }
 
 fn handle_shutdown_probe(
-    stream: &mut LocalSocketStream,
+    stream: LocalSocketStream,
     lifecycle_control: &LifecycleControlSourceAdapter,
     shutdown_beacon: &ShutdownBeacon,
     codec: &JsonAtmProtocolCodec,
@@ -768,12 +773,12 @@ fn handle_shutdown_probe(
 }
 
 fn reject_connection_when_capped(
-    stream: &mut LocalSocketStream,
+    stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
     active_connections: usize,
-) -> Result<bool, AtmError> {
+) -> Result<Option<LocalSocketStream>, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
-        return Ok(false);
+        return Ok(Some(stream));
     }
     let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
         &AtmError::daemon_unavailable("daemon connection cap exceeded (max 64 concurrent accepts)")
@@ -785,15 +790,56 @@ fn reject_connection_when_capped(
         atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
         response,
     )?;
-    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
-    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let _ = atm_core::protocol::write_frame(
+    let write_deadline_support = match apply_optional_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon capped-connection write deadline",
+        "Restart the daemon; the capped-connection rejection socket could not apply its bounded write deadline.",
+    ) {
+        Ok(support) => support,
+        Err(error) => {
+            tracing::debug!(
+                %error,
+                "daemon capped-connection rejection write deadline was unavailable; using helper-thread fallback"
+            );
+            DeadlineSupport::Unsupported
+        }
+    };
+    if let Err(error) = run_owned_local_ipc_with_deadline(
         stream,
-        &frame,
-        "failed to write daemon rejection response frame",
-    );
-    let _ = stream.flush();
-    Ok(true)
+        OwnedLocalIpcDeadlineConfig {
+            deadline: REQUEST_DEADLINE,
+            support: write_deadline_support,
+            worker_name: "local-ipc-cap-rejection-write-helper",
+            timeout_error: AtmError::daemon_unavailable(
+                "daemon capped-connection rejection response write exceeded the runtime deadline",
+            )
+            .with_recovery("Retry the ATM command after in-flight same-host work completes."),
+            disconnect_error: AtmError::daemon_unavailable(
+                "daemon capped-connection rejection write helper disconnected before returning a result",
+            )
+            .with_recovery("Retry the ATM command after in-flight same-host work completes."),
+            spawn_error_message: "failed to spawn daemon capped-connection rejection write helper",
+            spawn_error_recovery:
+                "Restart the daemon; the capped-connection rejection write helper could not be created.",
+        },
+        move |stream| {
+            atm_core::protocol::write_frame(
+                stream,
+                &frame,
+                "failed to write daemon rejection response frame",
+            )?;
+            stream.flush().map_err(|source| {
+                AtmError::daemon_unavailable("failed to flush daemon rejection response frame")
+                    .with_recovery(
+                        "Retry the ATM command after in-flight same-host work completes.",
+                    )
+                    .with_source(source)
+            })
+        },
+    ) {
+        tracing::warn!(%error, "daemon capped-connection rejection response delivery failed");
+    }
+    Ok(None)
 }
 
 fn spawn_connection_worker<'scope>(

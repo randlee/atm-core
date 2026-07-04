@@ -18,6 +18,7 @@ mod direct_boundaries;
 mod host_ownership;
 mod lifecycle_control;
 mod local_ipc_connection;
+mod local_ipc_deadline;
 mod local_ipc_transport;
 mod local_ipc_wake;
 mod non_claude_outbound_runtime;
