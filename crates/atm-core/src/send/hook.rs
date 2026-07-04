@@ -1221,13 +1221,20 @@ mod tests {
     fn local_tmux_post_send_emitter_uses_authoritative_pane_id() {
         let tempdir = tempdir().expect("tempdir");
         let tmux_log = tempdir.path().join("tmux.log");
+        #[cfg(windows)]
+        let tmux_path = tempdir.path().join("tmux.cmd");
+        #[cfg(not(windows))]
         let tmux_path = tempdir.path().join("tmux");
+        #[cfg(windows)]
         fs::write(
             &tmux_path,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"{}\"\nexit 0\n",
-                tmux_log.display()
-            ),
+            "@echo off\r\n>> \"%ATM_TEST_TMUX_LOG%\" echo %*\r\nexit /b 0\r\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &tmux_path,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$ATM_TEST_TMUX_LOG\"\nexit 0\n",
         )
         .expect("write tmux shim");
         #[cfg(unix)]
@@ -1238,15 +1245,17 @@ mod tests {
             fs::set_permissions(&tmux_path, perms).expect("chmod");
         }
 
-        let shim_path = match std::env::var_os("PATH") {
-            Some(path) => format!(
-                "{}:{}",
-                tempdir.path().display(),
-                PathBuf::from(path).display()
-            ),
-            None => tempdir.path().display().to_string(),
-        };
-        let _env = EnvGuard::set_raw("PATH", &shim_path);
+        let mut path_entries = vec![tempdir.path().to_path_buf()];
+        if let Some(path) = std::env::var_os("PATH") {
+            path_entries.extend(std::env::split_paths(&path));
+        }
+        let shim_path = std::env::join_paths(path_entries).expect("join shim path");
+        let shim_path = shim_path.to_str().expect("utf8 shim path").to_owned();
+        let tmux_log = tmux_log.to_str().expect("utf8 tmux log").to_owned();
+        let _env = EnvGuard::set_many([
+            ("PATH", Some(shim_path.as_str())),
+            ("ATM_TEST_TMUX_LOG", Some(tmux_log.as_str())),
+        ]);
 
         let result =
             LocalTmuxPostSendEmitter.emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))));
