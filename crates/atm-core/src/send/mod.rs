@@ -733,4 +733,6 @@ pub(super) fn qualified_sender_identity(
 }
 
 #[cfg(test)]
+mod graft_warning_tests;
+#[cfg(test)]
 mod tests;
