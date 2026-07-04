@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "ERRDOC-001" ;
   triage:title "New error codes repeatedly left unregistered in docs/atm-error-codes.md" ;
-  triage:description "Repeating pattern across Phase AD: new error code variants added to crates/atm-storage/src/error_codes.rs without corresponding entries in docs/atm-error-codes.md. All 11 sprints contain unregistered codes." ;
+  triage:description "Repeating pattern across Phase AD sprints (AD.7+): multiple error code variants defined in crates/atm-storage/src/error_codes.rs enum and used in production code (crates/atm-core/src/send/hook.rs) but never documented in docs/atm-error-codes.md. Confirmed open on AD.11 with PostSendPaneMissing (line 83) and PostSendTmuxSendFailed (line 84). Recurrence spans at least 4+ consecutive sprints through phase closeout." ;
   triage:phaseId "phase-AD" ;
   triage:category "ERRDOC" ;
   triage:triageMode "followup_pass" ;
@@ -14,7 +14,7 @@
   triage:severity "important" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-03T18:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-03T21:45:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
   triage:highestOpenBranchOrder 11 ;
   triage:promoteToBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
@@ -157,10 +157,23 @@
   triage:headSha "634feabb" ;
   triage:occursIn <urn:atm:triage:worktree/AD10/634feabb> .
 
+<urn:atm:triage:occurrence/ERRDOC-001/AD11/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 84 ;
+  triage:snippet "PostSendTmuxSendFailed => ATM_POST_SEND_TMUX_SEND_FAILED" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:errorCode "ATM_POST_SEND_TMUX_SEND_FAILED" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/1dc4f9a0> .
+
 <urn:atm:triage:finding/ERRDOC-001>
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD11/4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD1/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ERRDOC-001/AD10/1> ;
   triage:openOn <urn:atm:triage:worktree/AD1/2e151d21> ;
