@@ -377,6 +377,9 @@ pub struct GraftSession {
     join_handle: Option<JoinHandle<Result<(), AtmError>>>,
 }
 
+type GraftReceiveLoopHandle = JoinHandle<Result<(), AtmError>>;
+type GraftReceiveLoopWorker = (Sender<()>, GraftReceiveLoopHandle);
+
 impl fmt::Debug for GraftSession {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let snapshot = match self.snapshot() {
@@ -473,30 +476,13 @@ impl GraftSession {
             )
         })?;
 
-        let worker_client = Arc::clone(&client);
-        let worker_snapshot = Arc::clone(&snapshot);
-        let worker_observability = Arc::clone(&observability);
-        let registration_request = options.registration_request();
-        let drain_request = AdvisoryDrainRequest {
-            session_id: options.session_id.clone(),
-            limit: options.batch_limit,
-        };
-        let advisory_stream_request = AdvisoryStreamRequest {
-            registration: registration_request.clone(),
-            limit: options.batch_limit,
-        };
-        let (stop_tx, stop_rx) = mpsc::channel();
-        let join_handle = spawn_graft_receive_loop(
+        let (stop_tx, join_handle) = Self::start_graft_receive_loop(
             client.as_ref(),
             &options,
-            worker_client,
-            registration_request,
-            advisory_stream_request,
-            drain_request,
-            worker_snapshot,
+            Arc::clone(&client),
+            Arc::clone(&snapshot),
             injector,
-            worker_observability,
-            stop_rx,
+            Arc::clone(&observability),
         )
         .map_err(|error| {
             cleanup_registered_session_after_error(
@@ -514,6 +500,39 @@ impl GraftSession {
             stop_tx: Some(stop_tx),
             join_handle: Some(join_handle),
         })
+    }
+
+    fn start_graft_receive_loop(
+        client: &dyn GraftSessionClient,
+        options: &GraftSessionOptions,
+        worker_client: Arc<dyn GraftSessionClient>,
+        worker_snapshot: Arc<RwLock<SessionSnapshot>>,
+        injector: Arc<dyn HostNudgeInjector>,
+        worker_observability: Arc<dyn GraftObservability>,
+    ) -> Result<GraftReceiveLoopWorker, AtmError> {
+        let registration_request = options.registration_request();
+        let drain_request = AdvisoryDrainRequest {
+            session_id: options.session_id.clone(),
+            limit: options.batch_limit,
+        };
+        let advisory_stream_request = AdvisoryStreamRequest {
+            registration: registration_request.clone(),
+            limit: options.batch_limit,
+        };
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let join_handle = spawn_graft_receive_loop(
+            client,
+            options,
+            worker_client,
+            registration_request,
+            advisory_stream_request,
+            drain_request,
+            worker_snapshot,
+            injector,
+            worker_observability,
+            stop_rx,
+        )?;
+        Ok((stop_tx, join_handle))
     }
 
     pub fn snapshot(&self) -> Result<SessionSnapshot, AtmError> {
