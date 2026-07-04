@@ -1,6 +1,7 @@
 //! Send command service implementation and post-send hook handling.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
@@ -42,6 +43,8 @@ pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 pub(crate) use persistence::persist_message_and_seed_workflow;
+
+pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {

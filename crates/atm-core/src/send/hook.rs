@@ -25,9 +25,8 @@ use crate::types::{AgentName, TeamName};
 
 pub(super) use super::hook_tmux::tmux_nudge_message;
 use super::hook_tmux::{run_tmux_send_enter, run_tmux_send_keys};
-use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
+use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, qualified_sender_identity};
 
-pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 

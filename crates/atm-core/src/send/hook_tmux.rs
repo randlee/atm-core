@@ -9,7 +9,7 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::types::{PaneId, TeamName};
 
-use super::hook::POST_SEND_HOOK_TIMEOUT;
+use super::POST_SEND_HOOK_TIMEOUT;
 
 pub(super) fn tmux_nudge_message(team: &TeamName) -> String {
     format!("You have unread ATM messages. Run: atm read --team {team}")
