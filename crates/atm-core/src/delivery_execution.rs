@@ -17,6 +17,7 @@ use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::WarningEntry;
 use crate::service_runtime::RetainedServiceRuntime;
+use crate::service_runtime::append_notification_log;
 use crate::types::{AgentName, TaskId, TeamName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +112,6 @@ where
 }
 
 pub(crate) fn deliver_notifications(
-    notification_sink: &dyn crate::boundary::NotificationSink,
     warnings: &mut Vec<WarningEntry>,
     recipient: &crate::send::ResolvedRecipient,
     recipient_pane_id: Option<&str>,
@@ -119,7 +119,7 @@ pub(crate) fn deliver_notifications(
 ) {
     for notification in notifications {
         let event = notification_event_from_target(recipient, recipient_pane_id, notification);
-        if let Err(error) = notification_sink.deliver(event) {
+        if let Err(error) = append_notification_log(&event) {
             tracing::warn!(
                 subsystem = "delivery_execution",
                 action = "deliver_notifications",
@@ -177,9 +177,7 @@ pub(crate) fn execute_delivery_plan<R>(
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeCompatibilityMailboxWriter
-        + NonClaudeOutboundDeliveryWriter
-        + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter + NonClaudeOutboundDeliveryWriter,
 {
     execute_messages(
         runtime,
@@ -212,9 +210,7 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeCompatibilityMailboxWriter
-        + NonClaudeOutboundDeliveryWriter
-        + crate::boundary::NotificationSink,
+    R: ClaudeCompatibilityMailboxWriter + NonClaudeOutboundDeliveryWriter,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -237,7 +233,6 @@ where
     }
 
     deliver_notifications(
-        runtime,
         &mut result.warnings,
         view.recipient,
         view.recipient_pane_id,
@@ -471,8 +466,9 @@ mod tests {
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use std::fs;
 
     struct NoopRuntime;
 
@@ -495,12 +491,6 @@ mod tests {
             _disposition: DeliveryPlanDisposition,
             _messages: &[LogicalMessage],
         ) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
-
-    impl crate::boundary::NotificationSink for NoopRuntime {
-        fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
             Ok(())
         }
     }
@@ -593,8 +583,6 @@ mod tests {
         fail_message_set: bool,
         fail_single_append_indexes: Vec<usize>,
         single_append_calls: std::sync::Mutex<usize>,
-        notification_events: std::sync::Mutex<Vec<NotificationEvent>>,
-        notification_error_message: Option<&'static str>,
     }
 
     impl RecordingRuntime {
@@ -608,13 +596,6 @@ mod tests {
         fn with_single_append_failures(indexes: &[usize]) -> Self {
             Self {
                 fail_single_append_indexes: indexes.to_vec(),
-                ..Self::default()
-            }
-        }
-
-        fn with_notification_failure(message: &'static str) -> Self {
-            Self {
-                notification_error_message: Some(message),
                 ..Self::default()
             }
         }
@@ -669,21 +650,6 @@ mod tests {
         }
     }
 
-    impl crate::boundary::NotificationSink for RecordingRuntime {
-        fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-            if let Some(message) = self.notification_error_message {
-                return Err(AtmError::daemon_unavailable(message).with_recovery(
-                    "Restore the notification boundary before retrying retained-runtime delivery.",
-                ));
-            }
-            self.notification_events
-                .lock()
-                .expect("notification events")
-                .push(event);
-            Ok(())
-        }
-    }
-
     impl NonClaudeOutboundDeliveryWriter for RecordingRuntime {
         fn deliver_non_claude_payloads(
             &self,
@@ -719,6 +685,25 @@ mod tests {
             message_id,
             task_id: None,
         }
+    }
+
+    fn notification_log_path(home_dir: &Path) -> std::path::PathBuf {
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl")
+    }
+
+    fn read_logged_notifications(home_dir: &Path) -> Vec<NotificationEvent> {
+        fs::read_to_string(notification_log_path(home_dir))
+            .expect("notifications")
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("notification event"))
+            .collect()
+    }
+
+    fn install_home_env(home_dir: &Path) -> EnvGuard {
+        EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+        ])
     }
 
     #[test]
@@ -980,8 +965,13 @@ mod tests {
     }
 
     #[test]
-    fn delivery_notifications_use_notification_sink_boundary() {
+    #[serial_test::serial(env)]
+    fn delivery_notifications_append_directly_to_notification_log() {
         let runtime = RecordingRuntime::default();
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        fs::create_dir_all(&home_dir).expect("home dir");
+        let _env = install_home_env(&home_dir);
         let message_id = AtmMessageId::new();
         let mut plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
@@ -1009,21 +999,23 @@ mod tests {
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
         assert!(result.warnings.is_empty());
-        let events = runtime
-            .notification_events
-            .lock()
-            .expect("notification events");
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].kind, NotificationKind::Delivery);
+        let events = read_logged_notifications(&home_dir);
+        let event = events
+            .iter()
+            .find(|event| {
+                let detail = notification_detail(event);
+                detail.get("sender").and_then(Value::as_str) == Some(TEST_SENDER)
+                    && detail.get("message_id").and_then(Value::as_str)
+                        == Some(&message_id.to_string())
+            })
+            .expect("delivery notification event");
+        assert_eq!(event.kind, NotificationKind::Delivery);
+        assert_eq!(event.team.as_ref().map(TeamName::as_str), Some(TEST_TEAM));
         assert_eq!(
-            events[0].team.as_ref().map(TeamName::as_str),
-            Some(TEST_TEAM)
-        );
-        assert_eq!(
-            events[0].agent.as_ref().map(AgentName::as_str),
+            event.agent.as_ref().map(AgentName::as_str),
             Some("recipient")
         );
-        let detail = notification_detail(&events[0]);
+        let detail = notification_detail(event);
         assert_eq!(
             detail.get("sender").and_then(Value::as_str),
             Some(TEST_SENDER)
@@ -1047,8 +1039,13 @@ mod tests {
     }
 
     #[test]
-    fn notification_sink_failure_is_explicit_in_delivery_warnings() {
-        let runtime = RecordingRuntime::with_notification_failure("notification sink unavailable");
+    #[serial_test::serial(env)]
+    fn notification_log_failure_is_explicit_in_delivery_warnings() {
+        let runtime = RecordingRuntime::default();
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let blocking_home = tempdir.path().join("home-file");
+        fs::write(&blocking_home, "not a directory").expect("blocking home");
+        let _env = install_home_env(&blocking_home);
         let mut plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
@@ -1083,22 +1080,17 @@ mod tests {
             .recovery
             .as_deref()
             .expect("notification recovery");
-        assert!(recovery.contains("atm-daemon binary is installed"));
-        assert!(recovery.contains("daemon socket path is reachable"));
-        assert!(recovery.contains("ATM_HOME are set correctly"));
-        assert!(
-            runtime
-                .notification_events
-                .lock()
-                .expect("notification events")
-                .is_empty()
-        );
+        assert!(recovery.contains("mailbox/workflow path is writable"));
     }
 
     #[test]
-    fn notification_sink_backpressure_does_not_reopen_hook_helper_bypass() {
-        let runtime =
-            RecordingRuntime::with_notification_failure("notification sink queue is saturated");
+    #[serial_test::serial(env)]
+    fn notification_log_failure_does_not_reopen_hook_helper_bypass() {
+        let runtime = RecordingRuntime::default();
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let blocking_home = tempdir.path().join("home-file");
+        fs::write(&blocking_home, "not a directory").expect("blocking home");
+        let _env = install_home_env(&blocking_home);
         let mut plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
@@ -1134,13 +1126,6 @@ mod tests {
             result.warnings[0]
                 .message
                 .contains("notification delivery failed")
-        );
-        assert!(
-            runtime
-                .notification_events
-                .lock()
-                .expect("notification events")
-                .is_empty()
         );
     }
 }

@@ -1313,8 +1313,8 @@ Historical note:
 - the earlier file-backed/reconcile-fed line is historical only
 - the accepted runtime does not use `ingest/reconcile -> SQLite projection` as
   a live read pipeline
-- AD.4 removes the remaining daemon watch/reconcile lane from the accepted
-  runtime
+- AD.4 removed the remaining daemon watch/reconcile lane from the accepted
+  runtime and retired the corresponding daemon/core boundary traits
 
 The accepted read pipeline stages are:
 1. resolve caller identity and target mailbox from the accepted CLI/runtime
@@ -2596,8 +2596,9 @@ Architectural rules:
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is a dedicated post-send emitter, not
-  `DeliveryPlan`/`NotificationSink`
+- the accepted seam is direct post-send emission plus optional direct
+  notification-log append at the event site, not `NotificationSink` or a
+  daemon-owned notification worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 

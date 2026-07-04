@@ -364,26 +364,20 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns outward delivery of notifications, hooks, or plugin-facing events.
+- Historical boundary record only. Phase `AD.5` retired `NotificationSink`
+  from the accepted post-send/send/ack path.
 
 Notes:
-- This replaces direct `Command::new` use in business-flow code.
-- Notification fallback policy for delivery state machines belongs here as a
-  sink-side effect, but event legality still belongs to the event-family state
-  machine rather than to the sink adapter.
-- Phase `Yb` clarifies that this boundary is notification-only:
-  - hook or notifier invocation is not proof of logical message delivery
-  - non-Claude outbound payload delivery must use a dedicated delivery
-    boundary, not NotificationSink as a stand-in
-  - impossible non-Claude append-degraded routing must fail closed before it
-    reaches this sink
-  - the current proof surface for non-Claude delivery lives in
-    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
-- `Phase Yc` finalized the production-path ownership rule:
-  - `Y.13` removed the direct
-    `PostSendNotificationExecutor -> maybe_run_post_send_hook(...)` bypass
-  - the surviving production notification path now executes through
-    `NotificationSink::deliver(...)`
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- Post-send ownership now stays at the send/ack event site:
+  - durable message persistence succeeds first
+  - recipient-specific post-send emission happens directly through the accepted
+    post-send emitter seam
+  - retained notification logging, when enabled, appends directly to the
+    notification log with no `NotificationSink` substitution
+- Non-Claude outbound payload delivery still uses the dedicated
+  `NonClaudeOutbound` boundary rather than any notification surface.
 
 ## NonClaudeOutbound
 

@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["watch_event_coalescing", "ingress_reconcile_triggering"]
@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-RECONCILE-COORDINATOR-DAEMON-EDGES", "LINT-BOUNDARY
 review_gates = ["no_public_impl", "no_public_constructor", "no_store_or_transport_bypass_in_reconcile"]
 
 [status]
-state = "stub_landed"
-notes = ["runtime reconcile remains separate from raw watch source implementation", "crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition"]
+state = "retired"
+notes = ["Phase AD removed DaemonReconcileCoordinator from accepted daemon composition.", "The record is retained only as a historical boundary audit trail for the deleted reconcile lane."]
