@@ -142,6 +142,7 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
+    pub message: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
@@ -155,4 +156,13 @@ pub trait PostSendHookEmitter: sealed::Sealed {
     /// Returns `AtmError` when one direct post-send emission attempt fails
     /// after durable message persistence has already succeeded.
     fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+}
+
+/// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.
+pub trait GraftPostSendPort: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one graft-backed post-send emission attempt
+    /// fails after durable message persistence has already succeeded.
+    fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
 }

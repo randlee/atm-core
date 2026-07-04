@@ -54,6 +54,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) harness: DeliveryHarnessPath,
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
+    pub(crate) graft_post_send: bool,
     pub(crate) roster_backed: bool,
 }
 
@@ -65,12 +66,17 @@ impl DeliveryRecipientSnapshot {
                 .get("backendType")
                 .and_then(Value::as_str)
                 == Some("tmux");
+        let graft_post_send = matches!(
+            member.harness,
+            RosterHarness::CodexCli | RosterHarness::GeminiCli | RosterHarness::Opencode
+        ) && !local_tmux_post_send;
         Self {
             agent: member.agent_name,
             team: member.team_name,
             harness: DeliveryHarnessPath::from_roster_harness(member.harness),
             recipient_pane_id: member.recipient_pane_id,
             local_tmux_post_send,
+            graft_post_send,
             roster_backed: true,
         }
     }

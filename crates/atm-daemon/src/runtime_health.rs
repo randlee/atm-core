@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail,
+    ack::ack_mail_with_runtime_and_graft_port,
     boundary,
     clear::clear_mail,
     doctor::{
@@ -25,7 +25,7 @@ use atm_core::{
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
-    send::send_mail,
+    send::send_mail_with_runtime_and_graft_port,
 };
 
 use crate::AtmHomeDir;
@@ -56,7 +56,6 @@ pub(crate) struct DaemonRequestDispatcher {
     // not an arbitrary workspace path.
     home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
-    advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
@@ -346,7 +345,6 @@ impl DaemonRequestDispatcher {
         Self {
             home_dir,
             observability: Arc::clone(&observability),
-            advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
             service_runtime: runtime_assembly.service_runtime,
@@ -387,20 +385,22 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail(request, self.observability.as_ref())?;
-                if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    self.advisory_runtime_observability.emit_or_warn(
-                        "advisory_enqueue",
-                        "degraded",
-                        "advisory queue overflowed",
-                    );
-                    return Err(error);
-                }
+                let outcome = send_mail_with_runtime_and_graft_port(
+                    request,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    &self.advisory_runtime,
+                )?;
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, self.observability.as_ref())?,
+                    ack_mail_with_runtime_and_graft_port(
+                        request,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        &self.advisory_runtime,
+                    )?,
                 )))
             }
             RequestEnvelope::Heartbeat(request) => {
@@ -777,7 +777,6 @@ impl DaemonRequestDispatcher {
         Self {
             home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
-            advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
             service_runtime: runtime_assembly.service_runtime.clone(),

@@ -7,6 +7,7 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
+use crate::boundary::GraftPostSendPort;
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -190,7 +191,16 @@ pub fn send_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime)
+    send_mail_with_runtime_impl(request, observability, runtime, None)
+}
+
+pub fn send_mail_with_runtime_and_graft_port(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    graft_port: &dyn GraftPostSendPort,
+) -> Result<SendOutcome, AtmError> {
+    send_mail_with_runtime_impl(request, observability, runtime, Some(graft_port))
 }
 
 fn send_mail_with_runtime_impl<
@@ -199,6 +209,7 @@ fn send_mail_with_runtime_impl<
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    graft_port: Option<&dyn GraftPostSendPort>,
 ) -> Result<SendOutcome, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
@@ -227,6 +238,7 @@ fn send_mail_with_runtime_impl<
     finalize_send_outcome(
         runtime,
         observability,
+        graft_port,
         &request,
         &context,
         &body,
@@ -247,6 +259,7 @@ fn finalize_send_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
+    graft_port: Option<&dyn GraftPostSendPort>,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -295,6 +308,7 @@ fn finalize_send_outcome<
         hook::emit_post_send_effects(
             &mut outcome.warnings,
             context.post_send_config.as_ref(),
+            graft_port,
             &context.recipient,
             &context.delivery_snapshot,
             &plan.messages,

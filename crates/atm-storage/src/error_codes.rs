@@ -80,6 +80,8 @@ pub enum AtmErrorCode {
     WarningHookExecutionFailed,
     PostSendPaneMissing,
     PostSendTmuxSendFailed,
+    PostSendGraftUnavailable,
+    PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
 }
@@ -155,6 +157,8 @@ impl AtmErrorCode {
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
             Self::PostSendPaneMissing => "ATM_POST_SEND_PANE_MISSING",
             Self::PostSendTmuxSendFailed => "ATM_POST_SEND_TMUX_SEND_FAILED",
+            Self::PostSendGraftUnavailable => "ATM_POST_SEND_GRAFT_UNAVAILABLE",
+            Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
         }
@@ -165,86 +169,124 @@ impl FromStr for AtmErrorCode {
     type Err = UnknownAtmErrorCode;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "ATM_CONFIG_HOME_UNAVAILABLE" => Ok(Self::ConfigHomeUnavailable),
-            "ATM_CONFIG_PARSE_FAILED" => Ok(Self::ConfigParseFailed),
-            "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY" => Ok(Self::ConfigRetiredHookMembersKey),
-            "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS" => Ok(Self::ConfigRetiredLegacyHookKeys),
-            "ATM_CONFIG_TEAM_PARSE_FAILED" => Ok(Self::ConfigTeamParseFailed),
-            "ATM_CONFIG_TEAM_MISSING" => Ok(Self::ConfigTeamMissing),
-            "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
-            "ATM_IDENTITY_INVALID" => Ok(Self::IdentityInvalid),
-            "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
-            "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
-            "ATM_DAEMON_MAY_HAVE_EXECUTED" => Ok(Self::DaemonMayHaveExecuted),
-            "ATM_DAEMON_LIFECYCLE_WEDGE" => Ok(Self::DaemonLifecycleWedge),
-            "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
-            "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),
-            "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => Ok(Self::DaemonStaleOwnerRecoveryFailed),
-            "ATM_DAEMON_AUTO_START_FAILED" => Ok(Self::DaemonAutoStartFailed),
-            "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {
-                Ok(Self::DaemonAdvisorySessionAlreadyRegistered)
-            }
-            "ATM_DAEMON_ADVISORY_SESSION_NOT_REGISTERED" => {
-                Ok(Self::DaemonAdvisorySessionNotRegistered)
-            }
-            "ATM_REMOTE_OUTCOME_UNKNOWN" => Ok(Self::RemoteDeliveryOutcomeUnknown),
-            "ATM_ADDRESS_PARSE_FAILED" => Ok(Self::AddressParseFailed),
-            "ATM_TEAM_UNAVAILABLE" => Ok(Self::TeamUnavailable),
-            "ATM_TEAM_INVALID" => Ok(Self::TeamInvalid),
-            "ATM_TEAM_NOT_FOUND" => Ok(Self::TeamNotFound),
-            "ATM_AGENT_NOT_FOUND" => Ok(Self::AgentNotFound),
-            "ATM_MAILBOX_READ_FAILED" => Ok(Self::MailboxReadFailed),
-            "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE" => {
-                Ok(Self::MailboxRecoveredMessageSetTooLarge)
-            }
-            "ATM_MAILBOX_WRITE_FAILED" => Ok(Self::MailboxWriteFailed),
-            "ATM_MAILBOX_LOCK_FAILED" => Ok(Self::MailboxLockFailed),
-            "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => Ok(Self::MailboxLockReadOnlyFilesystem),
-            "ATM_MAILBOX_LOCK_TIMEOUT" => Ok(Self::MailboxLockTimeout),
-            "ATM_INTERNAL_ERROR" => Ok(Self::InternalError),
-            "ATM_MESSAGE_VALIDATION_FAILED" => Ok(Self::MessageValidationFailed),
-            "ATM_CALLER_CONTEXT_REQUEST_INVALID" => Ok(Self::CallerContextRequestInvalid),
-            "ATM_SERIALIZATION_FAILED" => Ok(Self::SerializationFailed),
-            "ATM_FILE_POLICY_REJECTED" => Ok(Self::FilePolicyRejected),
-            "ATM_FILE_REFERENCE_REWRITE_FAILED" => Ok(Self::FileReferenceRewriteFailed),
-            "ATM_WAIT_TIMEOUT" => Ok(Self::WaitTimeout),
-            "ATM_ACK_INVALID_STATE" => Ok(Self::AckInvalidState),
-            "ATM_CLEAR_INVALID_STATE" => Ok(Self::ClearInvalidState),
-            "ATM_OBSERVABILITY_EMIT_FAILED" => Ok(Self::ObservabilityEmitFailed),
-            "ATM_OBSERVABILITY_QUERY_FAILED" => Ok(Self::ObservabilityQueryFailed),
-            "ATM_OBSERVABILITY_FOLLOW_FAILED" => Ok(Self::ObservabilityFollowFailed),
-            "ATM_OBSERVABILITY_HEALTH_FAILED" => Ok(Self::ObservabilityHealthFailed),
-            "ATM_OBSERVABILITY_BOOTSTRAP_FAILED" => Ok(Self::ObservabilityBootstrapFailed),
-            "ATM_OBSERVABILITY_HEALTH_OK" => Ok(Self::ObservabilityHealthOk),
-            "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => Ok(Self::WarningInvalidTeamMemberSkipped),
-            "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => Ok(Self::WarningMailboxRecordSkipped),
-            "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED" => Ok(Self::WarningMalformedAtmFieldIgnored),
-            "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED" => {
-                Ok(Self::WarningObservabilityHealthDegraded)
-            }
-            "ATM_WARNING_SQLITE_HEALTH_DEGRADED" => Ok(Self::WarningSqliteHealthDegraded),
-            "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED" => Ok(Self::WarningOriginInboxEntrySkipped),
-            "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK" => {
-                Ok(Self::WarningMissingTeamConfigFallback)
-            }
-            "ATM_WARNING_SEND_ALERT_STATE_DEGRADED" => Ok(Self::WarningSendAlertStateDegraded),
-            "ATM_WARNING_IDENTITY_DRIFT" => Ok(Self::WarningIdentityDrift),
-            "ATM_WARNING_ROSTER_DRIFT" => Ok(Self::WarningRosterDrift),
-            "ATM_WARNING_BASELINE_MEMBER_MISSING" => Ok(Self::WarningBaselineMemberMissing),
-            "ATM_WARNING_RESTORE_IN_PROGRESS" => Ok(Self::WarningRestoreInProgress),
-            "ATM_WARNING_STALE_MAILBOX_LOCK" => Ok(Self::WarningStaleMailboxLock),
-            "ATM_WARNING_HOOK_SKIPPED" => Ok(Self::WarningHookSkipped),
-            "ATM_WARNING_HOOK_EXECUTION_FAILED" => Ok(Self::WarningHookExecutionFailed),
-            "ATM_POST_SEND_PANE_MISSING" => Ok(Self::PostSendPaneMissing),
-            "ATM_POST_SEND_TMUX_SEND_FAILED" => Ok(Self::PostSendTmuxSendFailed),
-            "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
-                Ok(Self::TestFakeTransportInjectionFailed)
-            }
-            "ATM_HELP_TOPIC_NOT_FOUND" => Ok(Self::HelpTopicNotFound),
-            _ => Err(UnknownAtmErrorCode(value.to_owned())),
-        }
+        parse_known_error_code(value).ok_or_else(|| UnknownAtmErrorCode(value.to_owned()))
     }
+}
+
+fn parse_known_error_code(value: &str) -> Option<AtmErrorCode> {
+    parse_config_or_identity_code(value)
+        .or_else(|| parse_daemon_or_address_code(value))
+        .or_else(|| parse_mailbox_or_validation_code(value))
+        .or_else(|| parse_observability_or_warning_code(value))
+        .or_else(|| parse_post_send_or_misc_code(value))
+}
+
+fn parse_config_or_identity_code(value: &str) -> Option<AtmErrorCode> {
+    Some(match value {
+        "ATM_CONFIG_HOME_UNAVAILABLE" => AtmErrorCode::ConfigHomeUnavailable,
+        "ATM_CONFIG_PARSE_FAILED" => AtmErrorCode::ConfigParseFailed,
+        "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY" => AtmErrorCode::ConfigRetiredHookMembersKey,
+        "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS" => AtmErrorCode::ConfigRetiredLegacyHookKeys,
+        "ATM_CONFIG_TEAM_PARSE_FAILED" => AtmErrorCode::ConfigTeamParseFailed,
+        "ATM_CONFIG_TEAM_MISSING" => AtmErrorCode::ConfigTeamMissing,
+        "ATM_IDENTITY_UNAVAILABLE" => AtmErrorCode::IdentityUnavailable,
+        "ATM_IDENTITY_INVALID" => AtmErrorCode::IdentityInvalid,
+        "ATM_IDENTITY_CONFLICT" => AtmErrorCode::IdentityConflict,
+        _ => return None,
+    })
+}
+
+fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
+    Some(match value {
+        "ATM_DAEMON_UNAVAILABLE" => AtmErrorCode::DaemonUnavailable,
+        "ATM_DAEMON_MAY_HAVE_EXECUTED" => AtmErrorCode::DaemonMayHaveExecuted,
+        "ATM_DAEMON_LIFECYCLE_WEDGE" => AtmErrorCode::DaemonLifecycleWedge,
+        "ATM_DAEMON_LAUNCH_GATE_REJECTED" => AtmErrorCode::DaemonLaunchGateRejected,
+        "ATM_DAEMON_SERVING_STATE_REJECTED" => AtmErrorCode::DaemonServingStateRejected,
+        "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
+        "ATM_DAEMON_AUTO_START_FAILED" => AtmErrorCode::DaemonAutoStartFailed,
+        "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {
+            AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        }
+        "ATM_DAEMON_ADVISORY_SESSION_NOT_REGISTERED" => {
+            AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        }
+        "ATM_REMOTE_OUTCOME_UNKNOWN" => AtmErrorCode::RemoteDeliveryOutcomeUnknown,
+        "ATM_ADDRESS_PARSE_FAILED" => AtmErrorCode::AddressParseFailed,
+        "ATM_TEAM_UNAVAILABLE" => AtmErrorCode::TeamUnavailable,
+        "ATM_TEAM_INVALID" => AtmErrorCode::TeamInvalid,
+        "ATM_TEAM_NOT_FOUND" => AtmErrorCode::TeamNotFound,
+        "ATM_AGENT_NOT_FOUND" => AtmErrorCode::AgentNotFound,
+        _ => return None,
+    })
+}
+
+fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
+    Some(match value {
+        "ATM_MAILBOX_READ_FAILED" => AtmErrorCode::MailboxReadFailed,
+        "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE" => {
+            AtmErrorCode::MailboxRecoveredMessageSetTooLarge
+        }
+        "ATM_MAILBOX_WRITE_FAILED" => AtmErrorCode::MailboxWriteFailed,
+        "ATM_MAILBOX_LOCK_FAILED" => AtmErrorCode::MailboxLockFailed,
+        "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => AtmErrorCode::MailboxLockReadOnlyFilesystem,
+        "ATM_MAILBOX_LOCK_TIMEOUT" => AtmErrorCode::MailboxLockTimeout,
+        "ATM_INTERNAL_ERROR" => AtmErrorCode::InternalError,
+        "ATM_MESSAGE_VALIDATION_FAILED" => AtmErrorCode::MessageValidationFailed,
+        "ATM_CALLER_CONTEXT_REQUEST_INVALID" => AtmErrorCode::CallerContextRequestInvalid,
+        "ATM_SERIALIZATION_FAILED" => AtmErrorCode::SerializationFailed,
+        "ATM_FILE_POLICY_REJECTED" => AtmErrorCode::FilePolicyRejected,
+        "ATM_FILE_REFERENCE_REWRITE_FAILED" => AtmErrorCode::FileReferenceRewriteFailed,
+        "ATM_WAIT_TIMEOUT" => AtmErrorCode::WaitTimeout,
+        "ATM_ACK_INVALID_STATE" => AtmErrorCode::AckInvalidState,
+        "ATM_CLEAR_INVALID_STATE" => AtmErrorCode::ClearInvalidState,
+        _ => return None,
+    })
+}
+
+fn parse_observability_or_warning_code(value: &str) -> Option<AtmErrorCode> {
+    Some(match value {
+        "ATM_OBSERVABILITY_EMIT_FAILED" => AtmErrorCode::ObservabilityEmitFailed,
+        "ATM_OBSERVABILITY_QUERY_FAILED" => AtmErrorCode::ObservabilityQueryFailed,
+        "ATM_OBSERVABILITY_FOLLOW_FAILED" => AtmErrorCode::ObservabilityFollowFailed,
+        "ATM_OBSERVABILITY_HEALTH_FAILED" => AtmErrorCode::ObservabilityHealthFailed,
+        "ATM_OBSERVABILITY_BOOTSTRAP_FAILED" => AtmErrorCode::ObservabilityBootstrapFailed,
+        "ATM_OBSERVABILITY_HEALTH_OK" => AtmErrorCode::ObservabilityHealthOk,
+        "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => AtmErrorCode::WarningInvalidTeamMemberSkipped,
+        "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => AtmErrorCode::WarningMailboxRecordSkipped,
+        "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED" => AtmErrorCode::WarningMalformedAtmFieldIgnored,
+        "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED" => {
+            AtmErrorCode::WarningObservabilityHealthDegraded
+        }
+        "ATM_WARNING_SQLITE_HEALTH_DEGRADED" => AtmErrorCode::WarningSqliteHealthDegraded,
+        "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED" => AtmErrorCode::WarningOriginInboxEntrySkipped,
+        "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK" => {
+            AtmErrorCode::WarningMissingTeamConfigFallback
+        }
+        "ATM_WARNING_SEND_ALERT_STATE_DEGRADED" => AtmErrorCode::WarningSendAlertStateDegraded,
+        "ATM_WARNING_IDENTITY_DRIFT" => AtmErrorCode::WarningIdentityDrift,
+        "ATM_WARNING_ROSTER_DRIFT" => AtmErrorCode::WarningRosterDrift,
+        "ATM_WARNING_BASELINE_MEMBER_MISSING" => AtmErrorCode::WarningBaselineMemberMissing,
+        "ATM_WARNING_RESTORE_IN_PROGRESS" => AtmErrorCode::WarningRestoreInProgress,
+        "ATM_WARNING_STALE_MAILBOX_LOCK" => AtmErrorCode::WarningStaleMailboxLock,
+        "ATM_WARNING_HOOK_SKIPPED" => AtmErrorCode::WarningHookSkipped,
+        "ATM_WARNING_HOOK_EXECUTION_FAILED" => AtmErrorCode::WarningHookExecutionFailed,
+        _ => return None,
+    })
+}
+
+fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
+    Some(match value {
+        "ATM_POST_SEND_PANE_MISSING" => AtmErrorCode::PostSendPaneMissing,
+        "ATM_POST_SEND_TMUX_SEND_FAILED" => AtmErrorCode::PostSendTmuxSendFailed,
+        "ATM_POST_SEND_GRAFT_UNAVAILABLE" => AtmErrorCode::PostSendGraftUnavailable,
+        "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED" => AtmErrorCode::PostSendAdvisoryDeliveryFailed,
+        "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
+            AtmErrorCode::TestFakeTransportInjectionFailed
+        }
+        "ATM_HELP_TOPIC_NOT_FOUND" => AtmErrorCode::HelpTopicNotFound,
+        _ => return None,
+    })
 }
 
 impl fmt::Display for AtmErrorCode {
