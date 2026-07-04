@@ -1,7 +1,7 @@
 ---
 id: AD.3
 title: Claude Backend And Inbox Nudge Retirement
-status: planned
+status: complete
 branch: feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
 worktree: ../atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
 target: integrate/phase-AD

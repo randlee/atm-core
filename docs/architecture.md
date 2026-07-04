@@ -2184,11 +2184,13 @@ Single-write-path guardrail:
   write path
 
 Current owner-layer boundaries:
-- Claude-owned inbox compatibility surface:
-  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
-  delegate through injected store adapters; low-level source-file discovery,
-  lock/reload orchestration, and persistence remain internal leaf helpers
-  behind that seam during the Phase R store transition
+- Historical Claude-owned inbox compatibility surface:
+  AD.3 retired the Claude inbox append backend and the old nudge/context
+  injection path. The retained mailbox commands now cross the
+  `RetainedServiceRuntime` seam and delegate through injected store adapters;
+  low-level source-file discovery, lock/reload orchestration, and persistence
+  remain internal leaf helpers behind that seam during the Phase R store
+  transition.
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -2508,13 +2510,14 @@ Historical Claude-owned shared inbox compatibility previously existed for:
   top-level JSON array of inbox messages
 
 Phase `AD` rule:
-- Claude context injection through inbox append is retired per `ADR-019`
+- Phase `AD.3` completes retirement of Claude context injection through inbox
+  append per `ADR-019`
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line because Claude Code no longer
-  uses them
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line
+  because Claude Code no longer uses them
 - durable SQLite state is ATM's authoritative mail state
 - send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
 - the shared backend contract remains required so SQLite stays one backend

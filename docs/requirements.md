@@ -3475,14 +3475,14 @@ mail correctness.
 
 ### 22.5 Direct Post-Send And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the
-  `atm-storage-claude` backend are retired from the accepted line.
+- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line.
 
   Required behavior:
   - no retained production path may use Claude inbox `.json` or `.jsonl` files
     for mailbox delivery, context injection, compatibility export, or
     background ingress
-  - the accepted line must not ship the `atm-storage-claude` crate or its
+  - the accepted line must not ship the former `atm-storage-claude` crate or its
     boundary records as a production backend
   - the shared backend contract remains required after Claude backend
     retirement; SQLite is one backend implementation and future SQL backend

@@ -63,11 +63,19 @@ pub(crate) trait RetainedServiceRuntime:
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<(), AtmError>;
+    #[allow(
+        dead_code,
+        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
+    )]
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
         message: &InboxMessage,
     ) -> Result<(), AtmError>;
+    #[allow(
+        dead_code,
+        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
+    )]
     fn append_compat_inbox_message_set(
         &self,
         inbox_path: &Path,
@@ -485,6 +493,10 @@ fn load_store_backed_mailbox_projection(
     Ok(messages)
 }
 
+#[allow(
+    dead_code,
+    reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
+)]
 fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
     if !path.exists()
         || crate::mailbox::store::inbox_file_format(path)
