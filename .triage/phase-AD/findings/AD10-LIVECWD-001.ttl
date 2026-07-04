@@ -12,8 +12,10 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
   triage:triagedAt "2026-07-03T19:05:00Z"^^xsd:dateTime ;
   triage:openOn <urn:atm:triage:worktree/pAD-s10/634feabb> ;
   triage:promoteTo <urn:atm:triage:worktree/pAD-s10/634feabb> .

@@ -12,8 +12,10 @@
   triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
   triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
   triage:correctionNote "prior record incorrectly claimed AD.4 removed the private EnvGuard; direct verification (grep across AD.1/AD.4/AD.11 worktrees, plus git show 729cdeab --stat) confirms it is unchanged and still present on all 11 branches; scope also corrected from 6 files down to 3 (caller_context.rs, members.rs, log.rs). FOLLOWUP PASS NOTE: PR #453 (AD.5) CI FAILURES ARE NOT THE ENVGUARD RACE. Ubuntu failure: send::tests::send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary assertion left==3 right==2 @line 666. Windows failure: send::tests::send_claude_success_appends_original_via_compat_inbox_writer assertion left==2 right==1 @line 818. Both are count mismatches in send module, not env-var corruption. These failures indicate FTQ-001/002/003 race condition remains OPEN and unconsolidated on AD.5 (and likely all branches per local `just test` passing vs CI failure). Different failure signature confirms root cause is NOT EnvGuard; new investigation required for send module test assertions." ;
   triage:pr453FailureSignature "ubuntu: send::tests::send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary line 666 assertion left=3 right=2" ;
