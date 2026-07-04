@@ -3,27 +3,23 @@
     reason = "team_admin still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
 )]
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::warn;
 
-use crate::address::validate_path_segment;
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
 use crate::config::load_claude_team_config_document;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
-use crate::persistence;
-use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-use crate::schema::{
-    AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, TeamConfig, canonical_home_dir,
-};
-use crate::types::{AgentId, AgentName, ModelName, PaneId, TeamName};
+use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
+use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
+#[path = "team_admin/filesystem.rs"]
+mod filesystem;
+#[path = "team_admin/projection.rs"]
+mod projection;
 #[path = "team_admin/restore.rs"]
 mod restore;
 
@@ -337,19 +333,7 @@ fn list_members_from_roster_store(
     roster_store: &dyn RosterStore,
     query: MembersQuery,
 ) -> Result<MembersList, AtmError> {
-    let roster = load_team_roster(roster_store, &query.team)?;
-    if roster.is_empty() {
-        return Err(AtmError::team_not_found(&query.team));
-    }
-
-    Ok(MembersList {
-        team: query.team,
-        members: ordered_roster_member_summaries(
-            &roster,
-            query.caller_identity.as_ref(),
-            query.live_cwd.as_deref(),
-        ),
-    })
+    projection::list_members_from_roster_store(roster_store, query)
 }
 
 fn add_member_from_roster_store(
@@ -367,14 +351,15 @@ fn add_member_from_roster_store(
         &request.team,
         &request.member,
     )?;
-    let created_inbox = ensure_inbox_exists(&inbox_path)?;
+    let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
-    let projected_config = project_team_config_from_roster(current_extra, &existing_roster)?;
+    let projected_config =
+        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
 
-    if let Err(error) = write_team_config(&team_dir, &projected_config) {
+    if let Err(error) = filesystem::write_team_config(&team_dir, &projected_config) {
         if created_inbox {
-            let _ = fs::remove_file(&inbox_path);
+            let _ = std::fs::remove_file(&inbox_path);
         }
         return Err(
             error.with_recovery(
@@ -403,7 +388,7 @@ fn update_member_from_roster_store(
     }
 
     let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
-    let mut existing_roster = load_team_roster(roster_store, &request.team)?;
+    let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
     let member = existing_roster
         .iter_mut()
@@ -418,8 +403,9 @@ fn update_member_from_roster_store(
                 "Check ATM roster store availability and rerun `atm teams update-member`.",
             )
         })?;
-    let projected_config = project_team_config_from_roster(current_extra, &existing_roster)?;
-    write_team_config(&team_dir, &projected_config).map_err(|error| {
+    let projected_config =
+        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
+    filesystem::write_team_config(&team_dir, &projected_config).map_err(|error| {
         error.with_recovery(
             "Check team config permissions and rerun `atm teams update-member`; ATM roster state may already include the repaired metadata.",
         )
@@ -442,7 +428,7 @@ fn load_member_add_context(
     }
 
     let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
-    let existing_roster = load_team_roster(roster_store, &request.team)?;
+    let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
     Ok(MemberAddContext {
         team_dir,
@@ -579,63 +565,7 @@ pub fn backup_team_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: BackupRequest,
 ) -> Result<BackupOutcome, AtmError> {
-    backup_team_from_roster_store(roster_store, request)
-}
-
-fn backup_team_from_roster_store(
-    roster_store: &dyn RosterStore,
-    request: BackupRequest,
-) -> Result<BackupOutcome, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let config_path = team_dir.join("config.json");
-    if !config_path.is_file() {
-        return Err(AtmError::missing_document(format!(
-            "team config is missing at {}",
-            config_path.display()
-        )));
-    }
-
-    let backup_dir = backup_root_from_home(&request.home_dir, &request.team)?.join(timestamp_dir());
-    fs::create_dir_all(backup_dir.join("inboxes")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to create backup directory {}: {error}",
-            backup_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check backup directory permissions under ATM_HOME and retry the backup.")
-    })?;
-
-    fs::copy(&config_path, backup_dir.join("config.json")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to copy {} into backup {}: {error}",
-            config_path.display(),
-            backup_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source and backup directory permissions and retry the backup.")
-    })?;
-
-    copy_regular_files(
-        &team_dir.join("inboxes"),
-        &backup_dir.join("inboxes"),
-        |name| !name.starts_with('.') && !name.ends_with(".lock"),
-    )?;
-    copy_regular_files(
-        &tasks_dir_from_home(&request.home_dir, &request.team)?,
-        &backup_dir.join("tasks"),
-        |name| name == ".highwatermark" || name.ends_with(".json"),
-    )?;
-    write_roster_audit_snapshot(&backup_dir, roster_store, &request.team)?;
-
-    Ok(BackupOutcome {
-        action: "backup",
-        team: request.team,
-        backup_path: backup_dir,
-    })
+    filesystem::backup_team_from_roster_store(roster_store, request)
 }
 
 /// Restore one team from a backup directory.
@@ -657,47 +587,7 @@ pub(crate) fn ordered_roster_member_summaries(
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
 ) -> Vec<MemberSummary> {
-    let mut members = Vec::with_capacity(records.len());
-    if let Some(team_lead) = records
-        .iter()
-        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
-    {
-        members.push(member_summary_from_roster(
-            team_lead,
-            caller_identity,
-            live_cwd,
-        ));
-    }
-    for member in records {
-        if member.agent_name == ROLE_TEAM_LEAD {
-            continue;
-        }
-        members.push(member_summary_from_roster(
-            member,
-            caller_identity,
-            live_cwd,
-        ));
-    }
-    members
-}
-
-fn member_summary_from_roster(
-    record: &RosterEntry,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-) -> MemberSummary {
-    MemberSummary {
-        name: record.agent_name.clone(),
-        agent_id: metadata_string(&record.metadata_json, "agentId")
-            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
-        agent_type: record.agent_type.to_string(),
-        model: record.model.clone(),
-        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone(),
-        home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
-        live_cwd: runtime_live_cwd(record, caller_identity, live_cwd),
-        extra: compatibility_extra_fields(&record.metadata_json),
-    }
+    projection::ordered_roster_member_summaries(records, caller_identity, live_cwd)
 }
 
 const MAX_MEMBER_METADATA_FIELD_LEN: usize = 256;
@@ -736,303 +626,6 @@ fn load_team_projection_extra_for_member_add(
     load_claude_team_config_document(team_dir).map(|config| config.extra)
 }
 
-fn load_team_roster(
-    roster_store: &dyn RosterStore,
-    team: &TeamName,
-) -> Result<Vec<RosterEntry>, AtmError> {
-    roster_store.load_roster(team)
-}
-
-pub(super) fn project_team_config_from_roster(
-    extra: serde_json::Map<String, Value>,
-    records: &[RosterEntry],
-) -> Result<TeamConfig, AtmError> {
-    let mut members = Vec::with_capacity(records.len());
-    if let Some(team_lead) = records
-        .iter()
-        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
-    {
-        members.push(agent_member_from_roster_record(team_lead)?);
-    }
-    for record in records {
-        if record.agent_name == ROLE_TEAM_LEAD {
-            continue;
-        }
-        members.push(agent_member_from_roster_record(record)?);
-    }
-    Ok(TeamConfig { members, extra })
-}
-
-fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, AtmError> {
-    let mut extra = compatibility_extra_fields(&record.metadata_json);
-    Ok(AgentMember {
-        name: record.agent_name.clone(),
-        agent_id: roster_record_agent_id(record)?,
-        agent_type: record.agent_type.clone(),
-        model: record.model.clone(),
-        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone(),
-        home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
-        extra: {
-            extra.remove("agentId");
-            extra.remove("joinedAt");
-            extra.remove(HOME_DIR_METADATA_KEY);
-            #[allow(
-                deprecated,
-                reason = "Phase AD obsolete: derived compatibility field only"
-            )]
-            extra.remove(LEGACY_CWD_METADATA_KEY);
-            extra
-        },
-    })
-}
-
-fn roster_record_agent_id(record: &RosterEntry) -> Result<AgentId, AtmError> {
-    let raw_agent_id = metadata_string(&record.metadata_json, "agentId")
-        .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name));
-    AgentId::new(raw_agent_id.clone()).map_err(|error| {
-        AtmError::validation(format!(
-            "roster member {}@{} has invalid persisted agentId '{}': {error}",
-            record.agent_name, record.team_name, raw_agent_id
-        ))
-        .with_recovery(
-            "Repair the malformed ATM roster row or rerun `atm teams update-member` so ATM rewrites the member metadata with a valid agentId.",
-        )
-    })
-}
-
-fn compatibility_extra_fields(
-    metadata_json: &serde_json::Map<String, Value>,
-) -> serde_json::Map<String, Value> {
-    let mut extra = metadata_json.clone();
-    extra.remove("agentId");
-    extra.remove("joinedAt");
-    extra.remove(HOME_DIR_METADATA_KEY);
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: derived compatibility field only"
-    )]
-    extra.remove(LEGACY_CWD_METADATA_KEY);
-    extra
-}
-
-fn runtime_live_cwd(
-    record: &RosterEntry,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-) -> Option<String> {
-    match (caller_identity, live_cwd) {
-        (Some(identity), Some(path)) if *identity == record.agent_name => {
-            Some(path.display().to_string())
-        }
-        _ => None,
-    }
-}
-
-fn metadata_string(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
-    metadata_json
-        .get(key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
-fn metadata_u64(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<u64> {
-    metadata_json.get(key).and_then(Value::as_u64)
-}
-
-fn teams_root_from_home(home_dir: &Path) -> PathBuf {
-    home_dir.join(".claude").join("teams")
-}
-
-fn backup_root_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    validate_path_segment(team, "team")?;
-    Ok(teams_root_from_home(home_dir).join(".backups").join(team))
-}
-
-fn tasks_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    validate_path_segment(team, "team")?;
-    Ok(home_dir.join(".claude").join("tasks").join(team))
-}
-
-fn timestamp_dir() -> String {
-    let now = Utc::now();
-    format!(
-        "{}{:09}Z",
-        now.format("%Y%m%dT%H%M%S"),
-        now.timestamp_subsec_nanos()
-    )
-}
-
-fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
-    if inbox_path.exists() {
-        return Ok(false);
-    }
-
-    if let Some(parent) = inbox_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create inbox directory {}: {error}",
-                parent.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox directory permissions and rerun the team recovery command.")
-        })?;
-    }
-
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(inbox_path)
-        .map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create inbox {}: {error}",
-                inbox_path.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and rerun the team recovery command.")
-        })?;
-    Ok(true)
-}
-
-fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmError> {
-    let config_path = team_dir.join("config.json");
-    let encoded = serde_json::to_vec_pretty(config).map_err(AtmError::from)?;
-    atomic_write(&config_path, &encoded)
-}
-
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
-    // Test seam for deterministic rollback coverage in integration tests.
-    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
-        return Err(AtmError::file_policy(format!(
-            "forced team config write failure for {}",
-            path.display()
-        ))
-        .with_recovery(
-            "Unset ATM_TEST_FAIL_TEAM_CONFIG_WRITE or rerun without the injected test failure.",
-        ));
-    }
-    persistence::atomic_write_bytes(
-        path,
-        bytes,
-        AtmErrorKind::FilePolicy,
-        "config",
-        "Check config directory permissions and rerun the operation.",
-    )
-}
-
-fn write_roster_audit_snapshot(
-    backup_dir: &Path,
-    roster_store: &dyn RosterStore,
-    team: &TeamName,
-) -> Result<(), AtmError> {
-    let roster = load_team_roster(roster_store, team)?;
-    let bytes = serde_json::to_vec_pretty(&json!({
-        "team": team,
-        "members": roster,
-    }))
-    .map_err(AtmError::from)?;
-    persistence::atomic_write_bytes(
-        &backup_dir.join("atm-roster.json"),
-        &bytes,
-        AtmErrorKind::FilePolicy,
-        "ATM roster backup snapshot",
-        "Check backup directory permissions and retry the backup.",
-    )
-}
-
-fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::WarnAndSkip)
-}
-
-fn copy_regular_files_strict<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
-}
-
-enum DirEntryErrorPolicy {
-    WarnAndSkip,
-    FailClosed,
-}
-
-fn copy_regular_files_with_policy<F>(
-    src: &Path,
-    dst: &Path,
-    include: F,
-    dir_entry_error_policy: DirEntryErrorPolicy,
-) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    if !src.exists() {
-        return Ok(());
-    }
-    fs::create_dir_all(dst).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to create destination directory {}: {error}",
-            dst.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check destination directory permissions and retry the copy.")
-    })?;
-
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(src).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to read source directory {}: {error}",
-            src.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source directory permissions and retry the copy.")
-    })? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => match dir_entry_error_policy {
-                DirEntryErrorPolicy::WarnAndSkip => {
-                    warn!(
-                        source = %src.display(),
-                        %error,
-                        "skipping unreadable source directory entry during backup copy"
-                    );
-                    continue;
-                }
-                DirEntryErrorPolicy::FailClosed => {
-                    return Err(AtmError::file_policy(format!(
-                        "failed to read source directory entry under {}: {error}",
-                        src.display()
-                    ))
-                    .with_source(error)
-                    .with_recovery("Check source directory permissions and retry the restore."));
-                }
-            },
-        };
-        if entry.path().is_file() && include(&entry.file_name().to_string_lossy()) {
-            entries.push(entry);
-        }
-    }
-    entries.sort_by_key(|entry| entry.file_name());
-
-    for entry in entries {
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        fs::copy(&from, &to).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to copy {} to {}: {error}",
-                from.display(),
-                to.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check source and destination permissions and retry the copy.")
-        })?;
-    }
-
-    Ok(())
-}
-
 fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {
     let Some(raw) = pane_id.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -1065,9 +658,9 @@ mod tests {
 
     use super::{
         AddMemberRequest, BackupRequest, MAX_MEMBER_METADATA_FIELD_LEN, MemberName, MembersQuery,
-        RestoreRequest, UpdateMemberRequest, add_member_with_roster_store, backup_root_from_home,
+        RestoreRequest, UpdateMemberRequest, add_member_with_roster_store,
         backup_team_with_roster_store, list_members_with_roster_store,
-        list_teams_with_roster_store, tasks_dir_from_home, update_member_with_roster_store,
+        list_teams_with_roster_store, update_member_with_roster_store,
     };
     use crate::boundary::{
         self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
@@ -1336,8 +929,11 @@ mod tests {
             .metadata_json
             .insert("agentId".to_string(), serde_json::json!("bad/agent/id"));
 
-        let error = super::project_team_config_from_roster(serde_json::Map::new(), &[malformed])
-            .expect_err("invalid persisted agent id");
+        let error = super::projection::project_team_config_from_roster(
+            serde_json::Map::new(),
+            &[malformed],
+        )
+        .expect_err("invalid persisted agent id");
 
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(error.message.contains("invalid persisted agentId"));
@@ -1639,7 +1235,8 @@ mod tests {
     #[test]
     fn backup_root_from_home_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = backup_root_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+        let error = super::filesystem::backup_root_from_home(tempdir.path(), "../evil")
+            .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
@@ -1647,7 +1244,8 @@ mod tests {
     #[test]
     fn tasks_dir_from_home_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = tasks_dir_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+        let error = super::filesystem::tasks_dir_from_home(tempdir.path(), "../evil")
+            .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
