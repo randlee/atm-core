@@ -13,12 +13,12 @@
   triage:repeatable false ;
   triage:sweepScope "workspace test suite: log, members, list, read, send, clear, ack command tests" ;
   triage:pattern "test-suite-depends-on-ambient-shell-env-not-explicit-context" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-03T15:45:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/AD1/b7ee3554> ;
-  triage:openOn <urn:atm:triage:worktree/AD2/be70a13d> ;
-  triage:openOn <urn:atm:triage:worktree/AD3/94e75df5> ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-03T16:20:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/AD1/2e151d21> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD2/490c9d23> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
   triage:fixedOn <urn:atm:triage:worktree/AD4/a41348f4> ;
   triage:fixedOn <urn:atm:triage:worktree/AD5/e3a90938> ;
   triage:fixedOn <urn:atm:triage:worktree/AD6/836bd918> ;
@@ -26,35 +26,34 @@
   triage:fixedOn <urn:atm:triage:worktree/AD8/345ab8ce> ;
   triage:fixedOn <urn:atm:triage:worktree/AD9/57f1d35e> ;
   triage:fixedOn <urn:atm:triage:worktree/AD10/5563bba2> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD11/d709cb73> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD3/94e75df5> .
+  triage:fixedOn <urn:atm:triage:worktree/AD11/d709cb73> .
 
-<urn:atm:triage:worktree/AD1/b7ee3554>
+<urn:atm:triage:worktree/AD1/2e151d21>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
-  triage:headSha "b7ee3554" ;
+  triage:headSha "2e151d21" ;
   triage:orderIndex 1 ;
   triage:sprint "AD.1" ;
-  triage:status "open" .
+  triage:status "fixed" .
 
-<urn:atm:triage:worktree/AD2/be70a13d>
+<urn:atm:triage:worktree/AD2/490c9d23>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
-  triage:headSha "be70a13d" ;
+  triage:headSha "490c9d23" ;
   triage:orderIndex 2 ;
   triage:sprint "AD.2" ;
-  triage:status "open" .
+  triage:status "fixed" .
 
-<urn:atm:triage:worktree/AD3/94e75df5>
+<urn:atm:triage:worktree/AD3/4ff7cfbc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
-  triage:headSha "94e75df5" ;
+  triage:headSha "4ff7cfbc" ;
   triage:orderIndex 3 ;
   triage:sprint "AD.3" ;
-  triage:status "open" .
+  triage:status "fixed" .
 
 <urn:atm:triage:worktree/AD4/a41348f4>
   a triage:WorktreeSnapshot ;
