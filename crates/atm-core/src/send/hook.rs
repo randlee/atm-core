@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -559,33 +559,121 @@ fn run_tmux_send_keys(
     message: &str,
     event: &PostSendHookEvent,
 ) -> Result<(), AtmError> {
-    let output = Command::new("tmux")
-        .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
-        .output()
-        .map_err(|error| {
-            tmux_send_failed_error(
-                pane_id,
-                event,
-                format!("failed to start tmux send-keys: {error}"),
-                Some(error),
-            )
-        })?;
+    let output = run_tmux_command(
+        {
+            let mut command = Command::new("tmux");
+            command.args(["send-keys", "-t", pane_id.as_str(), "-l", message]);
+            command
+        },
+        pane_id,
+        event,
+        "send-keys",
+    )?;
     ensure_tmux_success(output, pane_id, event, "send literal nudge")
 }
 
 fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    let output = Command::new("tmux")
-        .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
-        .output()
-        .map_err(|error| {
-            tmux_send_failed_error(
-                pane_id,
-                event,
-                format!("failed to start tmux send-keys Enter: {error}"),
-                Some(error),
-            )
-        })?;
+    let output = run_tmux_command(
+        {
+            let mut command = Command::new("tmux");
+            command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
+            command
+        },
+        pane_id,
+        event,
+        "send-keys Enter",
+    )?;
     ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
+}
+
+fn run_tmux_command(
+    mut command: Command,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    tmux_action: &str,
+) -> Result<Output, AtmError> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let child = command.spawn().map_err(|error| {
+        tmux_send_failed_error(
+            pane_id,
+            event,
+            format!("failed to start tmux {tmux_action}: {error}"),
+            Some(error),
+        )
+    })?;
+    wait_for_tmux_output(child, pane_id, event, tmux_action)
+}
+
+fn wait_for_tmux_output(
+    mut child: Child,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    tmux_action: &str,
+) -> Result<Output, AtmError> {
+    let started_at = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child.wait_with_output().map_err(|error| {
+                    tmux_send_failed_error(
+                        pane_id,
+                        event,
+                        format!("failed to collect tmux {tmux_action} output: {error}"),
+                        Some(error),
+                    )
+                });
+            }
+            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                terminate_tmux_child(&mut child, pane_id, event, tmux_action);
+                let _ = child.wait_with_output();
+                return Err(tmux_send_failed_error(
+                    pane_id,
+                    event,
+                    format!(
+                        "tmux {tmux_action} timed out after {}s",
+                        POST_SEND_HOOK_TIMEOUT.as_secs()
+                    ),
+                    None::<std::io::Error>,
+                ));
+            }
+            Err(error) => {
+                terminate_tmux_child(&mut child, pane_id, event, tmux_action);
+                let _ = child.wait_with_output();
+                return Err(tmux_send_failed_error(
+                    pane_id,
+                    event,
+                    format!("failed while waiting for tmux {tmux_action}: {error}"),
+                    Some(error),
+                ));
+            }
+        }
+    }
+}
+
+fn terminate_tmux_child(
+    child: &mut Child,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    tmux_action: &str,
+) {
+    if let Err(error) = child.kill()
+        && error.kind() != std::io::ErrorKind::InvalidInput
+    {
+        warn!(
+            code = %AtmErrorCode::PostSendTmuxSendFailed,
+            sender = %event.sender,
+            recipient = %event.recipient,
+            recipient_team = %event.recipient_team,
+            message_id = %event.message_id,
+            pane_id = %pane_id,
+            tmux_action,
+            %error,
+            "failed to terminate timed-out tmux subprocess"
+        );
+    }
 }
 
 fn ensure_tmux_success(
@@ -957,7 +1045,7 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use serde_json::{Map, json};
     use tempfile::tempdir;
@@ -1325,6 +1413,52 @@ mod tests {
         assert!(logged.contains("%9"));
         assert!(logged.contains(&tmux_nudge_message(&TeamName::from_validated("test-team"))));
         assert!(logged.contains("Enter"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn local_tmux_post_send_emitter_times_out_hung_tmux() {
+        let tempdir = tempdir().expect("tempdir");
+        #[cfg(windows)]
+        let tmux_path = tempdir.path().join("tmux.cmd");
+        #[cfg(not(windows))]
+        let tmux_path = tempdir.path().join("tmux");
+        #[cfg(windows)]
+        fs::write(
+            &tmux_path,
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\nfor /f \"tokens=1-4 delims=:.\" %%a in (\"%time%\") do (\r\n  set /a start=%%a*3600+%%b*60+%%c\r\n)\r\n:loop\r\nfor /f \"tokens=1-4 delims=:.\" %%a in (\"%time%\") do (\r\n  set /a now=%%a*3600+%%b*60+%%c\r\n)\r\nif !now! lss !start! set /a now+=86400\r\nset /a elapsed=now-start\r\nif !elapsed! lss 30 goto loop\r\nexit /b 0\r\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &tmux_path,
+            "#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&tmux_path, perms).expect("chmod");
+        }
+
+        let mut path_entries = vec![tempdir.path().to_path_buf()];
+        if let Some(path) = std::env::var_os("PATH") {
+            path_entries.extend(std::env::split_paths(&path));
+        }
+        let shim_path = std::env::join_paths(path_entries).expect("join shim path");
+        let shim_path = shim_path.to_str().expect("utf8 shim path").to_owned();
+        let _env = EnvGuard::set_many([("PATH", Some(shim_path.as_str()))]);
+
+        let started_at = Instant::now();
+        let error = LocalTmuxPostSendEmitter
+            .emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))))
+            .expect_err("hung tmux must time out");
+
+        assert!(started_at.elapsed() < Duration::from_secs(8));
+        assert_eq!(error.code, AtmErrorCode::PostSendTmuxSendFailed);
+        assert!(error.message.contains("timed out"));
     }
 
     #[test]
