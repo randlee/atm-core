@@ -264,7 +264,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn atomic_write_bytes_reports_parent_sync_failure_via_deterministic_hook() {
         let _env_lock = lock_env();
         let _fault = ParentSyncFailureGuard::enable();
