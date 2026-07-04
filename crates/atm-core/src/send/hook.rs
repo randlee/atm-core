@@ -713,14 +713,16 @@ fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathB
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
         .or_else(|| {
-            // Phase AD obsolete: derived compatibility field only. This
-            // bounded fallback remains solely to read pre-AD home metadata
-            // until downstream compatibility data is fully cleared.
-            metadata
+            #[allow(
+                deprecated,
+                reason = "Phase AD obsolete: derived compatibility field only. This bounded fallback remains solely to read pre-AD home metadata until downstream compatibility data is fully cleared."
+            )]
+            let legacy = metadata
                 .get(LEGACY_CWD_METADATA_KEY)
                 .and_then(Value::as_str)
                 .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from)
+                .map(PathBuf::from);
+            legacy
         })
 }
 
