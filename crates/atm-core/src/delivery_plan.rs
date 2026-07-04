@@ -6,8 +6,6 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanDisposition {
     Persisted,
@@ -135,38 +133,13 @@ impl DeliveryTarget {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NotificationTarget {
-    pub(crate) sender: AgentName,
-    pub(crate) sender_team: Option<TeamName>,
-    pub(crate) message_id: AtmMessageId,
-    pub(crate) requires_ack: bool,
-    pub(crate) is_ack: bool,
-    pub(crate) task_id: Option<TaskId>,
-}
-
-impl NotificationTarget {
-    pub(crate) fn from_logical_message(message: &LogicalMessage) -> Self {
-        Self {
-            sender: message.envelope.from.clone(),
-            sender_team: message.envelope.source_team.clone(),
-            message_id: message.message_id(),
-            requires_ack: message.requires_ack,
-            is_ack: message.is_ack,
-            task_id: message.envelope.task_id.clone(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DeliveryPlan {
     pub(crate) kind: DeliveryPlanKind,
     pub(crate) disposition: DeliveryPlanDisposition,
     pub(crate) delivery_target: DeliveryTarget,
     pub(crate) recipient: ResolvedRecipient,
-    pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) messages: Vec<LogicalMessage>,
-    pub(crate) notifications: Vec<NotificationTarget>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
@@ -176,22 +149,15 @@ impl DeliveryPlan {
         disposition: DeliveryPlanDisposition,
         delivery_target: DeliveryTarget,
         recipient: ResolvedRecipient,
-        recipient_pane_id: Option<PaneId>,
         messages: Vec<LogicalMessage>,
         warnings: Vec<WarningEntry>,
     ) -> Self {
-        let notifications = messages
-            .iter()
-            .map(NotificationTarget::from_logical_message)
-            .collect();
         Self {
             kind,
             disposition,
             delivery_target,
             recipient,
-            recipient_pane_id,
             messages,
-            notifications,
             warnings,
         }
     }

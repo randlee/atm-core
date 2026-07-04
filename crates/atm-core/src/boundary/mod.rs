@@ -4,6 +4,8 @@ use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
+use crate::schema::AtmMessageId;
+use crate::types::{AgentName, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -131,4 +133,26 @@ pub trait StatusSource: sealed::Sealed {
     ///
     /// Returns `AtmError` when a runtime status snapshot cannot be collected.
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PostSendHookEvent {
+    pub sender: AgentName,
+    pub sender_team: TeamName,
+    pub recipient: AgentName,
+    pub recipient_team: TeamName,
+    pub message_id: AtmMessageId,
+    pub requires_ack: bool,
+    pub is_ack: bool,
+    pub task_id: Option<TaskId>,
+    pub recipient_pane_id: Option<PaneId>,
+}
+
+/// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
+pub trait PostSendHookEmitter: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one direct post-send emission attempt fails
+    /// after durable message persistence has already succeeded.
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
 }

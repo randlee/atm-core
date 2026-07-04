@@ -538,7 +538,8 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
@@ -587,7 +588,8 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         WarningEntry::new("sqlite failed", Some("repair sqlite")),
     );
     let base_context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),

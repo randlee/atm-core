@@ -94,10 +94,10 @@ pub use boundary::{
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
-    RosterEntry, RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor,
-    RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
+    MessageKey, NotificationEvent, PostSendHookEmitter, PostSendHookEvent, RemoteReplayStateRecord,
+    RemoteReplayStore, RequestDispatcher, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
     UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;

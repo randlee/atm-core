@@ -532,6 +532,9 @@ Required caller-context rules:
 - the hook must also run after successful `atm ack`, using the reply message as
   the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must resolve from the sender's authoritative ATM
+  roster home metadata and may use retained `cwd` only as a compatibility
+  fallback until canonical `home_dir` metadata is fully populated
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
