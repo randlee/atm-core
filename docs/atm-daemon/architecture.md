@@ -469,7 +469,6 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
 - `advisory_runtime.rs`
-- `notification_runtime.rs`
 - `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`

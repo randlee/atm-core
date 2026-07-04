@@ -94,9 +94,9 @@ pub use boundary::{
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NotificationSink, RemoteReplayStateRecord, RemoteReplayStore,
-    RequestDispatcher, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    MessageKey, NotificationEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
+    RosterEntry, RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor,
+    RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
     RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
     UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
@@ -115,6 +115,4 @@ pub use graft::{
     AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-};
+pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};

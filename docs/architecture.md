@@ -2596,8 +2596,9 @@ Architectural rules:
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is a dedicated post-send emitter, not
-  `DeliveryPlan`/`NotificationSink`
+- the accepted seam is direct post-send emission plus optional direct
+  notification-log append at the event site, not `NotificationSink` or a
+  daemon-owned notification worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 
