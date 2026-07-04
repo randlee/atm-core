@@ -664,7 +664,9 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{self, MessageKey, ProjectionAppendMode};
+    use crate::boundary::{
+        self, MessageKey, NonClaudeOutboundDeliveryRequest, ProjectionAppendMode,
+    };
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -672,21 +674,43 @@ mod tests {
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow::WorkflowStateFile;
     use serde_json::Map;
 
     struct AckRuntime {
-        appended_messages: Mutex<Vec<InboxMessage>>,
+        outbound_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     }
 
     impl AckRuntime {
-        fn appended_messages(&self) -> Vec<InboxMessage> {
-            self.appended_messages
+        fn outbound_messages(&self) -> Vec<InboxMessage> {
+            self.outbound_deliveries
                 .lock()
-                .expect("append captures lock")
-                .clone()
+                .expect("non-claude deliveries")
+                .iter()
+                .flat_map(|request| request.messages.clone())
+                .collect()
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingGraftPort {
+        events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
+
+    impl crate::boundary::GraftPostSendPort for RecordingGraftPort {
+        fn deliver_post_send(
+            &self,
+            event: &crate::boundary::PostSendHookEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            self.events
+                .lock()
+                .expect("graft events lock")
+                .push(event.clone());
+            Ok(())
         }
     }
 
@@ -696,7 +720,7 @@ mod tests {
         inbox_path: PathBuf,
         source_row: boundary::MailStoreMailboxMetadataRow,
         source_record: boundary::Message,
-        appended_messages: Mutex<Vec<InboxMessage>>,
+        outbound_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     }
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
@@ -772,13 +796,9 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            message: &InboxMessage,
+            _message: &InboxMessage,
         ) -> Result<(), crate::error::AtmError> {
-            self.appended_messages
-                .lock()
-                .expect("append captures lock")
-                .push(message.clone());
-            Ok(())
+            panic!("ack writer-path test should not use the retired Claude inbox append path")
         }
 
         fn append_compat_inbox_message_set(
@@ -792,10 +812,19 @@ mod tests {
 
         fn deliver_non_claude_payloads(
             &self,
-            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[InboxMessage],
+            recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
-            panic!("ack writer-path test should not route through non-Claude delivery")
+            self.outbound_deliveries
+                .lock()
+                .expect("non-claude deliveries")
+                .push(NonClaudeOutboundDeliveryRequest {
+                    team: recipient.team.clone(),
+                    agent: recipient.agent.clone(),
+                    recipient_pane_id: recipient.recipient_pane_id.clone(),
+                    messages: messages.to_vec(),
+                });
+            Ok(())
         }
 
         fn load_roster_member(
@@ -902,13 +931,11 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            message: &InboxMessage,
+            _message: &InboxMessage,
         ) -> Result<(), crate::error::AtmError> {
-            self.appended_messages
-                .lock()
-                .expect("append captures lock")
-                .push(message.clone());
-            Ok(())
+            unreachable!(
+                "ack roster-gate tests should not use the retired Claude inbox append path"
+            )
         }
 
         fn append_compat_inbox_message_set(
@@ -922,10 +949,19 @@ mod tests {
 
         fn deliver_non_claude_payloads(
             &self,
-            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[InboxMessage],
+            recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            messages: &[InboxMessage],
         ) -> Result<(), crate::error::AtmError> {
-            unreachable!("ack roster-gate tests do not route non-Claude delivery")
+            self.outbound_deliveries
+                .lock()
+                .expect("non-claude deliveries")
+                .push(NonClaudeOutboundDeliveryRequest {
+                    team: recipient.team.clone(),
+                    agent: recipient.agent.clone(),
+                    recipient_pane_id: recipient.recipient_pane_id.clone(),
+                    messages: messages.to_vec(),
+                });
+            Ok(())
         }
 
         fn load_roster_member(
@@ -1128,15 +1164,15 @@ mod tests {
         assert_eq!(plan.messages[1].envelope, companion);
         assert_eq!(plan.warnings.len(), 1);
         match plan.delivery_target {
-            DeliveryTarget::ClaudeCode { .. } => {}
-            DeliveryTarget::NonClaude { .. } => {
-                panic!("expected ClaudeCode target for ClaudeCode harness")
+            DeliveryTarget::NonClaude { .. } => {}
+            DeliveryTarget::ClaudeCode { .. } => {
+                panic!("expected non-Claude target for retired Claude harness path")
             }
         }
     }
 
     #[test]
-    fn ack_write_goes_through_compat_inbox_writer_not_direct() {
+    fn ack_write_goes_through_non_claude_outbound_boundary() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -1183,7 +1219,7 @@ mod tests {
             persistence,
         };
         let runtime = AckRuntime {
-            appended_messages: Mutex::new(Vec::new()),
+            outbound_deliveries: Mutex::new(Vec::new()),
         };
 
         let outcome = finalize_ack_outcome(
@@ -1203,11 +1239,96 @@ mod tests {
         )
         .expect("finalize ack outcome");
 
-        let appended_messages = runtime.appended_messages();
-        assert_eq!(appended_messages.len(), 1);
-        assert_eq!(appended_messages[0], reply_message);
+        let outbound_messages = runtime.outbound_messages();
+        assert_eq!(outbound_messages.len(), 1);
+        assert_eq!(outbound_messages[0], reply_message);
         assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.reply_text, reply_text);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn ack_reply_graft_post_send_dispatches_to_graft_port() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let _env = EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+        ]);
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let reply_message = InboxMessage {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            text: reply_text.clone(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team.clone()),
+            summary: None,
+            message_id: Some(reply_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: Some(request_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message: reply_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        };
+        let reply_snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone());
+        let persisted = PersistedAckReply {
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+            reply_inbox_path: tempdir.path().join("reply.jsonl"),
+            persistence,
+        };
+        let runtime = AckRuntime {
+            outbound_deliveries: Mutex::new(Vec::new()),
+        };
+        let graft_port = RecordingGraftPort::default();
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            Some(&graft_port),
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team,
+                request_message_id,
+                reply_target,
+                reply_snapshot,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
+            },
+        )
+        .expect("finalize ack outcome");
+
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        let events = graft_port.events.lock().expect("graft events lock");
+        assert_eq!(events.len(), 1);
+        assert!(events[0].is_ack);
+        assert_eq!(events[0].recipient.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(events[0].recipient_team.as_str(), TEST_TEAM);
     }
 
     #[test]
@@ -1255,7 +1376,7 @@ mod tests {
                     extra: Map::new(),
                 },
             },
-            appended_messages: Mutex::new(Vec::new()),
+            outbound_deliveries: Mutex::new(Vec::new()),
         };
 
         let error = super::ack_mail_with_runtime_impl(
@@ -1325,7 +1446,7 @@ mod tests {
                     extra: Map::new(),
                 },
             },
-            appended_messages: Mutex::new(Vec::new()),
+            outbound_deliveries: Mutex::new(Vec::new()),
         };
 
         let outcome = super::ack_mail_with_runtime_impl(
@@ -1348,9 +1469,9 @@ mod tests {
         assert_eq!(outcome.message_id, source_message_id);
         assert!(
             !runtime
-                .appended_messages
+                .outbound_deliveries
                 .lock()
-                .expect("append captures lock")
+                .expect("non-claude deliveries")
                 .is_empty()
         );
     }
