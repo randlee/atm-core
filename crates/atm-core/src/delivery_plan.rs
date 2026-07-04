@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::schema::{AtmMessageId, InboxMessage};
@@ -101,14 +101,6 @@ pub(crate) fn delivery_target_for_snapshot(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeliveryTarget {
-    #[allow(
-        dead_code,
-        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
-    )]
-    ClaudeCode {
-        inbox_path: PathBuf,
-        recipient: DeliveryRecipientSnapshot,
-    },
     NonClaude {
         recipient: DeliveryRecipientSnapshot,
     },
@@ -117,18 +109,7 @@ pub(crate) enum DeliveryTarget {
 impl DeliveryTarget {
     pub(crate) fn harness_path(&self) -> crate::delivery_policy::DeliveryHarnessPath {
         match self {
-            Self::ClaudeCode { .. } => crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             Self::NonClaude { .. } => crate::delivery_policy::DeliveryHarnessPath::NonClaude,
-        }
-    }
-
-    #[allow(
-        dead_code,
-        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
-    )]
-    pub(crate) fn recipient_snapshot(&self) -> &DeliveryRecipientSnapshot {
-        match self {
-            Self::ClaudeCode { recipient, .. } | Self::NonClaude { recipient } => recipient,
         }
     }
 }

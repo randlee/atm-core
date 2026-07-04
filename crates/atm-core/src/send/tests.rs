@@ -13,8 +13,7 @@ use super::{
 };
 use crate::boundary::{
     MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterEntry, RosterHarness,
-    RosterMemberKind,
+    NonClaudeOutboundDeliveryRequest, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -100,7 +99,6 @@ fn assert_recovered_payload_texts(
 
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
-    append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
@@ -111,12 +109,10 @@ pub(super) struct TestRuntime {
 impl TestRuntime {
     pub(super) fn new(
         commit_error_message: Option<&'static str>,
-        append_error_message: Option<&'static str>,
         recipient_harness: DeliveryHarnessPath,
     ) -> Self {
         Self {
             commit_error_message,
-            append_error_message,
             recipient_harness,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
             roster_member_missing: false,
@@ -184,37 +180,6 @@ impl RetainedServiceRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
     ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn append_compat_inbox_message(
-        &self,
-        _inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError> {
-        if let Some(message) = self.append_error_message {
-            return Err(AtmError::mailbox_write(message));
-        }
-        self.appended_messages
-            .lock()
-            .expect("append captures lock")
-            .push(message.clone());
-        Ok(())
-    }
-
-    fn append_compat_inbox_message_set(
-        &self,
-        _inbox_path: &Path,
-        _mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
-    ) -> Result<(), AtmError> {
-        if let Some(message) = self.append_error_message {
-            return Err(AtmError::mailbox_write(message));
-        }
-        self.appended_messages
-            .lock()
-            .expect("append captures lock")
-            .extend(messages.iter().cloned());
         Ok(())
     }
 
@@ -406,13 +371,13 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
 }
 
 fn send_runtime_with_missing_claude_member() -> TestRuntime {
-    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.claude_roster_members.clear();
     runtime
 }
 
 fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
-    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.roster_member_missing = true;
     runtime
 }
@@ -455,11 +420,7 @@ impl ObservabilityPort for RecordingObservability {
 #[test]
 fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
     let outbound = outbound_message();
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::ClaudeCode,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -489,11 +450,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
 #[test]
 fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
     let outbound = outbound_message();
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::NonClaude,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -522,7 +479,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
 #[test]
 #[serial_test::serial(env)]
 fn claude_harness_delivery_no_longer_has_append_degradation_path() {
-    let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
         command_config: None,
@@ -610,11 +567,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
 #[test]
 #[serial_test::serial(env)]
 fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        Some("append failed"),
-        DeliveryHarnessPath::ClaudeCode,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
@@ -723,11 +676,7 @@ fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObser
 #[test]
 #[serial_test::serial(env)]
 fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::NonClaude,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
@@ -751,7 +700,7 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
 #[test]
 #[serial_test::serial(env)]
 fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
