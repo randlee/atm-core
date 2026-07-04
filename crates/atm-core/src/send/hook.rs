@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -14,11 +14,16 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
-use crate::config;
+use crate::boundary::{GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent};
 use crate::config::types::HookRecipient;
-use crate::error::AtmErrorCode;
+use crate::config::{self, AtmConfig};
+use crate::error::{AtmError, AtmErrorKind};
+use crate::error_codes::AtmErrorCode;
+use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::service_runtime::append_notification_log;
+use crate::types::{AgentName, PaneId, TeamName};
 
-use super::{PostSendHookContext, WarningEntry, qualified_sender_identity};
+use super::{ResolvedRecipient, WarningEntry, qualified_sender_identity};
 
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
@@ -54,53 +59,195 @@ impl HookCancellationToken {
     }
 }
 
+pub(crate) struct ConfiguredPostSendHookEmitter<'a> {
+    config: &'a AtmConfig,
+}
+
+impl<'a> ConfiguredPostSendHookEmitter<'a> {
+    pub(crate) fn new(config: &'a AtmConfig) -> Self {
+        Self { config }
+    }
+}
+
+impl crate::boundary::sealed::Sealed for ConfiguredPostSendHookEmitter<'_> {}
+
+impl PostSendHookEmitter for ConfiguredPostSendHookEmitter<'_> {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        let mut warnings = Vec::new();
+        run_post_send_hooks_for_cli(&mut warnings, self.config, event);
+        warnings_to_result(&warnings)
+    }
+}
+
+pub(crate) struct LocalTmuxPostSendEmitter;
+
+impl crate::boundary::sealed::Sealed for LocalTmuxPostSendEmitter {}
+
+impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        let Some(pane_id) = event.recipient_pane_id.as_ref() else {
+            let error = AtmError::new_with_code(
+                AtmErrorCode::PostSendPaneMissing,
+                AtmErrorKind::Validation,
+                format!(
+                    "recipient {}@{} has tmux-backed post-send capability but no pane id",
+                    event.recipient, event.recipient_team
+                ),
+            )
+            .with_recovery(format!(
+                "Repair the roster row with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
+                event.recipient_team, event.recipient
+            ));
+            warn!(
+                code = %AtmErrorCode::PostSendPaneMissing,
+                sender = %event.sender,
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                "local tmux post-send emission is missing authoritative pane metadata"
+            );
+            return Err(error);
+        };
+
+        let message = tmux_nudge_message(&event.recipient_team);
+        run_tmux_send_keys(pane_id, &message, event)?;
+        run_tmux_send_enter(pane_id, event)?;
+        Ok(())
+    }
+}
+
+pub(crate) struct GraftPostSendEmitter<'a> {
+    port: &'a dyn GraftPostSendPort,
+}
+
+impl<'a> GraftPostSendEmitter<'a> {
+    pub(crate) fn new(port: &'a dyn GraftPostSendPort) -> Self {
+        Self { port }
+    }
+}
+
+impl crate::boundary::sealed::Sealed for GraftPostSendEmitter<'_> {}
+
+impl PostSendHookEmitter for GraftPostSendEmitter<'_> {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        self.port.deliver_post_send(event)
+    }
+}
+
+pub(crate) fn emit_post_send_effects(
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    graft_port: Option<&dyn GraftPostSendPort>,
+    recipient: &ResolvedRecipient,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    messages: &[crate::delivery_plan::LogicalMessage],
+) {
+    let hook_emitter = config.map(ConfiguredPostSendHookEmitter::new);
+    let graft_emitter = graft_port.map(GraftPostSendEmitter::new);
+    let tmux_emitter = delivery_snapshot
+        .local_tmux_post_send
+        .then_some(LocalTmuxPostSendEmitter);
+    for message in messages {
+        let event = post_send_event_from_message(
+            recipient,
+            message,
+            delivery_snapshot.recipient_pane_id.as_ref(),
+        );
+        if let Err(error) = append_notification_log(&notification_event(&event)) {
+            warnings.push(WarningEntry::new(
+                format!(
+                    "warning: notification delivery failed for {}@{}: {error}",
+                    recipient.agent, recipient.team
+                ),
+                error.primary_recovery().map(str::to_owned),
+            ));
+        }
+        if let Some(emitter) = tmux_emitter.as_ref()
+            && let Err(error) = emitter.emit(&event)
+        {
+            warnings.push(post_send_warning(
+                "post-send emission failed",
+                &event,
+                &error,
+            ));
+        }
+        if delivery_snapshot.graft_post_send
+            && let Some(emitter) = graft_emitter.as_ref()
+            && let Err(error) = emitter.emit(&event)
+        {
+            warnings.push(post_send_warning(
+                "post-send emission failed",
+                &event,
+                &error,
+            ));
+        }
+        if let Some(emitter) = hook_emitter.as_ref()
+            && let Err(error) = emitter.emit(&event)
+        {
+            warnings.push(post_send_warning("post-send hook failed", &event, &error));
+        }
+    }
+}
+
+pub(crate) fn load_post_send_config_for_sender<R>(
+    runtime: &R,
+    sender_team: &TeamName,
+    sender: &AgentName,
+) -> Result<Option<AtmConfig>, AtmError>
+where
+    R: crate::service_runtime::RetainedServiceRuntime + ?Sized,
+{
+    let Some(member) = runtime.load_roster_member(sender_team, sender)? else {
+        return Ok(None);
+    };
+    let Some(config_root) = sender_config_root(&member.metadata_json) else {
+        return Ok(None);
+    };
+    runtime.load_config(&config_root)
+}
+
 fn run_post_send_hooks_for_cli(
     warnings: &mut Vec<WarningEntry>,
-    config: Option<&config::AtmConfig>,
-    context: PostSendHookContext<'_>,
+    config: &AtmConfig,
+    event: &PostSendHookEvent,
 ) {
     // This helper is intentionally synchronous and may block the caller thread
     // for up to POST_SEND_HOOK_TIMEOUT while supervising one child process.
     // Keep it on the CLI path; do not call it from an async runtime thread.
-    let Some(config) = config else {
-        return;
-    };
-
     let matching_rules: Vec<_> = config
         .post_send_hooks
         .iter()
-        .filter(|rule| hook_matches_recipient(&rule.recipient, &context.recipient.agent))
+        .filter(|rule| hook_matches_recipient(&rule.recipient, &event.recipient))
         .collect();
 
     if matching_rules.is_empty() {
         debug!(
-            sender = %context.sender,
-            recipient = %context.recipient.agent,
-            recipient_team = %context.recipient.team,
+            sender = %event.sender,
+            recipient = %event.recipient,
+            recipient_team = %event.recipient_team,
             "post-send hook had no matching recipient rules"
         );
         return;
     }
 
     for rule in matching_rules {
-        execute_post_send_hook(warnings, config, rule, &context);
+        execute_post_send_hook(warnings, config, rule, event);
     }
 }
 
 fn execute_post_send_hook(
     warnings: &mut Vec<WarningEntry>,
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     rule: &config::types::PostSendHookRule,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
 ) {
     // This function performs blocking child-process supervision with short
     // sleeps. It is safe for the current CLI call path and must stay off async
     // runtime threads unless wrapped in spawn_blocking by the caller.
-    let Some(execution) = prepare_post_send_hook_execution(config, rule, context) else {
+    let Some(execution) = prepare_post_send_hook_execution(config, rule, event) else {
         return;
     };
-    let mut child = match spawn_post_send_hook_process(config, &execution, context, rule, warnings)
-    {
+    let mut child = match spawn_post_send_hook_process(config, &execution, event, rule, warnings) {
         Some(child) => child,
         None => return,
     };
@@ -117,7 +264,7 @@ fn execute_post_send_hook(
                     stdout_reader.take(),
                     &execution.command_path,
                     warnings,
-                    context,
+                    event,
                     rule,
                 );
             }
@@ -131,7 +278,7 @@ fn execute_post_send_hook(
                     &stdout_cancellation,
                     &execution.command_path,
                     warnings,
-                    context,
+                    event,
                     rule,
                 );
             }
@@ -144,7 +291,7 @@ fn execute_post_send_hook(
                         stdout_cancellation: &stdout_cancellation,
                         command_path: &execution.command_path,
                         warnings,
-                        context,
+                        context: event,
                         rule,
                     },
                 );
@@ -160,50 +307,50 @@ struct HookExecution {
 }
 
 fn prepare_post_send_hook_execution(
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     rule: &config::types::PostSendHookRule,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
 ) -> Option<HookExecution> {
     let mut argv = rule.command.iter();
     let command_path = resolve_command_path(config, argv.next()?);
     Some(HookExecution {
         command_path,
         argv: argv.cloned().collect(),
-        payload: post_send_hook_payload(context),
+        payload: post_send_hook_payload(event),
     })
 }
 
-fn post_send_hook_payload(context: &PostSendHookContext<'_>) -> Value {
+fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
-        "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "sender": context.sender.as_str(),
-        "recipient": context.recipient.agent,
-        "team": context.recipient.team,
-        "message_id": context.message_id.to_string(),
-        "requires_ack": context.requires_ack,
-        "is_ack": context.is_ack,
+        "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        "to": format!("{}@{}", event.recipient, event.recipient_team),
+        "sender": event.sender.as_str(),
+        "recipient": event.recipient.as_str(),
+        "team": event.recipient_team.as_str(),
+        "message_id": event.message_id.to_string(),
+        "requires_ack": event.requires_ack,
+        "is_ack": event.is_ack,
     });
-    if let Some(task_id) = context.task_id {
+    if let Some(task_id) = &event.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
-    if let Some(recipient_pane_id) = context.recipient_pane_id {
+    if let Some(recipient_pane_id) = &event.recipient_pane_id {
         payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
     }
     payload
 }
 
 fn spawn_post_send_hook_process(
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     execution: &HookExecution,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
     warnings: &mut Vec<WarningEntry>,
 ) -> Option<std::process::Child> {
     debug!(
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %execution.command_path.display(),
         "post-send hook matched recipient rule"
@@ -223,7 +370,7 @@ fn spawn_post_send_hook_process(
             warn_post_send_hook_start_failure(
                 &execution.command_path,
                 &error,
-                context,
+                event,
                 rule,
                 warnings,
             );
@@ -235,15 +382,15 @@ fn spawn_post_send_hook_process(
 fn warn_post_send_hook_start_failure(
     command_path: &Path,
     error: &std::io::Error,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
     warnings: &mut Vec<WarningEntry>,
 ) {
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         %error,
@@ -263,7 +410,7 @@ fn handle_post_send_hook_exit(
     stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
     command_path: &Path,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
 ) {
     maybe_log_post_send_hook_result(
@@ -271,7 +418,7 @@ fn handle_post_send_hook_exit(
         finish_post_send_hook_stdout_capture(stdout_reader, command_path),
     );
     if !status.success() {
-        warn_post_send_hook_exit_failure(command_path, status, warnings, context, rule);
+        warn_post_send_hook_exit_failure(command_path, status, warnings, event, rule);
     }
 }
 
@@ -279,14 +426,14 @@ fn warn_post_send_hook_exit_failure(
     command_path: &Path,
     status: std::process::ExitStatus,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
 ) {
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         %status,
@@ -307,16 +454,16 @@ fn handle_post_send_hook_timeout(
     stdout_cancellation: &HookCancellationToken,
     command_path: &Path,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
 ) {
     terminate_post_send_hook_process(child, command_path);
     abandon_post_send_hook_stdout_capture(stdout_reader, stdout_cancellation, command_path);
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         timeout_seconds = POST_SEND_HOOK_TIMEOUT.as_secs(),
@@ -338,7 +485,7 @@ struct HookStatusFailureArgs<'a> {
     stdout_cancellation: &'a HookCancellationToken,
     command_path: &'a Path,
     warnings: &'a mut Vec<WarningEntry>,
-    context: &'a PostSendHookContext<'a>,
+    context: &'a PostSendHookEvent,
     rule: &'a config::types::PostSendHookRule,
 }
 
@@ -352,8 +499,8 @@ fn handle_post_send_hook_status_error(error: std::io::Error, args: HookStatusFai
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
         sender = %args.context.sender,
-        recipient = %args.context.recipient.agent,
-        recipient_team = %args.context.recipient.team,
+        recipient = %args.context.recipient,
+        recipient_team = %args.context.recipient_team,
         hook_recipient = %args.rule.recipient,
         hook_path = %args.command_path.display(),
         %error,
@@ -401,6 +548,200 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
 
 fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::AgentName) -> bool {
     configured.matches(candidate)
+}
+
+fn tmux_nudge_message(team: &TeamName) -> String {
+    format!("You have unread ATM messages. Run: atm read --team {team}")
+}
+
+fn run_tmux_send_keys(
+    pane_id: &PaneId,
+    message: &str,
+    event: &PostSendHookEvent,
+) -> Result<(), AtmError> {
+    let output = Command::new("tmux")
+        .args(["send-keys", "-t", pane_id.as_str(), "-l", message])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send literal nudge")
+}
+
+fn run_tmux_send_enter(pane_id: &PaneId, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    let output = Command::new("tmux")
+        .args(["send-keys", "-t", pane_id.as_str(), "Enter"])
+        .output()
+        .map_err(|error| {
+            tmux_send_failed_error(
+                pane_id,
+                event,
+                format!("failed to start tmux send-keys Enter: {error}"),
+                Some(error),
+            )
+        })?;
+    ensure_tmux_success(output, pane_id, event, "send Enter to nudge pane")
+}
+
+fn ensure_tmux_success(
+    output: Output,
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    action: &str,
+) -> Result<(), AtmError> {
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = if stderr.is_empty() {
+        format!("tmux exited unsuccessfully while trying to {action}")
+    } else {
+        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
+    };
+    Err(tmux_send_failed_error(
+        pane_id,
+        event,
+        detail,
+        None::<std::io::Error>,
+    ))
+}
+
+fn tmux_send_failed_error<E>(
+    pane_id: &PaneId,
+    event: &PostSendHookEvent,
+    message: String,
+    source: Option<E>,
+) -> AtmError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let error = AtmError::new_with_code(
+        AtmErrorCode::PostSendTmuxSendFailed,
+        AtmErrorKind::Internal,
+        format!(
+            "local tmux post-send emission failed for {}@{} pane {}: {message}",
+            event.recipient, event.recipient_team, pane_id
+        ),
+    )
+    .with_recovery(format!(
+        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
+        pane_id, event.recipient_team, event.recipient
+    ));
+    warn!(
+        code = %AtmErrorCode::PostSendTmuxSendFailed,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
+        pane_id = %pane_id,
+        message_id = %event.message_id,
+        error = %message,
+        "local tmux post-send emission failed"
+    );
+    match source {
+        Some(source) => error.with_source(source),
+        None => error,
+    }
+}
+
+fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
+    NotificationEvent {
+        kind: NotificationKind::Delivery,
+        detail: serde_json::to_string(&json!({
+            "sender": event.sender.as_str(),
+            "sender_team": event.sender_team.as_str(),
+            "message_id": event.message_id.to_string(),
+            "requires_ack": event.requires_ack,
+            "is_ack": event.is_ack,
+            "task_id": event.task_id.as_ref().map(ToString::to_string),
+            "recipient_pane_id": event.recipient_pane_id.as_ref().map(ToString::to_string),
+        }))
+        .expect("delivery notification detail must serialize to valid JSON"),
+        team: Some(event.recipient_team.clone()),
+        agent: Some(event.recipient.clone()),
+    }
+}
+
+fn post_send_event_from_message(
+    recipient: &ResolvedRecipient,
+    message: &crate::delivery_plan::LogicalMessage,
+    recipient_pane_id: Option<&crate::types::PaneId>,
+) -> PostSendHookEvent {
+    PostSendHookEvent {
+        sender: message.envelope.from.clone(),
+        sender_team: message
+            .envelope
+            .source_team
+            .clone()
+            .unwrap_or_else(|| recipient.team.clone()),
+        recipient: recipient.agent.clone(),
+        recipient_team: recipient.team.clone(),
+        message_id: message.message_id(),
+        message: message
+            .envelope
+            .summary
+            .clone()
+            .filter(|summary| !summary.trim().is_empty())
+            .unwrap_or_else(|| message.envelope.text.clone()),
+        requires_ack: message.requires_ack,
+        is_ack: message.is_ack,
+        task_id: message.envelope.task_id.clone(),
+        recipient_pane_id: recipient_pane_id.cloned(),
+    }
+}
+
+fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
+    metadata
+        .get("home_dir")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            metadata
+                .get("cwd")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(PathBuf::from)
+        })
+}
+
+fn warnings_to_result(warnings: &[WarningEntry]) -> Result<(), AtmError> {
+    if warnings.is_empty() {
+        return Ok(());
+    }
+
+    let message = warnings
+        .iter()
+        .map(|warning| warning.message.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut error = AtmError::new_with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
+        AtmErrorKind::Internal,
+        message,
+    );
+    for recovery in warnings
+        .iter()
+        .filter_map(|warning| warning.recovery.as_deref())
+    {
+        error = error.with_recovery(recovery.to_string());
+    }
+    Err(error)
+}
+
+fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
+    WarningEntry::new(
+        format!(
+            "warning: {prefix} for {}@{} message {} ({}): {}.",
+            event.recipient, event.recipient_team, event.message_id, error.code, error.message
+        ),
+        error.primary_recovery().map(str::to_owned),
+    )
 }
 
 fn spawn_post_send_hook_stdout_reader(
@@ -614,19 +955,157 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
-    use serde_json::json;
+    use serde_json::{Map, json};
+    use tempfile::tempdir;
     use tracing::Level;
 
     use super::{
-        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
-        hook_result_log_level, parse_post_send_hook_result,
+        HookCancellationToken, LocalTmuxPostSendEmitter, POST_SEND_HOOK_MAX_STDOUT_BYTES,
+        PostSendHookResultLevel, finish_abandoned_post_send_hook_stdout_capture,
+        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
+        parse_post_send_hook_result, sender_config_root, tmux_nudge_message,
     };
+    use crate::boundary::{
+        PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode, RosterEntry, RosterHarness,
+        RosterMemberKind,
+    };
+    use crate::config::AtmConfig;
     use crate::config::types::HookRecipient;
+    use crate::error::AtmError;
+    use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::test_support::TEST_SENDER;
+    use crate::schema::{InboxMessage, TeamConfig};
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::test_support::{EnvGuard, TEST_SENDER};
+    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::workflow::WorkflowStateFile;
+
+    struct ConfigLookupRuntime {
+        roster_entry: Option<RosterEntry>,
+        config_lookup_root: PathBuf,
+        config: Option<AtmConfig>,
+    }
+
+    impl crate::boundary::sealed::Sealed for ConfigLookupRuntime {}
+
+    impl RetainedServiceRuntime for ConfigLookupRuntime {
+        fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok((current_dir == self.config_lookup_root)
+                .then_some(self.config.clone())
+                .flatten())
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, AtmError> {
+            unreachable!("config lookup test does not read team config")
+        }
+
+        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            unreachable!("config lookup test does not resolve team dirs")
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            unreachable!("config lookup test does not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not rebuild projections")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _message: &InboxMessage,
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not append messages")
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ProjectionAppendMode,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not append message sets")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not deliver outbound payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(self.roster_entry.clone())
+        }
+
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            unreachable!("config lookup test does not commit workflow state")
+        }
+    }
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
@@ -694,5 +1173,126 @@ mod tests {
     fn bounded_stdout_teardown_returns_promptly_for_completed_reader() {
         let handle = std::thread::spawn(|| Ok::<Vec<u8>, std::io::Error>(Vec::new()));
         finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
+    }
+
+    #[test]
+    fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
+        let home_dir_metadata = Map::from_iter([("home_dir".to_string(), json!("/repo/home"))]);
+        assert_eq!(
+            sender_config_root(&home_dir_metadata),
+            Some(PathBuf::from("/repo/home"))
+        );
+
+        let cwd_only_metadata = Map::from_iter([("cwd".to_string(), json!("/repo/cwd"))]);
+        assert_eq!(
+            sender_config_root(&cwd_only_metadata),
+            Some(PathBuf::from("/repo/cwd"))
+        );
+    }
+
+    #[test]
+    fn load_post_send_config_uses_sender_roster_metadata_not_caller_cwd() {
+        let config_root = PathBuf::from("/repo/home");
+        let runtime = ConfigLookupRuntime {
+            roster_entry: Some(RosterEntry {
+                team_name: TeamName::from_validated("test-team"),
+                agent_name: AgentName::from_validated(TEST_SENDER),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::from_iter([(
+                    "cwd".to_string(),
+                    json!(config_root.display().to_string()),
+                )]),
+            }),
+            config_lookup_root: config_root.clone(),
+            config: Some(AtmConfig {
+                config_root: config_root.clone(),
+                ..Default::default()
+            }),
+        };
+
+        let loaded = load_post_send_config_for_sender(
+            &runtime,
+            &TeamName::from_validated("test-team"),
+            &AgentName::from_validated(TEST_SENDER),
+        )
+        .expect("config lookup");
+
+        assert_eq!(
+            loaded.as_ref().map(|config| &config.config_root),
+            Some(&config_root)
+        );
+    }
+
+    fn tmux_event(recipient_pane_id: Option<PaneId>) -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_team: TeamName::from_validated("test-team"),
+            recipient: AgentName::from_validated("recipient"),
+            recipient_team: TeamName::from_validated("test-team"),
+            message_id: crate::schema::AtmMessageId::new(),
+            message: "hello".to_string(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id,
+        }
+    }
+
+    #[test]
+    fn local_tmux_post_send_emitter_requires_authoritative_pane_id() {
+        let emitter = LocalTmuxPostSendEmitter;
+        let error = emitter
+            .emit(&tmux_event(None))
+            .expect_err("missing pane must fail");
+
+        assert_eq!(error.code, AtmErrorCode::PostSendPaneMissing);
+        assert!(error.message.contains("no pane id"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn local_tmux_post_send_emitter_uses_authoritative_pane_id() {
+        let tempdir = tempdir().expect("tempdir");
+        let tmux_log = tempdir.path().join("tmux.log");
+        let tmux_path = tempdir.path().join("tmux");
+        fs::write(
+            &tmux_path,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"{}\"\nexit 0\n",
+                tmux_log.display()
+            ),
+        )
+        .expect("write tmux shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&tmux_path, perms).expect("chmod");
+        }
+
+        let shim_path = match std::env::var_os("PATH") {
+            Some(path) => format!(
+                "{}:{}",
+                tempdir.path().display(),
+                PathBuf::from(path).display()
+            ),
+            None => tempdir.path().display().to_string(),
+        };
+        let _env = EnvGuard::set_raw("PATH", &shim_path);
+
+        let result =
+            LocalTmuxPostSendEmitter.emit(&tmux_event(Some(PaneId::from_cli("%9").expect("pane"))));
+
+        result.expect("tmux send");
+        let logged = fs::read_to_string(&tmux_log).expect("tmux log");
+        assert!(logged.contains("send-keys"));
+        assert!(logged.contains("%9"));
+        assert!(logged.contains(&tmux_nudge_message(&TeamName::from_validated("test-team"))));
+        assert!(logged.contains("Enter"));
     }
 }

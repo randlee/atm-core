@@ -1049,15 +1049,6 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for ReadRuntime {}
 
-    impl crate::boundary::NotificationSink for ReadRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
-
     impl RetainedServiceRuntime for ReadRuntime {
         fn load_config(
             &self,

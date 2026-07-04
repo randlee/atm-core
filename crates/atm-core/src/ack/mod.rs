@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
+use crate::boundary::GraftPostSendPort;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
@@ -121,7 +122,16 @@ pub fn ack_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime)
+    ack_mail_with_runtime_impl(request, observability, runtime, None)
+}
+
+pub fn ack_mail_with_runtime_and_graft_port(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    graft_port: &dyn GraftPostSendPort,
+) -> Result<AckOutcome, AtmError> {
+    ack_mail_with_runtime_impl(request, observability, runtime, Some(graft_port))
 }
 
 fn ack_mail_with_runtime_impl<
@@ -130,8 +140,8 @@ fn ack_mail_with_runtime_impl<
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    graft_port: Option<&dyn GraftPostSendPort>,
 ) -> Result<AckOutcome, AtmError> {
-    let config = runtime.load_config(&request.current_dir)?;
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
     let team_dir = runtime.team_dir(&request.home_dir, &team)?;
@@ -145,27 +155,34 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    ack_mail_with_runtime_sqlite(
-        request,
-        observability,
-        runtime,
-        config.as_ref(),
-        actor,
-        team,
-    )
+    ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team)
+        .and_then(|context| finalize_ack_outcome(runtime, observability, graft_port, context))
 }
 
 fn ack_mail_with_runtime_sqlite<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: AckRequest,
-    observability: &dyn ObservabilityPort,
+    _observability: &dyn ObservabilityPort,
     runtime: &R,
-    config: Option<&crate::config::AtmConfig>,
     actor: AgentName,
     team: TeamName,
-) -> Result<AckOutcome, AtmError> {
+) -> Result<FinalizeAckContextOwned, AtmError> {
     let delivery_policy = DeliveryPolicyCoordinator::new();
+    let (post_send_config, warnings) =
+        match crate::send::hook::load_post_send_config_for_sender(runtime, &team, &actor) {
+            Ok(config) => (config, Vec::new()),
+            Err(error) => (
+                None,
+                vec![crate::send::WarningEntry::new(
+                    format!(
+                        "warning: post-send hook config lookup failed for {}@{}: {}.",
+                        actor, team, error.message
+                    ),
+                    error.primary_recovery().map(str::to_owned),
+                )],
+            ),
+        };
     let source = load_ack_source(
         runtime,
         &request.home_dir,
@@ -189,19 +206,16 @@ fn ack_mail_with_runtime_sqlite<
             reply_target: &reply_target,
         },
     )?;
-    finalize_ack_outcome(
-        runtime,
-        observability,
-        config,
-        FinalizeAckContext {
-            actor: &actor,
-            team: &team,
-            request_message_id: request.message_id,
-            reply_target: &reply_target,
-            reply_snapshot: &reply_snapshot,
-            persisted: &persisted,
-        },
-    )
+    Ok(FinalizeAckContextOwned {
+        actor,
+        team,
+        request_message_id: request.message_id,
+        reply_target,
+        reply_snapshot,
+        persisted,
+        post_send_config,
+        warnings,
+    })
 }
 
 #[derive(Clone)]
@@ -225,6 +239,19 @@ struct FinalizeAckContext<'a> {
     reply_target: &'a ReplyTarget,
     reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     persisted: &'a PersistedAckReply,
+    post_send_config: Option<crate::config::AtmConfig>,
+    warnings: Vec<crate::send::WarningEntry>,
+}
+
+struct FinalizeAckContextOwned {
+    actor: AgentName,
+    team: TeamName,
+    request_message_id: AtmMessageId,
+    reply_target: ReplyTarget,
+    reply_snapshot: crate::delivery_policy::DeliveryRecipientSnapshot,
+    persisted: PersistedAckReply,
+    post_send_config: Option<crate::config::AtmConfig>,
+    warnings: Vec<crate::send::WarningEntry>,
 }
 
 struct AckPersistenceContext<'a> {
@@ -445,11 +472,21 @@ fn finalize_ack_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    config: Option<&crate::config::AtmConfig>,
-    context: FinalizeAckContext<'_>,
+    graft_port: Option<&dyn GraftPostSendPort>,
+    owned: FinalizeAckContextOwned,
 ) -> Result<AckOutcome, AtmError> {
+    let context = FinalizeAckContext {
+        actor: &owned.actor,
+        team: &owned.team,
+        request_message_id: owned.request_message_id,
+        reply_target: &owned.reply_target,
+        reply_snapshot: &owned.reply_snapshot,
+        persisted: &owned.persisted,
+        post_send_config: owned.post_send_config,
+        warnings: owned.warnings,
+    };
     let plan = build_reply_delivery_plan(&context)?;
-    let execution = execute_reply_delivery_plan(runtime, config, &plan)?;
+    let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
         team: context.team.clone(),
@@ -459,7 +496,7 @@ fn finalize_ack_outcome<
         reply_target: context.reply_target.clone(),
         reply_message_id: context.persisted.reply_message_id,
         reply_text: context.persisted.reply_text.clone(),
-        warnings: Vec::new(),
+        warnings: context.warnings,
     };
     outcome.warnings.extend(plan.warnings.iter().cloned());
     emit_reply_delivery_plan_transitions(
@@ -476,6 +513,14 @@ fn finalize_ack_outcome<
         &execution,
     )?;
     outcome.warnings.extend(execution.warnings);
+    crate::send::hook::emit_post_send_effects(
+        &mut outcome.warnings,
+        context.post_send_config.as_ref(),
+        graft_port,
+        &plan.recipient,
+        context.reply_snapshot,
+        &plan.messages,
+    );
     record_ack_telemetry(
         observability,
         context.actor,
@@ -547,7 +592,6 @@ impl AckReplyStateMachine {
                 agent: reply_target.agent.clone(),
                 team: reply_target.team.clone(),
             },
-            reply_snapshot.recipient_pane_id.clone(),
             messages,
             warnings,
         )
@@ -617,7 +661,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
+        AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
     use crate::boundary::{self, MessageKey, ProjectionAppendMode};
@@ -657,25 +701,7 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
 
-    impl crate::boundary::NotificationSink for AckRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
-
     impl crate::boundary::sealed::Sealed for AckRosterRuntime {}
-
-    impl crate::boundary::NotificationSink for AckRosterRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for AckRuntime {
         fn load_config(
@@ -1082,6 +1108,8 @@ mod tests {
             team: team.clone(),
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
             roster_backed: true,
         };
         let machine = AckReplyStateMachine::from_persistence(&persistence).expect("state machine");
@@ -1098,7 +1126,6 @@ mod tests {
         assert_eq!(plan.messages.len(), 2);
         assert_eq!(plan.messages[0].envelope, original);
         assert_eq!(plan.messages[1].envelope, companion);
-        assert_eq!(plan.notifications.len(), 2);
         assert_eq!(plan.warnings.len(), 1);
         match plan.delivery_target {
             DeliveryTarget::ClaudeCode { .. } => {}
@@ -1143,6 +1170,8 @@ mod tests {
             team: team.clone(),
             harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone());
@@ -1161,13 +1190,15 @@ mod tests {
             &runtime,
             &NullObservability,
             None,
-            FinalizeAckContext {
-                actor: &"sender".parse::<AgentName>().expect("agent"),
-                team: &team,
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team: team.clone(),
                 request_message_id,
-                reply_target: &reply_target,
-                reply_snapshot: &reply_snapshot,
-                persisted: &persisted,
+                reply_target,
+                reply_snapshot,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
             },
         )
         .expect("finalize ack outcome");
@@ -1238,6 +1269,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
         )
         .expect_err("missing ATM roster member should fail");
 
@@ -1307,6 +1339,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
         )
         .expect("valid ATM roster member should ack successfully");
 

@@ -194,6 +194,28 @@ impl AtmError {
         .with_recovery("Stop and report to the user immediately. Resolve the live pid conflict before retrying ATM activity.")
     }
 
+    pub fn member_already_exists(member: &str, team: &str) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MemberAlreadyExists,
+            AtmErrorKind::Validation,
+            format!("member '{member}' already exists in team '{team}'"),
+        )
+        .with_recovery(
+            "Use `atm teams update-member` to repair metadata for an existing member instead of retrying `atm teams add-member`.",
+        )
+    }
+
+    pub fn member_not_found(member: &str, team: &str) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MemberNotFound,
+            AtmErrorKind::Validation,
+            format!("member '{member}' was not found in team '{team}'"),
+        )
+        .with_recovery(
+            "Confirm the target team/member pair, create the member with `atm teams add-member` if it is genuinely missing, or retry `atm teams update-member` against an existing member row.",
+        )
+    }
+
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonUnavailable,
