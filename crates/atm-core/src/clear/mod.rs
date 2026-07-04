@@ -329,7 +329,7 @@ mod tests {
         time::Duration,
     };
 
-    use crate::test_support::{EnvGuard, remove_env_var, set_env_var};
+    use crate::test_support::{EnvGuard, lock_env, remove_env_var, set_env_var};
     use serde_json::Map;
     use tempfile::tempdir;
 
@@ -343,11 +343,13 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
     use crate::workflow::WorkflowStateFile;
-    use serial_test::serial;
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn env_guard_restores_original_value_after_panic() {
-        set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
+        {
+            let _env_lock = lock_env();
+            set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
+        }
 
         let result = panic::catch_unwind(AssertUnwindSafe(|| {
             let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
@@ -362,7 +364,10 @@ mod tests {
             std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD"),
             Some(OsString::from("original"))
         );
-        remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
+        {
+            let _env_lock = lock_env();
+            remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
+        }
     }
 
     struct ClearRuntime {
