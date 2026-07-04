@@ -6,6 +6,10 @@ use serde_json::{Map, Value};
 use crate::types::{AgentId, AgentName, ModelName, PaneId};
 pub use atm_storage::contract::AgentType;
 
+pub const HOME_DIR_METADATA_KEY: &str = "home_dir";
+#[deprecated(note = "Phase AD obsolete: derived compatibility field only")]
+pub const LEGACY_CWD_METADATA_KEY: &str = "cwd";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentMember {

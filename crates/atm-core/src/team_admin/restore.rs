@@ -89,7 +89,7 @@ fn build_restore_execution_plan(
         .collect::<Vec<_>>();
     let inboxes_to_restore = filter_restore_inboxes(&backup_dir, &members_to_restore)?;
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
-    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster);
+    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster)?;
 
     Ok(RestoreExecutionPlan {
         team_dir,
@@ -202,14 +202,14 @@ fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShell
 fn build_restored_team_config(
     recreated_shell: &RecreatedLeadShellState,
     canonical_roster: &[RosterEntry],
-) -> crate::schema::TeamConfig {
+) -> Result<crate::schema::TeamConfig, AtmError> {
     let non_lead_roster = canonical_roster
         .iter()
         .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
         .cloned()
         .collect::<Vec<_>>();
     let mut updated_config =
-        super::project_team_config_from_roster(serde_json::Map::new(), &non_lead_roster);
+        super::project_team_config_from_roster(serde_json::Map::new(), &non_lead_roster)?;
     updated_config
         .members
         .insert(0, recreated_shell.lead_member.clone());
@@ -218,7 +218,7 @@ fn build_restored_team_config(
             .extra
             .insert("leadSessionId".to_string(), value);
     }
-    updated_config
+    Ok(updated_config)
 }
 
 fn locate_backup_dir(

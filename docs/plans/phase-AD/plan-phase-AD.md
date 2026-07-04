@@ -158,7 +158,7 @@ Phase `AD` may:
 - finish the CLI-managed repair/update path for the existing SQLite-owned pane
   and member-home metadata and remove lingering `.atm.toml` assumptions
 - simplify directory metadata ownership so only durable `home_dir`, runtime
-  `live_cwd`, and log-only startup `launch_cwd` remain
+  caller-member `live_cwd`, and log-only startup `launch_cwd` remain
 - add smoke and doctor coverage required to keep these regressions closed
 
 Phase `AD` must not:

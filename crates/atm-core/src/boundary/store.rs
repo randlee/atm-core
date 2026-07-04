@@ -11,7 +11,7 @@
 
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, InboxMessage};
+use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, InboxMessage};
 use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ pub fn roster_member_record_from_claude_code_member(
     }
     if !member.home_dir.as_os_str().is_empty() {
         metadata_json.insert(
-            "home_dir".to_string(),
+            HOME_DIR_METADATA_KEY.to_string(),
             Value::String(member.home_dir.display().to_string()),
         );
     }

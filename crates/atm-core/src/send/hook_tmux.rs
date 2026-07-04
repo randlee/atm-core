@@ -13,6 +13,8 @@ use super::POST_SEND_HOOK_TIMEOUT;
 
 #[cfg(test)]
 const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
+const TMUX_TERMINATE_REAP_TIMEOUT: Duration = Duration::from_millis(250);
+const TMUX_TERMINATE_REAP_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 pub(super) fn tmux_nudge_message(team: &TeamName) -> String {
     format!("You have unread ATM messages. Run: atm read --team {team}")
@@ -103,7 +105,6 @@ fn wait_for_tmux_output(
             }
             Ok(None) => {
                 terminate_tmux_child(&mut child, pane_id, event, tmux_action);
-                let _ = child.wait_with_output();
                 return Err(tmux_send_failed_error(
                     pane_id,
                     event,
@@ -116,7 +117,6 @@ fn wait_for_tmux_output(
             }
             Err(error) => {
                 terminate_tmux_child(&mut child, pane_id, event, tmux_action);
-                let _ = child.wait_with_output();
                 return Err(tmux_send_failed_error(
                     pane_id,
                     event,
@@ -148,6 +148,43 @@ fn terminate_tmux_child(
             %error,
             "failed to terminate timed-out tmux subprocess"
         );
+    }
+
+    let deadline = Instant::now() + TMUX_TERMINATE_REAP_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) if Instant::now() < deadline => {
+                thread::sleep(TMUX_TERMINATE_REAP_POLL_INTERVAL);
+            }
+            Ok(None) => {
+                warn!(
+                    code = %AtmErrorCode::PostSendTmuxSendFailed,
+                    sender = %event.sender,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    pane_id = %pane_id,
+                    tmux_action,
+                    "timed-out tmux subprocess did not exit within the bounded reap window"
+                );
+                return;
+            }
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::PostSendTmuxSendFailed,
+                    sender = %event.sender,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    pane_id = %pane_id,
+                    tmux_action,
+                    %error,
+                    "failed while polling timed-out tmux subprocess during bounded reap"
+                );
+                return;
+            }
+        }
     }
 }
 

@@ -21,6 +21,12 @@ use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::schema::HOME_DIR_METADATA_KEY;
+#[allow(
+    deprecated,
+    reason = "Phase AD obsolete: derived compatibility field only. The send hook still owns one bounded legacy cwd compatibility read."
+)]
+use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
 use crate::service_runtime::append_notification_log;
 use crate::types::{AgentName, TeamName};
 
@@ -598,16 +604,21 @@ fn post_send_event_from_message(
 
 fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
     metadata
-        .get("home_dir")
+        .get(HOME_DIR_METADATA_KEY)
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
         .or_else(|| {
-            metadata
-                .get("cwd")
+            #[allow(
+                deprecated,
+                reason = "Phase AD obsolete: derived compatibility field only. This bounded fallback remains solely to read pre-AD home metadata until downstream compatibility data is fully cleared."
+            )]
+            let legacy = metadata
+                .get(LEGACY_CWD_METADATA_KEY)
                 .and_then(Value::as_str)
                 .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from)
+                .map(PathBuf::from);
+            legacy
         })
 }
 
@@ -880,7 +891,12 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{InboxMessage, TeamConfig};
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
+    )]
+    use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+    use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
     use crate::send::hook_tmux::tmux_nudge_message;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::test_support::{EnvGuard, TEST_SENDER};
@@ -1100,14 +1116,20 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally exercises the retained legacy cwd compatibility fallback."
+    )]
     fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
-        let home_dir_metadata = Map::from_iter([("home_dir".to_string(), json!("/repo/home"))]);
+        let home_dir_metadata =
+            Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), json!("/repo/home"))]);
         assert_eq!(
             sender_config_root(&home_dir_metadata),
             Some(PathBuf::from("/repo/home"))
         );
 
-        let cwd_only_metadata = Map::from_iter([("cwd".to_string(), json!("/repo/cwd"))]);
+        let cwd_only_metadata =
+            Map::from_iter([(LEGACY_CWD_METADATA_KEY.to_string(), json!("/repo/cwd"))]);
         assert_eq!(
             sender_config_root(&cwd_only_metadata),
             Some(PathBuf::from("/repo/cwd"))
@@ -1115,6 +1137,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally seeds legacy cwd metadata to verify the bounded compatibility read."
+    )]
     fn load_post_send_config_uses_sender_roster_metadata_not_caller_cwd() {
         let config_root = PathBuf::from("/repo/home");
         let runtime = ConfigLookupRuntime {
@@ -1127,7 +1153,7 @@ mod tests {
                 model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::from_iter([(
-                    "cwd".to_string(),
+                    LEGACY_CWD_METADATA_KEY.to_string(),
                     json!(config_root.display().to_string()),
                 )]),
             }),
@@ -1252,13 +1278,8 @@ mod tests {
             fs::set_permissions(&tmux_path, perms).expect("chmod");
         }
 
-        let mut path_entries = vec![tempdir.path().to_path_buf()];
-        if let Some(path) = std::env::var_os("PATH") {
-            path_entries.extend(std::env::split_paths(&path));
-        }
-        let shim_path = std::env::join_paths(path_entries).expect("join shim path");
-        let shim_path = shim_path.to_str().expect("utf8 shim path").to_owned();
-        let _env = EnvGuard::set_many([("PATH", Some(shim_path.as_str()))]);
+        let tmux_bin = tmux_path.to_str().expect("utf8 tmux path").to_owned();
+        let _env = EnvGuard::set_many([(TMUX_PROGRAM_ENV, Some(tmux_bin.as_str()))]);
 
         let started_at = Instant::now();
         let error = LocalTmuxPostSendEmitter
