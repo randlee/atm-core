@@ -568,6 +568,7 @@ mod tests {
             team: TeamName::from_validated(TEST_TEAM),
             harness,
             recipient_pane_id: None,
+            local_tmux_post_send: false,
             roster_backed: true,
         }
     }

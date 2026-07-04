@@ -166,6 +166,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
         | AtmErrorCode::TestFakeTransportInjectionFailed
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
