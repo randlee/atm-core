@@ -20,7 +20,12 @@ use crate::config::{self, AtmConfig};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::{HOME_DIR_METADATA_KEY, LEGACY_CWD_METADATA_KEY};
+use crate::schema::HOME_DIR_METADATA_KEY;
+#[allow(
+    deprecated,
+    reason = "Phase AD obsolete: derived compatibility field only. The send hook still owns one bounded legacy cwd compatibility read."
+)]
+use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
 use crate::service_runtime::append_notification_log;
 use crate::types::{AgentName, PaneId, TeamName};
 
@@ -994,7 +999,12 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, LEGACY_CWD_METADATA_KEY, TeamConfig};
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
+    )]
+    use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+    use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -1192,6 +1202,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally exercises the retained legacy cwd compatibility fallback."
+    )]
     fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
         let home_dir_metadata =
             Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), json!("/repo/home"))]);
@@ -1209,6 +1223,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally seeds legacy cwd metadata to verify the bounded compatibility read."
+    )]
     fn load_post_send_config_uses_sender_roster_metadata_not_caller_cwd() {
         let config_root = PathBuf::from("/repo/home");
         let runtime = ConfigLookupRuntime {

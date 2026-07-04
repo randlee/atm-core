@@ -18,9 +18,8 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{
-    AgentMember, AgentType, HOME_DIR_METADATA_KEY, LEGACY_CWD_METADATA_KEY, TeamConfig,
-};
+use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+use crate::schema::{AgentMember, AgentType, HOME_DIR_METADATA_KEY, TeamConfig};
 use crate::types::{AgentId, AgentName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/restore.rs"]
