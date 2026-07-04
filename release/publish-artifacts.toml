@@ -34,17 +34,6 @@ wait_after_publish_seconds = 30
 verify_install = false
 
 [[crates]]
-artifact = "atm-storage-claude"
-package = "atm-storage-claude"
-cargo_toml = "crates/atm-storage-claude/Cargo.toml"
-required = true
-publish = true
-publish_order = 4
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
 artifact = "atm-storage-rusqlite"
 package = "atm-storage-rusqlite"
 cargo_toml = "crates/atm-storage-rusqlite/Cargo.toml"
