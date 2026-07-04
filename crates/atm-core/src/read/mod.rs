@@ -750,7 +750,7 @@ mod tests {
         BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
         read_mail_with_runtime_impl, state,
     };
-    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, RosterHarness, RosterMemberKind};
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
@@ -1113,23 +1113,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not rebuild projections")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox message sets")
         }
 
         fn deliver_non_claude_payloads(

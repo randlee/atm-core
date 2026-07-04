@@ -862,8 +862,8 @@ mod tests {
         sender_config_root,
     };
     use crate::boundary::{
-        GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent, ProjectionAppendMode,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        GraftPostSendPort, PostSendHookEmitter, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use crate::config::AtmConfig;
     use crate::config::types::HookRecipient;
@@ -949,23 +949,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), AtmError> {
             unreachable!("config lookup test does not rebuild projections")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), AtmError> {
-            unreachable!("config lookup test does not append messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), AtmError> {
-            unreachable!("config lookup test does not append message sets")
         }
 
         fn deliver_non_claude_payloads(

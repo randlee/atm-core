@@ -263,7 +263,7 @@ mod tests {
     use super::{
         ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages,
     };
-    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::read::ClassifiedMessage;
@@ -415,23 +415,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not rebuild projections")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not append compat inbox messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not append compat inbox message sets")
         }
 
         fn deliver_non_claude_payloads(

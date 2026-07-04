@@ -516,6 +516,7 @@ pub(crate) fn sqlite_failure_transition_names(
     new_message_sqlite_failure_transitions(harness)
 }
 
+#[cfg(test)]
 pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
     &[
         "delivery_policy.new_message.received",
@@ -659,23 +660,6 @@ mod tests {
             _inbox_path: &Path,
             _team: &TeamName,
             _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &crate::schema::InboxMessage,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: crate::boundary::ProjectionAppendMode,
-            _messages: &[crate::schema::InboxMessage],
         ) -> Result<(), AtmError> {
             Ok(())
         }
