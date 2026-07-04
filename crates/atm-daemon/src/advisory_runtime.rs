@@ -889,7 +889,7 @@ mod tests {
             if predicate() {
                 return;
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::park_timeout(Duration::from_millis(10));
         }
         panic!("timed out waiting for {label}");
     }
