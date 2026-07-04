@@ -2513,7 +2513,8 @@ Historical Claude-owned shared inbox compatibility previously existed for:
   top-level JSON array of inbox messages
 
 Phase `AD` rule:
-- Claude context injection through inbox append is retired per `ADR-019`
+- Phase `AD.3` completes retirement of Claude context injection through inbox
+  append per `ADR-019`
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
@@ -2863,7 +2864,7 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- the historical `R.17` daemon-owned queued notifier worker is being retired by
+- the historical `R.17` daemon-owned queued notifier worker was retired by
   `AD.5`
 - the accepted runtime must not require a daemon notification queue/worker just
   to append one post-send event or warning

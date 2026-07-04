@@ -1027,6 +1027,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
     #[test]
     #[serial_test::serial(env)]
     fn identity_prefers_environment_over_config() {
+        let _env_lock = crate::test_support::lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         set_env_var("ATM_IDENTITY", "env-identity");
 
@@ -1045,6 +1046,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
     #[test]
     #[serial_test::serial(env)]
     fn identity_ignores_obsolete_config_field_when_env_missing() {
+        let _env_lock = crate::test_support::lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
 
@@ -1060,6 +1062,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
     #[test]
     #[serial_test::serial(env)]
     fn team_resolution_prefers_flag_then_env_then_config() {
+        let _env_lock = crate::test_support::lock_env();
         let original_team = env::var_os("ATM_TEAM");
         set_env_var("ATM_TEAM", "env-team");
 
@@ -1109,16 +1112,10 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
     }
 
     fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: these tests use serial execution before mutating process
-        // environment variables, so there is no concurrent access in this
-        // process while the mutation is performed.
-        unsafe { env::set_var(key, value) }
+        crate::test_support::set_env_var(key, value);
     }
 
     fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: these tests use serial execution before mutating process
-        // environment variables, so there is no concurrent access in this
-        // process while the mutation is performed.
-        unsafe { env::remove_var(key) }
+        crate::test_support::remove_env_var(key);
     }
 }

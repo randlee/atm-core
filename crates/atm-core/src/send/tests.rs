@@ -64,25 +64,22 @@ fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
+fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
+    fs::read_to_string(
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl"),
+    )
+    .expect("notifications")
+    .lines()
+    .map(|line| serde_json::from_str(line).expect("notification event"))
+    .collect()
+}
+
 fn install_home_env(home_dir: &Path) -> EnvGuard {
-    fs::create_dir_all(home_dir).expect("home dir");
     EnvGuard::set_many([
         ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
         ("ATM_LOG_DIR", None),
     ])
-}
-
-fn notification_log_path(home_dir: &Path) -> PathBuf {
-    crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl")
-}
-
-fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
-    fs::read_to_string(notification_log_path(home_dir))
-        .expect("notification log")
-        .lines()
-        .map(|line| serde_json::from_str(line).expect("notification event"))
-        .collect()
 }
 
 fn assert_recovered_payload_texts(
@@ -457,6 +454,26 @@ impl ObservabilityPort for RecordingObservability {
     }
 }
 
+#[derive(Default)]
+struct RecordingGraftPort {
+    events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
+}
+
+impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
+
+impl crate::boundary::GraftPostSendPort for RecordingGraftPort {
+    fn deliver_post_send(
+        &self,
+        event: &crate::boundary::PostSendHookEvent,
+    ) -> Result<(), AtmError> {
+        self.events
+            .lock()
+            .expect("graft events lock")
+            .push(event.clone());
+        Ok(())
+    }
+}
+
 #[test]
 fn load_send_alert_state_parse_errors_are_config_errors() {
     let tempdir = tempdir().expect("tempdir");
@@ -538,7 +555,8 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
 }
 
 #[test]
-fn append_failure_after_sqlite_commit_is_execution_only() {
+#[serial_test::serial(env)]
+fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
@@ -556,14 +574,13 @@ fn append_failure_after_sqlite_commit_is_execution_only() {
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
     let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
-    let execution =
-        execute_delivery_plan(&runtime, None, &plan).expect("append degraded execution");
+    let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
     assert_eq!(
         execution.disposition,
-        DeliveryExecutionDisposition::AppendDegraded
+        DeliveryExecutionDisposition::Delivered
     );
-    assert_eq!(execution.warnings.len(), 1);
+    assert!(execution.warnings.is_empty());
 }
 
 #[test]
@@ -617,7 +634,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
     assert_eq!(claude_plan.messages, non_claude_plan.messages);
     assert!(matches!(
         claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::ClaudeCode { .. }
+        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
     ));
     assert!(matches!(
         non_claude_plan.delivery_target,
@@ -626,7 +643,8 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
 }
 
 #[test]
-fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
+#[serial_test::serial(env)]
+fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
         Some("append failed"),
@@ -634,17 +652,22 @@ fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
     );
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
-    let error = super::send_mail_with_runtime_impl(
+    let outcome = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &observability,
         &runtime,
         None,
     )
-    .expect_err("recovered Claude append failure must fail hard");
+    .expect("send outcome");
 
-    assert!(error.is_mailbox_write());
-    assert!(error.message.contains("append failed"));
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    assert_eq!(outcome.warnings.len(), 1);
+    assert_non_claude_sqlite_failure_delivery(&runtime);
+    assert_non_claude_sqlite_failure_notifications(&home_dir);
+    assert_non_claude_sqlite_failure_observability(&observability);
 }
 
 fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
@@ -765,6 +788,59 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
 fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
+    let graft_port = RecordingGraftPort::default();
+    let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
+
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        Some(&graft_port),
+    )
+    .expect("send outcome");
+
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    assert!(outcome.warnings.is_empty());
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    let deliveries = runtime
+        .non_claude_deliveries
+        .lock()
+        .expect("non-claude deliveries lock");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].messages.len(), 1);
+    assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
+    drop(deliveries);
+    let events = read_notification_events(&home_dir);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, NotificationKind::Delivery);
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
+    drop(events);
+    let graft_events = graft_port.events.lock().expect("graft events lock");
+    assert_eq!(graft_events.len(), 1);
+    assert_eq!(graft_events[0].sender.as_str(), TEST_SENDER);
+    assert_eq!(graft_events[0].recipient.as_str(), "recipient");
+    assert_eq!(graft_events[0].recipient_team.as_str(), TEST_TEAM);
+    assert_eq!(graft_events[0].message, "hello");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
+    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
     let _env = install_home_env(&home_dir);
@@ -803,57 +879,17 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
             .and_then(Value::as_str),
         Some(TEST_SENDER)
     );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn send_claude_success_appends_original_via_compat_inbox_writer() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
-    let observability = RecordingObservability::default();
-    let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
-
-    let outcome = super::send_mail_with_runtime_impl(
-        send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        None,
-    )
-    .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert!(outcome.warnings.is_empty());
-    let appended_messages = runtime.appended_messages.lock().expect("append lock");
-    assert_eq!(appended_messages.len(), 1);
-    assert_eq!(appended_messages[0].from.as_str(), TEST_SENDER);
-    drop(appended_messages);
-    assert!(
-        runtime
-            .non_claude_deliveries
-            .lock()
-            .expect("non-claude deliveries lock")
-            .is_empty()
-    );
-    let events = read_notification_events(&home_dir);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
     drop(events);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.compat_append_original"
+            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_original"
     }));
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z6_post_write_warning_uses_store_backed_claude_roster() {
     let runtime = send_runtime_with_missing_claude_member();
     let observability = RecordingObservability::default();
@@ -870,7 +906,11 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(
-        runtime.appended_messages.lock().expect("append lock").len(),
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
         1
     );
     assert_eq!(outcome.warnings.len(), 1);
@@ -882,6 +922,7 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     let runtime = send_runtime_with_missing_atm_roster_member();
     let observability = RecordingObservability::default();
@@ -918,43 +959,6 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
             .expect("non-claude deliveries lock")
             .is_empty()
     );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn send_append_failure_routes_to_post_send_hook_fallback() {
-    let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
-    let observability = RecordingObservability::default();
-    let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
-
-    let outcome = super::send_mail_with_runtime_impl(
-        send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        None,
-    )
-    .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert_eq!(outcome.warnings.len(), 1);
-    let events = read_notification_events(&home_dir);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
-    drop(events);
-
-    let events = observability.events.lock().expect("events lock");
-    assert!(events.iter().any(|event| {
-        event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.post_send_hook_fallback"
-    }));
 }
 
 #[test]

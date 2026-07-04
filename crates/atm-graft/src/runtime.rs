@@ -8,8 +8,8 @@ use atm_core::GraftConfig;
 use atm_core::error::AtmError;
 use atm_core::graft::{
     AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisorySessionPort,
-    AdvisorySessionRegistrationRequest, AdvisorySessionState, AdvisorySessionUnregistrationRequest,
-    AdvisoryStreamRequest,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse, AdvisorySessionState,
+    AdvisorySessionUnregistrationRequest, AdvisoryStreamRequest,
 };
 use atm_core::protocol::{self, ResponseEnvelope};
 
@@ -74,6 +74,33 @@ pub(crate) fn validate_batch_limit_against_capacity(
         ));
     }
     Ok(())
+}
+
+pub(crate) fn register_session_with_validated_batch_limit(
+    client: &dyn AdvisorySessionPort,
+    request: AdvisorySessionRegistrationRequest,
+    batch_limit: AdvisoryBatchLimit,
+) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+    let response = client.register_session(request.clone())?;
+    if let Err(validation_error) =
+        validate_batch_limit_against_capacity(batch_limit, response.queue_capacity)
+    {
+        return match client.unregister_session(AdvisorySessionUnregistrationRequest {
+            session_id: request.session_id.clone(),
+        }) {
+            Ok(cleanup) if cleanup.closed => Err(validation_error),
+            Ok(_) => Err(AtmError::daemon_unavailable(format!(
+                "graft advisory session {} remained registered after batch-limit validation failed",
+                request.session_id
+            ))
+            .with_source(validation_error)
+            .with_recovery(
+                "Restart the graft session after the daemon unregister path can close invalid registrations reliably.",
+            )),
+            Err(cleanup_error) => Err(validation_error.with_source(cleanup_error)),
+        };
+    }
+    Ok(response)
 }
 
 pub(crate) fn join_receive_loop_with_deadline(
@@ -288,21 +315,24 @@ fn attempt_receive_loop_reregistration(
     ctx: &ReceiveLoopContext,
     session_id: &atm_core::graft::AdvisorySessionId,
 ) -> Result<(), AtmError> {
-    match ctx
-        .client
-        .register_session(ctx.registration_request.clone())
-    {
-        Ok(response) => {
-            validate_batch_limit_against_capacity(
-                ctx.drain_request.limit,
-                response.queue_capacity,
-            )?;
-            ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())
-        }
+    match register_session_with_validated_batch_limit(
+        &*ctx.client,
+        ctx.registration_request.clone(),
+        ctx.drain_request.limit,
+    ) {
+        Ok(_) => ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref()),
         Err(register_error) if is_duplicate_registration(&register_error) => {
             ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())
         }
         Err(register_error) => {
+            if register_error.is_validation() {
+                ctx.observability.session_error(
+                    session_id,
+                    "validate_batch_limit",
+                    &register_error,
+                );
+                return Err(register_error);
+            }
             ctx.observability
                 .session_error(session_id, "register_session", &register_error);
             ctx.observability
@@ -425,4 +455,204 @@ fn is_socket_timeout_error(error: &AtmError) -> bool {
                 io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex, RwLock};
+    use std::time::Duration;
+
+    use atm_core::ack::{AckOutcome, AckRequest};
+    use atm_core::error::AtmError;
+    use atm_core::graft::{
+        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySessionId, AdvisorySessionPort,
+        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+        AdvisorySessionState, AdvisorySessionUnregistrationRequest,
+        AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AtmGraftClient,
+    };
+    use atm_core::read::{ReadOutcome, ReadQuery};
+    use atm_core::send::{SendOutcome, SendRequest};
+    use atm_core::types::IsoTimestamp;
+
+    use super::{
+        ReceiveLoopContext, attempt_receive_loop_reregistration, read_snapshot,
+        register_session_with_validated_batch_limit,
+    };
+    use crate::{GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot};
+
+    #[derive(Debug)]
+    struct RecordingSessionClient {
+        queue_capacity: usize,
+        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
+    }
+
+    impl RecordingSessionClient {
+        fn new(queue_capacity: usize) -> Self {
+            Self {
+                queue_capacity,
+                unregister_calls: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl AtmGraftClient for RecordingSessionClient {
+        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+            panic!("send_message is not used by runtime registration tests")
+        }
+
+        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+            panic!("read_message is not used by runtime registration tests")
+        }
+
+        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+            panic!("acknowledge_message is not used by runtime registration tests")
+        }
+    }
+
+    impl AdvisorySessionPort for RecordingSessionClient {
+        fn register_session(
+            &self,
+            request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            Ok(AdvisorySessionRegistrationResponse {
+                team: request.team,
+                agent: request.agent,
+                session_id: request.session_id,
+                registered_at: IsoTimestamp::now(),
+                queue_capacity: self.queue_capacity,
+            })
+        }
+
+        fn unregister_session(
+            &self,
+            request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            self.unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .push(request.session_id.clone());
+            Ok(AdvisorySessionUnregistrationResponse {
+                session_id: request.session_id,
+                closed: true,
+            })
+        }
+
+        fn fetch_nudges(
+            &self,
+            _request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            panic!("fetch_nudges is not used by runtime registration tests")
+        }
+
+        fn drain_nudges(
+            &self,
+            _request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            panic!("drain_nudges is not used by runtime registration tests")
+        }
+    }
+
+    impl GraftSessionClient for RecordingSessionClient {
+        fn supports_live_advisory_stream(&self) -> bool {
+            false
+        }
+
+        fn open_advisory_stream(
+            &self,
+            _request: AdvisoryStreamRequest,
+        ) -> Result<crate::transport::ActiveAdvisoryStream, AtmError> {
+            panic!("open_advisory_stream is not used by runtime registration tests")
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct NoopInjector;
+
+    impl HostNudgeInjector for NoopInjector {
+        fn inject_nudge(&self, _nudge: AdvisoryEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct NoopObservability;
+
+    impl GraftObservability for NoopObservability {}
+
+    fn registration_request() -> AdvisorySessionRegistrationRequest {
+        AdvisorySessionRegistrationRequest {
+            team: "test-team".parse().expect("team"),
+            agent: "test-agent".parse().expect("agent"),
+            session_id: AdvisorySessionId::new("session-1").expect("session id"),
+            pid: 4242,
+            started_at: IsoTimestamp::now(),
+        }
+    }
+
+    #[test]
+    fn register_session_with_invalid_batch_limit_cleans_up_registered_slot() {
+        let client = RecordingSessionClient::new(1);
+        let error = register_session_with_validated_batch_limit(
+            &client,
+            registration_request(),
+            AdvisoryBatchLimit::new(8).expect("limit"),
+        )
+        .expect_err("batch-limit validation should fail");
+
+        assert!(error.is_validation());
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn reregistration_cleans_up_registered_slot_when_batch_limit_validation_fails() {
+        let client = Arc::new(RecordingSessionClient::new(1));
+        let registration = registration_request();
+        let session_id = registration.session_id.clone();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: registration.team.clone(),
+            agent: registration.agent.clone(),
+            session_id: session_id.clone(),
+            state: AdvisorySessionState::Disconnected,
+        }));
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let ctx = ReceiveLoopContext {
+            client: client.clone(),
+            registration_request: registration,
+            drain_request: AdvisoryDrainRequest {
+                session_id: session_id.clone(),
+                limit: AdvisoryBatchLimit::new(8).expect("limit"),
+            },
+            poll_interval: Duration::from_millis(10),
+            snapshot: snapshot.clone(),
+            injector: Arc::new(NoopInjector),
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+        };
+
+        let error = attempt_receive_loop_reregistration(&ctx, &session_id)
+            .expect_err("invalid batch limit must fail after cleanup");
+
+        assert!(error.is_validation());
+        assert_eq!(
+            client
+                .unregister_calls
+                .lock()
+                .expect("unregister calls")
+                .len(),
+            1
+        );
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            AdvisorySessionState::Disconnected
+        );
+    }
 }

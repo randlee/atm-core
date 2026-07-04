@@ -42,8 +42,8 @@ mod transport;
 
 use runtime::{
     LiveReceiveLoopContext, ReceiveLoopContext, join_receive_loop_with_deadline, load_graft_config,
-    read_snapshot, run_live_receive_loop, run_receive_loop, set_session_state,
-    validate_batch_limit_against_capacity,
+    read_snapshot, register_session_with_validated_batch_limit, run_live_receive_loop,
+    run_receive_loop, set_session_state,
 };
 use transport::{ActiveAdvisoryStream, GraftLocalIpcClientTransport, unexpected_response};
 
@@ -565,8 +565,12 @@ fn register_graft_session(
     client: &dyn GraftSessionClient,
     options: &GraftSessionOptions,
 ) -> Result<(), AtmError> {
-    let register_response = client.register_session(options.registration_request())?;
-    validate_batch_limit_against_capacity(options.batch_limit, register_response.queue_capacity)
+    register_session_with_validated_batch_limit(
+        client,
+        options.registration_request(),
+        options.batch_limit,
+    )
+    .map(|_| ())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1337,5 +1341,54 @@ mod tests {
             read_snapshot(&snapshot).expect("snapshot").state,
             AdvisorySessionState::Registered
         );
+    }
+
+    #[test]
+    fn session_activation_cleans_up_registered_slot_when_batch_limit_validation_fails() {
+        let root = TempDir::new().expect("tempdir");
+        write_config(root.path(), "[atm.graft]\nenabled = true\n");
+        let unregister_count = Arc::new(Mutex::new(0usize));
+        let unregister_count_for_handler = Arc::clone(&unregister_count);
+
+        let transport = Arc::new(FakeClientTransport::new(move |request| match request {
+            RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
+                AdvisorySessionRegistrationResponse {
+                    team: request.team,
+                    agent: request.agent,
+                    session_id: request.session_id,
+                    registered_at: IsoTimestamp::now(),
+                    queue_capacity: 1,
+                },
+            )),
+            RequestEnvelope::AdvisoryUnregister(request) => {
+                *unregister_count_for_handler
+                    .lock()
+                    .expect("unregister count") += 1;
+                Ok(ResponseEnvelope::AdvisoryUnregister(
+                    AdvisorySessionUnregistrationResponse {
+                        session_id: request.session_id,
+                        closed: true,
+                    },
+                ))
+            }
+            other => panic!("unexpected request: {other:?}"),
+        }));
+        let client = GraftClient::from_transport(transport);
+        let injector = Arc::new(CollectingInjector::default());
+
+        let error = GraftSession::activate(
+            client,
+            GraftSessionOptions::for_current_process(
+                root.path(),
+                TEST_TEAM.parse().expect("team"),
+                TEST_LEAD.parse().expect("agent"),
+            )
+            .with_batch_limit(AdvisoryBatchLimit::new(8).expect("limit")),
+            injector,
+        )
+        .expect_err("batch-limit validation should fail");
+
+        assert!(error.is_validation());
+        assert_eq!(*unregister_count.lock().expect("unregister count"), 1);
     }
 }
