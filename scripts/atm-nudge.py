@@ -318,6 +318,12 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
     payload = payload or {}
     is_ack = payload.get("is_ack") is True
     message_id = str(payload.get("message_id", "")).strip()
+    description = ""
+    for key in ("description", "summary"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            description = value.strip()
+            break
     if is_ack:
         acknowledgement = (
             f"message {message_id} acknowledged"
@@ -333,9 +339,17 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
             f'<console announce="concise" pause="false"/></atm>'
         )
 
+    message_context = (
+        f"<action>message {message_id} received</action>" if message_id else ""
+    )
+    description_context = (
+        f"<action>description: {description}</action>" if description else ""
+    )
     return (
         f"<atm><action>read atm --team {team}</action>"
         f"<action>ack the message</action>"
+        f"{message_context}"
+        f"{description_context}"
         f"<action>execute the assigned task</action>"
         f'<when idle="immediate" busy="after-current-task"/>'
         f'<console announce="concise" pause="false"/></atm>'

@@ -357,6 +357,26 @@ class TestBuildMessage(unittest.TestCase):
         self.assertIn(f"read atm --team {TEST_TEAM}", message)
         self.assertIn("execute the assigned task", message)
         self.assertIn('busy="after-current-task"', message)
+        self.assertNotIn("message ", message)
+
+    def test_send_message_includes_message_id_when_present(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {"message_id": "01JSENDTEST0000000000000000"},
+        )
+        self.assertIn("message 01JSENDTEST0000000000000000 received", message)
+        self.assertIn("execute the assigned task", message)
+
+    def test_send_message_includes_description_when_present(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {
+                "message_id": "01JSENDTEST0000000000000000",
+                "summary": "review failing smoke lane",
+            },
+        )
+        self.assertIn("message 01JSENDTEST0000000000000000 received", message)
+        self.assertIn("description: review failing smoke lane", message)
 
     def test_ack_message_requests_immediate_work_with_message_context(self):
         message = _MOD.build_message(
