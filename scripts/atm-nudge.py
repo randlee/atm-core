@@ -330,9 +330,13 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
             if message_id
             else "message acknowledged"
         )
+        message_context = (
+            f"<message-id>{message_id}</message-id>" if message_id else ""
+        )
         return (
             f"<atm><action>read atm --team {team}</action>"
             f"<action>ack the message</action>"
+            f"{message_context}"
             f"<action>{acknowledgement}</action>"
             f"<action>complete associated work immediately</action>"
             f'<when idle="immediate" busy="complete tasks based on established priority"/>'
@@ -340,10 +344,10 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
         )
 
     message_context = (
-        f"<action>message {message_id} received</action>" if message_id else ""
+        f"<message-id>{message_id}</message-id>" if message_id else ""
     )
     description_context = (
-        f"<action>description: {description}</action>" if description else ""
+        f"<description>{description}</description>" if description else ""
     )
     return (
         f"<atm><action>read atm --team {team}</action>"

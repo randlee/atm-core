@@ -364,7 +364,7 @@ class TestBuildMessage(unittest.TestCase):
             TEST_TEAM,
             {"message_id": "01JSENDTEST0000000000000000"},
         )
-        self.assertIn("message 01JSENDTEST0000000000000000 received", message)
+        self.assertIn("<message-id>01JSENDTEST0000000000000000</message-id>", message)
         self.assertIn("execute the assigned task", message)
 
     def test_send_message_includes_description_when_present(self):
@@ -375,8 +375,8 @@ class TestBuildMessage(unittest.TestCase):
                 "summary": "review failing smoke lane",
             },
         )
-        self.assertIn("message 01JSENDTEST0000000000000000 received", message)
-        self.assertIn("description: review failing smoke lane", message)
+        self.assertIn("<message-id>01JSENDTEST0000000000000000</message-id>", message)
+        self.assertIn("<description>review failing smoke lane</description>", message)
 
     def test_ack_message_requests_immediate_work_with_message_context(self):
         message = _MOD.build_message(
@@ -384,6 +384,7 @@ class TestBuildMessage(unittest.TestCase):
             {"is_ack": True, "message_id": "01JACKTEST00000000000000000"},
         )
         self.assertIn(f"read atm --team {TEST_TEAM}", message)
+        self.assertIn("<message-id>01JACKTEST00000000000000000</message-id>", message)
         self.assertIn("message 01JACKTEST00000000000000000 acknowledged", message)
         self.assertIn("complete associated work immediately", message)
         self.assertIn(
