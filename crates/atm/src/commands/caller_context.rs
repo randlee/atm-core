@@ -146,10 +146,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn missing_identity_fails_before_dispatch() {
-        let _env = EnvGuard::set_many([
-            ("ATM_IDENTITY", None),
-            ("ATM_TEAM", Some(TEST_TEAM)),
-        ]);
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", Some(TEST_TEAM))]);
 
         let error = resolve_cli_caller_context(CallerContextOverrides::default())
             .expect_err("missing identity");

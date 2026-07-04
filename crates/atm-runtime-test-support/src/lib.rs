@@ -6,10 +6,7 @@ use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
 use atm_core::error::AtmError;
 use atm_core::test_support::{remove_env_var, set_env_var};
-use atm_core::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::{atm_home, host_runtime_dir_from_home},
-};
+use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, home::atm_home};
 use atm_runtime::{
     RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
     assemble_sqlite_runtime,
@@ -83,15 +80,12 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
             )
             .with_source(source)
     })?;
-    let notification_path = host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl");
+    let _ = atm_home()?;
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: path.as_ref().to_path_buf(),
         config_current_dir,
         sqlite_observer: std::sync::Arc::new(NoopRuntimeSqliteObserver),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
-        notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            notification_path,
-        )),
     })
 }
 

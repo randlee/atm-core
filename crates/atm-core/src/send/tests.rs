@@ -31,7 +31,7 @@ use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::test_support::{TEST_SENDER, TEST_TEAM};
+use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::WorkflowStateFile;
 
@@ -64,6 +64,26 @@ fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
+fn install_home_env(home_dir: &Path) -> EnvGuard {
+    fs::create_dir_all(home_dir).expect("home dir");
+    EnvGuard::set_many([
+        ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ])
+}
+
+fn notification_log_path(home_dir: &Path) -> PathBuf {
+    crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl")
+}
+
+fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
+    fs::read_to_string(notification_log_path(home_dir))
+        .expect("notification log")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("notification event"))
+        .collect()
+}
+
 fn assert_recovered_payload_texts(
     original: &InboxMessage,
     companion: &InboxMessage,
@@ -90,8 +110,6 @@ struct TestRuntime {
     appended_messages: Mutex<Vec<InboxMessage>>,
     // Mutex required because concurrent send-path tests share the same runtime.
     non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    notification_events: Mutex<Vec<NotificationEvent>>,
 }
 
 impl TestRuntime {
@@ -108,22 +126,11 @@ impl TestRuntime {
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
-            notification_events: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
-
-impl crate::boundary::NotificationSink for TestRuntime {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_events
-            .lock()
-            .expect("notification events lock")
-            .push(event);
-        Ok(())
-    }
-}
 
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
@@ -532,7 +539,8 @@ fn append_failure_after_sqlite_commit_is_execution_only() {
     let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
@@ -582,7 +590,8 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         WarningEntry::new("sqlite failed", Some("repair sqlite")),
     );
     let base_context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
@@ -654,11 +663,8 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
     );
 }
 
-fn assert_non_claude_sqlite_failure_notifications(runtime: &TestRuntime) {
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+fn assert_non_claude_sqlite_failure_notifications(home_dir: &Path) {
+    let events = read_notification_events(home_dir);
     assert_eq!(events.len(), 2);
     assert!(
         events
@@ -720,6 +726,7 @@ fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObser
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
@@ -728,6 +735,8 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     );
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -736,15 +745,18 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&runtime);
+    assert_non_claude_sqlite_failure_notifications(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -767,10 +779,7 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+    let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(
@@ -782,10 +791,13 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_claude_success_appends_original_via_compat_inbox_writer() {
     let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -804,10 +816,7 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
             .expect("non-claude deliveries lock")
             .is_empty()
     );
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+    let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(
@@ -885,10 +894,13 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_append_failure_routes_to_post_send_hook_fallback() {
     let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -896,10 +908,7 @@ fn send_append_failure_routes_to_post_send_hook_fallback() {
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+    let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(

@@ -5,6 +5,7 @@ name = "DaemonNotificationSinkAdapter"
 
 [public]
 trait = "NotificationSink"
+notes = "Historical daemon boundary record only. Phase AD AD.5 removed the daemon-owned NotificationSink adapter and notification worker."
 
 [implementation]
 type = "DaemonNotificationSink"
@@ -13,7 +14,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["outbound_notification_delivery"]
@@ -42,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-NOTIFICATION-SINK-DAEMON-EDGES", "LINT-BOUNDARY-NOT
 review_gates = ["no_public_impl", "no_process_spawn_outside_notification_boundary"]
 
 [status]
-state = "active"
-notes = ["crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition"]
+state = "retired"
+notes = ["Phase AD AD.5 deleted the daemon-owned NotificationSink adapter and notification worker runtime.", "Daemon post-send behavior now appends notification events directly at the event site and no accepted composition root assembles this adapter."]

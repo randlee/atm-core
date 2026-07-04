@@ -3,10 +3,9 @@
 use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
-pub use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
-    WatchSubscriptionRequest,
-};
+pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
+use crate::schema::AtmMessageId;
+use crate::types::{AgentName, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -128,14 +127,6 @@ pub trait AdvisoryStreamSink {
     }
 }
 
-/// BOUNDARY-NotificationSink — see docs/atm-core/boundaries.md.
-pub trait NotificationSink: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when notification delivery cannot be executed.
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError>;
-}
-
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {
     /// # Errors
@@ -144,20 +135,24 @@ pub trait StatusSource: sealed::Sealed {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
 }
 
-/// BOUNDARY-WatchEventSource — see docs/atm-core/boundaries.md.
-pub trait WatchEventSource: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when watch subscriptions cannot be created or events
-    /// cannot be delivered as a batch.
-    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PostSendHookEvent {
+    pub sender: AgentName,
+    pub sender_team: TeamName,
+    pub recipient: AgentName,
+    pub recipient_team: TeamName,
+    pub message_id: AtmMessageId,
+    pub requires_ack: bool,
+    pub is_ack: bool,
+    pub task_id: Option<TaskId>,
+    pub recipient_pane_id: Option<PaneId>,
 }
 
-/// BOUNDARY-ReconcileCoordinator — see docs/atm-core/boundaries.md.
-pub trait ReconcileCoordinator: sealed::Sealed {
+/// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
+pub trait PostSendHookEmitter: sealed::Sealed {
     /// # Errors
     ///
-    /// Returns `AtmError` when reconcile policy cannot be executed for the
-    /// request input.
-    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError>;
+    /// Returns `AtmError` when one direct post-send emission attempt fails
+    /// after durable message persistence has already succeeded.
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
 }
