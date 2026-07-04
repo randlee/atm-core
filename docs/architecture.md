@@ -2599,8 +2599,9 @@ Architectural rules:
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is a dedicated post-send emitter, not
-  `DeliveryPlan`/`NotificationSink`
+- the accepted seam is direct post-send emission plus optional direct
+  notification-log append at the event site, not `NotificationSink` or a
+  daemon-owned notification worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -2860,7 +2861,7 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- the historical `R.17` daemon-owned queued notifier worker is being retired by
+- the historical `R.17` daemon-owned queued notifier worker was retired by
   `AD.5`
 - the accepted runtime must not require a daemon notification queue/worker just
   to append one post-send event or warning

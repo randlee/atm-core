@@ -22,6 +22,8 @@ use crate::daemon_runtime_observability::DaemonEvent;
 
 const MAX_ADVISORY_SESSIONS: usize = 128;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
+// Streaming clients poll this bounded in-memory queue, so 100ms keeps idle
+// waits short without busy-spinning when no advisory events are available.
 const STREAM_IDLE_WAIT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]

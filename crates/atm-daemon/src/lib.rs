@@ -22,7 +22,6 @@ mod local_ipc_connection;
 mod local_ipc_transport;
 mod local_ipc_wake;
 mod non_claude_outbound_runtime;
-mod notification_runtime;
 mod peer_transport;
 mod runtime_health;
 mod runtime_sqlite_observer;
@@ -38,6 +37,7 @@ mod tests_advisory;
 mod tests_host_ownership;
 #[cfg(test)]
 mod tests_lifecycle;
+#[cfg(test)]
 mod worker_support;
 
 use std::path::PathBuf;

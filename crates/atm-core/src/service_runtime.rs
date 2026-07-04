@@ -27,9 +27,7 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
 }
 
-pub(crate) trait RetainedServiceRuntime:
-    crate::boundary::NotificationSink + crate::boundary::sealed::Sealed
-{
+pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
@@ -127,8 +125,6 @@ pub struct LocalServiceRuntime {
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
-    pub(crate) notification_sink:
-        std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
 }
 
 impl LocalServiceRuntime {
@@ -136,13 +132,11 @@ impl LocalServiceRuntime {
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
-        notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
             roster_store,
             non_claude_outbound,
-            notification_sink,
         }
     }
 }
@@ -159,21 +153,11 @@ impl fmt::Debug for LocalServiceRuntime {
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
-            .field(
-                "notification_sink",
-                &std::sync::Arc::as_ptr(&self.notification_sink),
-            )
             .finish()
     }
 }
 
 impl crate::boundary::sealed::Sealed for LocalServiceRuntime {}
-
-impl crate::boundary::NotificationSink for LocalServiceRuntime {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_sink.deliver(event)
-    }
-}
 
 type OutputPathFactory = std::sync::Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
@@ -257,46 +241,35 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
     }
 }
 
-#[derive(Debug, Clone)]
-/// Production fallback boundary used when the daemon runtime is not composing
-/// a dedicated notification sink. This is not a test double.
-pub struct LocalFileNotificationSink {
-    path: PathBuf,
+pub(crate) fn append_notification_log(event: &NotificationEvent) -> Result<(), AtmError> {
+    append_notification_log_at_path(
+        &crate::home::host_runtime_dir()?.join("notifications.jsonl"),
+        event,
+    )
 }
 
-impl LocalFileNotificationSink {
-    /// Path validation stays lazy because this constructor is used from
-    /// cross-crate runtime assembly callsites that only have a PathBuf. The
-    /// actual boundary contract is enforced on first deliver() with typed I/O
-    /// errors instead of panicking during assembly.
-    pub fn at_path(path: PathBuf) -> Self {
-        Self { path }
-    }
-}
-
-impl crate::boundary::sealed::Sealed for LocalFileNotificationSink {}
-
-impl crate::boundary::NotificationSink for LocalFileNotificationSink {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        let parent = self.path.parent().ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "notification sink path {} has no parent directory",
-                self.path.display()
-            ))
-            .with_recovery("Choose a notification output path with an existing parent directory.")
-        })?;
-        std::fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create notification sink directory {}: {error}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Check that the notification output directory is writable before retrying notification delivery.",
-            )
-            .with_source(error)
-        })?;
-        crate::mailbox::atomic::append_jsonl_record(&self.path, &event)
-    }
+pub(crate) fn append_notification_log_at_path(
+    path: &Path,
+    event: &NotificationEvent,
+) -> Result<(), AtmError> {
+    let parent = path.parent().ok_or_else(|| {
+        AtmError::mailbox_write(format!(
+            "notification log path {} has no parent directory",
+            path.display()
+        ))
+        .with_recovery("Choose a notification log path with an existing parent directory.")
+    })?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create notification log directory {}: {error}",
+            parent.display()
+        ))
+        .with_recovery(
+            "Check that the notification log directory is writable before retrying post-send logging.",
+        )
+        .with_source(error)
+    })?;
+    crate::mailbox::atomic::append_jsonl_record(path, event)
 }
 
 impl RetainedServiceRuntime for LocalServiceRuntime {
@@ -511,15 +484,14 @@ fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-        MAX_NON_CLAUDE_PAYLOAD_BYTES, RetainedServiceRuntime,
+        LocalFileNonClaudeOutbound, LocalServiceRuntime, MAX_NON_CLAUDE_PAYLOAD_BYTES,
+        RetainedServiceRuntime, append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
-    use serde_json::Value;
     use std::fs::File;
     use std::io::Read;
     use std::sync::Arc;
@@ -640,9 +612,6 @@ mod tests {
             Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
         );
 
         runtime
@@ -666,9 +635,6 @@ mod tests {
             Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
         );
 
         let error = runtime
@@ -692,9 +658,6 @@ mod tests {
             Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
         );
         let team = "test-team".parse::<TeamName>().expect("team");
         let agent = "recipient".parse::<AgentName>().expect("agent");
@@ -711,17 +674,9 @@ mod tests {
     }
 
     #[test]
-    fn local_service_runtime_delivers_notifications_through_sink_boundary() {
+    fn notification_logging_appends_directly_at_event_site() {
         let tempdir = tempdir().expect("tempdir");
         let notification_path = tempdir.path().join("notifications.jsonl");
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                notification_path.clone(),
-            )),
-        );
         let event = NotificationEvent {
             kind: NotificationKind::Delivery,
             detail: "runtime-direct".to_string(),
@@ -729,41 +684,11 @@ mod tests {
             agent: Some("recipient".parse::<AgentName>().expect("agent")),
         };
 
-        crate::boundary::NotificationSink::deliver(&runtime, event.clone())
-            .expect("direct sink delivery");
+        append_notification_log_at_path(&notification_path, &event).expect("direct log append");
 
         let direct_events = read_notification_events(&notification_path);
         assert_eq!(direct_events.len(), 1);
         assert_eq!(direct_events[0].detail, "runtime-direct");
-
-        let mut warnings = Vec::new();
-        crate::delivery_execution::deliver_notifications(
-            &runtime,
-            &mut warnings,
-            &crate::send::ResolvedRecipient {
-                agent: "recipient".parse::<AgentName>().expect("agent"),
-                team: "test-team".parse::<TeamName>().expect("team"),
-            },
-            Some("pane-1"),
-            &[crate::delivery_plan::NotificationTarget {
-                sender: "sender".parse::<AgentName>().expect("sender"),
-                sender_team: Some("test-team".parse::<TeamName>().expect("team")),
-                message_id: crate::schema::AtmMessageId::new(),
-                requires_ack: true,
-                is_ack: false,
-                task_id: None,
-            }],
-        );
-        assert!(warnings.is_empty());
-
-        let events = read_notification_events(&notification_path);
-        assert_eq!(events.len(), 2);
-        let detail: Value =
-            serde_json::from_str(&events[1].detail).expect("structured notification detail");
-        assert_eq!(
-            detail.get("recipient_pane_id").and_then(Value::as_str),
-            Some("pane-1")
-        );
     }
 
     #[test]

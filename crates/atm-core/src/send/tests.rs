@@ -31,7 +31,7 @@ use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::test_support::{TEST_SENDER, TEST_TEAM};
+use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::WorkflowStateFile;
 
@@ -64,6 +64,24 @@ fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
+fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
+    fs::read_to_string(
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl"),
+    )
+    .expect("notifications")
+    .lines()
+    .map(|line| serde_json::from_str(line).expect("notification event"))
+    .collect()
+}
+
+fn install_home_env(home_dir: &Path) -> EnvGuard {
+    EnvGuard::set_many([
+        ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+        ("ATM_LOG_DIR", None),
+    ])
+}
+
 fn assert_recovered_payload_texts(
     original: &InboxMessage,
     companion: &InboxMessage,
@@ -90,8 +108,6 @@ struct TestRuntime {
     appended_messages: Mutex<Vec<InboxMessage>>,
     // Mutex required because concurrent send-path tests share the same runtime.
     non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    notification_events: Mutex<Vec<NotificationEvent>>,
 }
 
 impl TestRuntime {
@@ -108,22 +124,11 @@ impl TestRuntime {
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
-            notification_events: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
-
-impl crate::boundary::NotificationSink for TestRuntime {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_events
-            .lock()
-            .expect("notification events lock")
-            .push(event);
-        Ok(())
-    }
-}
 
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
@@ -528,6 +533,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
@@ -613,6 +619,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
@@ -621,6 +628,8 @@ fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     );
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -629,7 +638,7 @@ fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&runtime);
+    assert_non_claude_sqlite_failure_notifications(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
@@ -656,11 +665,8 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
     );
 }
 
-fn assert_non_claude_sqlite_failure_notifications(runtime: &TestRuntime) {
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+fn assert_non_claude_sqlite_failure_notifications(home_dir: &Path) {
+    let events = read_notification_events(home_dir);
     assert_eq!(events.len(), 2);
     assert!(
         events
@@ -722,6 +728,7 @@ fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObser
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
@@ -730,6 +737,8 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     );
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -738,15 +747,18 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&runtime);
+    assert_non_claude_sqlite_failure_notifications(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -769,10 +781,7 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+    let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(
@@ -784,10 +793,13 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
     let outcome =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
@@ -810,10 +822,7 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
+    let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(
@@ -832,6 +841,7 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z6_post_write_warning_uses_store_backed_claude_roster() {
     let runtime = send_runtime_with_missing_claude_member();
     let observability = RecordingObservability::default();
@@ -860,6 +870,7 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     let runtime = send_runtime_with_missing_atm_roster_member();
     let observability = RecordingObservability::default();

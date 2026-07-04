@@ -577,9 +577,7 @@ mod tests {
         new_message_success_transitions, restore_inbox_rebuild_transitions,
         thread_update_transitions,
     };
-    use crate::boundary::NotificationSink;
     use crate::error::AtmError;
-    use crate::protocol::NotificationEvent;
     use crate::schema::ThreadMode;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -591,12 +589,6 @@ mod tests {
     struct MissingRosterRuntime;
 
     impl crate::boundary::sealed::Sealed for MissingRosterRuntime {}
-
-    impl NotificationSink for MissingRosterRuntime {
-        fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for MissingRosterRuntime {
         fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {

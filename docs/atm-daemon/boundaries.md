@@ -67,7 +67,6 @@ Historical pre-AD planning names that no longer describe the accepted current
 daemon-private ownership map:
 - `watch_runtime`
 - `reconcile_runtime`
-- `notification_runtime`
 
 `R.20` exists to turn that ownership map into the follow-on cleanup sprint plan
 and to make those seams explicit enough for later QA and lint review.
@@ -382,33 +381,16 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the daemon runtime adapter behind the NotificationSink contract.
+- Historical daemon boundary record only. Phase `AD.5` retired the daemon-owned
+  `NotificationSink` adapter and deleted the notification worker/runtime.
 
 Notes:
-- The active implementation is a daemon-owned queued worker in
-  `atm_daemon::notification_runtime`.
-- It returns typed unavailable/backpressure failures at the boundary and
-  persists delivered events through the runtime-owned notifier path instead of
-  degrading to tracing-only behavior.
-- The queue is intentionally bounded at `64` events; overflow fails closed with
-  typed backpressure instead of silently buffering unbounded plugin traffic.
-- `Y.20` replaced the caller-visible shared queue/lifecycle lock with one
-  bounded command-channel handoff (`sync_channel`), immutable runtime-status
-  publication, and worker-owned drain/persistence state.
-- Runtime lifecycle ownership stays above this boundary:
-  - `start()` and `shutdown()` are composition-root responsibilities
-  - callers outside `RuntimeComposition` must use
-    `NotificationSink::deliver(...)` only and must not open plugin/agent
-    delivery paths directly
-- `Phase Yc` closed the last daemon/runtime consistency gap for this boundary:
-  - `Y.13` ensures the retained runtime factory installs the daemon-owned
-    `NotificationSink` adapter on the live send/ack executor path rather than
-    allowing direct helper-owned notification execution to survive
-  - shutdown remains bounded by the current `3s`
-    `NotificationRuntime::shutdown()` deadline; if exceeded, the adapter emits
-    a structured warning, returns `AtmErrorCode::DaemonUnavailable`
-    (`ATM_DAEMON_UNAVAILABLE`), detaches the join helper, and any still-pending
-    queued notification events are treated as dropped
+- This record remains only to preserve historical references from earlier
+  phases and ADRs.
+- The accepted daemon runtime no longer starts a notification worker or owns a
+  `NotificationSink` adapter for post-send behavior.
+- Post-send notification logging, when retained, is a direct append at the
+  event site.
 
 ## DaemonNonClaudeOutboundAdapter
 
@@ -454,6 +436,5 @@ Notes:
   - `project_runtime_health(...)`
 - these are daemon-private health projection artifacts, not public cross-crate
   boundary exports
-- `runtime_health` may project the owner-provided
-  `NotificationRuntime::worker_liveness()` signal directly, but it must not
-  inspect queue internals or retry state to reconstruct liveness
+- `runtime_health` must not reconstruct deleted notification-worker state or
+  reintroduce notification-runtime liveness as a daemon-private health input

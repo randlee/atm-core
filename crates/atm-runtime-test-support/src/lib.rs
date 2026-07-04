@@ -2,14 +2,11 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, Once, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use atm_core::error::AtmError;
-use atm_core::test_support::{remove_env_var, set_env_var};
-use atm_core::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::{atm_home, host_runtime_dir_from_home},
-};
+use atm_core::test_support::{lock_env, remove_env_var, set_env_var};
+use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, home::atm_home};
 use atm_runtime::{
     RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
     assemble_sqlite_runtime,
@@ -33,11 +30,6 @@ impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
     }
 }
 
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
         atm_core::runtime_install_hooks::install_retained_runtime_factory_for_test_support(
@@ -48,26 +40,21 @@ pub fn install_sqlite_retained_runtime_factory() {
 
 pub struct SqliteRuntimeGuard {
     previous: Option<PathBuf>,
-    _env_lock: MutexGuard<'static, ()>,
 }
 
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
-        let env_guard = env_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _env_lock = lock_env();
         let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
         set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
-        Self {
-            previous,
-            _env_lock: env_guard,
-        }
+        Self { previous }
     }
 }
 
 impl Drop for SqliteRuntimeGuard {
     fn drop(&mut self) {
+        let _env_lock = lock_env();
         match self.previous.take() {
             Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string()),
             None => remove_env_var(SQLITE_RUNTIME_PATH_ENV),
@@ -83,15 +70,12 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
             )
             .with_source(source)
     })?;
-    let notification_path = host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl");
+    let _ = atm_home()?;
     assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: path.as_ref().to_path_buf(),
         config_current_dir,
         sqlite_observer: std::sync::Arc::new(NoopRuntimeSqliteObserver),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
-        notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            notification_path,
-        )),
     })
 }
 

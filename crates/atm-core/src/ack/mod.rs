@@ -661,25 +661,7 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
 
-    impl crate::boundary::NotificationSink for AckRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
-
     impl crate::boundary::sealed::Sealed for AckRosterRuntime {}
-
-    impl crate::boundary::NotificationSink for AckRosterRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for AckRuntime {
         fn load_config(

@@ -36,11 +36,11 @@ notes = ["The daemon-owned adapter is wired into the production retained runtime
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["NotificationSink"]
+forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-DAEMON-REFERENCES"]
-review_gates = ["no_public_impl", "no_notification_only_fallback"]
+review_gates = ["no_public_impl"]
 
 [status]
 state = "concrete_landed"

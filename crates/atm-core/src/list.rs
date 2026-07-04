@@ -355,12 +355,6 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for ListRuntime {}
 
-    impl crate::boundary::NotificationSink for ListRuntime {
-        fn deliver(&self, _event: crate::protocol::NotificationEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
-
     impl RetainedServiceRuntime for ListRuntime {
         fn load_config(
             &self,

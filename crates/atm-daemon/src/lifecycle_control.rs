@@ -8,6 +8,10 @@ use signal_hook::SigId;
 use crate::{DaemonSubsystem, SubsystemObservability};
 
 const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
+// Keep the Unix wake worker responsive to lifecycle signals without turning the
+// blocking read loop into a tight poll when no wake byte is pending.
+#[cfg(unix)]
+const UNIX_WAKE_READ_TIMEOUT: Duration = Duration::from_millis(100);
 
 // Installation takes this global slot only after the outer install lock so concurrent daemon
 // startup/teardown never races lifecycle-hook ownership or leaves a half-installed worker behind.
@@ -303,7 +307,7 @@ fn run_unix_lifecycle_wake_worker(
 ) {
     use std::io::Read;
 
-    let _ = wake_read.set_read_timeout(Some(Duration::from_millis(100)));
+    let _ = wake_read.set_read_timeout(Some(UNIX_WAKE_READ_TIMEOUT));
     let mut wake_buffer = [0_u8; 32];
     loop {
         if shutdown.load(Ordering::SeqCst) {

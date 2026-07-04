@@ -125,14 +125,6 @@ pub trait AdvisoryStreamSink {
     }
 }
 
-/// BOUNDARY-NotificationSink — see docs/atm-core/boundaries.md.
-pub trait NotificationSink: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when notification delivery cannot be executed.
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError>;
-}
-
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {
     /// # Errors

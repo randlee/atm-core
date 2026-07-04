@@ -546,6 +546,9 @@ Required runtime rules:
   extension point requires explicit architecture review
 - any direct post-send/advisory implementation must remain isolated from
   transport and store implementations behind its owned boundary
+- daemon post-send notification logging, if retained, must append directly at
+  the event site; a daemon-owned notification worker/runtime is not an accepted
+  production subsystem
 - daemon unavailability after one documented auto-start attempt must surface as
   explicit runtime failure rather than hidden fallback to direct SQLite or
   inbox-file access
