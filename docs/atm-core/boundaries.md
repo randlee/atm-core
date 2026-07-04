@@ -359,6 +359,27 @@ Notes:
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
 
+## GraftPostSendPort
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
+
+
+Purpose:
+- Owns the one accepted graft-backed advisory handoff for post-send events
+  after `atm-core` has already decided that recipient-side graft emission is
+  required.
+
+Notes:
+- This stays narrower than `PostSendHookEmitter`:
+  - `atm-core` still decides whether graft-backed post-send applies
+  - `atm-core` still logs failures and constructs sender-visible warnings
+  - the port only attempts the graft-side advisory delivery
+- the accepted out-of-owner implementation is
+  `atm_daemon::advisory_runtime::AdvisoryRuntime`.
+- this boundary must not expand into generic notification routing, mailbox
+  compatibility append, tmux delivery, or local process spawning.
+
 ## NotificationSink
 
 Canonical machine-readable boundary source:
