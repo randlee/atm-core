@@ -214,7 +214,6 @@ fn build_missing_config_delivery_plan(
             agent: AgentName::from_validated(ROLE_TEAM_LEAD),
             team: snapshot.team.clone(),
         },
-        snapshot.recipient_pane_id.clone(),
         logical_messages_from_persistence(persistence, false, false)
             .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),

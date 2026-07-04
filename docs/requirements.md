@@ -882,6 +882,9 @@ Post-send-hook rules:
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must use the sender's authoritative ATM roster
+  metadata (`home_dir`, or retained compatibility `cwd`) rather than the
+  caller's live process working directory
 - example payload:
   ```json
   {
@@ -3517,6 +3520,9 @@ mail correctness.
   Required behavior:
   - running `atm send` from another repository or working directory must not
     silently change whether post-send emission is attempted
+  - hook configuration lookup must follow the sender's canonical roster home
+    metadata and may use retained `cwd` only as a compatibility fallback until
+    `home_dir` migration is complete
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files

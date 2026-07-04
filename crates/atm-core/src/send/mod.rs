@@ -32,10 +32,6 @@ use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
-#[allow(
-    dead_code,
-    reason = "The direct CLI post-send hook helper is intentionally dormant while retained-runtime notification delivery is boundary-owned."
-)]
 pub(crate) mod hook;
 pub(crate) mod input;
 mod missing_config_notice;
@@ -281,7 +277,7 @@ fn finalize_send_outcome<
             outcome.warnings.push(warning);
         }
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
+        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
             observability,
             DeliveryTransitionContext {
@@ -296,6 +292,13 @@ fn finalize_send_outcome<
             &execution,
         )?;
         outcome.warnings.extend(execution.warnings);
+        hook::emit_post_send_effects(
+            &mut outcome.warnings,
+            context.post_send_config.as_ref(),
+            &context.recipient,
+            &context.delivery_snapshot,
+            &plan.messages,
+        );
     }
     emit_send_command_event(
         observability,
@@ -397,7 +400,6 @@ fn build_send_delivery_plan(
             &context.delivery_snapshot,
         ),
         context.recipient.clone(),
-        context.delivery_snapshot.recipient_pane_id.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
             .map_err(|error| {
                 AtmError::mailbox_write(error.to_string()).with_recovery(
@@ -409,7 +411,8 @@ fn build_send_delivery_plan(
 }
 
 struct SendExecutionContext {
-    config: Option<config::AtmConfig>,
+    command_config: Option<config::AtmConfig>,
+    post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
     canonical_sender: AgentName,
     inbox_path: PathBuf,
@@ -424,9 +427,26 @@ fn prepare_send_context<
     runtime: &R,
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
-    let config = runtime.load_config(&request.current_dir)?;
+    let command_config = runtime.load_config(&request.current_dir)?;
+    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
+        runtime,
+        &request.caller_team,
+        &request.caller_identity,
+    ) {
+        Ok(config) => (config, Vec::new()),
+        Err(error) => (
+            None,
+            vec![WarningEntry::new(
+                format!(
+                    "warning: post-send hook config lookup failed for {}@{}: {}.",
+                    request.caller_identity, request.caller_team, error.message
+                ),
+                error.primary_recovery().map(str::to_owned),
+            )],
+        ),
+    };
     let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, config.as_ref())?;
+    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
@@ -440,13 +460,14 @@ fn prepare_send_context<
         request.thread_mode,
     );
     Ok(SendExecutionContext {
-        config,
+        command_config,
+        post_send_config,
         recipient,
         canonical_sender,
         inbox_path,
         delivery_snapshot,
         delivery_family,
-        warnings: Vec::new(),
+        warnings,
     })
 }
 
@@ -541,22 +562,6 @@ fn emit_send_command_event(
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
-}
-
-#[allow(
-    dead_code,
-    reason = "The direct post-send hook payload contract remains documented while the CLI-only helper stays dormant."
-)]
-#[derive(Clone, Copy)]
-pub(crate) struct PostSendHookContext<'a> {
-    pub(crate) sender: &'a AgentName,
-    pub(crate) sender_team: Option<&'a TeamName>,
-    pub(crate) recipient: &'a ResolvedRecipient,
-    pub(crate) recipient_pane_id: Option<&'a str>,
-    pub(crate) message_id: AtmMessageId,
-    pub(crate) requires_ack: bool,
-    pub(crate) is_ack: bool,
-    pub(crate) task_id: Option<&'a TaskId>,
 }
 
 fn resolve_recipient(

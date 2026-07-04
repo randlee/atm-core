@@ -3,16 +3,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::boundary::{
-    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, NotificationSink,
-    RuntimeStorageFinalizer,
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, RuntimeStorageFinalizer,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_core::home::host_mail_db_path;
-use atm_core::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::host_runtime_dir, load_atm_config,
-};
+use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, load_atm_config};
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 use atm_storage_rusqlite::SqliteStorageBackend;
 
@@ -28,7 +24,6 @@ pub struct RuntimeAssemblyInputs {
     pub config_current_dir: PathBuf,
     pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-    pub notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -38,7 +33,6 @@ impl fmt::Debug for RuntimeAssemblyInputs {
             .field("config_current_dir", &self.config_current_dir)
             .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
-            .field("notification_sink", &"dyn NotificationSink")
             .finish()
     }
 }
@@ -89,7 +83,6 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
         inputs.config_current_dir.clone(),
         Arc::clone(&inputs.sqlite_observer),
         Arc::clone(&inputs.non_claude_outbound),
-        Arc::clone(&inputs.notification_sink),
     )
 }
 
@@ -98,7 +91,6 @@ fn assemble_sqlite_runtime_at_path(
     config_current_dir: PathBuf,
     sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
     let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
     let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
@@ -115,7 +107,6 @@ fn assemble_sqlite_runtime_at_path(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
         non_claude_outbound,
-        notification_sink,
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
@@ -140,19 +131,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             )
             .with_source(source)
     })?;
-    let notification_path = host_runtime_dir()?.join("notifications.jsonl");
-    if let Some(parent) = notification_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to create notification sink directory {}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Create a writable ATM runtime directory before constructing the default local retained runtime.",
-            )
-            .with_source(source)
-        })?;
-    }
     let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
         host_mail_db_path()?,
         RuntimeSqliteObservability::disabled(),
@@ -167,7 +145,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
-        Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =

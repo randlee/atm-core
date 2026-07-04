@@ -3,6 +3,7 @@ use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
+use serde_json::Value;
 
 #[expect(
     dead_code,
@@ -52,16 +53,24 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) team: TeamName,
     pub(crate) harness: DeliveryHarnessPath,
     pub(crate) recipient_pane_id: Option<PaneId>,
+    pub(crate) local_tmux_post_send: bool,
     pub(crate) roster_backed: bool,
 }
 
 impl DeliveryRecipientSnapshot {
     fn from_roster(member: RosterEntry) -> Self {
+        let local_tmux_post_send = member.recipient_pane_id.is_some()
+            || member
+                .metadata_json
+                .get("backendType")
+                .and_then(Value::as_str)
+                == Some("tmux");
         Self {
             agent: member.agent_name,
             team: member.team_name,
             harness: DeliveryHarnessPath::from_roster_harness(member.harness),
             recipient_pane_id: member.recipient_pane_id,
+            local_tmux_post_send,
             roster_backed: true,
         }
     }
@@ -576,9 +585,7 @@ mod tests {
         new_message_success_transitions, restore_inbox_rebuild_transitions,
         thread_update_transitions,
     };
-    use crate::boundary::NotificationSink;
     use crate::error::AtmError;
-    use crate::protocol::NotificationEvent;
     use crate::schema::ThreadMode;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -590,12 +597,6 @@ mod tests {
     struct MissingRosterRuntime;
 
     impl crate::boundary::sealed::Sealed for MissingRosterRuntime {}
-
-    impl NotificationSink for MissingRosterRuntime {
-        fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for MissingRosterRuntime {
         fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {

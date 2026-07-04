@@ -5,6 +5,7 @@ name = "NotificationSink"
 
 [public]
 trait = "NotificationSink"
+notes = "Historical boundary record only. Phase AD AD.5 removed NotificationSink from the accepted post-send path and deleted the active trait surface."
 
 [implementation]
 visibility = "trait_only"
@@ -24,7 +25,7 @@ forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["std::process::Command", "maybe_run_post_send_hook"]
+forbidden = ["std::process::Command", "maybe_run_post_send_hook", "NotificationSink::deliver"]
 
 [contracts]
 request_types = ["notification payload requests"]
@@ -40,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-NOTIFICATION-SINK-REFERENCES"]
 review_gates = ["no_direct_process_spawn"]
 
 [status]
-state = "stub_landed"
-notes = ["callable notification trait and named event DTOs landed in atm_core::boundary", "a thin extension crate should never need to reach into process-spawn internals"]
+state = "retired"
+notes = ["Phase AD AD.5 retired NotificationSink as an accepted boundary.", "Post-send notification logging is now a direct append helper at the event site rather than a retained notification sink contract."]
