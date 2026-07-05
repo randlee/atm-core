@@ -353,38 +353,49 @@ fn write_response(
     let frame = codec.response_to_frame(request_id, response)?;
     let _ = run_owned_local_ipc_with_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: REQUEST_DEADLINE,
-            support: write_deadline_support,
-            worker_name: "local-ipc-response-write-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "daemon response write exceeded the runtime deadline; closing the stalled same-host connection",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
-            ),
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon response write helper disconnected before returning a result",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
-            ),
-            spawn_error_message: "failed to spawn daemon response write helper",
-            spawn_error_recovery:
-                "Restart the daemon; the same-host response write helper could not be created.",
-        },
-        move |stream| {
-            atm_core::protocol::write_frame(stream, &frame, "failed to write daemon response frame")?;
-            std::io::Write::flush(stream).map_err(|source| {
-                AtmError::daemon_unavailable("failed to flush daemon response frame")
-                    .with_recovery(
-                        "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
-                    )
-                    .with_source(source)
-            })
-        },
+        response_write_deadline_config(write_deadline_support),
+        move |stream| write_response_frame(stream, &frame),
     )?;
     Ok(())
+}
+
+fn response_write_deadline_config(
+    write_deadline_support: DeadlineSupport,
+) -> OwnedLocalIpcDeadlineConfig {
+    OwnedLocalIpcDeadlineConfig {
+        deadline: REQUEST_DEADLINE,
+        support: write_deadline_support,
+        worker_name: "local-ipc-response-write-helper",
+        timeout_error: AtmError::daemon_unavailable(
+            "daemon response write exceeded the runtime deadline; closing the stalled same-host connection",
+        )
+        .with_recovery(
+            "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
+        ),
+        disconnect_error: AtmError::daemon_unavailable(
+            "daemon response write helper disconnected before returning a result",
+        )
+        .with_recovery(
+            "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
+        ),
+        spawn_error_message: "failed to spawn daemon response write helper",
+        spawn_error_recovery:
+            "Restart the daemon; the same-host response write helper could not be created.",
+    }
+}
+
+fn write_response_frame(
+    stream: &mut LocalSocketStream,
+    frame: &atm_core::protocol::FramePayload,
+) -> Result<(), AtmError> {
+    atm_core::protocol::write_frame(stream, frame, "failed to write daemon response frame")?;
+    std::io::Write::flush(stream).map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon response frame")
+            .with_recovery(
+                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
+            )
+            .with_source(source)
+    })
 }
 
 struct LocalIpcAdvisoryStreamSink<'a> {
