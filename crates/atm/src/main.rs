@@ -78,13 +78,17 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::ConfigTeamParseFailed
         | AtmErrorCode::ConfigTeamMissing => 2,
         AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::MemberAlreadyExists
+        | AtmErrorCode::MemberNotFound
         | AtmErrorCode::AddressParseFailed
         | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamInvalid
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
+        | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
         | AtmErrorCode::HelpTopicNotFound
@@ -98,6 +102,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown
         | AtmErrorCode::WarningSqliteHealthDegraded => 4,
         AtmErrorCode::MailboxReadFailed
@@ -128,6 +133,10 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::WarningStaleMailboxLock
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
+        | AtmErrorCode::PostSendGraftUnavailable
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed
         | AtmErrorCode::InternalError => 1,
     }
 }
@@ -167,6 +176,10 @@ fn run() -> Result<(), AtmError> {
             return Err(error);
         }
     };
+
+    if let Ok(launch_cwd) = std::env::current_dir() {
+        tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
+    }
 
     match cli.run(&observability) {
         Ok(()) => Ok(()),

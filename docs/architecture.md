@@ -717,8 +717,9 @@ ATM config and team-launch config are distinct concerns:
   surface
 - retired flat hook keys and `[atm].post_send_hook_members` must fail fast
   with migration guidance
-- `[atm].identity` is obsolete in the retained multi-agent model and must not
-  participate in runtime identity resolution
+- `[atm].identity` and the legacy top-level `identity` key are obsolete in the
+  retained multi-agent model and must not participate in runtime identity
+  resolution
 
 Team config loading must follow a narrow-scope recovery policy:
 - compatibility-only schema drift may use deterministic defaults at the schema
@@ -739,8 +740,9 @@ Diagnostics for team config failures must preserve:
 
 ### 5.1.1 Deprecated `[atm].identity`
 
-`[atm].identity` remains parse-compatible only as an obsolete migration field.
-It is no longer part of runtime sender or actor resolution.
+`[atm].identity` and the legacy top-level `identity` key remain
+parse-compatible only as obsolete migration fields. They are no longer part of
+runtime sender or actor resolution.
 
 Current runtime contract:
 - caller-context-owned commands resolve required caller identity/team according
@@ -748,14 +750,15 @@ Current runtime contract:
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch
 - `atm doctor` remains the explicit identity-free, optional-team exception
-- `[atm].identity` is ignored for runtime resolution even when still present in
-  `.atm.toml`
+- `[atm].identity` and legacy top-level `identity` are ignored for runtime
+  resolution even when still present in `.atm.toml`
 
 Deprecation and migration contract:
-- `atm doctor` reports stale `[atm].identity` with
+- `atm doctor` reports stale config identity fields with
   `ATM_WARNING_IDENTITY_DRIFT`
-- operator migration path is: remove `[atm].identity` and set `ATM_IDENTITY`
-  in the active agent environment instead
+- operator migration path is: remove `[atm].identity` and any legacy top-level
+  `identity` key, then set `ATM_IDENTITY` in the active agent environment
+  instead
 - keeping the obsolete key temporarily is tolerated for migration diagnostics
   only; it must not change runtime behavior
 
@@ -1201,7 +1204,8 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
-- current team member roster from `config.json`
+- current team member roster projected from canonical ATM roster truth and
+  ordered against the live `config.json` baseline
 - observability health
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
@@ -1256,14 +1260,20 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the retained local roster-metadata repair path for
   existing members and must not create new members implicitly
 - accepted terminology must distinguish:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - operator repair paths may repair `home_dir` but must not treat `live_cwd` or
   `launch_cwd` as durable roster metadata
 - accepted implementations must prefer direct roster-row and runtime-roster
@@ -1310,8 +1320,8 @@ Historical note:
 - the earlier file-backed/reconcile-fed line is historical only
 - the accepted runtime does not use `ingest/reconcile -> SQLite projection` as
   a live read pipeline
-- AD.4 removes the remaining daemon watch/reconcile lane from the accepted
-  runtime
+- AD.4 removed the remaining daemon watch/reconcile lane from the accepted
+  runtime and retired the corresponding daemon/core boundary traits
 
 The accepted read pipeline stages are:
 1. resolve caller identity and target mailbox from the accepted CLI/runtime
@@ -1469,6 +1479,10 @@ The post-send hook runs only after a successful outbound mailbox write from
 uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
 optionally emit one structured stdout result for observability, and never rolls
 back a successful message write on failure or timeout.
+
+Hook configuration lookup note:
+- send/ack must resolve post-send hook configuration from the sender's
+  authoritative ATM roster `home_dir` metadata
 
 Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
@@ -2181,11 +2195,13 @@ Single-write-path guardrail:
   write path
 
 Current owner-layer boundaries:
-- Claude-owned inbox compatibility surface:
-  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
-  delegate through injected store adapters; low-level source-file discovery,
-  lock/reload orchestration, and persistence remain internal leaf helpers
-  behind that seam during the Phase R store transition
+- Historical Claude-owned inbox compatibility surface:
+  AD.3 retired the Claude inbox append backend and the old nudge/context
+  injection path. The retained mailbox commands now cross the
+  `RetainedServiceRuntime` seam and delegate through injected store adapters;
+  low-level source-file discovery, lock/reload orchestration, and persistence
+  remain internal leaf helpers behind that seam during the Phase R store
+  transition.
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -2505,13 +2521,14 @@ Historical Claude-owned shared inbox compatibility previously existed for:
   top-level JSON array of inbox messages
 
 Phase `AD` rule:
-- Claude context injection through inbox append is retired per `ADR-019`
+- Phase `AD.3` completes retirement of Claude context injection through inbox
+  append per `ADR-019`
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line because Claude Code no longer
-  uses them
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line
+  because Claude Code no longer uses them
 - durable SQLite state is ATM's authoritative mail state
 - send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
 - the shared backend contract remains required so SQLite stays one backend
@@ -2593,8 +2610,9 @@ Architectural rules:
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is a dedicated post-send emitter, not
-  `DeliveryPlan`/`NotificationSink`
+- the accepted seam is direct post-send emission plus optional direct
+  notification-log append at the event site, not `NotificationSink` or a
+  daemon-owned notification worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -2854,7 +2872,7 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- the historical `R.17` daemon-owned queued notifier worker is being retired by
+- the historical `R.17` daemon-owned queued notifier worker was retired by
   `AD.5`
 - the accepted runtime must not require a daemon notification queue/worker just
   to append one post-send event or warning

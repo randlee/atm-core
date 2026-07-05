@@ -5,7 +5,8 @@
 Accepted
 
 Phase AD supersession note:
-- `ADR-019` retires `atm-storage-claude` from the accepted product
+- `ADR-019` retires the former `atm-storage-claude` crate from the accepted
+  product
   architecture because Claude Code no longer uses that backend
 - this ADR still governs the requirement for a shared storage contract,
   backend interoperability, and future SQL backend support
@@ -93,7 +94,8 @@ Forbidden graph edges:
   composition seam
 
 Historical note:
-- `AC.2` landed `atm-storage-claude` as a concrete backend
+- `AC.2` landed `atm-storage-claude` as a concrete backend before `ADR-019`
+  retired it from the accepted line
 - `ADR-019` later retires that backend from the accepted product architecture
   because Claude Code no longer uses it
 - that retirement does not weaken the requirement that the shared
@@ -245,7 +247,7 @@ This ADR is implemented by Phase `AC`:
 
 - `AC.0` planning-line ADR + violation inventory freeze
 - `AC.1` `atm-storage` contract and canonical domain types
-- `AC.2` `atm-storage-claude`
+- `AC.2` `atm-storage-claude` (historical; retired in `ADR-019`)
 - `AC.3` SQLite backend convergence
 - `AC.4` `atm-core` storage-boundary adoption
 - `AC.5` RPC envelope and domain type unification for message/roster bodies

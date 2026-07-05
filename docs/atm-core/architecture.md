@@ -142,11 +142,11 @@ Follow-up work:
 - retained mailbox runtime selection must be fail-closed and store-backed only;
   `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
   cutover line lands
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line; retained command/runtime logic
-  must not treat mailbox JSON append as a second durable or governing runtime
-  backend, and the shared backend contract remains the required seam for
-  future backend implementations
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line;
+  retained command/runtime logic must not treat mailbox JSON append as a
+  second durable or governing runtime backend, and the shared backend
+  contract remains the required seam for future backend implementations
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -248,9 +248,9 @@ Phase R redesign notes:
   but it must not reimplement backend-specific diagnosis logic
 
 Phase AC supersession note:
-- `AC.2` moved the concrete Claude inbox storage backend into
+- `AC.2` moved the concrete Claude inbox storage backend into the now-retired
   `crates/atm-storage-claude`
-- `ADR-019` later retires that concrete backend from the accepted line because
+- `ADR-019` later retired that concrete backend from the accepted line because
   Claude Code no longer uses it
 - `atm-core` still owns generic source/projection boundary traits and helper
   request/response shapes during the cutover window, but it no longer owns the
@@ -446,6 +446,8 @@ Identity-specific policy:
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
+- hook configuration lookup must come from authoritative sender roster home
+  `home_dir` metadata
 - recipient non-match is silent
 - hook-decision evaluation must preserve sender, recipient, matched rule
   selector, and execution outcome for troubleshooting
@@ -525,6 +527,9 @@ Architectural rules:
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
 - `add-member` remains create-only
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the accepted repair path for mutable existing roster
   metadata such as `home_dir`, `recipient_pane_id`, `harness`, `agent_type`,
   and `model`
@@ -532,10 +537,13 @@ Architectural rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
-- `live_cwd` is runtime-roster state, not operator-settable or durable roster
-  metadata
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
+- `live_cwd` is runtime-only caller-member state, not operator-settable or
+  durable roster metadata
 - `launch_cwd` is log-only startup context and must not become durable roster
   metadata
 - accepted implementations must prefer direct roster-row and runtime-roster
@@ -564,8 +572,11 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - durable store state is the primary forward-write contract for ATM 1.2
-- Claude inbox-append runtime behavior is retired from the accepted runtime
-  and must not be a live forward-write contract
+- Claude inbox-append runtime behavior is retired from the accepted governing
+  runtime and must not be the live forward-write contract
+- if a retained Claude mailbox compatibility export helper survives
+  temporarily, it is explicit obsolete-only scaffolding rather than the
+  governing delivery contract
 - write-affecting mail events persist first, then emit direct post-send
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through

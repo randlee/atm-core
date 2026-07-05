@@ -65,13 +65,14 @@ pub struct AtmConfig {
     ///
     /// ATM no longer uses config identity as a runtime fallback. Callers must
     /// use `ATM_IDENTITY` or an explicit sender override instead. `atm doctor`
-    /// surfaces `ATM_WARNING_IDENTITY_DRIFT` when this obsolete field is still
-    /// present. Migration path: remove `[atm].identity` from `.atm.toml` and
-    /// inject `ATM_IDENTITY` in the active agent environment. This field
+    /// surfaces `ATM_WARNING_IDENTITY_DRIFT` when an obsolete config identity
+    /// field is still present. Migration path: remove `[atm].identity` or the
+    /// legacy top-level `identity` key from `.atm.toml` and inject
+    /// `ATM_IDENTITY` in the active agent environment. This field
     /// intentionally remains `Option<String>` because ATM preserves the raw
     /// deprecated token only for compatibility reporting, not runtime identity
     /// resolution.
-    pub identity: Option<String>,
+    pub obsolete_identity: Option<String>,
     pub default_team: Option<TeamName>,
     pub team_members: Vec<TeamName>,
     /// Alias destination values are free-form routing strings; no domain constraint is applied at
@@ -82,13 +83,12 @@ pub struct AtmConfig {
     pub daemon: DaemonConfig,
     pub graft: GraftConfig,
     pub config_root: PathBuf,
-    pub(crate) obsolete_identity_present: bool,
 }
 
 impl Default for AtmConfig {
     fn default() -> Self {
         Self {
-            identity: None,
+            obsolete_identity: None,
             default_team: None,
             team_members: Vec::new(),
             aliases: BTreeMap::new(),
@@ -99,7 +99,6 @@ impl Default for AtmConfig {
             daemon: DaemonConfig::default(),
             graft: GraftConfig::default(),
             config_root: PathBuf::new(),
-            obsolete_identity_present: false,
         }
     }
 }

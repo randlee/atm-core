@@ -11,10 +11,10 @@ use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::AgentMember;
+use crate::schema::{AgentMember, HomeDirPath, canonical_home_dir};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
-use crate::team_admin::{MemberSummary, MembersList};
+use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
 use std::sync::Arc;
 
@@ -76,20 +76,28 @@ pub fn run_doctor_with_runtime(
     let mut findings = Vec::new();
     if config
         .as_ref()
-        .is_some_and(|config| config.obsolete_identity_present)
+        .is_some_and(|config| config.obsolete_identity.is_some())
     {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
             remediation: Some(
-                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
                     .to_string(),
             ),
         });
     }
     let member_roster = resolved_team.as_ref().and_then(|team| {
-        load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
+        load_member_roster(
+            runtime,
+            &home_dir,
+            team,
+            config.as_ref(),
+            environment.atm_identity.as_ref(),
+            Some(query.current_dir.as_path()),
+            &mut findings,
+        )
     });
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
@@ -143,6 +151,8 @@ pub fn run_doctor_with_runtime_ports(
             &home_dir,
             team,
             config.as_ref(),
+            environment.atm_identity.as_ref(),
+            Some(query.current_dir.as_path()),
             &mut drift_findings,
         )
     });
@@ -205,13 +215,13 @@ fn push_obsolete_identity_finding(
     config: Option<&config::AtmConfig>,
     config_report: &mut crate::boundary::ConfigDoctorReport,
 ) {
-    if config.is_some_and(|config| config.obsolete_identity_present) {
+    if config.is_some_and(|config| config.obsolete_identity.is_some()) {
         config_report.findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
             remediation: Some(
-                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
                     .to_string(),
             ),
         });
@@ -316,6 +326,8 @@ fn load_member_roster(
     home_dir: &Path,
     team: &TeamName,
     config: Option<&config::AtmConfig>,
+    caller_identity: Option<&AgentName>,
+    live_cwd: Option<&Path>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
     let team_dir = resolve_doctor_team_dir(runtime, home_dir, team, findings)?;
@@ -326,11 +338,16 @@ fn load_member_roster(
         .map(|config| config.team_members.as_slice())
         .unwrap_or(&[]);
     check_inbox_directory(team, &team_dir.join("inboxes"), findings);
-    record_doctor_roster_drift(team, &team_config, atm_roster, findings);
+    record_doctor_roster_drift(team, &team_config, atm_roster.as_deref(), findings);
+
+    let members = match atm_roster {
+        Some(ref roster) => ordered_roster_member_summaries(roster, caller_identity, live_cwd),
+        None => ordered_member_summaries(&team_config.members, baseline, caller_identity, live_cwd),
+    };
 
     Some(MembersList {
         team: team.clone(),
-        members: ordered_member_summaries(&team_config.members, baseline),
+        members,
     })
 }
 
@@ -391,7 +408,7 @@ fn load_doctor_roster_compare_inputs(
 fn record_doctor_roster_drift(
     team: &TeamName,
     team_config: &crate::schema::TeamConfig,
-    atm_roster: Option<Vec<RosterEntry>>,
+    atm_roster: Option<&[RosterEntry]>,
     findings: &mut Vec<DoctorFinding>,
 ) {
     let present = team_config
@@ -403,32 +420,111 @@ fn record_doctor_roster_drift(
         return;
     };
     let atm_members = atm_roster
-        .into_iter()
-        .map(|member| member.agent_name)
+        .iter()
+        .map(|member| member.agent_name.clone())
         .collect::<BTreeSet<_>>();
 
-    for member in atm_members.difference(&present) {
+    record_roster_membership_drift(team, &present, &atm_members, findings);
+    record_roster_member_metadata_drift(team, &team_config.members, atm_roster, findings);
+}
+
+fn record_roster_membership_drift(
+    team: &TeamName,
+    config_members: &BTreeSet<AgentName>,
+    roster_members: &BTreeSet<AgentName>,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for member in roster_members.difference(config_members) {
+        push_missing_config_member_finding(team, member.as_str(), findings);
+    }
+
+    for member in config_members.difference(roster_members) {
+        push_missing_roster_member_finding(team, member.as_str(), findings);
+    }
+}
+
+fn record_roster_member_metadata_drift(
+    team: &TeamName,
+    config_members: &[crate::schema::AgentMember],
+    atm_roster: &[RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for config_member in config_members {
+        let Some(roster_member) = atm_roster
+            .iter()
+            .find(|member| member.agent_name == config_member.name)
+        else {
+            continue;
+        };
+
+        record_member_metadata_drift(team, config_member, roster_member, findings);
+    }
+}
+
+fn push_missing_config_member_finding(
+    team: &TeamName,
+    member: &str,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRosterDrift,
+        message: format!("ATM roster member '{member}' is missing from team config.json for '{team}'"),
+        remediation: Some(format!(
+            "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
+        )),
+    });
+}
+
+fn push_missing_roster_member_finding(
+    team: &TeamName,
+    member: &str,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRosterDrift,
+        message: format!("Claude team member '{member}' is missing from ATM roster truth for '{team}'"),
+        remediation: Some(format!(
+            "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
+        )),
+    });
+}
+
+fn record_member_metadata_drift(
+    team: &TeamName,
+    config_member: &crate::schema::AgentMember,
+    roster_member: &RosterEntry,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    if roster_member.recipient_pane_id != config_member.tmux_pane_id {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningRosterDrift,
             message: format!(
-                "ATM roster member '{member}' is missing from team config.json for '{team}'"
+                "member '{}' has pane drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                config_member.name, team, roster_member.recipient_pane_id, config_member.tmux_pane_id
             ),
             remediation: Some(format!(
-                "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
+                "Repair the authoritative pane id with `atm teams update-member {team} {} --pane-id <pane>` and rerun `atm doctor`.",
+                config_member.name
             )),
         });
     }
 
-    for member in present.difference(&atm_members) {
+    let roster_home_dir = roster_member_home_dir(roster_member);
+    let config_home_dir = config_member_home_dir(config_member);
+    if roster_home_dir != config_home_dir {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningRosterDrift,
             message: format!(
-                "Claude team member '{member}' is missing from ATM roster truth for '{team}'"
+                "member '{}' has home-dir drift for '{}': ATM roster has {:?}, config.json has {:?}",
+                config_member.name, team, roster_home_dir, config_home_dir
             ),
             remediation: Some(format!(
-                "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
+                "Repair the authoritative member home with `atm teams update-member {team} {} --home-dir <path>` and rerun `atm doctor`.",
+                config_member.name
             )),
         });
     }
@@ -574,7 +670,12 @@ fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> Vec<MemberSummary> {
+fn ordered_member_summaries(
+    members: &[AgentMember],
+    baseline: &[TeamName],
+    caller_identity: Option<&AgentName>,
+    live_cwd: Option<&Path>,
+) -> Vec<crate::team_admin::MemberSummary> {
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
@@ -583,7 +684,7 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
         .any(|member| member.as_str() == ROLE_TEAM_LEAD)
         && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
-        ordered.push(member_summary(team_lead));
+        ordered.push(member_summary(team_lead, caller_identity, live_cwd));
         included.insert(team_lead.name.clone());
     }
 
@@ -595,38 +696,57 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
             .iter()
             .find(|member| member.name == baseline_member.as_str())
         {
-            ordered.push(member_summary(member));
+            ordered.push(member_summary(member, caller_identity, live_cwd));
             included.insert(member.name.clone());
         }
     }
 
     for member in members {
         if included.insert(member.name.clone()) {
-            ordered.push(member_summary(member));
+            ordered.push(member_summary(member, caller_identity, live_cwd));
         }
     }
 
     ordered
 }
 
-fn member_summary(member: &AgentMember) -> MemberSummary {
-    MemberSummary {
+fn member_summary(
+    member: &AgentMember,
+    caller_identity: Option<&AgentName>,
+    live_cwd: Option<&Path>,
+) -> crate::team_admin::MemberSummary {
+    crate::team_admin::MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.to_string(),
         agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.display().to_string(),
+        home_dir: member.home_dir.clone(),
+        live_cwd: match (caller_identity, live_cwd) {
+            (Some(identity), Some(path)) if member.name == identity.as_str() => {
+                Some(path.display().to_string())
+            }
+            _ => None,
+        },
         extra: member.extra.clone(),
     }
 }
 
+fn roster_member_home_dir(member: &RosterEntry) -> Option<HomeDirPath> {
+    canonical_home_dir(&member.metadata_json)
+}
+
+fn config_member_home_dir(member: &AgentMember) -> Option<HomeDirPath> {
+    (!member.home_dir.is_empty()).then(|| member.home_dir.clone())
+}
+
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
+    use super::ordered_member_summaries;
     use crate::doctor::{
         DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
     };
@@ -637,7 +757,7 @@ mod tests {
         LogTailSession, ObservabilityPort,
     };
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AgentMember, TeamConfig};
+    use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
@@ -751,22 +871,17 @@ mod tests {
         }
     }
 
-    fn test_runtime_with_roster(
-        members: &[&str],
-        notification_sink_path: PathBuf,
-    ) -> LocalServiceRuntime {
+    fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
-            Arc::new(crate::LocalFileNotificationSink::at_path(
-                notification_sink_path,
-            )),
         )
     }
 
     fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
-        test_runtime_with_roster(&[TEST_SENDER], paths.notification_sink_path.clone())
+        let _ = paths;
+        test_runtime_with_roster(&[TEST_SENDER])
     }
 
     fn run_doctor(
@@ -783,7 +898,6 @@ mod tests {
         home_dir: PathBuf,
         current_dir: PathBuf,
         active_log_path: PathBuf,
-        notification_sink_path: PathBuf,
     }
 
     impl TestPaths {
@@ -800,7 +914,6 @@ mod tests {
                 home_dir,
                 current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
-                notification_sink_path: root.join("atm-core-doctor-notifications.jsonl"),
             }
         }
 
@@ -929,7 +1042,7 @@ mod tests {
         assert!(
             report.findings[0]
                 .message
-                .contains("obsolete [atm].identity")
+                .contains("obsolete config identity")
         );
         assert_eq!(report.findings[1].code, AtmErrorCode::ObservabilityHealthOk);
     }
@@ -1115,10 +1228,7 @@ mod tests {
     fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
-        let runtime = test_runtime_with_roster(
-            &[TEST_SENDER, ROLE_TEAM_LEAD],
-            paths.notification_sink_path.clone(),
-        );
+        let runtime = test_runtime_with_roster(&[TEST_SENDER, ROLE_TEAM_LEAD]);
         let report = run_doctor_with_runtime(
             query(&paths),
             &StubObservability {
@@ -1146,6 +1256,96 @@ mod tests {
             }),
             "{report:#?}"
         );
+    }
+
+    #[test]
+    fn run_doctor_reports_pane_and_home_dir_drift_from_roster_truth() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        paths.write_raw_team_config(&format!(
+            r#"{{"members":[{{"name":"{TEST_SENDER}","home_dir":"/repo/config"}}]}}"#
+        ));
+        let mut roster_member = atm_storage::RosterMember {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: AgentName::from_validated(TEST_SENDER),
+            member_kind: atm_storage::RosterMemberKind::Permanent,
+            harness: atm_storage::RosterHarness::ClaudeCode,
+            agent_type: atm_storage::contract::AgentType::default(),
+            model: atm_storage::ModelName::default(),
+            recipient_pane_id: Some(crate::types::PaneId::from_cli("%9").expect("pane")),
+            metadata_json: serde_json::Map::new(),
+        };
+        roster_member.metadata_json.insert(
+            HOME_DIR_METADATA_KEY.to_string(),
+            serde_json::json!("/repo/roster"),
+        );
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedMailStore),
+            Arc::new(TestRosterStore {
+                members: vec![roster_member],
+            }),
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+        );
+
+        let report = run_doctor_with_runtime(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                }),
+            },
+            &runtime,
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.message.contains("pane drift")),
+            "{report:#?}"
+        );
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.message.contains("home-dir drift")),
+            "{report:#?}"
+        );
+        let member_roster = report.member_roster.expect("member roster");
+        assert_eq!(member_roster.members[0].tmux_pane_id.as_deref(), Some("%9"));
+        assert_eq!(
+            member_roster.members[0].home_dir.as_path(),
+            Path::new("/repo/roster")
+        );
+    }
+
+    #[test]
+    fn ordered_member_summaries_overlay_live_cwd_for_calling_member_only() {
+        let members = vec![
+            AgentMember::with_name(AgentName::from_validated(ROLE_TEAM_LEAD)),
+            AgentMember::with_name(AgentName::from_validated(TEST_SENDER)),
+        ];
+        let caller_identity = AgentName::from_validated(TEST_SENDER);
+
+        let summaries = ordered_member_summaries(
+            &members,
+            &[],
+            Some(&caller_identity),
+            Some(Path::new("/repo/live")),
+        );
+
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].name.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(summaries[0].live_cwd, None);
+        assert_eq!(summaries[1].name.as_str(), TEST_SENDER);
+        assert_eq!(summaries[1].live_cwd.as_deref(), Some("/repo/live"));
     }
 
     #[test]

@@ -13,6 +13,7 @@ use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
+    UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.
@@ -352,7 +353,16 @@ fn print_doctor_roster(report: &DoctorReport) {
     println!();
     println!("Members: {}", roster.team);
     for member in &roster.members {
-        println!("  - {}", member.name);
+        let home_dir = member.home_dir.as_path().display().to_string();
+        println!(
+            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
+            member.name,
+            empty_dash(&member.agent_type),
+            empty_dash(&member.model),
+            empty_dash(&home_dir),
+            empty_dash_opt(member.live_cwd.as_deref()),
+            empty_dash_opt(member.tmux_pane_id.as_deref())
+        );
     }
 }
 
@@ -401,12 +411,14 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
     }
 
     for member in &outcome.members {
+        let home_dir = member.home_dir.as_path().display().to_string();
         println!(
-            "  {} | type={} model={} cwd={} pane={}",
+            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
             member.name,
             empty_dash(&member.agent_type),
             empty_dash(&member.model),
-            empty_dash(&member.cwd),
+            empty_dash(&home_dir),
+            empty_dash_opt(member.live_cwd.as_deref()),
             empty_dash_opt(member.tmux_pane_id.as_deref())
         );
     }
@@ -422,6 +434,16 @@ pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result
             "Added member {} to {} (created_inbox: {})",
             outcome.member, outcome.team, outcome.created_inbox
         );
+    }
+    Ok(())
+}
+
+/// Print one update-member result in human-readable or JSON form.
+pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Updated member {} in {}", outcome.member, outcome.team);
     }
     Ok(())
 }

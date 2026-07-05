@@ -198,12 +198,22 @@ mod tests {
     use crate::config::RawPostSendHookRule;
     use crate::config::types::HookRecipient;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::EnvGuard;
 
     fn config_root_fixture() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempdir().expect("tempdir");
         let config_root = tempdir.path().join("atm config root").join("nested");
         std::fs::create_dir_all(&config_root).expect("config root");
         (tempdir, config_root)
+    }
+
+    fn home_fixture() -> (tempfile::TempDir, EnvGuard) {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path().join("home");
+        std::fs::create_dir_all(&home).expect("home dir");
+        let home_utf8 = home.to_str().expect("utf8 home path");
+        let env = EnvGuard::set_many([("HOME", Some(home_utf8)), ("USERPROFILE", Some(home_utf8))]);
+        (tempdir, env)
     }
 
     #[test]
@@ -266,9 +276,11 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_home_tilde_path() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let (home_root, _env) = home_fixture();
+        let home = home_root.path().join("home");
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec!["~/hooks/notify.sh".into()],
@@ -283,9 +295,11 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_windows_style_home_tilde_path() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let (home_root, _env) = home_fixture();
+        let home = home_root.path().join("home");
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec![r"~\hooks\notify.cmd".into()],
@@ -300,9 +314,11 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn normalize_post_send_hooks_expands_bare_home_tilde() {
         let (_tempdir, config_root) = config_root_fixture();
-        let home = crate::home::user_home().expect("user home");
+        let (home_root, _env) = home_fixture();
+        let home = home_root.path().join("home");
         let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec!["~".into()],

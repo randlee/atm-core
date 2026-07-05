@@ -1,18 +1,15 @@
 # Smoke
 
 - status: `passed`
-- timestamp: `2026-05-26T16:17:52.512750+00:00`
-- binary SHA: `84935774c720e06a9e5ae36b9c6073f2231450c2`
-- duration secs: `1.352`
-- summary: `pass=8`, `fail=0`, `skip=0`
+- timestamp: `2026-07-04T02:35:57.946116+00:00`
+- binary SHA: `5a964add3b9a05283239809fd45fee5ba380807a`
+- duration secs: `2.162`
+- summary: `pass=5`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
-| `Z1-001` | build approved smoke baseline | `PASS` | release smoke binaries built successfully |
-| `Z1-002` | clean-room daemon/runtime bring-up | `PASS` | doctor auto-started the daemon and reported healthy readiness on the clean-room baseline |
-| `Z1-003` | retained team/member inspection on clean-room baseline | `PASS` | teams and members returned the retained clean-room roster after explicit add-member setup |
-| `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot all succeeded on the clean-room empty-mailbox baseline |
-| `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes succeeded; the ack-required message was read from the recipient mailbox and acknowledged successfully |
-| `Z1-007` | retained CLI validation and recovery guidance | `PASS` | pending-ack inspection, post-ack mailbox clear/re-read, log snapshot, and invalid-ack recovery guidance all behaved as expected |
-| `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events |
-| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning records and no unexpected error records during the healthy smoke path |
+| `AD11-ENV-001` | env-only caller context for retained command surfaces | `PASS` | env-only caller context succeeds for retained CLI surfaces that require it, and daemon-independent retained command paths stay operational |
+| `AD11-DOCTOR-001` | doctor remains identity-free and optional-team scoped | `PASS` | doctor still executes without caller identity or caller team while preserving explicit team scoping |
+| `AD11-POSTSEND-001` | local tmux post-send and sender-visible warning fallback | `PASS` | local tmux nudges still use authoritative pane metadata and forced emission failure still degrades into sender-visible warning behavior |
+| `AD11-OVERRIDE-001` | explicit CLI caller-context overrides win when supported | `PASS` | commands with retained override surfaces stay bound to explicit CLI caller context instead of ambient environment values |
+| `AD11-LOCAL-001` | caller-context failures stay local before retained execution | `PASS` | missing caller identity or caller team still fails at CLI entry instead of guessing or dispatching into retained execution |

@@ -204,6 +204,7 @@ class LintBoundariesTests(unittest.TestCase):
             (crate_dir / "src").mkdir()
             (crate_dir / "src/lib.rs").write_text("pub fn example() {}\n", encoding="utf-8")
         (repo_root / "crates/atm/src/commands").mkdir(parents=True, exist_ok=True)
+        (repo_root / "crates/atm-core/src/team_admin").mkdir(parents=True, exist_ok=True)
         for doc_name in ("atm-core", "atm-storage-rusqlite", "atm", "atm-daemon"):
             (repo_root / "docs" / doc_name).mkdir(parents=True)
         self.write_scb_config_support(repo_root)
@@ -524,7 +525,7 @@ fn send_bad(team_dir: &std::path::Path) {
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
             self.write_scb_singleton_support(repo_root)
-            (repo_root / "crates/atm/src/commands/teams.rs").write_text(
+            (repo_root / "crates/atm-core/src/team_admin/member_mutation.rs").write_text(
                 """\
 use crate::service_runtime_store;
 
@@ -545,7 +546,7 @@ fn run_bad() {
             self.write_manifests(repo_root)
             self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_scb_workspace_support(repo_root)
-            (repo_root / "crates/atm-core/src/team_admin.rs").write_text(
+            (repo_root / "crates/atm-core/src/team_admin/member_mutation.rs").write_text(
                 """\
 use crate::config::load_config;
 

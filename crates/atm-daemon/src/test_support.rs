@@ -1,9 +1,9 @@
+use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
 use atm_core::error::AtmError;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 
 use interprocess::local_socket::Name as LocalSocketName;
@@ -125,9 +125,6 @@ pub(crate) fn sqlite_runtime_assembly_for_test(db_path: &std::path::Path) -> Run
         config_current_dir,
         sqlite_observer: std::sync::Arc::new(DaemonRuntimeSqliteObserver::new(observability)),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
-        notification_sink: std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            db_path.with_extension("notifications.jsonl"),
-        )),
     })
     .unwrap_or_else(|error| {
         panic!(

@@ -581,6 +581,142 @@ def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
         maybe_file_dep_currency_issue(root, stale)
 
 
+def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
+    readiness_path = root / "docs" / "plans" / "phase-AD" / "readiness.md"
+    smoke_normal = root / "reports" / "smoke" / "smoke.md"
+    smoke_thorough = root / "reports" / "smoke" / "smoke-thorough.md"
+    post_send_boundary_toml = root / "boundaries" / "atm-core" / "post-send-hook-emitter.toml"
+    graft_boundary_toml = root / "boundaries" / "atm-core" / "graft-post-send-port.toml"
+    boundary_inventory = root / "docs" / "atm-core" / "boundaries.md"
+
+    missing = [
+        path
+        for path in (
+            readiness_path,
+            smoke_normal,
+            smoke_thorough,
+            post_send_boundary_toml,
+            graft_boundary_toml,
+            boundary_inventory,
+        )
+        if not path.exists()
+    ]
+    if missing:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="phase AD readiness artifacts are missing",
+                detail=", ".join(str(path.relative_to(root)) for path in missing),
+            )
+        )
+        return
+
+    readiness_text = readiness_path.read_text(encoding="utf-8")
+    boundary_text = boundary_inventory.read_text(encoding="utf-8")
+    required_readiness_markers = (
+        "# Phase AD Readiness",
+        "`AD.11`",
+        "release verdict: `READY`",
+        "`reports/smoke/smoke.md`",
+        "`reports/smoke/smoke-thorough.md`",
+    )
+    missing_markers = [
+        marker for marker in required_readiness_markers if marker not in readiness_text
+    ]
+    if missing_markers:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="phase AD readiness document is incomplete",
+                detail=", ".join(missing_markers),
+            )
+        )
+
+    if "## PostSendHookEmitter" not in boundary_text:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="PostSendHookEmitter boundary inventory entry is missing",
+                detail="docs/atm-core/boundaries.md does not contain the PostSendHookEmitter heading",
+            )
+        )
+    if "## GraftPostSendPort" not in boundary_text:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="GraftPostSendPort boundary inventory entry is missing",
+                detail="docs/atm-core/boundaries.md does not contain the GraftPostSendPort heading",
+            )
+        )
+
+    expected_sprint_statuses = {
+        "AD.1": "complete",
+        "AD.2": "complete",
+        "AD.3": "complete",
+        "AD.4": "complete",
+        "AD.5": "complete",
+        "AD.6": "complete",
+        "AD.7": "complete",
+        "AD.8": "complete",
+        "AD.9": "complete",
+        "AD.10": "complete",
+        "AD.11": "complete",
+    }
+    for sprint_id, expected_status in expected_sprint_statuses.items():
+        sprint_path = root / "docs" / "plans" / "phase-AD" / f"sprint-{sprint_id.replace('.', '')}.md"
+        actual_status = phase_ad_frontmatter_value(sprint_path, "status")
+        if actual_status != expected_status:
+            findings.append(
+                Finding(
+                    check="phase-ad-readiness",
+                    severity="error",
+                    summary=f"{sprint_id} status does not match the readiness contract",
+                    detail=f"{sprint_path.relative_to(root)} has status={actual_status!r}; expected {expected_status!r}",
+                )
+            )
+
+    post_send_boundary_state = tomllib.loads(post_send_boundary_toml.read_text(encoding="utf-8")).get(
+        "status", {}
+    ).get("state")
+    if post_send_boundary_state != "active":
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="PostSendHookEmitter boundary state does not match the readiness contract",
+                detail=f"boundaries/atm-core/post-send-hook-emitter.toml has state={post_send_boundary_state!r}; expected 'active'",
+            )
+        )
+
+    graft_boundary_state = tomllib.loads(graft_boundary_toml.read_text(encoding="utf-8")).get("status", {}).get(
+        "state"
+    )
+    if graft_boundary_state != "active":
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="GraftPostSendPort boundary state does not match the readiness contract",
+                detail=f"boundaries/atm-core/graft-post-send-port.toml has state={graft_boundary_state!r}; expected 'active'",
+            )
+        )
+
+
+def phase_ad_frontmatter_value(path: Path, key: str) -> str | None:
+    text = path.read_text(encoding="utf-8")
+    frontmatter_match = re.match(r"---\n(.*?)\n---", text, re.DOTALL)
+    if frontmatter_match is None:
+        return None
+    key_match = re.search(rf"^{re.escape(key)}:\s*(.+)$", frontmatter_match.group(1), re.MULTILINE)
+    if key_match is None:
+        return None
+    return key_match.group(1).strip()
+
+
 def write_findings(root: Path, version: str, findings_path: Path, findings: list[Finding]) -> None:
     payload = {
         "generatedAt": utc_now(),
@@ -608,6 +744,7 @@ def build_parser() -> argparse.ArgumentParser:
             "inventory",
             "cargo-lock-drift",
             "dependency-currency",
+            "phase-ad-readiness",
         ),
     )
     parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
@@ -644,6 +781,7 @@ def main(argv: list[str] | None = None) -> int:
             enforce_release_window=explicit_version,
         ),
         "dependency-currency": lambda: validate_dependency_currency(root, findings),
+        "phase-ad-readiness": lambda: validate_phase_ad_readiness(root, findings),
     }
 
     findings_path = root / args.findings
@@ -658,6 +796,7 @@ def main(argv: list[str] | None = None) -> int:
                 "inventory",
                 "cargo-lock-drift",
                 "dependency-currency",
+                "phase-ad-readiness",
             ):
                 print(f"== validate {target} ==")
                 actions[target]()

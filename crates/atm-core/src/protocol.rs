@@ -112,10 +112,12 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
         | AtmErrorCode::ConfigTeamMissing => AtmErrorKind::Config,
-        AtmErrorCode::IdentityUnavailable | AtmErrorCode::WarningIdentityDrift => {
-            AtmErrorKind::Identity
-        }
+        AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityInvalid
+        | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
+        AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
+        AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
@@ -125,6 +127,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
@@ -149,10 +152,10 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityHealthOk
         | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
-        AtmErrorCode::WarningSqliteHealthDegraded => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
@@ -166,7 +169,12 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::TestFakeTransportInjectionFailed => AtmErrorKind::Validation,
+        | AtmErrorCode::PostSendPaneMissing
+        | AtmErrorCode::PostSendTmuxSendFailed
+        | AtmErrorCode::PostSendGraftUnavailable
+        | AtmErrorCode::TestFakeTransportInjectionFailed
+        | AtmErrorCode::TeamInvalid
+        | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
     }
 }
 
@@ -387,8 +395,65 @@ pub fn request_from_frame_payload(
             "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
         ));
     }
-    let request = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
+    let request = match frame.message_kind {
+        MessageKind::SendComposeRequest
+        | MessageKind::SendAcknowledgeRequest
+        | MessageKind::ListRequest
+        | MessageKind::ReceiveRequest
+        | MessageKind::ClearRequest => {
+            let value = serde_json::from_slice::<serde_json::Value>(&frame.bytes)
+                .map_err(AtmError::from)?;
+            validate_required_caller_context_fields(&value)?;
+            serde_json::from_value(value).map_err(AtmError::from)?
+        }
+        _ => serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?,
+    };
     Ok((frame.request_id, request))
+}
+
+fn validate_required_caller_context_fields(value: &serde_json::Value) -> Result<(), AtmError> {
+    let object = value.as_object().ok_or_else(|| {
+        AtmError::caller_context_request_invalid(
+            "daemon request payload must be a JSON object with caller_identity and caller_team",
+        )
+    })?;
+    parse_required_caller_identity(object)?;
+    parse_required_caller_team(object)?;
+    Ok(())
+}
+
+fn parse_required_caller_identity(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<AgentName, AtmError> {
+    let value = object.get("caller_identity").ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request is missing caller_identity")
+    })?;
+    let raw = value.as_str().ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request caller_identity must be a string")
+    })?;
+    raw.parse::<AgentName>().map_err(|error| {
+        AtmError::caller_context_request_invalid(format!(
+            "daemon request caller_identity is invalid: {}",
+            error.message
+        ))
+    })
+}
+
+fn parse_required_caller_team(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<TeamName, AtmError> {
+    let value = object.get("caller_team").ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request is missing caller_team")
+    })?;
+    let raw = value.as_str().ok_or_else(|| {
+        AtmError::caller_context_request_invalid("daemon request caller_team must be a string")
+    })?;
+    raw.parse::<TeamName>().map_err(|error| {
+        AtmError::caller_context_request_invalid(format!(
+            "daemon request caller_team is invalid: {}",
+            error.message
+        ))
+    })
 }
 
 pub fn response_to_frame_payload(
@@ -686,10 +751,15 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 #[serde(rename_all = "snake_case")]
 pub enum NotificationKind {
     Delivery,
+    #[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
     ReconcileComplete,
 }
 
 impl fmt::Display for NotificationKind {
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete transport strings remain stable for historical reconcile/watch decoding and formatting support."
+    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
             Self::Delivery => "delivery",
@@ -793,6 +863,7 @@ pub struct RuntimeStatusSnapshot {
 
 /// Watch subscription request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct WatchSubscriptionRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
@@ -801,12 +872,14 @@ pub struct WatchSubscriptionRequest {
 
 /// Watch event batch transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct WatchEventBatch {
     pub paths: Vec<PathBuf>,
 }
 
 /// Reconcile request transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct ReconcileRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
@@ -815,6 +888,7 @@ pub struct ReconcileRequest {
 
 /// Reconcile outcome transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
 pub struct ReconcileResult {
     pub observed_paths: usize,
     pub imported_sources: usize,
@@ -829,6 +903,7 @@ mod tests {
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
@@ -926,5 +1001,15 @@ mod tests {
         assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
         assert_eq!(round_trip.message, error.message);
         assert_eq!(round_trip.recovery, error.recovery);
+    }
+
+    #[test]
+    fn protocol_error_envelope_round_trips_member_not_found_as_agent_not_found() {
+        let error = AtmError::member_not_found(TEST_SENDER, TEST_TEAM);
+        let envelope = ProtocolErrorEnvelope::from_error(&error);
+        let round_trip = envelope.into_atm_error();
+
+        assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
+        assert!(round_trip.is_agent_not_found());
     }
 }

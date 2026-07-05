@@ -456,9 +456,9 @@ mod tests {
         let request = RequestEnvelope::Clear(ClearQuery {
             home_dir: tmp.clone(),
             current_dir: tmp,
-            actor_override: None,
+            caller_identity: atm_core::test_support::TEST_SENDER.parse().expect("caller"),
+            caller_team: atm_core::test_support::TEST_TEAM.parse().expect("team"),
             target_address: None,
-            team_override: None,
             older_than: None,
             idle_only: false,
             dry_run: false,

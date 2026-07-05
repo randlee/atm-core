@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::boundary;
-use crate::config;
 use crate::error::AtmError;
-use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, InboxMessage};
@@ -34,9 +32,9 @@ pub const MAX_TIMEOUT_SECS: u64 = 3600;
 pub struct ReadQuery {
     pub(crate) home_dir: PathBuf,
     pub(crate) current_dir: PathBuf,
-    pub(crate) actor_override: Option<AgentName>,
+    pub(crate) caller_identity: AgentName,
+    pub(crate) caller_team: TeamName,
     pub(crate) target_address: Option<AgentAddress>,
-    pub(crate) team_override: Option<TeamName>,
     pub(crate) selection_mode: ReadSelection,
     pub(crate) seen_state_filter: bool,
     pub(crate) seen_state_update: bool,
@@ -54,9 +52,9 @@ impl ReadQuery {
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        actor_override: Option<&str>,
+        caller_identity: AgentName,
         target_address: Option<&str>,
-        team_override: Option<&str>,
+        caller_team: TeamName,
         selection_mode: ReadSelection,
         seen_state_filter: bool,
         seen_state_update: bool,
@@ -73,9 +71,9 @@ impl ReadQuery {
         Ok(Self {
             home_dir,
             current_dir,
-            actor_override: actor_override.map(str::parse).transpose()?,
+            caller_identity,
+            caller_team,
             target_address: target_address.map(str::parse).transpose()?,
-            team_override: team_override.map(str::parse).transpose()?,
             selection_mode,
             seen_state_filter,
             seen_state_update,
@@ -100,7 +98,7 @@ impl ReadQuery {
     }
 
     pub fn team_override(&self) -> Option<&TeamName> {
-        self.team_override.as_ref()
+        Some(&self.caller_team)
     }
 
     pub fn selection_mode(&self) -> ReadSelection {
@@ -457,12 +455,12 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
     runtime: &R,
 ) -> Result<ReadRuntimeContext, AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
-    let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
+    let actor = query.caller_identity.clone();
+    let actor_team = Some(query.caller_team.clone());
     let target = resolve_target(
         query.target_address.as_ref(),
         &actor,
-        query.team_override.as_ref(),
+        &query.caller_team,
         config.as_ref(),
     )?;
 
@@ -752,7 +750,7 @@ mod tests {
         BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
         read_mail_with_runtime_impl, state,
     };
-    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, RosterHarness, RosterMemberKind};
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
@@ -1051,15 +1049,6 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for ReadRuntime {}
 
-    impl crate::boundary::NotificationSink for ReadRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
-
     impl RetainedServiceRuntime for ReadRuntime {
         fn load_config(
             &self,
@@ -1124,23 +1113,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not rebuild projections")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox message sets")
         }
 
         fn deliver_non_claude_payloads(
@@ -1233,9 +1205,9 @@ mod tests {
         ReadQuery::new(
             home_dir,
             current_dir,
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some(&target),
-            None,
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,
             false,
@@ -1275,9 +1247,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::All,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1317,9 +1289,9 @@ mod tests {
         let error = ReadQuery::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some("../evil"),
-            Some(TEST_TEAM),
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::Actionable,
             false,
             false,
@@ -1332,31 +1304,6 @@ mod tests {
             None,
         )
         .expect_err("invalid target");
-
-        assert!(error.message.contains("agent name"));
-    }
-
-    #[test]
-    fn read_query_new_rejects_invalid_actor_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = ReadQuery::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some("../evil"),
-            None,
-            Some(TEST_TEAM),
-            ReadSelection::Actionable,
-            false,
-            false,
-            AckActivationMode::ReadOnly,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect_err("invalid actor");
 
         assert!(error.message.contains("agent name"));
     }
@@ -1385,9 +1332,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1431,9 +1378,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1481,9 +1428,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1526,9 +1473,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1573,9 +1520,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1617,9 +1564,9 @@ mod tests {
         let actionable = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1660,9 +1607,9 @@ mod tests {
         let actionable = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1714,9 +1661,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::All,
             seen_state_filter: false,
             seen_state_update: false,
@@ -1760,9 +1707,9 @@ mod tests {
         let query = ReadQuery {
             home_dir: PathBuf::new(),
             current_dir: PathBuf::new(),
-            actor_override: None,
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
             target_address: None,
-            team_override: None,
             selection_mode: ReadSelection::All,
             seen_state_filter: false,
             seen_state_update: false,

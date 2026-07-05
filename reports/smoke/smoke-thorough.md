@@ -1,23 +1,19 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-06-07T05:18:56.225388+00:00`
-- binary SHA: `7b355937f5e18744435ee52a8825800a3ded4e91`
-- duration secs: `2.568`
-- summary: `pass=13`, `fail=0`, `skip=0`
+- timestamp: `2026-07-04T02:35:58.551642+00:00`
+- binary SHA: `5a964add3b9a05283239809fd45fee5ba380807a`
+- duration secs: `2.711`
+- summary: `pass=9`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
-| `Z1-001` | build approved smoke baseline | `PASS` | release smoke binaries built successfully |
-| `Z1-002` | clean-room daemon/runtime bring-up | `PASS` | doctor auto-started the daemon and reported healthy readiness on the clean-room baseline |
-| `Z1-003` | retained team/member inspection on clean-room baseline | `PASS` | teams, members, backup, and restore dry-run all succeeded on the clean-room retained/admin baseline |
-| `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot plus ATM help overview/send guidance all succeeded on the clean-room baseline |
-| `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes, pending-ack inspection, recipient read/ack, and post-ack clear/re-read all succeeded on the clean-room baseline |
-| `GRAFT-001` | same-host atm-graft advisory and unary ICD coverage | `PASS` | a real atm-graft host registered, consumed the advisory nudge, read and acknowledged the nudged message, and sent a unary follow-up back to the CLI operator |
-| `Z1-006` | primary Claude inbox durable send | `PASS` | copied-state durable send stayed on the primary Claude inbox path without compatibility append degradation |
-| `Z1-007` | retained CLI validation and recovery guidance | `PASS` | send/read/ack/list/clear/log/doctor/teams/members/help common error paths all failed closed with explicit actionable guidance |
-| `Z1-008` | copied-state durable baseline bring-up | `PASS` | disposable copied-state doctor/list/send/read all succeeded without touching live host ATM state |
-| `Z1-009` | reconcile/runtime retry-visible smoke coverage | `PASS` | copied-state log snapshot retained the expected retry-visible daemon lifecycle outcomes while the durable send/read path succeeded |
-| `PRR-001` | shared-host multi-workspace same-daemon smoke coverage | `PASS` | two workspaces with one shared ATM_HOME daemon/database/log root handled concurrent send/read/ack traffic without cross-workspace leakage |
-| `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events before negative-path execution |
-| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning or error records during the healthy-path portion of the thorough run |
+| `AD11-ENV-001` | env-only caller context for retained command surfaces | `PASS` | env-only caller context succeeds for retained CLI surfaces that require it, and daemon-independent retained command paths stay operational |
+| `AD11-OVERRIDE-001` | explicit CLI caller-context overrides win when supported | `PASS` | commands with retained override surfaces stay bound to explicit CLI caller context instead of ambient environment values |
+| `AD11-LOCAL-001` | caller-context failures stay local before retained execution | `PASS` | missing caller identity or caller team still fails at CLI entry instead of guessing or dispatching into retained execution |
+| `AD11-DOCTOR-001` | doctor remains identity-free and optional-team scoped | `PASS` | doctor still executes without caller identity or caller team while preserving explicit team scoping |
+| `AD11-POSTSEND-001` | local tmux post-send and sender-visible warning fallback | `PASS` | local tmux nudges still use authoritative pane metadata and forced emission failure still degrades into sender-visible warning behavior |
+| `AD11-XREPO-001` | sender roster home_dir governs post-send config lookup across repos | `PASS` | post-send config discovery remains anchored to sender roster metadata rather than ambient caller cwd, preserving cross-repo local-send behavior |
+| `AD11-GRAFT-001` | graft-backed post-send emission path remains optional and explicit | `PASS` | the graft-backed emission seam delegates through the dedicated graft port and surfaces failure without leaking graft ownership into the core send path |
+| `AD11-AUTH-001` | update-member auth checks and infallible add-member projection are closed | `PASS` | the promoted AD.9 auth and infallible findings are closed: update-member consumes caller context materially, and add-member projection no longer pretends to fail |
+| `AD11-READINESS-001` | phase-ad readiness and boundary artifacts fail closed | `PASS` | Phase AD readiness records, smoke artifacts, and PostSendHookEmitter boundary inventory are all present and wired into the retained validation gate |

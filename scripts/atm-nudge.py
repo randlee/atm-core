@@ -5,10 +5,10 @@ Post-send hook for ATM: nudge a named agent's tmux pane after successful send.
 
 Normal mode:
   atm-nudge.py <recipient>
-  Resolves the target pane from the committed repo-local `.atm.toml` by
-  matching both recipient name and ATM team. `config.json` is read only for
-  advisory diagnostics and recovery suggestions; it is not the authoritative
-  pane source for delivery.
+  Resolves the target pane from canonical ATM roster state first via
+  `atm members --team <team> --json`. If that lookup cannot produce a usable
+  pane id, the script falls back to the repo-local `.atm.toml` pane mapping as
+  a last-resort compatibility seam.
 
 Override mode:
   atm-nudge.py --pane <id> <recipient> [<message>]
@@ -46,6 +46,7 @@ ERR_PARSE_ERROR = "parse_error"
 ERR_NO_TOMLLIB = "no_tomllib"
 ERR_AMBIGUOUS = "ambiguous_match"
 ERR_INVALID_STRUCTURE = "invalid_structure"
+ERR_COMMAND_FAILED = "command_failed"
 
 
 class PaneLookup(NamedTuple):
@@ -153,8 +154,91 @@ def _pane_team(pane: dict[str, object]) -> str | None:
     return _normalize_team(env.get("ATM_TEAM"))
 
 
+def read_pane_from_roster(
+    recipient: str,
+    team: str,
+    payload: dict[str, object] | None = None,
+) -> PaneLookup:
+    """Read the authoritative pane from canonical ATM roster state."""
+    command = ["atm", "members", "--team", team, "--json"]
+    env = dict(os.environ)
+    env.setdefault("ATM_TEAM", team)
+    if payload is not None:
+        sender = payload.get("sender")
+        if isinstance(sender, str) and sender.strip():
+            env.setdefault("ATM_IDENTITY", sender.strip())
+
+    source = "atm members --team <team> --json"
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+    except OSError as exc:
+        return PaneLookup(
+            None,
+            ERR_COMMAND_FAILED,
+            f"Cannot run {' '.join(command)}: {exc}",
+            source,
+        )
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
+        return PaneLookup(
+            None,
+            ERR_COMMAND_FAILED,
+            f"{' '.join(command)} failed: {detail}",
+            source,
+        )
+
+    try:
+        response = json.loads(result.stdout)
+    except Exception as exc:
+        return PaneLookup(
+            None,
+            ERR_PARSE_ERROR,
+            f"Cannot parse ATM roster JSON from {' '.join(command)}: {exc}",
+            source,
+        )
+
+    members = response.get("members")
+    if not isinstance(members, list):
+        return PaneLookup(
+            None,
+            ERR_INVALID_STRUCTURE,
+            f"{' '.join(command)} returned invalid members structure",
+            source,
+        )
+
+    member = next(
+        (entry for entry in members if isinstance(entry, dict) and entry.get("name") == recipient),
+        None,
+    )
+    if member is None:
+        return PaneLookup(
+            None,
+            ERR_NOT_FOUND,
+            f"'{recipient}' not in canonical ATM roster for team '{team}'",
+            source,
+        )
+
+    pane_id = str(member.get("tmux_pane_id", "")).strip()
+    if not pane_id:
+        return PaneLookup(
+            None,
+            ERR_EMPTY_PANE,
+            f"'{recipient}' in canonical ATM roster for team '{team}' has empty tmux_pane_id",
+            source,
+        )
+
+    return PaneLookup(pane_id, None, None, source)
+
+
 def read_pane_from_toml(recipient: str, team: str) -> PaneLookup:
-    """Read the authoritative pane from the repo-local .atm.toml."""
+    """Read a fallback pane from the repo-local .atm.toml."""
     if tomllib is None:
         return PaneLookup(
             None,
@@ -248,58 +332,6 @@ def read_pane_from_toml(recipient: str, team: str) -> PaneLookup:
     return PaneLookup(pane_id, None, None, str(toml_path))
 
 
-def read_pane_from_config(recipient: str, team: str) -> PaneLookup:
-    """Read advisory pane info from Claude team config.json."""
-    config_path = Path.home() / ".claude" / "teams" / team / "config.json"
-    if not config_path.exists():
-        return PaneLookup(
-            None,
-            ERR_FILE_MISSING,
-            f"config.json not found for team '{team}' at {config_path}",
-            str(config_path),
-        )
-    try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return PaneLookup(
-            None,
-            ERR_PARSE_ERROR,
-            f"Cannot parse {config_path}: {exc}",
-            str(config_path),
-        )
-    members = config.get("members", [])
-    if not isinstance(members, list):
-        return PaneLookup(
-            None,
-            ERR_INVALID_STRUCTURE,
-            f"{config_path} has invalid members structure",
-            str(config_path),
-        )
-
-    member = next(
-        (entry for entry in members if isinstance(entry, dict) and entry.get("name") == recipient),
-        None,
-    )
-    if member is None:
-        return PaneLookup(
-            None,
-            ERR_NOT_FOUND,
-            f"'{recipient}' not in team '{team}' members",
-            str(config_path),
-        )
-
-    pane_id = str(member.get("tmuxPaneId", "")).strip()
-    if not pane_id:
-        return PaneLookup(
-            None,
-            ERR_EMPTY_PANE,
-            f"'{recipient}' in team '{team}' has empty tmuxPaneId",
-            str(config_path),
-        )
-
-    return PaneLookup(pane_id, None, None, str(config_path))
-
-
 def nudge_pane(pane_id: str, recipient: str, message: str) -> None:
     """Send a message to a tmux pane after validating all inputs."""
     if not isinstance(pane_id, str) or not pane_id.strip():
@@ -385,14 +417,13 @@ def build_error_payload(
     recipient: str,
     team: str,
     message: str,
+    roster: PaneLookup,
     toml: PaneLookup,
-    cfg: PaneLookup,
 ) -> dict[str, object]:
-    recommended_pane = cfg.pane_id or CODEX_DEFAULT_PANE
-    recommended_source = "config.json" if cfg.pane_id else "default"
+    recommended_pane = toml.pane_id or CODEX_DEFAULT_PANE
+    recommended_source = ".atm.toml fallback" if toml.pane_id else "default"
     discovered_toml = discover_atm_toml()
     toml_path = toml.source_path or (str(discovered_toml) if discovered_toml else None)
-    config_path = cfg.source_path or str(Path.home() / ".claude" / "teams" / team / "config.json")
     nudge_command = build_nudge_command(recommended_pane, recipient, message)
     try:
         cwd = os.getcwd()
@@ -407,35 +438,51 @@ def build_error_payload(
     ]
 
     fix: list[str] = []
+    pane_hint = toml.pane_id or "<pane>"
+    fix.append(
+        f"Repair canonical ATM roster pane metadata with `atm teams update-member {team} {recipient} --pane-id {pane_hint}`."
+    )
+    if roster.error_code == ERR_COMMAND_FAILED:
+        fix.append(
+            f"Make sure `atm members --team {team} --json` succeeds from the hook environment and preserves ATM_IDENTITY/ATM_TEAM."
+        )
+    elif roster.error_code == ERR_NOT_FOUND:
+        fix.append(
+            f"Add or restore '{recipient}@{team}' in the canonical ATM roster before relying on automatic nudges."
+        )
+    elif roster.error_code == ERR_EMPTY_PANE:
+        fix.append(
+            f"Set tmux_pane_id for '{recipient}@{team}' in canonical ATM roster state via `atm teams update-member`."
+        )
+    elif roster.error_code == ERR_PARSE_ERROR:
+        fix.append(
+            "Investigate the `atm members --json` response; the hook could not parse canonical ATM roster output."
+        )
+    elif roster.error_code == ERR_INVALID_STRUCTURE:
+        fix.append(
+            "Investigate the `atm members --json` response shape; the canonical ATM roster output was not in the expected format."
+        )
+
     if toml.error_code in {ERR_FILE_MISSING, ERR_PARSE_ERROR, ERR_INVALID_STRUCTURE}:
-        fix.append("Fix or restore the repo-local .atm.toml so the hook can resolve a committed pane mapping.")
+        fix.append("Fix or restore the repo-local .atm.toml so the compatibility fallback can resolve a pane if roster lookup fails again.")
     elif toml.error_code == ERR_NOT_FOUND:
-        fix.append(f"Add [[rmux.windows.panes]] name='{recipient}' with env.ATM_TEAM='{team}' and a tmux_pane_id in .atm.toml.")
+        fix.append(f"Add [[rmux.windows.panes]] name='{recipient}' with env.ATM_TEAM='{team}' and a tmux_pane_id in .atm.toml as a last-resort fallback.")
     elif toml.error_code == ERR_EMPTY_PANE:
-        fix.append(f"Set tmux_pane_id for '{recipient}@{team}' in .atm.toml.")
+        fix.append(f"Set tmux_pane_id for '{recipient}@{team}' in .atm.toml if the fallback mapping should remain available.")
     elif toml.error_code == ERR_AMBIGUOUS:
-        fix.append(f"Make the .atm.toml pane mapping for '{recipient}@{team}' unique so the hook can select exactly one pane.")
+        fix.append(f"Make the .atm.toml fallback mapping for '{recipient}@{team}' unique so the hook can select exactly one pane.")
     elif toml.error_code == ERR_NO_TOMLLIB:
         fix.append("Install tomli (Python < 3.11) or run the hook under Python 3.11+.")
 
-    if cfg.error_code == ERR_FILE_MISSING:
-        fix.append(f"Create {config_path} so Claude Code also has a pane mapping for '{recipient}@{team}'.")
-    elif cfg.error_code == ERR_PARSE_ERROR:
-        fix.append(f"Fix JSON syntax in {config_path}.")
-    elif cfg.error_code == ERR_NOT_FOUND:
-        fix.append(f"Add '{recipient}' with tmuxPaneId to {config_path}.")
-    elif cfg.error_code == ERR_EMPTY_PANE:
-        fix.append(f"Set tmuxPaneId for '{recipient}' in {config_path}.")
-
     if not fix:
-        fix.append("Review .atm.toml and config.json pane mappings before retrying the nudge.")
+        fix.append("Review canonical ATM roster state and the repo-local .atm.toml fallback before retrying the nudge.")
 
     return {
         "status": "error",
-        "error_code": toml.error_code or "nudge_resolution_failed",
+        "error_code": roster.error_code or toml.error_code or "nudge_resolution_failed",
         "recipient": recipient,
         "team": team,
-        "detail": toml.error_msg or "Unable to resolve pane from .atm.toml",
+        "detail": roster.error_msg or toml.error_msg or "Unable to resolve pane from canonical ATM roster state or .atm.toml fallback",
         "call_to_action": call_to_action,
         "nudge_command": nudge_command,
         "fix": fix,
@@ -448,16 +495,15 @@ def build_error_payload(
             "pwd": os.environ.get("PWD"),
         },
         "pane_resolution": {
-            "authoritative_source": ".atm.toml",
+            "authoritative_source": "atm roster",
             "recommended_pane": recommended_pane,
             "recommended_pane_source": recommended_source,
+            "roster_lookup": roster.source_path,
+            "roster_error_code": roster.error_code,
+            "roster_error": roster.error_msg,
             "toml_path": toml_path,
             "toml_error_code": toml.error_code,
             "toml_error": toml.error_msg,
-            "config_path": config_path,
-            "config_pane": cfg.pane_id,
-            "config_error_code": cfg.error_code,
-            "config_error": cfg.error_msg,
         },
     }
 
@@ -467,49 +513,43 @@ def build_warning_payload(
     recipient: str,
     team: str,
     message: str,
+    roster: PaneLookup,
     delivered_pane: str,
     toml: PaneLookup,
-    cfg: PaneLookup,
 ) -> dict[str, object]:
-    config_path = cfg.source_path or str(Path.home() / ".claude" / "teams" / team / "config.json")
     try:
         cwd = os.getcwd()
     except Exception:
         cwd = None
-    if cfg.pane_id:
-        detail = (
-            f"Nudge sent to pane {delivered_pane} from .atm.toml for "
-            f"'{recipient}@{team}', but config.json points to {cfg.pane_id}"
+    detail = (
+        f"Nudge sent to pane {delivered_pane} from .atm.toml fallback for "
+        f"'{recipient}@{team}' because canonical ATM roster lookup did not yield a usable pane"
+    )
+    fix = [
+        f"Repair canonical ATM roster pane metadata with `atm teams update-member {team} {recipient} --pane-id {delivered_pane}`."
+    ]
+    if roster.error_code == ERR_COMMAND_FAILED:
+        fix.append(
+            f"Make sure `atm members --team {team} --json` succeeds from the hook environment and preserves ATM_IDENTITY/ATM_TEAM."
         )
-        fix = [f"Update tmuxPaneId for '{recipient}' in {config_path} to '{delivered_pane}'."]
-    else:
-        detail = (
-            f"Nudge sent to pane {delivered_pane} from .atm.toml for "
-            f"'{recipient}@{team}', but config.json is not consistent enough to confirm the same pane"
-        )
-        fix = []
-        if cfg.error_code == ERR_FILE_MISSING:
-            fix.append(f"Create {config_path} and add '{recipient}' with tmuxPaneId '{delivered_pane}'.")
-        elif cfg.error_code == ERR_PARSE_ERROR:
-            fix.append(f"Fix JSON syntax in {config_path} and set tmuxPaneId for '{recipient}' to '{delivered_pane}'.")
-        elif cfg.error_code == ERR_NOT_FOUND:
-            fix.append(f"Add '{recipient}' with tmuxPaneId '{delivered_pane}' to {config_path}.")
-        elif cfg.error_code == ERR_EMPTY_PANE:
-            fix.append(f"Set tmuxPaneId for '{recipient}' in {config_path} to '{delivered_pane}'.")
-        elif cfg.error_code == ERR_INVALID_STRUCTURE:
-            fix.append(f"Repair the members structure in {config_path} and set tmuxPaneId for '{recipient}' to '{delivered_pane}'.")
-        else:
-            fix.append(f"Review {config_path} and align tmuxPaneId for '{recipient}' to '{delivered_pane}'.")
+    elif roster.error_code == ERR_NOT_FOUND:
+        fix.append(f"Add or restore '{recipient}@{team}' in canonical ATM roster state.")
+    elif roster.error_code == ERR_EMPTY_PANE:
+        fix.append(f"Set tmux_pane_id for '{recipient}@{team}' in canonical ATM roster state.")
+    elif roster.error_code == ERR_PARSE_ERROR:
+        fix.append("Investigate the `atm members --json` response; the hook could not parse canonical ATM roster output.")
+    elif roster.error_code == ERR_INVALID_STRUCTURE:
+        fix.append("Investigate the `atm members --json` response shape; the canonical ATM roster output was not in the expected format.")
 
     return {
         "status": "warning",
-        "error_code": "config_json_out_of_sync",
+        "error_code": "roster_pane_fallback",
         "recipient": recipient,
         "team": team,
         "detail": detail,
         "call_to_action": [
-            f"NOTICE: nudge already sent to pane {delivered_pane} from .atm.toml.",
-            f"NOW fix config.json so Claude Code uses the same pane for '{recipient}@{team}'.",
+            f"NOTICE: nudge already sent to pane {delivered_pane} from the .atm.toml fallback.",
+            f"NOW repair canonical ATM roster state so future nudges use SQLite-backed pane metadata first for '{recipient}@{team}'.",
             "If you need to resend manually, use nudge_command below and verify the pane id first.",
         ],
         "nudge_command": build_nudge_command(delivered_pane, recipient, message),
@@ -523,13 +563,13 @@ def build_warning_payload(
             "pwd": os.environ.get("PWD"),
         },
         "pane_resolution": {
-            "authoritative_source": ".atm.toml",
+            "authoritative_source": "atm roster",
             "delivered_pane": delivered_pane,
+            "delivered_source": ".atm.toml fallback",
+            "roster_lookup": roster.source_path,
+            "roster_error_code": roster.error_code,
+            "roster_error": roster.error_msg,
             "toml_path": toml.source_path,
-            "config_path": config_path,
-            "config_pane": cfg.pane_id,
-            "config_error_code": cfg.error_code,
-            "config_error": cfg.error_msg,
         },
     }
 
@@ -556,24 +596,24 @@ def main(argv: list[str]) -> int:
         nudge_pane(pane_override, recipient, message)
         return 0
 
+    roster = read_pane_from_roster(recipient, team, payload)
+
+    if roster.pane_id:
+        nudge_pane(roster.pane_id, recipient, message)
+        return 0
+
     toml = read_pane_from_toml(recipient, team)
-    cfg = read_pane_from_config(recipient, team)
 
     if toml.pane_id:
-        if cfg.pane_id and cfg.pane_id != toml.pane_id:
-            log(
-                f"warn: config mismatch for {recipient}@{team}: "
-                f"toml={toml.pane_id} config={cfg.pane_id}"
-            )
         nudge_pane(toml.pane_id, recipient, message)
-        if cfg.pane_id != toml.pane_id or cfg.error_code:
+        if roster.error_code:
             warning = build_warning_payload(
                 recipient=recipient,
                 team=team,
                 message=message,
+                roster=roster,
                 delivered_pane=toml.pane_id,
                 toml=toml,
-                cfg=cfg,
             )
             emit_json_stderr(warning)
             emit_hook_result(
@@ -585,24 +625,23 @@ def main(argv: list[str]) -> int:
                     "delivered_pane": toml.pane_id,
                     "nudge_command": warning["nudge_command"],
                     "call_to_action": warning["call_to_action"],
-                    "config_error_code": cfg.error_code,
-                    "config_error": cfg.error_msg,
+                    "roster_error_code": roster.error_code,
+                    "roster_error": roster.error_msg,
                 },
             )
-            return 0
         return 0
 
     payload = build_error_payload(
         recipient=recipient,
         team=team,
         message=message,
+        roster=roster,
         toml=toml,
-        cfg=cfg,
     )
     emit_json_stderr(payload)
     log(
         f"error: pane resolution failed for {recipient}@{team}: "
-        f"toml={toml.error_code} config={cfg.error_code}"
+        f"roster={roster.error_code} toml={toml.error_code}"
     )
     return 1
 

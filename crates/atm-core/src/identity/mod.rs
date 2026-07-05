@@ -1,5 +1,11 @@
+#![allow(
+    dead_code,
+    reason = "Phase AD obsolete: caller-owned context fallback is forbidden in production, but the retired helper module remains test-visible until the later deletion sprint removes it entirely."
+)]
+
 pub mod hook;
 
+use crate::caller_context::read_cli_identity_from_env;
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::types::AgentName;
@@ -57,9 +63,9 @@ pub(crate) fn resolve_sender_identity(
 /// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
 /// `ATM_IDENTITY` is not set in the current environment.
 pub(crate) fn resolve_runtime_sender_identity(
-    config: Option<&AtmConfig>,
+    _config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
-    crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
+    read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)
 }
 
 fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
@@ -86,7 +92,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM, lock_env, remove_env_var, set_env_var};
     use crate::types::AgentName;
 
     #[cfg(unix)]
@@ -98,12 +104,12 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn resolves_sender_identity_from_environment() {
+        let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         set_env_var("ATM_IDENTITY", TEST_SENDER);
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-agent".into()),
             ..Default::default()
         };
         assert_eq!(
@@ -117,12 +123,12 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn sender_identity_does_not_fall_back_to_config_when_env_missing() {
+        let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
-            obsolete_identity_present: true,
+            obsolete_identity: Some("config-agent".into()),
             ..Default::default()
         };
 
@@ -135,6 +141,7 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn resolves_hook_identity_from_environment() {
+        let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
         set_env_var("ATM_IDENTITY", TEST_SENDER);
@@ -151,15 +158,15 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn hook_identity_requires_runtime_identity_when_env_missing() {
+        let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
         remove_env_var("ATM_IDENTITY");
         set_env_var("ATM_TEAM", "");
 
         let config = AtmConfig {
-            identity: Some("config-agent".into()),
+            obsolete_identity: Some("config-agent".into()),
             default_team: Some("config-team".parse().expect("team")),
-            obsolete_identity_present: true,
             ..Default::default()
         };
 
@@ -174,6 +181,7 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn send_sender_identity_applies_alias_to_hook_identity() {
+        let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
 
@@ -210,17 +218,5 @@ mod tests {
             Some(value) => set_env_var(key, value),
             None => remove_env_var(key),
         }
-    }
-
-    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: these tests use #[serial_test::serial(env)] to ensure process
-        // environment mutations are not performed concurrently.
-        unsafe { env::set_var(key, value) }
-    }
-
-    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: these tests use #[serial_test::serial(env)] to ensure process
-        // environment mutations are not performed concurrently.
-        unsafe { env::remove_var(key) }
     }
 }

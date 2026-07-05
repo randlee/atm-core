@@ -8,6 +8,8 @@ pub mod boundary;
 /// adapter crates.
 #[doc(hidden)]
 pub mod boundary_support;
+/// Shared caller-context resolution and ATM-owned environment parsing helpers.
+pub mod caller_context;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
@@ -94,12 +96,11 @@ pub use boundary::{
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NotificationSink, ReconcileCoordinator, ReconcileRequest,
-    ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
-    RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
-    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
-    StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
-    WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    MessageKey, NotificationEvent, PostSendHookEmitter, PostSendHookEvent, RemoteReplayStateRecord,
+    RemoteReplayStore, RequestDispatcher, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
+    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
@@ -116,6 +117,4 @@ pub use graft::{
     AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-};
+pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};

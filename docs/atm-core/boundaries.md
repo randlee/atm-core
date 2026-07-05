@@ -342,7 +342,7 @@ Purpose:
   behavior after durable message persistence succeeds.
 
 Notes:
-- Phase `AD` introduces this boundary as the replacement for
+- Phase `AD` established this boundary as the replacement for
   `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
   path.
 - `send` / `ack` remain responsible for:
@@ -350,12 +350,35 @@ Notes:
   - deciding whether the recipient exposes post-send capability
   - logging emission failure
   - constructing sender-visible warnings on emission failure
+- accepted send/ack finalization emits post-send from persisted logical
+  messages before any retained compatibility delivery-plan execution
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter
   is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
+
+## GraftPostSendPort
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
+
+
+Purpose:
+- Owns the one accepted graft-backed advisory handoff for post-send events
+  after `atm-core` has already decided that recipient-side graft emission is
+  required.
+
+Notes:
+- This stays narrower than `PostSendHookEmitter`:
+  - `atm-core` still decides whether graft-backed post-send applies
+  - `atm-core` still logs failures and constructs sender-visible warnings
+  - the port only attempts the graft-side advisory delivery
+- the accepted out-of-owner implementation is
+  `atm_daemon::advisory_runtime::AdvisoryRuntime`.
+- this boundary must not expand into generic notification routing, mailbox
+  compatibility append, tmux delivery, or local process spawning.
 
 ## NotificationSink
 
@@ -364,26 +387,46 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns outward delivery of notifications, hooks, or plugin-facing events.
+- Historical boundary record only. Phase `AD.5` retired `NotificationSink`
+  from the accepted post-send/send/ack path.
 
 Notes:
-- This replaces direct `Command::new` use in business-flow code.
-- Notification fallback policy for delivery state machines belongs here as a
-  sink-side effect, but event legality still belongs to the event-family state
-  machine rather than to the sink adapter.
-- Phase `Yb` clarifies that this boundary is notification-only:
-  - hook or notifier invocation is not proof of logical message delivery
-  - non-Claude outbound payload delivery must use a dedicated delivery
-    boundary, not NotificationSink as a stand-in
-  - impossible non-Claude append-degraded routing must fail closed before it
-    reaches this sink
-  - the current proof surface for non-Claude delivery lives in
-    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
-- `Phase Yc` finalized the production-path ownership rule:
-  - `Y.13` removed the direct
-    `PostSendNotificationExecutor -> maybe_run_post_send_hook(...)` bypass
-  - the surviving production notification path now executes through
-    `NotificationSink::deliver(...)`
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- Post-send ownership now stays at the send/ack event site:
+  - durable message persistence succeeds first
+  - recipient-specific post-send emission happens directly through the accepted
+    post-send emitter seam
+  - retained notification logging, when enabled, appends directly to the
+    notification log with no `NotificationSink` substitution
+- Non-Claude outbound payload delivery still uses the dedicated
+  `NonClaudeOutbound` boundary rather than any notification surface.
+
+## ClaudeCompatibilityMailboxWriter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml](../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml)
+
+Historical status:
+- retired from the accepted runtime by `AD.3`
+- any surviving references are historical boundary records only
+
+Purpose:
+- Historical boundary record only. Phase `AD.3` retired the
+  `ClaudeCompatibilityMailboxWriter` executor seam from the accepted send/ack
+  runtime.
+
+Notes:
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- The deleted seam previously owned:
+  - `execute_claude_delivery(...)`
+  - direct `append_claude_inbox_message(...)` / recovered message-set append
+    execution
+- Accepted send/ack delivery now routes through the retained
+  `NonClaudeOutbound` seam only.
+- Repair-only inbox rebuild/export support remains outside the live send/ack
+  executor and must not be treated as a surviving delivery boundary.
 
 ## NonClaudeOutbound
 

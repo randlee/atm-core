@@ -3,13 +3,10 @@ use super::runtime_health::{
 };
 use super::{
     LocalIpcServerTransportAdapter,
-    boundary_adapters::DaemonNotificationSink,
     composition::build_production_runtime,
-    daemon_runtime_observability::SubsystemObservability,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
-    notification_runtime::NotificationRuntime,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
@@ -380,7 +377,7 @@ fn read_notification_output(path: &std::path::Path) -> String {
 
 #[test]
 #[serial_test::serial(env)]
-fn production_runtime_installs_daemon_notification_sink() {
+fn production_runtime_appends_notification_log_directly() {
     let tempdir = TempDir::new().expect("tempdir");
     let workspace_dir = tempdir.path().join("workspace");
     let atm_home = tempdir.path().join("atm-home");
@@ -403,23 +400,15 @@ fn production_runtime_installs_daemon_notification_sink() {
     let notification_path = atm_core::home::host_runtime_dir()
         .expect("host runtime dir")
         .join("notifications.jsonl");
-    let sink = DaemonNotificationSink::new(NotificationRuntime::new_with_observability(
-        SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
-    ));
-    sink.start().expect("start notification sink");
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
-    let runtime = build_production_runtime(
-        &assembly,
-        Arc::new(DaemonNonClaudeOutbound::new()),
-        Arc::new(sink.clone()),
-    );
+    let runtime = build_production_runtime(&assembly, Arc::new(DaemonNonClaudeOutbound::new()));
 
     let request = SendRequest::new(
         atm_home.clone(),
         workspace_dir.clone(),
-        Some(ROLE_TEAM_LEAD),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
         "qa-a@test-team",
-        Some(TEST_TEAM),
+        TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("boundary install proof".to_string()),
         None,
         false,
@@ -430,12 +419,16 @@ fn production_runtime_installs_daemon_notification_sink() {
     let observability = atm_core::observability::NullObservability;
 
     send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
-    sink.shutdown().expect("shutdown notification sink");
 
     let output = read_notification_output(&notification_path);
-    assert!(
-        output.contains("\"kind\":\"delivery\""),
-        "expected delivery notification output, got: {output}"
+    let event: atm_core::protocol::NotificationEvent =
+        serde_json::from_str(output.trim()).expect("notification event");
+    let detail: serde_json::Value =
+        serde_json::from_str(&event.detail).expect("notification detail");
+    assert_eq!(event.kind, atm_core::protocol::NotificationKind::Delivery);
+    assert_eq!(
+        detail.get("sender").and_then(serde_json::Value::as_str),
+        Some(ROLE_TEAM_LEAD)
     );
 }
 

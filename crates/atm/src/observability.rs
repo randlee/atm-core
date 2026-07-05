@@ -1,3 +1,4 @@
+use atm_core::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
@@ -64,8 +65,6 @@ impl CliObservability {
             (AtmErrorCode::InternalError, error.to_string())
         };
 
-        let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
-        let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
         let fallback_agent: AgentName = match "unknown".parse() {
             Ok(agent) => agent,
             Err(_) => return,
@@ -74,12 +73,19 @@ impl CliObservability {
             Ok(team) => team,
             Err(_) => return,
         };
-        let agent = identity.parse().unwrap_or(fallback_agent);
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides::default()).ok();
+        let agent = caller_context
+            .as_ref()
+            .map(|context| context.caller_identity.clone())
+            .unwrap_or_else(|| fallback_agent.clone());
+        let team = caller_context
+            .map(|context| context.caller_team)
+            .unwrap_or(fallback_team);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: ATM_SERVICE_NAME,
             action: action_name(stage),
             outcome: outcome_label("error"),
-            team: team.parse().unwrap_or(fallback_team),
+            team,
             agent: agent.clone(),
             sender: agent,
             message_id: None,

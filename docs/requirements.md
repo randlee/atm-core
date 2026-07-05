@@ -615,8 +615,9 @@ Supported optional config fields:
 - `[[atm.post_send_hooks]]`
 
 Runtime caller-context rules:
-- repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
-  fallback for the retained multi-agent ATM model
+- repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`
+  key are not valid runtime identity fallback for the retained multi-agent ATM
+  model
 - repo-local `.atm.toml` `[atm].default_team` is not a valid runtime caller
   team fallback for commands that require caller context
 - the authoritative command-by-command caller-context matrix is
@@ -639,9 +640,9 @@ Runtime caller-context rules:
   required request data when the command requires caller team
 - the daemon must not consult hook files, repo-local config, roster state, or
   daemon ambient `ATM_IDENTITY` / `ATM_TEAM` to fill missing caller context
-- an obsolete config `[atm].identity` field may remain temporarily for
-  migration, but ATM must ignore it for runtime identity resolution and
-  `atm doctor` must flag it for removal
+- obsolete config identity fields (`[atm].identity` and legacy top-level
+  `identity`) may remain temporarily for migration, but ATM must ignore them
+  for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
@@ -761,7 +762,8 @@ Caller context means:
 
 Global caller-context rules:
 
-- repo-local `.atm.toml` `[atm].identity` is not valid runtime caller identity
+- repo-local `.atm.toml` `[atm].identity` and legacy top-level `identity` are
+  not valid runtime caller identity
 - repo-local `.atm.toml` `[atm].default_team` is not valid runtime caller team
   for commands that require explicit caller context
 - daemon ambient `ATM_IDENTITY` / `ATM_TEAM` are not valid fallback sources
@@ -880,6 +882,8 @@ Post-send-hook rules:
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must use the sender's authoritative ATM roster
+  `home_dir` metadata rather than the caller's live process working directory
 - example payload:
   ```json
   {
@@ -1708,7 +1712,8 @@ The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - caller identity/team visibility and optional diagnostic scope behavior
-- obsolete `[atm].identity` configuration drift detection
+- obsolete config identity drift detection (`[atm].identity` and legacy
+  top-level `identity`)
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when the current runtime is
@@ -1809,6 +1814,8 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- persist the member's durable `home_dir` on the canonical ATM roster row and
+  project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
 
 `atm teams update-member` must:
@@ -1917,19 +1924,24 @@ follow-up without depending on daemon-only or hook-only state.
 
 `atm members` must:
 - resolve the effective team using the retained team-resolution rules
-- load the local team roster from `config.json`
-- return a structured error when the team or team config is missing
-- show all configured members deterministically, with `team-lead` first when
+- load the local team roster from canonical ATM roster state
+- return a structured error when the team is missing from canonical ATM roster
+  state
+- show all rostered members deterministically, with `team-lead` first when
   present and remaining members in stable local order
 - use these names distinctly:
   - `home_dir`: durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd`: runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd`: startup-only current-directory snapshot used for logging
+  - `live_cwd`: runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to the
+    displayed member; never durable roster metadata
+  - `launch_cwd`: startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id
+  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
+  the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -3090,8 +3102,9 @@ The intentionally forbidden shape is:
   - the identical helper currently present in `ack/mod.rs`, `clear/mod.rs`, and
     `read/mod.rs` must be moved to `identity/mod.rs` as `pub(crate)`
 
-- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key must be
-  documented in a `# Deprecated` section in the config module documentation.
+- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key and
+  legacy top-level `identity` key must be documented in a `# Deprecated`
+  section in the config module documentation.
 
   Required behavior:
   - migration guidance: use `ATM_IDENTITY` environment variable instead
@@ -3471,14 +3484,16 @@ mail correctness.
 
 ### 22.5 Direct Post-Send And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the
-  `atm-storage-claude` backend are retired from the accepted line.
+- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line.
 
   Required behavior:
   - no retained production path may use Claude inbox `.json` or `.jsonl` files
-    for mailbox delivery, context injection, compatibility export, or
-    background ingress
-  - the accepted line must not ship the `atm-storage-claude` crate or its
+    for context injection or background ingress
+  - if a retained Claude mailbox compatibility export helper survives
+    temporarily, it must be explicit historical/obsolete-only scaffolding and
+    must not define current send/read/post-send semantics
+  - the accepted line must not ship the former `atm-storage-claude` crate or its
     boundary records as a production backend
   - the shared backend contract remains required after Claude backend
     retirement; SQLite is one backend implementation and future SQL backend
@@ -3513,6 +3528,8 @@ mail correctness.
   Required behavior:
   - running `atm send` from another repository or working directory must not
     silently change whether post-send emission is attempted
+  - hook configuration lookup must follow the sender's canonical roster
+    `home_dir` metadata
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files

@@ -683,17 +683,38 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
-            let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-            if raw.trim_start().starts_with('[') {
-                let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
-                return values
-                    .into_iter()
-                    .map(|value| serde_json::from_value(value).expect("message envelope"))
+            let inbox_path = self.inbox_path(agent);
+            if let Ok(raw) = fs::read_to_string(&inbox_path) {
+                if raw.trim_start().starts_with('[') {
+                    let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                    return values
+                        .into_iter()
+                        .map(|value| serde_json::from_value(value).expect("message envelope"))
+                        .collect();
+                }
+                return raw
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
                     .collect();
             }
-            raw.lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
+
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let mail_store = assembly.mail_store_arc();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let agent_name = agent.parse::<AgentName>().expect("agent");
+            let metadata_rows = mail_store
+                .query_mailbox_metadata(&team, &agent_name, None)
+                .expect("mailbox rows");
+            metadata_rows
+                .into_iter()
+                .map(|row| {
+                    mail_store
+                        .load_message(&team, &agent_name, &row.message_key)
+                        .expect("message record")
+                        .expect("stored message")
+                        .envelope
+                })
                 .collect()
         }
 
@@ -752,9 +773,9 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 false,
@@ -773,9 +794,9 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 requires_ack,
@@ -789,8 +810,8 @@ mod tests {
             AckRequest {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 message_id,
                 reply_body: reply_body.to_string(),
             }
@@ -800,9 +821,9 @@ mod tests {
             ReadQuery::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 Some(TEST_RECIPIENT_ADDRESS),
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
                 false,
                 false,
@@ -821,9 +842,9 @@ mod tests {
             ClearQuery {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
                 target_address: Some(TEST_RECIPIENT_ADDRESS.parse().expect("recipient")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 older_than: None,
                 idle_only: false,
                 dry_run: false,
@@ -1003,7 +1024,7 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_none());
+        assert!(inbox[0].pending_ack_at.is_some());
     }
 
     #[test]
@@ -1170,7 +1191,7 @@ mod tests {
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
-        assert!(replies[0].acknowledges_message_id.is_none());
+        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
     }
 

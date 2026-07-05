@@ -174,6 +174,17 @@ impl AtmError {
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
+    pub fn identity_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::IdentityInvalid,
+            AtmErrorKind::Identity,
+            format!("caller identity is invalid: {}", message.into()),
+        )
+        .with_recovery(
+            "Set ATM_IDENTITY or provide an explicit command identity override using a valid ATM agent name.",
+        )
+    }
+
     pub fn identity_conflict(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::IdentityConflict,
@@ -181,6 +192,28 @@ impl AtmError {
             message,
         )
         .with_recovery("Stop and report to the user immediately. Resolve the live pid conflict before retrying ATM activity.")
+    }
+
+    pub fn member_already_exists(member: &str, team: &str) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MemberAlreadyExists,
+            AtmErrorKind::Validation,
+            format!("member '{member}' already exists in team '{team}'"),
+        )
+        .with_recovery(
+            "Use `atm teams update-member` to repair metadata for an existing member instead of retrying `atm teams add-member`.",
+        )
+    }
+
+    pub fn member_not_found(member: &str, team: &str) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MemberNotFound,
+            AtmErrorKind::AgentNotFound,
+            format!("member '{member}' was not found in team '{team}'"),
+        )
+        .with_recovery(
+            "Confirm the target team/member pair, create the member with `atm teams add-member` if it is genuinely missing, or retry `atm teams update-member` against an existing member row.",
+        )
     }
 
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
@@ -235,6 +268,17 @@ impl AtmError {
         )
         .with_recovery(
             "Register the advisory session before fetching or draining daemon-owned advisory state.",
+        )
+    }
+
+    pub fn daemon_advisory_session_cleanup_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonAdvisorySessionCleanupFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect advisory-session lifecycle logs, clean up any orphaned graft session, and retry only after the daemon unregister path is healthy.",
         )
     }
 
@@ -322,6 +366,17 @@ impl AtmError {
         .with_recovery("Pass an explicit team in the address or configure a default team.")
     }
 
+    pub fn team_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::TeamInvalid,
+            AtmErrorKind::Validation,
+            format!("caller team is invalid: {}", message.into()),
+        )
+        .with_recovery(
+            "Set ATM_TEAM or provide an explicit --team override using a valid ATM team name.",
+        )
+    }
+
     pub fn team_not_found(team: &str) -> Self {
         Self::new(
             AtmErrorKind::TeamNotFound,
@@ -341,6 +396,17 @@ impl AtmError {
     pub fn validation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::Validation, message).with_recovery(
             "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.",
+        )
+    }
+
+    pub fn caller_context_request_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::CallerContextRequestInvalid,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Repair the CLI request-builder path so ATM daemon requests always include validated caller_identity and caller_team fields.",
         )
     }
 
@@ -512,7 +578,7 @@ impl AtmErrorKind {
 
 #[cfg(test)]
 mod tests {
-    use super::{AtmError, AtmErrorKind};
+    use super::{AtmError, AtmErrorCode, AtmErrorKind};
     use std::error::Error;
     use std::fmt;
 
@@ -561,5 +627,13 @@ mod tests {
         assert!(rendered.contains("Source: parent source"));
         assert!(rendered.contains("Caused by: leaf source"));
         assert!(rendered.contains("Backtrace:"));
+    }
+
+    #[test]
+    fn member_not_found_uses_agent_not_found_kind() {
+        let error = AtmError::member_not_found("test-agent", "test-team");
+
+        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert!(error.is_agent_not_found());
     }
 }

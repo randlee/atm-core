@@ -4,6 +4,9 @@ use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
 use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
+use crate::commands::caller_context::{
+    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
+};
 use crate::commands::util::parse_timestamp;
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
@@ -78,8 +81,8 @@ impl ReadCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let composition = CliComposition::bootstrap("read", observability)?;
         let query = self.build_query(home_dir, current_dir)?;
+        let composition = CliComposition::bootstrap("read", observability)?;
         let outcome = composition.receive(query)?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
@@ -93,6 +96,10 @@ impl ReadCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
         if let Some(timeout_secs) = self.timeout
             && timeout_secs > MAX_TIMEOUT_SECS
         {
@@ -109,9 +116,9 @@ impl ReadCommand {
         ReadQuery::new(
             home_dir,
             current_dir,
-            self.actor.as_deref(),
+            caller_context.caller_identity,
             self.target.as_deref(),
-            self.team.as_deref(),
+            caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             !self.no_update_seen,
@@ -173,7 +180,10 @@ impl ReadCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::ROLE_TEAM_LEAD;
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use serial_test::serial;
 
     use super::ReadCommand;
 
@@ -200,6 +210,7 @@ mod tests {
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
         command.message_id = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
         command.no_since_last_seen = true;
         command.no_mark = true;
@@ -226,6 +237,42 @@ mod tests {
 
         let warnings = command.deprecation_warnings();
         assert_eq!(warnings.len(), 4);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let query = base_command()
+            .build_query(".".into(), ".".into())
+            .expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("env-team")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("override-team")
+        );
     }
 
     fn base_command() -> ReadCommand {

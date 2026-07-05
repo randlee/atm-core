@@ -1,0 +1,242 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD3-ARCH-004>
+  a triage:Finding ;
+  triage:findingId "AD3-ARCH-004" ;
+  triage:title "release/publish-artifacts.toml still requires the crate AD.3 was supposed to retire" ;
+  triage:description "release/publish-artifacts.toml still lists/requires the Claude-backend-related crate/artifact that sprint AD.3 (Claude Backend And Inbox Nudge Retirement) was supposed to retire, contradicting the sprint's own retirement scope. Found during AD.3-QA-1 on PR #451." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AD" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot." ;
+  triage:triagedAt "2026-07-03T17:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD3-ARCH-004/AD11/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD1/2e151d21> ;
+  triage:openOn <urn:atm:triage:worktree/AD2/490c9d23> ;
+  triage:openOn <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
+  triage:openOn <urn:atm:triage:worktree/AD4/29b96dd3> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/8f17a12a> ;
+  triage:openOn <urn:atm:triage:worktree/AD6/cf4da69a> ;
+  triage:openOn <urn:atm:triage:worktree/AD7/499f890c> ;
+  triage:openOn <urn:atm:triage:worktree/AD8/ec576d26> ;
+  triage:openOn <urn:atm:triage:worktree/AD9/a703e99c> ;
+  triage:openOn <urn:atm:triage:worktree/AD10/88941b99> ;
+  triage:openOn <urn:atm:triage:worktree/AD11/1dc4f9a0> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
+  triage:notes "Non-repeatable closure item specific to sprint AD.3 (Claude Backend And Inbox Nudge Retirement). This is a required manifest check: the retired atm-storage-claude crate must be removed from release/publish-artifacts.toml as part of sprint AD.3 closure." .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD1/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/2e151d21> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD2/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/490c9d23> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD3/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/4ff7cfbc> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD4/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/29b96dd3> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD5/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD6/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "cf4da69a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/cf4da69a> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD7/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "499f890c" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/499f890c> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD8/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "ec576d26" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/ec576d26> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD9/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "a703e99c" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/a703e99c> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD10/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/88941b99> .
+
+<urn:atm:triage:occurrence/AD3-ARCH-004/AD11/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 37 ;
+  triage:snippet "[[crates]]\nartifact = \"atm-storage-claude\"\npackage = \"atm-storage-claude\"\nrequired = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/1dc4f9a0> .
+
+<urn:atm:triage:worktree/AD1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD4/29b96dd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AD6/cf4da69a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "cf4da69a" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AD7/499f890c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "499f890c" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AD8/ec576d26>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "ec576d26" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AD9/a703e99c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "a703e99c" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/AD10/88941b99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "88941b99" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/AD11/1dc4f9a0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:orderIndex 11 .

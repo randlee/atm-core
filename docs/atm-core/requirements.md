@@ -299,8 +299,10 @@ Required `atm-core` crate rules:
   - inbox ingress
   - inbox export
   - config ingress
-  - watcher / reconcile (historical only; retired per `ADR-019`, see §10.1)
   - notifier-facing service integration
+- `atm-core` must not retain watch/reconcile as accepted boundary traits after
+  `AD.4`; any surviving watch/reconcile DTOs are historical-only protocol
+  scaffolding until a later deletion sprint removes them
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - one unified mutable message-state surface
@@ -466,8 +468,9 @@ Required config rules:
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
   treated as compatibility aliases
-- `[atm].identity` is obsolete and must not participate in runtime identity
-  resolution; doctor should report it as configuration drift when present
+- `[atm].identity` and the legacy top-level `identity` key are obsolete and
+  must not participate in runtime identity resolution; doctor should report
+  them as configuration drift when present
 
 Required caller-context rules:
 - the authoritative command-by-command caller-context matrix is
@@ -529,6 +532,8 @@ Required caller-context rules:
 - the hook must also run after successful `atm ack`, using the reply message as
   the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must resolve from the sender's authoritative ATM
+  roster `home_dir` metadata
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -545,8 +550,8 @@ Required caller-context rules:
   identity fallback
 
 Required doctor rules:
-- `atm doctor` must flag obsolete `[atm].identity` when present with
-  `ATM_WARNING_IDENTITY_DRIFT`
+- `atm doctor` must flag obsolete config identity fields (`[atm].identity` and
+  legacy top-level `identity`) when present with `ATM_WARNING_IDENTITY_DRIFT`
 - `atm doctor` must compare canonical ATM roster truth against
   `config.json.members`
 - ATM roster members missing from `config.json` are findings
@@ -581,6 +586,9 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `add-member` must persist the member's durable `home_dir` on the canonical
+  ATM roster row and project that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` must validate team existence and require an existing member
   before mutating canonical ATM roster truth
 - `update-member` must be the accepted repair path for mutable canonical member
@@ -592,8 +600,11 @@ Required service rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - no accepted `atm-core` surface may use bare `cwd` when `live_cwd` or
   `launch_cwd` is the real meaning
 - `atm-core` must prefer extending existing roster-row and runtime-roster
