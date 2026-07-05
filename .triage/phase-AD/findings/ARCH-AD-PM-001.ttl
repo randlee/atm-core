@@ -16,7 +16,7 @@
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD-PM-001/fix-phase-AD-pm-team-admin-split/1> ;
-  triage:fixedOn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891> .
+  triage:fixedOn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/7e626bc3> .
 
 <urn:atm:triage:occurrence/ARCH-AD-PM-001/fix-phase-AD-pm-team-admin-split/1>
   a triage:Occurrence ;
@@ -26,12 +26,12 @@
   triage:status "closed" ;
   triage:closed true ;
   triage:branch "fix/phase-AD-pm-team-admin-split" ;
-  triage:headSha "cd2f2891" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891> .
+  triage:headSha "7e626bc3" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/7e626bc3> .
 
-<urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891>
+<urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/7e626bc3>
   a triage:WorktreeSnapshot ;
   triage:branch "fix/phase-AD-pm-team-admin-split" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/fix/phase-AD-pm-team-admin-split" ;
-  triage:headSha "cd2f2891" ;
+  triage:headSha "7e626bc3" ;
   triage:status "closed" .
