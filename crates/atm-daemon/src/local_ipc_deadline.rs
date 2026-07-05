@@ -3,11 +3,9 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use atm_core::protocol::FramePayload;
 use interprocess::local_socket::Stream as LocalSocketStream;
-#[cfg(windows)]
 use interprocess::local_socket::traits::Stream as _;
 
-#[cfg(windows)]
-const WINDOWS_NONBLOCKING_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const NONBLOCKING_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,22 +23,7 @@ pub(crate) struct LocalIpcDeadlineSupport {
 pub(crate) enum ReadFrameDeadlineOutcome {
     EndOfStream,
     Frame(FramePayload),
-    #[cfg(windows)]
     TimedOut,
-}
-
-#[derive(Debug)]
-#[cfg(any(test, not(windows)))]
-pub(crate) struct OwnedLocalIpcDeadlineConfig {
-    pub(crate) deadline: Duration,
-    pub(crate) support: DeadlineSupport,
-    pub(crate) worker_name: &'static str,
-    pub(crate) timeout_error: AtmError,
-    pub(crate) disconnect_error: AtmError,
-    pub(crate) spawn_error_message: &'static str,
-    pub(crate) spawn_error_recovery: &'static str,
-    pub(crate) background_work_registry:
-        Option<std::sync::Arc<crate::active_connection_registry::ActiveConnectionRegistry>>,
 }
 
 pub(crate) fn apply_optional_deadline(
@@ -60,63 +43,16 @@ pub(crate) fn apply_optional_deadline(
     }
 }
 
-#[cfg(any(test, not(windows)))]
-pub(crate) fn run_owned_local_ipc_with_deadline<T, F>(
-    mut stream: LocalSocketStream,
-    config: OwnedLocalIpcDeadlineConfig,
-    operation: F,
-) -> Result<(LocalSocketStream, T), AtmError>
-where
-    T: Send + 'static,
-    F: FnOnce(&mut LocalSocketStream) -> Result<T, AtmError> + Send + 'static,
-{
-    match config.support {
-        DeadlineSupport::Applied => {
-            let result = operation(&mut stream)?;
-            Ok((stream, result))
-        }
-        DeadlineSupport::Unsupported => {
-            let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-            // The underlying local IPC read/write call cannot be force-cancelled once the OS
-            // reports deadline APIs as unsupported. We therefore detach the blocking worker but
-            // register it in the daemon's active-work registry when available so shutdown drain
-            // and same-host work accounting can still observe the stalled helper and fail within
-            // the documented bounded deadline instead of leaking it silently.
-            let background_work_registry = config.background_work_registry.clone();
-            std::thread::Builder::new()
-                .name(config.worker_name.to_owned())
-                .spawn(move || {
-                    let _background_work = background_work_registry
-                        .map(|registry| registry.register_background_work());
-                    let result = operation(&mut stream);
-                    let _ = result_tx.send((stream, result));
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable(config.spawn_error_message)
-                        .with_recovery(config.spawn_error_recovery)
-                        .with_source(source)
-                })?;
-            match result_rx.recv_timeout(config.deadline) {
-                Ok((stream, Ok(result))) => Ok((stream, result)),
-                Ok((_, Err(error))) => Err(error),
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(config.timeout_error),
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    Err(config.disconnect_error)
-                }
-            }
-        }
-    }
-}
-
 pub(crate) fn write_frame_with_optional_deadline(
     mut stream: LocalSocketStream,
     deadline: Duration,
     support: DeadlineSupport,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
     frame: &FramePayload,
-    write_error: &'static str,
-    flush_error: &'static str,
+    error_messages: (&'static str, &'static str),
     timeout_error: AtmError,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
+    let (write_error, flush_error) = error_messages;
     match support {
         DeadlineSupport::Applied => {
             atm_core::protocol::write_frame(&mut stream, frame, write_error)?;
@@ -124,19 +60,10 @@ pub(crate) fn write_frame_with_optional_deadline(
                 .map_err(|source| AtmError::daemon_unavailable(flush_error).with_source(source))?;
             Ok((stream, ()))
         }
-        #[cfg(windows)]
         DeadlineSupport::Unsupported => write_frame_nonblocking(
             stream,
             deadline,
-            frame,
-            write_error,
-            flush_error,
-            timeout_error,
-        ),
-        #[cfg(not(windows))]
-        DeadlineSupport::Unsupported => write_frame_with_helper_deadline(
-            stream,
-            deadline,
+            stop_requested,
             frame,
             write_error,
             flush_error,
@@ -149,7 +76,7 @@ pub(crate) fn read_frame_with_optional_deadline(
     mut stream: LocalSocketStream,
     deadline: Duration,
     support: DeadlineSupport,
-    #[cfg(windows)] stop_requested: Option<&std::sync::atomic::AtomicBool>,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> Result<(LocalSocketStream, ReadFrameDeadlineOutcome), AtmError> {
@@ -164,121 +91,44 @@ pub(crate) fn read_frame_with_optional_deadline(
                 },
             ))
         }
-        #[cfg(windows)]
         DeadlineSupport::Unsupported => {
             read_frame_nonblocking(stream, deadline, stop_requested, read_error, oversize_error)
-        }
-        #[cfg(not(windows))]
-        DeadlineSupport::Unsupported => {
-            read_frame_with_helper_deadline(stream, deadline, read_error, oversize_error)
         }
     }
 }
 
-#[cfg(not(windows))]
-fn write_frame_with_helper_deadline(
-    stream: LocalSocketStream,
-    deadline: Duration,
-    frame: &FramePayload,
-    write_error: &'static str,
-    flush_error: &'static str,
-    timeout_error: AtmError,
-) -> Result<(LocalSocketStream, ()), AtmError> {
-    let frame = frame.clone();
-    run_owned_local_ipc_with_deadline(
-        stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline,
-            support: DeadlineSupport::Unsupported,
-            worker_name: "local-ipc-write-deadline-helper",
-            timeout_error,
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon local IPC write helper disconnected before the bounded write completed",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the same-host fallback write worker stopped unexpectedly.",
-            ),
-            spawn_error_message: "failed to spawn daemon local IPC write helper",
-            spawn_error_recovery:
-                "Retry the ATM command after the daemon restarts; the same-host fallback write worker could not be created.",
-            background_work_registry: None,
-        },
-        move |stream| {
-            atm_core::protocol::write_frame(stream, &frame, write_error)?;
-            std::io::Write::flush(stream)
-                .map_err(|source| AtmError::daemon_unavailable(flush_error).with_source(source))?;
-            Ok(())
-        },
-    )
-}
-
-#[cfg(not(windows))]
-fn read_frame_with_helper_deadline(
-    stream: LocalSocketStream,
-    deadline: Duration,
-    read_error: &'static str,
-    oversize_error: &'static str,
-) -> Result<(LocalSocketStream, ReadFrameDeadlineOutcome), AtmError> {
-    run_owned_local_ipc_with_deadline(
-        stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline,
-            support: DeadlineSupport::Unsupported,
-            worker_name: "local-ipc-read-deadline-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "daemon local IPC read exceeded the runtime deadline",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the same-host fallback read worker did not complete within the bounded deadline.",
-            ),
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon local IPC read helper disconnected before the bounded read completed",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the same-host fallback read worker stopped unexpectedly.",
-            ),
-            spawn_error_message: "failed to spawn daemon local IPC read helper",
-            spawn_error_recovery:
-                "Retry the ATM command after the daemon restarts; the same-host fallback read worker could not be created.",
-            background_work_registry: None,
-        },
-        move |stream| {
-            Ok(match atm_core::protocol::read_frame(stream, read_error, oversize_error)? {
-                Some(frame) => ReadFrameDeadlineOutcome::Frame(frame),
-                None => ReadFrameDeadlineOutcome::EndOfStream,
-            })
-        },
-    )
-}
-
-#[cfg(windows)]
 fn write_frame_nonblocking(
     mut stream: LocalSocketStream,
     deadline: Duration,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
     frame: &FramePayload,
     write_error: &'static str,
     flush_error: &'static str,
     timeout_error: AtmError,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
     let bytes = encode_frame_bytes(frame, write_error)?;
-    with_windows_nonblocking(&mut stream, |stream| {
+    with_nonblocking_mode(&mut stream, |stream| {
         let started = std::time::Instant::now();
         let written = poll_write_bytes_with(
             started,
             deadline,
+            stop_requested,
             &bytes,
-            WINDOWS_NONBLOCKING_POLL_INTERVAL,
+            NONBLOCKING_POLL_INTERVAL,
             |slice| std::io::Write::write(stream, slice),
         )
         .map_err(|source| AtmError::daemon_unavailable(write_error).with_source(source))?;
         if written != bytes.len() {
             return Err(clone_timeout_error(&timeout_error));
         }
-        let flushed =
-            poll_unit_until_complete(started, deadline, WINDOWS_NONBLOCKING_POLL_INTERVAL, || {
-                std::io::Write::flush(stream)
-            })
-            .map_err(|source| AtmError::daemon_unavailable(flush_error).with_source(source))?;
+        let flushed = poll_unit_until_complete(
+            started,
+            deadline,
+            stop_requested,
+            NONBLOCKING_POLL_INTERVAL,
+            || std::io::Write::flush(stream),
+        )
+        .map_err(|source| AtmError::daemon_unavailable(flush_error).with_source(source))?;
         if !flushed {
             return Err(clone_timeout_error(&timeout_error));
         }
@@ -287,7 +137,6 @@ fn write_frame_nonblocking(
     Ok((stream, ()))
 }
 
-#[cfg(windows)]
 fn read_frame_nonblocking(
     mut stream: LocalSocketStream,
     deadline: Duration,
@@ -295,7 +144,7 @@ fn read_frame_nonblocking(
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> Result<(LocalSocketStream, ReadFrameDeadlineOutcome), AtmError> {
-    let result = with_windows_nonblocking(&mut stream, |stream| {
+    let result = with_nonblocking_mode(&mut stream, |stream| {
         let started = std::time::Instant::now();
         let mut header = [0u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES];
         let header_read = poll_read_bytes_with(
@@ -303,7 +152,7 @@ fn read_frame_nonblocking(
             deadline,
             stop_requested,
             &mut header,
-            WINDOWS_NONBLOCKING_POLL_INTERVAL,
+            NONBLOCKING_POLL_INTERVAL,
             |buffer| std::io::Read::read(stream, buffer),
         )
         .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
@@ -321,7 +170,7 @@ fn read_frame_nonblocking(
             deadline,
             stop_requested,
             &mut payload,
-            WINDOWS_NONBLOCKING_POLL_INTERVAL,
+            NONBLOCKING_POLL_INTERVAL,
             |buffer| std::io::Read::read(stream, buffer),
         )
         .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
@@ -338,34 +187,34 @@ fn read_frame_nonblocking(
     Ok((stream, result))
 }
 
-#[cfg(windows)]
-fn with_windows_nonblocking<T>(
+fn with_nonblocking_mode<T>(
     stream: &mut LocalSocketStream,
     operation: impl FnOnce(&mut LocalSocketStream) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     stream.set_nonblocking(true).map_err(|source| {
-        AtmError::daemon_unavailable(
-            "failed to place the Windows same-host pipe into nonblocking mode",
-        )
+        AtmError::daemon_unavailable("failed to place the same-host IPC stream into nonblocking mode")
         .with_recovery(
-            "Restart the daemon; the Windows same-host pipe could not enter the bounded nonblocking fallback path.",
+            "Restart the daemon; the same-host IPC stream could not enter the bounded nonblocking fallback path.",
         )
         .with_source(source)
     })?;
     let result = operation(stream);
-    stream.set_nonblocking(false).map_err(|source| {
-        AtmError::daemon_unavailable(
-            "failed to restore blocking mode on the Windows same-host pipe",
+    if let Err(source) = stream.set_nonblocking(false) {
+        let error = AtmError::daemon_unavailable(
+            "failed to restore blocking mode on the same-host IPC stream",
         )
         .with_recovery(
-            "Restart the daemon; the Windows same-host pipe could not return to blocking mode after the bounded fallback path.",
+            "Restart the daemon; the same-host IPC stream could not return to blocking mode after the bounded fallback path.",
         )
-        .with_source(source)
-    })?;
+        .with_source(source);
+        tracing::warn!(
+            %error,
+            "same-host IPC stream failed to restore blocking mode after bounded nonblocking fallback"
+        );
+    }
     result
 }
 
-#[cfg(windows)]
 fn poll_read_bytes_with<ReadFn>(
     started: std::time::Instant,
     deadline: Duration,
@@ -377,8 +226,6 @@ fn poll_read_bytes_with<ReadFn>(
 where
     ReadFn: FnMut(&mut [u8]) -> std::io::Result<usize>,
 {
-    use std::sync::atomic::Ordering;
-
     let mut offset = 0usize;
     while offset < buffer.len() {
         match read_fn(&mut buffer[offset..]) {
@@ -386,11 +233,7 @@ where
             Ok(0) => return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)),
             Ok(read) => offset += read,
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                if stop_requested
-                    .map(|flag| flag.load(Ordering::SeqCst))
-                    .unwrap_or(false)
-                    || started.elapsed() >= deadline
-                {
+                if stop_requested_or_deadline_elapsed(started, deadline, stop_requested) {
                     return Ok(offset);
                 }
                 let remaining = deadline.saturating_sub(started.elapsed());
@@ -403,10 +246,10 @@ where
     Ok(offset)
 }
 
-#[cfg(windows)]
 fn poll_write_bytes_with<WriteFn>(
     started: std::time::Instant,
     deadline: Duration,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
     buffer: &[u8],
     poll_interval: Duration,
     mut write_fn: WriteFn,
@@ -420,7 +263,7 @@ where
             Ok(0) => return Err(std::io::Error::from(std::io::ErrorKind::WriteZero)),
             Ok(written) => offset += written,
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                if started.elapsed() >= deadline {
+                if stop_requested_or_deadline_elapsed(started, deadline, stop_requested) {
                     return Ok(offset);
                 }
                 let remaining = deadline.saturating_sub(started.elapsed());
@@ -433,10 +276,10 @@ where
     Ok(offset)
 }
 
-#[cfg(windows)]
 fn poll_unit_until_complete<Op>(
     started: std::time::Instant,
     deadline: Duration,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
     poll_interval: Duration,
     mut op: Op,
 ) -> std::io::Result<bool>
@@ -447,7 +290,7 @@ where
         match op() {
             Ok(()) => return Ok(true),
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                if started.elapsed() >= deadline {
+                if stop_requested_or_deadline_elapsed(started, deadline, stop_requested) {
                     return Ok(false);
                 }
                 let remaining = deadline.saturating_sub(started.elapsed());
@@ -459,10 +302,22 @@ where
     }
 }
 
-#[cfg(windows)]
+fn stop_requested_or_deadline_elapsed(
+    started: std::time::Instant,
+    deadline: Duration,
+    stop_requested: Option<&std::sync::atomic::AtomicBool>,
+) -> bool {
+    use std::sync::atomic::Ordering;
+
+    stop_requested
+        .map(|flag| flag.load(Ordering::SeqCst))
+        .unwrap_or(false)
+        || started.elapsed() >= deadline
+}
+
 fn encode_frame_bytes(
     frame: &FramePayload,
-    _write_error: &'static str,
+    write_error: &'static str,
 ) -> Result<Vec<u8>, AtmError> {
     if frame.flags != atm_core::protocol::ATM_FRAME_FLAGS_V1 {
         return Err(AtmError::validation(format!(
@@ -499,7 +354,6 @@ fn encode_frame_bytes(
     Ok(bytes)
 }
 
-#[cfg(windows)]
 fn decode_frame_header(
     header: [u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES],
     oversize_error: &'static str,
@@ -556,7 +410,6 @@ fn decode_frame_header(
     Ok((request_id, message_kind, flags, payload_length))
 }
 
-#[cfg(windows)]
 fn clone_timeout_error(template: &AtmError) -> AtmError {
     let mut error = AtmError::new_with_code(template.code, template.kind, template.message.clone());
     for recovery in &template.recovery {
@@ -569,17 +422,13 @@ fn clone_timeout_error(template: &AtmError) -> AtmError {
 mod tests {
     use super::*;
 
-    use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc;
     use std::time::Instant;
 
     use interprocess::local_socket::ListenerOptions;
-    use interprocess::local_socket::traits::{Listener as _, Stream as _};
+    use interprocess::local_socket::traits::Listener as _;
     use tempfile::TempDir;
-
-    use crate::active_connection_registry::ActiveConnectionRegistry;
-    use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
     fn connected_stream_pair() -> (LocalSocketStream, LocalSocketStream) {
         let tempdir = TempDir::new().expect("tempdir");
@@ -607,109 +456,6 @@ mod tests {
         (client, accepted)
     }
 
-    fn connected_stream() -> LocalSocketStream {
-        connected_stream_pair().0
-    }
-
-    fn unsupported_config(deadline: Duration) -> OwnedLocalIpcDeadlineConfig {
-        OwnedLocalIpcDeadlineConfig {
-            deadline,
-            support: DeadlineSupport::Unsupported,
-            worker_name: "local-ipc-deadline-test-helper",
-            timeout_error: AtmError::daemon_unavailable("deadline helper timed out"),
-            disconnect_error: AtmError::daemon_unavailable("deadline helper disconnected"),
-            spawn_error_message: "failed to spawn deadline helper",
-            spawn_error_recovery: "retry the local IPC deadline test helper",
-            background_work_registry: None,
-        }
-    }
-
-    #[test]
-    fn unsupported_helper_returns_result_before_deadline() {
-        let stream = connected_stream();
-        let (_stream, result) = run_owned_local_ipc_with_deadline(
-            stream,
-            unsupported_config(Duration::from_millis(50)),
-            |_stream| Ok::<_, AtmError>(42usize),
-        )
-        .expect("helper result");
-        assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn unsupported_helper_returns_timeout_error_after_deadline() {
-        let (_release_tx, release_rx) = mpsc::sync_channel::<()>(1);
-        let stream = connected_stream();
-        let error = run_owned_local_ipc_with_deadline(
-            stream,
-            unsupported_config(Duration::from_millis(10)),
-            move |_stream| {
-                let _ = release_rx.recv_timeout(Duration::from_millis(50));
-                Ok::<_, AtmError>(())
-            },
-        )
-        .expect_err("timeout");
-        assert!(error.message.contains("deadline helper timed out"));
-    }
-
-    #[test]
-    fn unsupported_helper_returns_disconnect_error_when_worker_panics() {
-        let stream = connected_stream();
-        let error = run_owned_local_ipc_with_deadline::<(), _>(
-            stream,
-            unsupported_config(Duration::from_millis(50)),
-            |_stream| panic!("intentional helper panic for disconnect branch"),
-        )
-        .expect_err("disconnect");
-        assert!(error.message.contains("deadline helper disconnected"));
-    }
-
-    #[test]
-    fn tracked_unsupported_helper_keeps_shutdown_drain_bounded() {
-        let registry = Arc::new(ActiveConnectionRegistry::default());
-        let force_shutdown = AtomicBool::new(false);
-        let (started_tx, started_rx) = mpsc::sync_channel(1);
-        let (release_tx, release_rx) = mpsc::sync_channel(1);
-        let stream = connected_stream();
-        let error = run_owned_local_ipc_with_deadline(
-            stream,
-            OwnedLocalIpcDeadlineConfig {
-                background_work_registry: Some(Arc::clone(&registry)),
-                ..unsupported_config(Duration::from_millis(10))
-            },
-            move |_stream| {
-                started_tx.send(()).expect("signal helper start");
-                let _ = release_rx.recv_timeout(Duration::from_secs(5));
-                Ok::<_, AtmError>(())
-            },
-        )
-        .expect_err("helper timeout");
-        assert!(error.message.contains("deadline helper timed out"));
-        started_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("helper started");
-
-        let shutdown_error = drain_active_connections_for_shutdown(
-            registry.as_ref(),
-            &force_shutdown,
-            Duration::from_millis(5),
-            Duration::from_millis(20),
-            Instant::now(),
-            Duration::from_millis(5),
-        )
-        .expect_err("shutdown drain should stay bounded by the forced-cancel deadline");
-        assert!(force_shutdown.load(std::sync::atomic::Ordering::SeqCst));
-        assert!(
-            shutdown_error
-                .message
-                .contains("forced cancel deadline elapsed"),
-            "unexpected error: {shutdown_error:?}"
-        );
-
-        let _ = release_tx.send(());
-    }
-
-    #[cfg(windows)]
     #[test]
     fn poll_read_bytes_with_retries_interrupted_reads() {
         let started = Instant::now();
@@ -742,13 +488,12 @@ mod tests {
         assert_eq!(buffer, [1, 2, 3, 4]);
     }
 
-    #[cfg(windows)]
     #[test]
     fn read_frame_with_optional_deadline_times_out_after_partial_header_stall() {
         let (client, mut server) = connected_stream_pair();
         let frame = FramePayload {
             request_id: atm_core::protocol::RequestId::new(1).expect("request id"),
-            message_kind: atm_core::protocol::MessageKind::Request,
+            message_kind: atm_core::protocol::MessageKind::DoctorRequest,
             flags: atm_core::protocol::ATM_FRAME_FLAGS_V1,
             bytes: b"ping".to_vec(),
         };
@@ -769,5 +514,52 @@ mod tests {
         .expect("bounded read outcome");
 
         assert!(matches!(outcome, ReadFrameDeadlineOutcome::TimedOut));
+    }
+
+    #[test]
+    fn poll_read_bytes_with_exits_early_when_stop_requested_flips() {
+        let stop_requested = AtomicBool::new(false);
+        let started = Instant::now();
+        let mut first_block = true;
+        let mut buffer = [0u8; 8];
+        let read = poll_read_bytes_with(
+            started,
+            Duration::from_secs(1),
+            Some(&stop_requested),
+            &mut buffer,
+            Duration::from_millis(1),
+            |_slice| {
+                if first_block {
+                    first_block = false;
+                    stop_requested.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                Err(std::io::Error::from(std::io::ErrorKind::WouldBlock))
+            },
+        )
+        .expect("poll read exits cleanly");
+        assert_eq!(read, 0);
+        assert!(
+            started.elapsed() < Duration::from_millis(250),
+            "poll read should stop well before the full deadline"
+        );
+    }
+
+    #[test]
+    fn poll_write_bytes_with_times_out_when_receiver_never_drains() {
+        let started = Instant::now();
+        let written = poll_write_bytes_with(
+            started,
+            Duration::from_millis(20),
+            None,
+            &[1, 2, 3, 4],
+            Duration::from_millis(1),
+            |_slice| Err(std::io::Error::from(std::io::ErrorKind::WouldBlock)),
+        )
+        .expect("poll write returns bounded timeout result");
+        assert_eq!(written, 0);
+        assert!(
+            started.elapsed() < Duration::from_millis(250),
+            "poll write timeout should remain bounded"
+        );
     }
 }

@@ -822,9 +822,12 @@ fn reject_connection_when_capped(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
+        None,
         &frame,
-        "failed to write daemon rejection response frame",
-        "failed to flush daemon rejection response frame",
+        (
+            "failed to write daemon rejection response frame",
+            "failed to flush daemon rejection response frame",
+        ),
         AtmError::daemon_unavailable(
             "daemon capped-connection rejection response write exceeded the runtime deadline",
         )

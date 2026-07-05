@@ -11,11 +11,9 @@ use interprocess::local_socket::traits::Stream;
 
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::local_ipc_deadline::{
-    DeadlineSupport, LocalIpcDeadlineSupport, apply_optional_deadline,
-    write_frame_with_optional_deadline,
+    DeadlineSupport, LocalIpcDeadlineSupport, ReadFrameDeadlineOutcome, apply_optional_deadline,
+    read_frame_with_optional_deadline, write_frame_with_optional_deadline,
 };
-#[cfg(windows)]
-use crate::local_ipc_deadline::{ReadFrameDeadlineOutcome, read_frame_with_optional_deadline};
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
@@ -41,7 +39,6 @@ enum ReadRequestFrameResult {
         stream: LocalSocketStream,
         frame: atm_core::protocol::FramePayload,
     },
-    #[cfg(windows)]
     TimedOut,
 }
 
@@ -121,17 +118,15 @@ fn read_request_frame_or_terminate(
             stream: resumed_stream,
             frame,
         } => Ok(Some((resumed_stream, frame))),
-        #[cfg(windows)]
         ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
             tracing::info!(
                 subsystem = "local_ipc",
                 action = "request_read",
                 outcome = "forced_shutdown",
-                "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
+                "daemon forced shutdown interrupted a same-host request read before a complete frame arrived"
             );
             Ok(None)
         }
-        #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
             tracing::warn!(
                 subsystem = "local_ipc",
@@ -167,12 +162,9 @@ fn read_request_frame_with_deadline(
     registry: &Arc<ActiveConnectionRegistry>,
     read_deadline_support: DeadlineSupport,
 ) -> Result<ReadRequestFrameResult, AtmError> {
-    #[cfg(windows)]
     if read_deadline_support == DeadlineSupport::Unsupported {
         return read_request_frame_with_helper(stream, force_shutdown, registry);
     }
-    #[cfg(not(windows))]
-    let _ = (force_shutdown, registry, read_deadline_support);
 
     match read_request_frame(&mut stream)? {
         None => Ok(ReadRequestFrameResult::EndOfStream),
@@ -180,7 +172,6 @@ fn read_request_frame_with_deadline(
     }
 }
 
-#[cfg(windows)]
 fn read_request_frame_with_helper(
     stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
@@ -356,9 +347,12 @@ fn write_response(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
+        None,
         &frame,
-        "failed to write daemon response frame",
-        "failed to flush daemon response frame",
+        (
+            "failed to write daemon response frame",
+            "failed to flush daemon response frame",
+        ),
         response_write_timeout_error(),
     )?;
     Ok(())
@@ -396,9 +390,12 @@ impl AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
             stream,
             REQUEST_DEADLINE,
             self.write_deadline_support,
+            Some(self.force_shutdown),
             &frame,
-            "failed to write daemon advisory-stream response frame",
-            "failed to flush daemon advisory-stream response frame",
+            (
+                "failed to write daemon advisory-stream response frame",
+                "failed to flush daemon advisory-stream response frame",
+            ),
             AtmError::daemon_unavailable(
                 "daemon advisory-stream response write exceeded the runtime deadline",
             )

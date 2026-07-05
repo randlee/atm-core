@@ -171,14 +171,13 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
 
 pub(super) fn write_shutdown_response(
     mut stream: LocalSocketStream,
-    registry: &Arc<ActiveConnectionRegistry>,
+    _registry: &Arc<ActiveConnectionRegistry>,
     codec: &JsonAtmProtocolCodec,
     deadline_mode: ShutdownResponseDeadlineMode,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let (read_deadline_support, write_deadline_support) =
         shutdown_rejection_deadline_support(&stream, deadline_mode)?;
-    let (resumed_stream, frame) =
-        read_shutdown_rejection_frame(stream, Arc::clone(registry), read_deadline_support)?;
+    let (resumed_stream, frame) = read_shutdown_rejection_frame(stream, read_deadline_support)?;
     stream = resumed_stream;
     let Some(frame) = frame else {
         return Ok(ShutdownResponseOutcome::NoFrame);
@@ -191,12 +190,7 @@ pub(super) fn write_shutdown_response(
             .with_recovery("Retry the ATM command after the daemon restarts."),
     ));
     let frame = codec.response_to_frame(request_id, response)?;
-    let _ = write_shutdown_rejection_frame(
-        stream,
-        Arc::clone(registry),
-        write_deadline_support,
-        frame,
-    )?;
+    let _ = write_shutdown_rejection_frame(stream, write_deadline_support, frame)?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
@@ -261,14 +255,12 @@ fn shutdown_deadline_support(
 
 fn read_shutdown_rejection_frame(
     stream: LocalSocketStream,
-    _background_work_registry: Arc<ActiveConnectionRegistry>,
     read_deadline_support: DeadlineSupport,
 ) -> Result<(LocalSocketStream, Option<atm_core::protocol::FramePayload>), AtmError> {
     let (stream, outcome) = read_frame_with_optional_deadline(
         stream,
         REQUEST_DEADLINE,
         read_deadline_support,
-        #[cfg(windows)]
         None,
         "failed to read daemon request frame during shutdown rejection",
         "daemon request frame exceeded the maximum supported size during shutdown rejection",
@@ -276,7 +268,6 @@ fn read_shutdown_rejection_frame(
     match outcome {
         ReadFrameDeadlineOutcome::EndOfStream => Ok((stream, None)),
         ReadFrameDeadlineOutcome::Frame(frame) => Ok((stream, Some(frame))),
-        #[cfg(windows)]
         ReadFrameDeadlineOutcome::TimedOut => Err(AtmError::daemon_unavailable(
             "daemon shutdown rejection request read exceeded the runtime deadline",
         )
@@ -286,7 +277,6 @@ fn read_shutdown_rejection_frame(
 
 fn write_shutdown_rejection_frame(
     stream: LocalSocketStream,
-    _background_work_registry: Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
     frame: atm_core::protocol::FramePayload,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
@@ -294,9 +284,12 @@ fn write_shutdown_rejection_frame(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
+        None,
         &frame,
-        "failed to write daemon shutdown rejection response frame",
-        "failed to flush daemon shutdown rejection response frame",
+        (
+            "failed to write daemon shutdown rejection response frame",
+            "failed to flush daemon shutdown rejection response frame",
+        ),
         AtmError::daemon_unavailable(
             "daemon shutdown rejection response write exceeded the runtime deadline",
         )

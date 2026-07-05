@@ -227,9 +227,9 @@ pub(crate) fn write_test_frame_with_deadline(
         stream,
         TEST_LOCAL_IPC_REQUEST_DEADLINE,
         deadline_support.write,
+        None,
         &frame,
-        write_error,
-        flush_error,
+        (write_error, flush_error),
         AtmError::daemon_unavailable("test local IPC write exceeded the bounded request deadline")
             .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
     )
@@ -247,7 +247,6 @@ pub(crate) fn read_test_frame_with_deadline(
         stream,
         TEST_LOCAL_IPC_REQUEST_DEADLINE,
         deadline_support.read,
-        #[cfg(windows)]
         None,
         read_error,
         oversize_error,
@@ -256,10 +255,7 @@ pub(crate) fn read_test_frame_with_deadline(
     match outcome {
         ReadFrameDeadlineOutcome::EndOfStream => (stream, None),
         ReadFrameDeadlineOutcome::Frame(frame) => (stream, Some(frame)),
-        #[cfg(windows)]
-        ReadFrameDeadlineOutcome::TimedOut => {
-            panic!("bounded test local IPC read timed out")
-        }
+        ReadFrameDeadlineOutcome::TimedOut => panic!("bounded test local IPC read timed out"),
     }
 }
 
