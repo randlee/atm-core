@@ -9,12 +9,12 @@ use std::time::Duration;
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+#[cfg(windows)]
+use interprocess::local_socket::ListenerNonblockingMode;
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
-#[cfg(windows)]
-use interprocess::local_socket::ListenerNonblockingMode;
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
