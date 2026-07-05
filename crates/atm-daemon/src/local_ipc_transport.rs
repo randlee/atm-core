@@ -505,6 +505,7 @@ where
         dispatcher: &dispatcher,
         signals: signals.as_ref(),
         shutdown_beacon: shutdown_beacon.as_ref(),
+        #[cfg(not(windows))]
         endpoint_path,
         #[cfg(test)]
         accept_error_inject,
