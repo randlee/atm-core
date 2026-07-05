@@ -62,6 +62,13 @@ where
     )
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "JSONL append helper remains test-only after compat retirement"
+    )
+)]
 pub fn append_message(
     path: &Path,
     message: &InboxMessage,

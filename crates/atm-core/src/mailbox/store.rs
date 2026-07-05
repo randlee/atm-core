@@ -1,16 +1,20 @@
 //! Mailbox owner-layer write boundaries for the Claude-owned inbox surface.
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config;
 use crate::error::AtmError;
 use crate::mailbox::atomic;
-use crate::mailbox::source::{SourceFile, discover_source_paths, load_source_files};
 use crate::schema::InboxMessage;
 use crate::schema::inbox_message::SharedAppendPolicy;
-use crate::types::{AgentName, TeamName};
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "mailbox format detection remains test-only after compat retirement"
+    )
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InboxFileFormat {
     ClaudeJsonArray,
@@ -42,27 +46,6 @@ fn write_compat_mailbox_projection_with_policy(
     atomic::write_messages(path, messages, export_policy)
 }
 
-/// Write one already-loaded multi-source compatibility inbox projection set.
-pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    let mut export_policy_by_dir = BTreeMap::<PathBuf, SharedAppendPolicy>::new();
-    for source in source_files {
-        let config_dir = source
-            .path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf();
-        let export_policy = if let Some(policy) = export_policy_by_dir.get(&config_dir).copied() {
-            policy
-        } else {
-            let policy = export_policy_for_path(&source.path)?;
-            export_policy_by_dir.insert(config_dir, policy);
-            policy
-        };
-        write_compat_mailbox_projection_with_policy(&source.path, &source.messages, export_policy)?;
-    }
-    Ok(())
-}
-
 pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedAppendPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
@@ -73,6 +56,13 @@ pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedAppendPolicy, 
     })
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "mailbox format detection remains test-only after compat retirement"
+    )
+)]
 pub(crate) fn inbox_file_format(path: &Path) -> InboxFileFormat {
     path.extension()
         .and_then(|value| value.to_str())
@@ -88,23 +78,12 @@ pub(crate) fn inbox_file_format(path: &Path) -> InboxFileFormat {
         .unwrap_or(InboxFileFormat::Other)
 }
 
-/// Load the current inbox projection set without mailbox locks.
-pub(crate) fn load_source_projections(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<SourceFile>, AtmError> {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
-    load_source_files(&source_paths)
-}
-
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
 
-    use super::{write_compat_mailbox_projection, write_compat_source_projections};
+    use super::write_compat_mailbox_projection;
     use crate::mailbox::load_compat_mailbox_messages;
-    use crate::mailbox::source::SourceFile;
     use crate::schema::{AtmMessageId, InboxMessage};
     use crate::test_support::{TEST_QA, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp};
@@ -168,73 +147,6 @@ mod tests {
             encoded[0]["summary"],
             serde_json::Value::String("stub summary".into())
         );
-    }
-
-    #[test]
-    fn write_compat_source_projections_commits_each_source_path() {
-        let tempdir = tempdir().expect("tempdir");
-        let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let right_path = tempdir.path().join(format!("{TEST_QA}.json"));
-        let left_messages = vec![sample_message(TEST_SENDER, "left message")];
-        let right_messages = vec![
-            sample_message(TEST_SENDER, "right first"),
-            sample_message(TEST_QA, "right second"),
-        ];
-
-        write_compat_source_projections(&[
-            SourceFile {
-                path: left_path.clone(),
-                messages: left_messages.clone(),
-            },
-            SourceFile {
-                path: right_path.clone(),
-                messages: right_messages.clone(),
-            },
-        ])
-        .expect("commit source files");
-
-        let left = load_compat_mailbox_messages(&left_path).expect("left inbox");
-        let right = load_compat_mailbox_messages(&right_path).expect("right inbox");
-        assert_eq!(left.len(), left_messages.len());
-        assert_eq!(right.len(), right_messages.len());
-        assert_eq!(left[0].text, left_messages[0].text);
-        assert_eq!(right[0].text, right_messages[0].text);
-        assert_eq!(right[1].text, right_messages[1].text);
-        assert!(left.iter().all(|message| message.source_team.is_none()));
-        assert!(right.iter().all(|message| message.source_team.is_none()));
-    }
-
-    #[test]
-    fn write_compat_source_projections_stops_after_first_write_error() {
-        let tempdir = tempdir().expect("tempdir");
-        let first_path = tempdir.path().join("first.json");
-        let invalid_path = tempdir.path().to_path_buf();
-        let later_path = tempdir.path().join("later.json");
-
-        let error = write_compat_source_projections(&[
-            SourceFile {
-                path: first_path.clone(),
-                messages: vec![sample_message(TEST_SENDER, "first")],
-            },
-            SourceFile {
-                path: invalid_path,
-                messages: vec![sample_message(TEST_QA, "broken")],
-            },
-            SourceFile {
-                path: later_path.clone(),
-                messages: vec![sample_message(TEST_SENDER, "later")],
-            },
-        ])
-        .expect_err("write failure");
-
-        assert!(error.is_mailbox_write());
-        assert_eq!(
-            load_compat_mailbox_messages(&first_path)
-                .expect("first inbox")
-                .len(),
-            1
-        );
-        assert!(!later_path.exists());
     }
 
     fn sample_message(from: &str, text: &str) -> InboxMessage {

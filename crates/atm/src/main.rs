@@ -89,7 +89,6 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::AgentNotFound
         | AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::CallerContextRequestInvalid
-        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
         | AtmErrorCode::HelpTopicNotFound

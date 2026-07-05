@@ -156,7 +156,6 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::MailboxRecoveredMessageSetTooLarge
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState

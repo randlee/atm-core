@@ -1,10 +1,5 @@
 //! Mailbox read/write helpers, compatibility parsing, and lock-scoped mutation.
 
-#![allow(
-    dead_code,
-    reason = "AC.2 retains internal compatibility readers and salvage helpers while Claude storage ownership finishes moving below the trait line."
-)]
-
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
@@ -18,10 +13,7 @@ use std::path::Path;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
-use crate::mailbox::source::SourceFile;
 use crate::schema::{AtmMessageId, InboxMessage};
-use crate::types::{AgentName, TeamName};
-
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 const DEGRADED_RAW_FRAGMENT_MAX_CHARS: usize = 512;
 
@@ -70,8 +62,7 @@ pub fn append_message(path: &Path, envelope: &InboxMessage) -> Result<(), AtmErr
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
 ///
 /// Production mutation paths use equivalent lock coverage through
-/// `workflow::commit_workflow_state()` plus
-/// `mailbox::store::write_compat_source_projections()`.
+/// `workflow::commit_workflow_state()`.
 /// This helper stays test-only so unit tests can exercise the shared mailbox
 /// lock contract directly without the workflow/state sidecars required in
 /// production commands.
@@ -177,6 +168,13 @@ pub(crate) fn load_compat_mailbox_items(path: &Path) -> Result<Vec<InboxReadItem
     parse_mailbox_contents(&raw, path)
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "strict mailbox compatibility reads remain test-only"
+    )
+)]
 pub(crate) fn load_compat_mailbox_messages_strict(
     path: &Path,
 ) -> Result<Vec<InboxMessage>, AtmError> {
@@ -222,20 +220,6 @@ pub(crate) fn load_compat_mailbox_messages_strict(
     parse_mailbox_contents_strict(&raw, path)
 }
 
-pub(crate) fn import_source_projections(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<SourceFile>, AtmError> {
-    store::load_source_projections(home_dir, team, agent)
-}
-
-pub(crate) fn export_compat_source_projections(
-    source_files: &[SourceFile],
-) -> Result<(), AtmError> {
-    store::write_compat_source_projections(source_files)
-}
-
 pub(crate) fn export_compat_mailbox_projection(
     path: &Path,
     messages: &[InboxMessage],
@@ -252,6 +236,13 @@ fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, 
     }
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "strict mailbox compatibility reads remain test-only"
+    )
+)]
 fn parse_mailbox_contents_strict(raw: &str, path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
@@ -277,6 +268,13 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, Atm
     }
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "strict mailbox compatibility reads remain test-only"
+    )
+)]
 fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
         AtmError::new(

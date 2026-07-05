@@ -46,7 +46,6 @@ pub enum AtmErrorCode {
     TeamNotFound,
     AgentNotFound,
     MailboxReadFailed,
-    MailboxRecoveredMessageSetTooLarge,
     MailboxWriteFailed,
     MailboxLockFailed,
     MailboxLockReadOnlyFilesystem,
@@ -154,9 +153,6 @@ impl AtmErrorCode {
     fn mailbox_or_validation_str(self) -> Option<&'static str> {
         Some(match self {
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
-            Self::MailboxRecoveredMessageSetTooLarge => {
-                "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE"
-            }
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
             Self::MailboxLockReadOnlyFilesystem => "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM",
@@ -278,9 +274,6 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
 fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
     Some(match value {
         "ATM_MAILBOX_READ_FAILED" => AtmErrorCode::MailboxReadFailed,
-        "ATM_MAILBOX_RECOVERED_MESSAGE_SET_TOO_LARGE" => {
-            AtmErrorCode::MailboxRecoveredMessageSetTooLarge
-        }
         "ATM_MAILBOX_WRITE_FAILED" => AtmErrorCode::MailboxWriteFailed,
         "ATM_MAILBOX_LOCK_FAILED" => AtmErrorCode::MailboxLockFailed,
         "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => AtmErrorCode::MailboxLockReadOnlyFilesystem,
