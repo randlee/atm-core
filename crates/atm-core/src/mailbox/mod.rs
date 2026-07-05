@@ -35,11 +35,8 @@ pub(crate) enum InboxReadItem {
     },
 }
 
-/// Append one message through the shared inbox compatibility writer.
+/// Append one message through the surviving mailbox projection rules.
 ///
-/// Production send flows use the same compatibility writer through the
-/// retained runtime boundary. Current Claude `.json` inboxes rewrite the array
-/// projection atomically; `.jsonl` compatibility files remain append-only.
 /// This helper stays test-only because production callers must also coordinate
 /// workflow persistence and delivery policy routing.
 ///
@@ -53,7 +50,21 @@ pub(crate) enum InboxReadItem {
 /// cannot be loaded, locked, or atomically replaced.
 #[cfg(test)]
 pub fn append_message(path: &Path, envelope: &InboxMessage) -> Result<(), AtmError> {
-    store::append_compat_mailbox_message(path, envelope)
+    let export_policy = store::export_policy_for_path(path)?;
+    if store::inbox_file_format(path) == store::InboxFileFormat::ClaudeJsonArray {
+        let existing_messages = if path.exists() {
+            load_compat_mailbox_messages_strict(path)?
+        } else {
+            Vec::new()
+        };
+        return atomic::write_message_iter(
+            path,
+            existing_messages.iter().chain(std::iter::once(envelope)),
+            export_policy,
+        );
+    }
+
+    atomic::append_message(path, envelope, export_policy)
 }
 
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
