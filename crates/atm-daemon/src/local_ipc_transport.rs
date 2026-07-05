@@ -26,7 +26,9 @@ use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_deadline::{
     DeadlineSupport, apply_optional_deadline, write_frame_with_optional_deadline,
 };
-use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
+#[cfg(not(windows))]
+use crate::local_ipc_wake::schedule_delayed_listener_wake;
+use crate::local_ipc_wake::wake_listener;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod request_worker;
@@ -50,6 +52,7 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
+#[cfg(not(windows))]
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[cfg(windows)]
 const WINDOWS_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -223,6 +226,7 @@ struct AcceptLoopContext<'a> {
     dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
+    #[cfg(not(windows))]
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
