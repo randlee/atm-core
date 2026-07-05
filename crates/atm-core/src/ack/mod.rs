@@ -678,9 +678,7 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{
-        self, MessageKey, NonClaudeOutboundDeliveryRequest, ProjectionAppendMode,
-    };
+    use crate::boundary::{self, MessageKey, NonClaudeOutboundDeliveryRequest};
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -824,23 +822,6 @@ mod tests {
             unreachable!("ack writer-path test should not rebuild compatibility inboxes")
         }
 
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), crate::error::AtmError> {
-            panic!("ack writer-path test should not use the retired Claude inbox append path")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), crate::error::AtmError> {
-            panic!("ack writer-path test should use the single-message Claude inbox writer path")
-        }
-
         fn deliver_non_claude_payloads(
             &self,
             recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -957,25 +938,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack roster-gate tests do not rebuild compatibility inboxes")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!(
-                "ack roster-gate tests should not use the retired Claude inbox append path"
-            )
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("ack roster-gate tests do not append compatibility inbox message sets")
         }
 
         fn deliver_non_claude_payloads(
@@ -1194,12 +1156,10 @@ mod tests {
         assert_eq!(plan.messages[0].envelope, original);
         assert_eq!(plan.messages[1].envelope, companion);
         assert_eq!(plan.warnings.len(), 1);
-        match plan.delivery_target {
-            DeliveryTarget::NonClaude { .. } => {}
-            DeliveryTarget::ClaudeCode { .. } => {
-                panic!("expected non-Claude target for retired Claude harness path")
-            }
-        }
+        assert!(matches!(
+            plan.delivery_target,
+            DeliveryTarget::NonClaude { .. }
+        ));
     }
 
     #[test]

@@ -74,7 +74,7 @@ fn load_send_alert_state_parse_errors_are_config_errors() {
 #[test]
 #[serial_test::serial(env)]
 fn send_non_claude_success_delivers_original_via_outbound_boundary() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let graft_port = RecordingGraftPort::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
@@ -129,7 +129,7 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
 #[test]
 #[serial_test::serial(env)]
 fn send_non_claude_warns_when_graft_post_send_delivery_fails() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let graft_port = FailingGraftPort {
         events: Mutex::new(Vec::new()),
     };

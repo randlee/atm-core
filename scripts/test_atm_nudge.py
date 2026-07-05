@@ -24,6 +24,7 @@ ERR_FILE_MISSING = _MOD.ERR_FILE_MISSING
 ERR_INVALID_STRUCTURE = _MOD.ERR_INVALID_STRUCTURE
 ERR_NOT_FOUND = _MOD.ERR_NOT_FOUND
 ERR_PARSE_ERROR = _MOD.ERR_PARSE_ERROR
+ERR_COMMAND_FAILED = _MOD.ERR_COMMAND_FAILED
 CODEX_DEFAULT_PANE = _MOD.CODEX_DEFAULT_PANE
 TEST_TEAM = "test-team"
 TEST_AGENT = "test-agent"
@@ -40,16 +41,16 @@ def _parse_json(text: str) -> dict:
 
 def _run_with_mocked_lookups(
     args: list[str],
+    roster: PaneLookup,
     toml: PaneLookup,
-    cfg: PaneLookup,
     *,
     team: str = TEST_TEAM,
 ) -> tuple[int, dict, dict, MagicMock]:
     stderr_buf = io.StringIO()
     stdout_buf = io.StringIO()
     with (
+        patch.object(_MOD, "read_pane_from_roster", return_value=roster),
         patch.object(_MOD, "read_pane_from_toml", return_value=toml),
-        patch.object(_MOD, "read_pane_from_config", return_value=cfg),
         patch.object(_MOD, "resolve_team", return_value=team),
         patch.object(_MOD, "read_post_send_payload", return_value={}),
         patch.object(_MOD, "nudge_pane") as mock_nudge,
@@ -295,16 +296,43 @@ env = {{ ATM_TEAM = "{TEST_TEAM}" }}
         self.assertEqual(result.error_code, ERR_FILE_MISSING)
 
 
-class TestReadPaneFromConfig(unittest.TestCase):
+class TestReadPaneFromRoster(unittest.TestCase):
     def test_reports_invalid_members_structure(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            cfg = home / ".claude" / "teams" / TEST_TEAM
-            cfg.mkdir(parents=True)
-            (cfg / "config.json").write_text('{"members": {}}', encoding="utf-8")
-            with patch.object(Path, "home", return_value=home):
-                result = _MOD.read_pane_from_config(TEST_AGENT, TEST_TEAM)
+        process = MagicMock(returncode=0, stdout='{"members": {}}', stderr="")
+        with patch("subprocess.run", return_value=process):
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {})
         self.assertEqual(result.error_code, ERR_INVALID_STRUCTURE)
+
+    def test_reports_missing_member(self):
+        process = MagicMock(returncode=0, stdout='{"team":"test-team","members":[]}', stderr="")
+        with patch("subprocess.run", return_value=process):
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {})
+        self.assertEqual(result.error_code, ERR_NOT_FOUND)
+
+    def test_reads_tmux_pane_id_from_members_json(self):
+        process = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "team": TEST_TEAM,
+                    "members": [
+                        {"name": TEST_AGENT, "tmux_pane_id": "%17"},
+                    ],
+                }
+            ),
+            stderr="",
+        )
+        with patch("subprocess.run", return_value=process):
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {"sender": TEST_TEAM_LEAD})
+        self.assertEqual(result.pane_id, "%17")
+        self.assertEqual(result.source_path, "atm members --team <team> --json")
+
+    def test_reports_command_failure(self):
+        process = MagicMock(returncode=1, stdout="", stderr="boom")
+        with patch("subprocess.run", return_value=process):
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {})
+        self.assertEqual(result.error_code, ERR_COMMAND_FAILED)
+        self.assertIn("boom", result.error_msg)
 
 
 class TestUsage(unittest.TestCase):
@@ -326,23 +354,23 @@ class TestOverrideMode(unittest.TestCase):
     def test_override_calls_nudge_directly(self):
         with (
             patch.object(_MOD, "nudge_pane") as mock_nudge,
+            patch.object(_MOD, "read_pane_from_roster") as mock_roster,
             patch.object(_MOD, "read_pane_from_toml") as mock_toml,
-            patch.object(_MOD, "read_pane_from_config") as mock_cfg,
             patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
         ):
             rc = _MOD.main(["atm-nudge.py", "--pane", "%1", TEST_AGENT, "<atm/>"])
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, "<atm/>")
+        mock_roster.assert_not_called()
         mock_toml.assert_not_called()
-        mock_cfg.assert_not_called()
 
     def test_override_without_message_builds_default(self):
         with (
             patch.object(_MOD, "nudge_pane") as mock_nudge,
             patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
             patch.object(_MOD, "read_post_send_payload", return_value={}),
+            patch.object(_MOD, "read_pane_from_roster"),
             patch.object(_MOD, "read_pane_from_toml"),
-            patch.object(_MOD, "read_pane_from_config"),
         ):
             rc = _MOD.main(["atm-nudge.py", "--pane", "%1", TEST_AGENT])
         self.assertEqual(rc, 0)
@@ -395,51 +423,89 @@ class TestBuildMessage(unittest.TestCase):
 
 
 class TestMainBehavior(unittest.TestCase):
-    def test_matching_panes_nudges_without_warning(self):
+    def test_roster_match_nudges_without_warning(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
+            PaneLookup("%1", None, None, "atm members --team <team> --json"),
             PaneLookup("%1", None, None, "/repo/.atm.toml"),
-            PaneLookup("%1", None, None, "/home/config.json"),
         )
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, unittest.mock.ANY)
         self.assertEqual(stderr_json, {})
         self.assertEqual(stdout_json, {})
 
-    def test_config_mismatch_still_nudges_and_warns(self):
+    def test_roster_match_skips_toml_fallback_lookup(self):
+        with (
+            patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
+            patch.object(_MOD, "read_post_send_payload", return_value={}),
+            patch.object(
+                _MOD,
+                "read_pane_from_roster",
+                return_value=PaneLookup(
+                    "%5",
+                    None,
+                    None,
+                    "atm members --team <team> --json",
+                ),
+            ),
+            patch.object(_MOD, "read_pane_from_toml") as mock_toml,
+            patch.object(_MOD, "nudge_pane") as mock_nudge,
+            patch.object(_MOD, "emit_json_stderr"),
+            patch.object(_MOD, "emit_hook_result"),
+            patch.object(_MOD, "log"),
+        ):
+            rc = _MOD.main(["atm-nudge.py", TEST_AGENT])
+
+        self.assertEqual(rc, 0)
+        mock_toml.assert_not_called()
+        mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
+
+    def test_roster_pane_wins_when_roster_and_toml_disagree(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
+            PaneLookup("%5", None, None, "atm members --team <team> --json"),
+            PaneLookup("%9", None, None, "/repo/.atm.toml"),
+        )
+        self.assertEqual(rc, 0)
+        mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
+        self.assertEqual(stderr_json, {})
+        self.assertEqual(stdout_json, {})
+
+    def test_toml_fallback_still_nudges_and_warns(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            [TEST_AGENT],
+            PaneLookup(None, ERR_EMPTY_PANE, "missing roster pane", "atm members --team <team> --json"),
             PaneLookup("%1", None, None, "/repo/.atm.toml"),
-            PaneLookup("%9", None, None, "/home/config.json"),
         )
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, unittest.mock.ANY)
         self.assertEqual(stderr_json["status"], "warning")
-        self.assertIn("pane %1", " ".join(stderr_json["call_to_action"]))
-        self.assertIn("config.json", " ".join(stderr_json["call_to_action"]))
+        self.assertIn(".atm.toml fallback", " ".join(stderr_json["call_to_action"]))
+        self.assertIn("SQLite-backed pane metadata", " ".join(stderr_json["call_to_action"]))
         self.assertIn("--pane %1", stderr_json["nudge_command"])
         self.assertEqual(stderr_json["pane_resolution"]["delivered_pane"], "%1")
         self.assertEqual(stdout_json["level"], "warn")
         self.assertEqual(stdout_json["fields"]["delivered_pane"], "%1")
+        self.assertEqual(stdout_json["fields"]["roster_error_code"], ERR_EMPTY_PANE)
 
-    def test_config_missing_still_nudges_and_warns(self):
+    def test_roster_command_failure_still_uses_toml_fallback(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_QM],
+            PaneLookup(None, ERR_COMMAND_FAILED, "atm members failed", "atm members --team <team> --json"),
             PaneLookup("%2", None, None, "/repo/.atm.toml"),
-            PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
         )
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%2", TEST_QM, unittest.mock.ANY)
         self.assertEqual(stderr_json["status"], "warning")
         self.assertIn("already sent to pane %2", " ".join(stderr_json["call_to_action"]))
-        self.assertTrue(any("Create /home/config.json" in item for item in stderr_json["fix"]))
-        self.assertEqual(stdout_json["fields"]["config_error_code"], ERR_FILE_MISSING)
+        self.assertTrue(any("atm members --team test-team --json" in item for item in stderr_json["fix"]))
+        self.assertEqual(stdout_json["fields"]["roster_error_code"], ERR_COMMAND_FAILED)
 
-    def test_toml_failure_emits_manual_nudge_and_fix_call_to_action(self):
+    def test_roster_and_toml_failure_emit_manual_nudge_and_fix_call_to_action(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_QM],
+            PaneLookup(None, ERR_EMPTY_PANE, "bad roster", "atm members --team <team> --json"),
             PaneLookup(None, ERR_PARSE_ERROR, "bad toml", "/repo/.atm.toml"),
-            PaneLookup("%2", None, None, "/home/config.json"),
         )
         self.assertEqual(rc, 1)
         mock_nudge.assert_not_called()
@@ -447,14 +513,15 @@ class TestMainBehavior(unittest.TestCase):
         self.assertEqual(stderr_json["status"], "error")
         self.assertIn("Run nudge_command NOW", " ".join(stderr_json["call_to_action"]))
         self.assertIn("VERIFY the pane id", " ".join(stderr_json["call_to_action"]))
-        self.assertIn("--pane %2", stderr_json["nudge_command"])
+        self.assertIn(f"--pane {CODEX_DEFAULT_PANE}", stderr_json["nudge_command"])
+        self.assertIn("Repair canonical ATM roster pane metadata", " ".join(stderr_json["fix"]))
         self.assertIn("Fix or restore the repo-local .atm.toml", " ".join(stderr_json["fix"]))
 
     def test_neither_source_found_uses_default_pane(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
+            PaneLookup(None, ERR_NOT_FOUND, "missing member", "atm members --team <team> --json"),
             PaneLookup(None, ERR_NOT_FOUND, "missing recipient", "/repo/.atm.toml"),
-            PaneLookup(None, ERR_NOT_FOUND, "missing member", "/home/config.json"),
         )
         self.assertEqual(rc, 1)
         mock_nudge.assert_not_called()
@@ -465,14 +532,14 @@ class TestMainBehavior(unittest.TestCase):
     def test_error_payload_includes_input_and_resolution_context(self):
         rc, stderr_json, _, _ = _run_with_mocked_lookups(
             [TEST_AGENT],
+            PaneLookup(None, ERR_FILE_MISSING, "missing", "atm members --team <team> --json"),
             PaneLookup(None, ERR_FILE_MISSING, "missing", None),
-            PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
         )
         self.assertEqual(rc, 1)
         self.assertIn("input", stderr_json)
         self.assertIn("pane_resolution", stderr_json)
         self.assertEqual(stderr_json["input"]["recipient"], TEST_AGENT)
-        self.assertEqual(stderr_json["pane_resolution"]["authoritative_source"], ".atm.toml")
+        self.assertEqual(stderr_json["pane_resolution"]["authoritative_source"], "atm roster")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
-use crate::boundary::ProjectionAppendMode;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -60,25 +59,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         inbox_path: &Path,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<(), AtmError>;
-    #[allow(
-        dead_code,
-        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
-    )]
-    fn append_compat_inbox_message(
-        &self,
-        inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError>;
-    #[allow(
-        dead_code,
-        reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
-    )]
-    fn append_compat_inbox_message_set(
-        &self,
-        inbox_path: &Path,
-        mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
@@ -329,45 +309,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
-    fn append_compat_inbox_message(
-        &self,
-        inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError> {
-        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
-            if current_claude_inbox_requires_repair(inbox_path).unwrap_or(false) {
-                AtmError::validation(format!(
-                    "compatibility inbox {} is malformed or unsupported for the primary Claude delivery path",
-                    inbox_path.display()
-                ))
-                .with_recovery(
-                    "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; healthy current Claude inbox files should not require this path.",
-                )
-                .with_source(error)
-            } else {
-                error
-            }
-        })
-    }
-
-    fn append_compat_inbox_message_set(
-        &self,
-        inbox_path: &Path,
-        mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
-    ) -> Result<(), AtmError> {
-        match mode {
-            ProjectionAppendMode::RecoveredLogicalMessageSet => {
-                let export_policy = crate::mailbox::store::export_policy_for_path(inbox_path)?;
-                crate::mailbox::store::append_compat_mailbox_message_set(
-                    inbox_path,
-                    export_policy,
-                    messages,
-                )
-            }
-        }
-    }
-
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -464,21 +405,6 @@ fn load_store_backed_mailbox_projection(
         messages.push(record.envelope);
     }
     Ok(messages)
-}
-
-#[allow(
-    dead_code,
-    reason = "Phase AD obsolete: historical Claude mailbox compatibility only."
-)]
-fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
-    if !path.exists()
-        || crate::mailbox::store::inbox_file_format(path)
-            != crate::mailbox::store::InboxFileFormat::ClaudeJsonArray
-    {
-        return Ok(false);
-    }
-
-    Ok(crate::mailbox::load_compat_mailbox_messages_strict(path).is_err())
 }
 
 #[cfg(test)]
@@ -591,63 +517,6 @@ mod tests {
             .lines()
             .map(|line| serde_json::from_str(line).expect("notification event"))
             .collect()
-    }
-
-    #[test]
-    fn append_compat_inbox_message_accepts_current_claude_json_array_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.json");
-        let first = message();
-        let second = message();
-        std::fs::write(
-            &inbox_path,
-            format!(
-                "{}\n",
-                serde_json::to_string_pretty(&vec![first.clone()]).expect("mailbox array")
-            ),
-        )
-        .expect("write mailbox");
-
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-        );
-
-        runtime
-            .append_compat_inbox_message(&inbox_path, &second)
-            .expect("current Claude array path should succeed");
-
-        let raw = std::fs::read_to_string(&inbox_path).expect("mailbox contents");
-        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
-        assert_eq!(encoded.len(), 2);
-        assert_eq!(encoded[0]["text"], serde_json::Value::String(first.text));
-        assert_eq!(encoded[1]["text"], serde_json::Value::String(second.text));
-    }
-
-    #[test]
-    fn append_compat_inbox_message_rejects_malformed_current_claude_json_array_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.json");
-        std::fs::write(&inbox_path, "[{ not-json }\n").expect("write malformed mailbox");
-
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-        );
-
-        let error = runtime
-            .append_compat_inbox_message(&inbox_path, &message())
-            .expect_err("malformed Claude array path must fail closed");
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(
-            error
-                .recovery
-                .iter()
-                .any(|recovery| recovery.contains("explicit repair/rebuild inbox projection path")),
-            "unexpected recovery: {error:?}"
-        );
     }
 
     #[test]

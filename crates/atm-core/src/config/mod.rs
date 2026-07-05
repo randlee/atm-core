@@ -13,7 +13,6 @@ pub mod bridge;
 pub mod discovery;
 pub mod types;
 
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -25,6 +24,7 @@ use tracing::warn;
 
 pub use types::AtmConfig;
 
+use crate::caller_context::read_cli_team_from_env;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
@@ -172,35 +172,16 @@ pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, A
     parse_team_config(&config_path, &raw)
 }
 
-/// Resolves the sender identity for outgoing messages.
+/// Resolve the active team from explicit override or the invoking shell.
 ///
-/// The `_config` parameter is retained only to preserve the shared config-aware
-/// helper signature used across command code paths. Identity is resolved
-/// exclusively via the `ATM_IDENTITY` environment variable and will never fall
-/// back to deprecated config identity fields.
-#[allow(
-    dead_code,
-    reason = "Phase AD obsolete: caller identity resolution moved to the CLI boundary, but this env-only helper remains until the obsolete daemon-side identity module is deleted."
-)]
-pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<AgentName> {
-    env::var("ATM_IDENTITY")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .and_then(|value| value.parse().ok())
-}
-
-/// Resolve the active team from explicit override, environment, or config.
-pub fn resolve_team(team_override: Option<&str>, config: Option<&AtmConfig>) -> Option<TeamName> {
+/// Phase AD forbids repo-local default-team fallback for caller context. The
+/// `_config` parameter remains only to avoid widening call-site churn while the
+/// obsolete config-aware helper surface is being retired.
+pub fn resolve_team(team_override: Option<&str>, _config: Option<&AtmConfig>) -> Option<TeamName> {
     team_override
         .filter(|value| !value.is_empty())
         .and_then(|value| value.parse().ok())
-        .or_else(|| {
-            env::var("ATM_TEAM")
-                .ok()
-                .filter(|value| !value.is_empty())
-                .and_then(|value| value.parse().ok())
-        })
-        .or_else(|| config.and_then(|cfg| cfg.default_team.clone()))
+        .or_else(|| read_cli_team_from_env().ok().flatten())
 }
 
 fn find_config_path(start_dir: &Path) -> Option<PathBuf> {
@@ -592,7 +573,7 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
 
-    use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
+    use super::{AtmConfig, load_config, parse_team_config, resolve_team};
 
     #[test]
     fn load_config_walks_upward_for_dot_atm_toml() {
@@ -1026,42 +1007,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
     #[test]
     #[serial_test::serial(env)]
-    fn identity_prefers_environment_over_config() {
-        let _env_lock = crate::test_support::lock_env();
-        let original_identity = env::var_os("ATM_IDENTITY");
-        set_env_var("ATM_IDENTITY", "env-identity");
-
-        let config = AtmConfig {
-            obsolete_identity: Some("config-identity".into()),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            resolve_identity(Some(&config)).as_deref(),
-            Some("env-identity")
-        );
-        restore("ATM_IDENTITY", original_identity);
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn identity_ignores_obsolete_config_field_when_env_missing() {
-        let _env_lock = crate::test_support::lock_env();
-        let original_identity = env::var_os("ATM_IDENTITY");
-        remove_env_var("ATM_IDENTITY");
-
-        let config = AtmConfig {
-            obsolete_identity: Some("config-identity".into()),
-            ..Default::default()
-        };
-
-        assert_eq!(resolve_identity(Some(&config)), None);
-        restore("ATM_IDENTITY", original_identity);
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn team_resolution_prefers_flag_then_env_then_config() {
+    fn team_resolution_prefers_flag_then_env_and_never_falls_back_to_config() {
         let _env_lock = crate::test_support::lock_env();
         let original_team = env::var_os("ATM_TEAM");
         set_env_var("ATM_TEAM", "env-team");
@@ -1081,10 +1027,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         );
 
         remove_env_var("ATM_TEAM");
-        assert_eq!(
-            resolve_team(None, Some(&config)).as_deref(),
-            Some("config-team")
-        );
+        assert_eq!(resolve_team(None, Some(&config)), None);
 
         restore("ATM_TEAM", original_team);
     }

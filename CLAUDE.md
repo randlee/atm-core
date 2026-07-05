@@ -147,7 +147,7 @@ main
 
 ### Identity
 
-`.atm.toml` at repo root sets `identity = "team-lead"` and `default_team = "atm-dev"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`.
+ATM CLI commands that require caller context must receive it explicitly from the invoking shell (`ATM_IDENTITY`, `ATM_TEAM`) or from supported command-line overrides such as `--as` / `--team`; `.atm.toml` must not be treated as a caller-identity fallback.
 
 **Note**: ARCH-CTM gets his identity from `ATM_IDENTITY=arch-ctm` set in his tmux session (via rmux or manually).
 
