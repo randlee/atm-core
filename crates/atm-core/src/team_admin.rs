@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use crate::boundary::{RosterEntry, RosterStore};
 use crate::error::AtmError;
-use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
+use crate::schema::HomeDirPath;
 use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/filesystem.rs"]
