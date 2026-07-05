@@ -88,6 +88,10 @@ SCB_CONFIG_BOUNDARY_FILES = (
     Path("crates/atm-daemon/src/boundary_adapters.rs"),
     Path("crates/atm-daemon/src/direct_boundaries.rs"),
 )
+# team_admin's sibling split files (restore.rs, filesystem.rs, projection.rs) were
+# reviewed as of the member_mutation.rs split (PR #471) and found not to call
+# service_runtime_store::default_runtime() or load_config() -- no gate entry needed
+# for them today. Re-check if business logic migrates into those files later.
 SCB_RETAINED_DIRECT_PATTERNS = ("service_runtime_store::default_runtime()",)
 SCB_RETAINED_TARGET_FILES = (
     Path("crates/atm/src/commands/teams.rs"),
