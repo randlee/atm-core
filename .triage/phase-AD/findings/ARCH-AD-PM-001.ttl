@@ -12,7 +12,8 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope ".just/lint_boundaries.py, .just/tests/test_lint_boundaries.py, crates/atm-core/src/team_admin/member_mutation.rs" ;
-  triage:status "closed" ;
+  triage:status "open" ;
+  triage:rationale "QA-3 (req-qa) found restore.rs/filesystem.rs/projection.rs -- the other 3 files produced by this same split -- were never documented as reviewed against the SCB_RETAINED_TARGET_FILES/SCB_WORKSPACE_TARGET_FILES gate, even though req-qa independently confirmed none of them call service_runtime_store::default_runtime() or load_config(). Status held open until arch-ctm's fix-4 lands a rationale note covering those 3 files; team-lead will flip this back to closed once that note is confirmed on the merged commit." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD-PM-001/fix-phase-AD-pm-team-admin-split/1> ;
