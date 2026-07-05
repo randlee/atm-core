@@ -13,6 +13,8 @@ use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
+#[cfg(windows)]
+use interprocess::local_socket::ListenerNonblockingMode;
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
@@ -49,6 +51,8 @@ const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+#[cfg(windows)]
+const WINDOWS_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 // Test hooks keep shutdown deadlines short so the transport suite verifies
 // drain/cancel behavior without waiting on production-scale timing.
 #[cfg(all(test, unix))]
@@ -308,6 +312,18 @@ impl PreparedRuntimeServer {
                 )
                 .with_source(source)
             })?;
+        #[cfg(windows)]
+        listener
+            .set_nonblocking(ListenerNonblockingMode::Accept)
+            .map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "failed to place the daemon local IPC listener into nonblocking accept mode",
+                )
+                .with_recovery(
+                    "Restart the daemon; the Windows named-pipe listener could not enter the bounded accept polling mode.",
+                )
+                .with_source(source)
+            })?;
         tracing::info!(
             max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
             max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
@@ -516,11 +532,14 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
     thread::Builder::new()
         .name("local-ipc-lifecycle-waiter".to_string())
         .spawn_scoped(scope, move || {
+            #[cfg(windows)]
+            let _ = &endpoint_path;
             let mut observed_generation = match lifecycle_control.event_generation() {
                 Ok(generation) => generation,
                 Err(error) => {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
+                    #[cfg(not(windows))]
                     let _ = wake_listener(&endpoint_path);
                     return;
                 }
@@ -532,6 +551,7 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 if let Err(error) = lifecycle_control.wait_for_state_change(&mut observed_generation) {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
+                    #[cfg(not(windows))]
                     let _ = wake_listener(&endpoint_path);
                     return;
                 }
@@ -540,11 +560,15 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 }
                 if lifecycle_control.terminate_requested() {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
+                    #[cfg(not(windows))]
                     let _ = wake_listener(&endpoint_path);
                     return;
                 }
                 if lifecycle_control.take_reload_requested() {
                     signals.request_reload();
+                    #[cfg(windows)]
+                    continue;
+                    #[cfg(not(windows))]
                     if let Err(error) = wake_listener(&endpoint_path) {
                         record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                         let _ = signals.record_accept_error(
@@ -634,6 +658,16 @@ where
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+            if context.lifecycle_control.terminate_requested() || context.shutdown_beacon.is_tripped()
+            {
+                record_shutdown_signal(context.lifecycle_control, context.shutdown_beacon);
+                return Ok(AcceptLoopOutcome::Break(None));
+            }
+            std::thread::sleep(WINDOWS_ACCEPT_POLL_INTERVAL);
+            Ok(AcceptLoopOutcome::Continue)
+        }
         Err(source) => Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
             context.lifecycle_control,
             context.shutdown_beacon,
@@ -754,6 +788,11 @@ fn handle_shutdown_probe(
             Ok(AcceptLoopOutcome::Break(None))
         }
         ShutdownResponseOutcome::NoFrame => {
+            #[cfg(windows)]
+            {
+                let _ = terminate_probe_pending;
+                return Ok(AcceptLoopOutcome::Break(None));
+            }
             *terminate_probe_pending = true;
             if let Err(error) = schedule_delayed_listener_wake(
                 context.endpoint_path.to_path_buf(),
