@@ -66,6 +66,7 @@ impl ActiveConnectionRegistry {
         }
     }
 
+    #[cfg(any(test, not(windows)))]
     pub(crate) fn register_background_work(self: &Arc<Self>) -> ActiveDispatchGuard {
         self.register_dispatch_work()
     }

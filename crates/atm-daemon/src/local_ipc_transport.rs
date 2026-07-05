@@ -22,8 +22,7 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_deadline::{
-    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
-    run_owned_local_ipc_with_deadline,
+    DeadlineSupport, apply_optional_deadline, write_frame_with_optional_deadline,
 };
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
@@ -783,7 +782,7 @@ fn handle_shutdown_probe(
 fn reject_connection_when_capped(
     stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
-    registry: &Arc<ActiveConnectionRegistry>,
+    _registry: &Arc<ActiveConnectionRegistry>,
     active_connections: usize,
 ) -> Result<Option<LocalSocketStream>, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
@@ -813,39 +812,17 @@ fn reject_connection_when_capped(
             DeadlineSupport::Unsupported
         }
     };
-    if let Err(error) = run_owned_local_ipc_with_deadline(
+    if let Err(error) = write_frame_with_optional_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: REQUEST_DEADLINE,
-            support: write_deadline_support,
-            worker_name: "local-ipc-cap-rejection-write-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "daemon capped-connection rejection response write exceeded the runtime deadline",
-            )
-            .with_recovery("Retry the ATM command after in-flight same-host work completes."),
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon capped-connection rejection write helper disconnected before returning a result",
-            )
-            .with_recovery("Retry the ATM command after in-flight same-host work completes."),
-            spawn_error_message: "failed to spawn daemon capped-connection rejection write helper",
-            spawn_error_recovery:
-                "Restart the daemon; the capped-connection rejection write helper could not be created.",
-            background_work_registry: Some(Arc::clone(registry)),
-        },
-        move |stream| {
-            atm_core::protocol::write_frame(
-                stream,
-                &frame,
-                "failed to write daemon rejection response frame",
-            )?;
-            stream.flush().map_err(|source| {
-                AtmError::daemon_unavailable("failed to flush daemon rejection response frame")
-                    .with_recovery(
-                        "Retry the ATM command after in-flight same-host work completes.",
-                    )
-                    .with_source(source)
-            })
-        },
+        REQUEST_DEADLINE,
+        write_deadline_support,
+        &frame,
+        "failed to write daemon rejection response frame",
+        "failed to flush daemon rejection response frame",
+        AtmError::daemon_unavailable(
+            "daemon capped-connection rejection response write exceeded the runtime deadline",
+        )
+        .with_recovery("Retry the ATM command after in-flight same-host work completes."),
     ) {
         tracing::warn!(%error, "daemon capped-connection rejection response delivery failed");
     }
@@ -961,7 +938,9 @@ mod tests {
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]
     use crate::test_support::{
-        DoctorOnlyDispatcher, LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready,
+        DoctorOnlyDispatcher, LifecycleFlagResetGuard, configure_test_local_ipc_timeouts,
+        connect_daemon_local_ipc_until_ready, read_test_frame_with_deadline,
+        write_test_frame_with_deadline,
     };
     #[cfg(unix)]
     use atm_core::boundary::RequestDispatcher;
@@ -1143,12 +1122,7 @@ mod tests {
 
         lifecycle.terminate_flag().store(true, Ordering::SeqCst);
         let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-        stream
-            .set_send_timeout(Some(Duration::from_secs(5)))
-            .expect("set send timeout");
-        stream
-            .set_recv_timeout(Some(Duration::from_secs(5)))
-            .expect("set recv timeout");
+        let deadline_support = configure_test_local_ipc_timeouts(&stream);
         let request = RequestEnvelope::Doctor(DoctorQuery {
             home_dir: tempdir.path().join("home"),
             current_dir: tempdir.path().join("cwd"),
@@ -1157,15 +1131,20 @@ mod tests {
         let request_id = atm_core::protocol::next_request_id();
         let frame =
             atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-        atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-        std::io::Write::flush(&mut stream).expect("flush");
-        let response_frame = atm_core::protocol::read_frame(
-            &mut stream,
+        stream = write_test_frame_with_deadline(
+            stream,
+            deadline_support,
+            frame,
+            "write doctor frame",
+            "flush doctor frame",
+        );
+        let (_stream, response_frame) = read_test_frame_with_deadline(
+            stream,
+            deadline_support,
             "read shutdown response frame",
             "shutdown response frame too large",
-        )
-        .expect("read frame")
-        .expect("response frame");
+        );
+        let response_frame = response_frame.expect("response frame");
         let (response_id, response) =
             atm_core::protocol::response_from_frame_payload(response_frame)
                 .expect("decode response");
@@ -1234,12 +1213,7 @@ mod tests {
         });
 
         let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-        stream
-            .set_send_timeout(Some(Duration::from_secs(5)))
-            .expect("set send timeout");
-        stream
-            .set_recv_timeout(Some(Duration::from_secs(5)))
-            .expect("set recv timeout");
+        let deadline_support = configure_test_local_ipc_timeouts(&stream);
         let request = RequestEnvelope::Doctor(DoctorQuery {
             home_dir: tempdir.path().join("home"),
             current_dir: tempdir.path().join("cwd"),
@@ -1248,15 +1222,20 @@ mod tests {
         let request_id = atm_core::protocol::next_request_id();
         let frame =
             atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-        atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-        std::io::Write::flush(&mut stream).expect("flush");
-        let response_frame = atm_core::protocol::read_frame(
-            &mut stream,
+        stream = write_test_frame_with_deadline(
+            stream,
+            deadline_support,
+            frame,
+            "write doctor frame",
+            "flush doctor frame",
+        );
+        let (_stream, response_frame) = read_test_frame_with_deadline(
+            stream,
+            deadline_support,
             "read panic response",
             "panic frame too large",
-        )
-        .expect("read frame")
-        .expect("response frame");
+        );
+        let response_frame = response_frame.expect("response frame");
         let (response_id, response) =
             atm_core::protocol::response_from_frame_payload(response_frame)
                 .expect("decode response");

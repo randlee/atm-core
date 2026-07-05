@@ -12,8 +12,8 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_deadline::{
-    DeadlineSupport, LocalIpcDeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
-    run_owned_local_ipc_with_deadline,
+    DeadlineSupport, LocalIpcDeadlineSupport, ReadFrameDeadlineOutcome, apply_optional_deadline,
+    read_frame_with_optional_deadline, write_frame_with_optional_deadline,
 };
 use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
@@ -226,33 +226,15 @@ pub(crate) fn write_test_frame_with_deadline(
     write_error: &'static str,
     flush_error: &'static str,
 ) -> LocalSocketStream {
-    let (stream, ()) = run_owned_local_ipc_with_deadline(
+    let (stream, ()) = write_frame_with_optional_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: TEST_LOCAL_IPC_REQUEST_DEADLINE,
-            support: deadline_support.write,
-            worker_name: "test-local-ipc-write-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "test local IPC write exceeded the bounded request deadline",
-            )
+        TEST_LOCAL_IPC_REQUEST_DEADLINE,
+        deadline_support.write,
+        &frame,
+        write_error,
+        flush_error,
+        AtmError::daemon_unavailable("test local IPC write exceeded the bounded request deadline")
             .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
-            disconnect_error: AtmError::daemon_unavailable(
-                "test local IPC write helper disconnected before returning a result",
-            )
-            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
-            spawn_error_message: "failed to spawn test local IPC write helper",
-            spawn_error_recovery:
-                "Inspect the daemon test runtime; the bounded local IPC write helper could not be created.",
-            background_work_registry: None,
-        },
-        move |stream| {
-            atm_core::protocol::write_frame(stream, &frame, write_error)?;
-            std::io::Write::flush(stream).map_err(|source| {
-                AtmError::daemon_unavailable(flush_error)
-                    .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs.")
-                    .with_source(source)
-            })
-        },
     )
     .unwrap_or_else(|error| panic!("bounded test local IPC write failed: {error}"));
     stream
@@ -264,35 +246,44 @@ pub(crate) fn read_test_frame_with_deadline(
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> (LocalSocketStream, Option<atm_core::protocol::FramePayload>) {
-    run_owned_local_ipc_with_deadline(
+    let (stream, outcome) = read_frame_with_optional_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: TEST_LOCAL_IPC_REQUEST_DEADLINE,
-            support: deadline_support.read,
-            worker_name: "test-local-ipc-read-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "test local IPC read exceeded the bounded request deadline",
-            )
-            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
-            disconnect_error: AtmError::daemon_unavailable(
-                "test local IPC read helper disconnected before returning a frame",
-            )
-            .with_recovery("Inspect the daemon test and Windows named-pipe fallback for hangs."),
-            spawn_error_message: "failed to spawn test local IPC read helper",
-            spawn_error_recovery:
-                "Inspect the daemon test runtime; the bounded local IPC read helper could not be created.",
-            background_work_registry: None,
-        },
-        move |stream| atm_core::protocol::read_frame(stream, read_error, oversize_error),
+        TEST_LOCAL_IPC_REQUEST_DEADLINE,
+        deadline_support.read,
+        #[cfg(windows)]
+        None,
+        read_error,
+        oversize_error,
     )
-    .unwrap_or_else(|error| panic!("bounded test local IPC read failed: {error}"))
+    .unwrap_or_else(|error| panic!("bounded test local IPC read failed: {error}"));
+    match outcome {
+        ReadFrameDeadlineOutcome::EndOfStream => (stream, None),
+        ReadFrameDeadlineOutcome::Frame(frame) => (stream, Some(frame)),
+        #[cfg(windows)]
+        ReadFrameDeadlineOutcome::TimedOut => {
+            panic!("bounded test local IPC read timed out")
+        }
+    }
 }
 
 fn apply_test_deadline(result: std::io::Result<()>, context: &str) -> DeadlineSupport {
-    apply_optional_deadline(
-        result,
-        "failed to apply test local IPC deadline",
-        "Inspect the daemon test runtime; the same-host test socket could not apply its bounded local IPC deadline.",
-    )
-    .unwrap_or_else(|error| panic!("{context}: {error}"))
+    match result {
+        Ok(()) => DeadlineSupport::Applied,
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            DeadlineSupport::Unsupported
+        }
+        Err(source) if source.kind() == std::io::ErrorKind::InvalidInput => {
+            tracing::debug!(
+                context,
+                "test local IPC timeout setter rejected the stream; using bounded helper fallback"
+            );
+            DeadlineSupport::Unsupported
+        }
+        Err(source) => apply_optional_deadline(
+            Err(source),
+            "failed to apply test local IPC deadline",
+            "Inspect the daemon test runtime; the same-host test socket could not apply its bounded local IPC deadline.",
+        )
+        .unwrap_or_else(|error| panic!("{context}: {error}")),
+    }
 }

@@ -4,7 +4,8 @@ use std::fs;
 use std::time::Instant;
 
 use crate::local_ipc_deadline::{
-    DeadlineSupport, OwnedLocalIpcDeadlineConfig, run_owned_local_ipc_with_deadline,
+    DeadlineSupport, ReadFrameDeadlineOutcome, read_frame_with_optional_deadline,
+    write_frame_with_optional_deadline,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,82 +261,48 @@ fn shutdown_deadline_support(
 
 fn read_shutdown_rejection_frame(
     stream: LocalSocketStream,
-    background_work_registry: Arc<ActiveConnectionRegistry>,
+    _background_work_registry: Arc<ActiveConnectionRegistry>,
     read_deadline_support: DeadlineSupport,
 ) -> Result<(LocalSocketStream, Option<atm_core::protocol::FramePayload>), AtmError> {
-    run_owned_local_ipc_with_deadline(
+    let (stream, outcome) = read_frame_with_optional_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: REQUEST_DEADLINE,
-            support: read_deadline_support,
-            worker_name: "local-ipc-shutdown-read-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "daemon shutdown rejection request read exceeded the runtime deadline",
-            )
-            .with_recovery("Retry the ATM command after the daemon restarts."),
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon shutdown rejection read helper disconnected before returning a frame",
-            )
-            .with_recovery("Retry the ATM command after the daemon restarts."),
-            spawn_error_message: "failed to spawn daemon shutdown rejection read helper",
-            spawn_error_recovery: "Restart the daemon; the shutdown rejection read helper could not be created.",
-            background_work_registry: Some(background_work_registry),
-        },
-        |stream| {
-            atm_core::protocol::read_frame(
-                stream,
-                "failed to read daemon request frame during shutdown rejection",
-                "daemon request frame exceeded the maximum supported size during shutdown rejection",
-            )
-        },
-    )
+        REQUEST_DEADLINE,
+        read_deadline_support,
+        #[cfg(windows)]
+        None,
+        "failed to read daemon request frame during shutdown rejection",
+        "daemon request frame exceeded the maximum supported size during shutdown rejection",
+    )?;
+    match outcome {
+        ReadFrameDeadlineOutcome::EndOfStream => Ok((stream, None)),
+        ReadFrameDeadlineOutcome::Frame(frame) => Ok((stream, Some(frame))),
+        #[cfg(windows)]
+        ReadFrameDeadlineOutcome::TimedOut => Err(AtmError::daemon_unavailable(
+            "daemon shutdown rejection request read exceeded the runtime deadline",
+        )
+        .with_recovery("Retry the ATM command after the daemon restarts.")),
+    }
 }
 
 fn write_shutdown_rejection_frame(
     stream: LocalSocketStream,
-    background_work_registry: Arc<ActiveConnectionRegistry>,
+    _background_work_registry: Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
     frame: atm_core::protocol::FramePayload,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
-    run_owned_local_ipc_with_deadline(
+    write_frame_with_optional_deadline(
         stream,
-        OwnedLocalIpcDeadlineConfig {
-            deadline: REQUEST_DEADLINE,
-            support: write_deadline_support,
-            worker_name: "local-ipc-shutdown-write-helper",
-            timeout_error: AtmError::daemon_unavailable(
-                "daemon shutdown rejection response write exceeded the runtime deadline",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
-            ),
-            disconnect_error: AtmError::daemon_unavailable(
-                "daemon shutdown rejection write helper disconnected before returning a result",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
-            ),
-            spawn_error_message: "failed to spawn daemon shutdown rejection write helper",
-            spawn_error_recovery:
-                "Restart the daemon; the shutdown rejection write helper could not be created.",
-            background_work_registry: Some(background_work_registry),
-        },
-        move |stream| {
-            atm_core::protocol::write_frame(
-                stream,
-                &frame,
-                "failed to write daemon shutdown rejection response frame",
-            )?;
-            stream.flush().map_err(|source| {
-                AtmError::daemon_unavailable(
-                    "failed to flush daemon shutdown rejection response frame",
-                )
-                .with_recovery(
-                    "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
-                )
-                .with_source(source)
-            })
-        },
+        REQUEST_DEADLINE,
+        write_deadline_support,
+        &frame,
+        "failed to write daemon shutdown rejection response frame",
+        "failed to flush daemon shutdown rejection response frame",
+        AtmError::daemon_unavailable(
+            "daemon shutdown rejection response write exceeded the runtime deadline",
+        )
+        .with_recovery(
+            "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
+        ),
     )
 }
 
