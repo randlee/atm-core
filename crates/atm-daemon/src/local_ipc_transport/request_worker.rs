@@ -47,6 +47,13 @@ enum ReadRequestFrameResult {
     TimedOut,
 }
 
+#[cfg(windows)]
+enum NonblockingReadRequestFrameResult {
+    EndOfStream,
+    Frame(atm_core::protocol::FramePayload),
+    TimedOut,
+}
+
 struct AdvisoryStreamSinkContext<'a> {
     codec: &'a JsonAtmProtocolCodec,
     request_id: RequestId,
@@ -189,48 +196,37 @@ fn read_request_frame_with_deadline(
 fn read_request_frame_with_helper(
     mut stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
-    registry: &Arc<ActiveConnectionRegistry>,
+    _registry: &Arc<ActiveConnectionRegistry>,
 ) -> Result<ReadRequestFrameResult, AtmError> {
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let registry = Arc::clone(registry);
-    std::thread::Builder::new()
-        .name("local-ipc-read-helper".to_string())
-        .spawn(move || {
-            let _background_work = registry.register_background_work();
-            let result = read_request_frame(&mut stream);
-            let _ = result_tx.send((stream, result));
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn Windows named-pipe request read helper")
+    stream.set_nonblocking(true).map_err(|source| {
+        AtmError::daemon_unavailable(
+            "failed to place the Windows same-host request pipe into nonblocking mode",
+        )
+        .with_recovery(
+            "Restart the daemon; the same-host Windows request pipe could not enter the bounded nonblocking read path.",
+        )
+        .with_source(source)
+    })?;
+
+    let result = poll_request_frame_nonblocking(&mut stream, force_shutdown);
+    match result {
+        Ok(NonblockingReadRequestFrameResult::Frame(frame)) => {
+            stream.set_nonblocking(false).map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "failed to restore blocking mode on the Windows same-host request pipe",
+                )
                 .with_recovery(
-                    "Restart the daemon; the same-host Windows request read helper could not be created.",
+                    "Restart the daemon; the same-host Windows request pipe could not return to blocking mode after a bounded read.",
                 )
                 .with_source(source)
-        })?;
-
-    let started = std::time::Instant::now();
-    loop {
-        let remaining = REQUEST_DEADLINE.saturating_sub(started.elapsed());
-        if remaining.is_zero() || force_shutdown.load(Ordering::SeqCst) {
-            return Ok(ReadRequestFrameResult::TimedOut);
+            })?;
+            Ok(ReadRequestFrameResult::Frame { stream, frame })
         }
-        let poll = std::cmp::min(remaining, WINDOWS_READ_HELPER_POLL_INTERVAL);
-        match result_rx.recv_timeout(poll) {
-            Ok((stream, Ok(Some(frame)))) => {
-                return Ok(ReadRequestFrameResult::Frame { stream, frame });
-            }
-            Ok((_, Ok(None))) => return Ok(ReadRequestFrameResult::EndOfStream),
-            Ok((_, Err(error))) => return Err(error),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(AtmError::daemon_unavailable(
-                    "Windows named-pipe request read helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Restart the daemon; the same-host Windows request read helper stopped before it could return a frame result.",
-                ));
-            }
+        Ok(NonblockingReadRequestFrameResult::EndOfStream) => {
+            Ok(ReadRequestFrameResult::EndOfStream)
         }
+        Ok(NonblockingReadRequestFrameResult::TimedOut) => Ok(ReadRequestFrameResult::TimedOut),
+        Err(error) => Err(error),
     }
 }
 
@@ -242,6 +238,123 @@ fn read_request_frame(
         "failed to read daemon request frame",
         "daemon request frame exceeded the maximum supported size",
     )
+}
+
+#[cfg(windows)]
+fn poll_request_frame_nonblocking(
+    stream: &mut LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<NonblockingReadRequestFrameResult, AtmError> {
+    let started = std::time::Instant::now();
+    let mut header = [0u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES];
+    let header_read = poll_request_bytes(stream, force_shutdown, started, &mut header)?;
+    if header_read == 0 {
+        return Ok(NonblockingReadRequestFrameResult::EndOfStream);
+    }
+    let (request_id, message_kind, flags, payload_length) = decode_polled_frame_header(header)?;
+    let mut payload = vec![0u8; payload_length];
+    let payload_read = poll_request_bytes(stream, force_shutdown, started, &mut payload)?;
+    if payload_read != payload.len() {
+        return Ok(NonblockingReadRequestFrameResult::TimedOut);
+    }
+    Ok(NonblockingReadRequestFrameResult::Frame(
+        atm_core::protocol::FramePayload {
+            request_id,
+            message_kind,
+            flags,
+            bytes: payload,
+        },
+    ))
+}
+
+#[cfg(windows)]
+fn poll_request_bytes(
+    stream: &mut LocalSocketStream,
+    force_shutdown: &AtomicBool,
+    started: std::time::Instant,
+    buffer: &mut [u8],
+) -> Result<usize, AtmError> {
+    let mut offset = 0usize;
+    while offset < buffer.len() {
+        match std::io::Read::read(stream, &mut buffer[offset..]) {
+            Ok(0) if offset == 0 => return Ok(0),
+            Ok(0) => {
+                return Err(daemon_request_read_error(std::io::Error::from(
+                    std::io::ErrorKind::UnexpectedEof,
+                )));
+            }
+            Ok(read) => {
+                offset += read;
+            }
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                if force_shutdown.load(Ordering::SeqCst) || started.elapsed() >= REQUEST_DEADLINE {
+                    return Ok(offset);
+                }
+                let remaining = REQUEST_DEADLINE.saturating_sub(started.elapsed());
+                std::thread::sleep(std::cmp::min(remaining, WINDOWS_READ_HELPER_POLL_INTERVAL));
+            }
+            Err(source) if source.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(source) => return Err(daemon_request_read_error(source)),
+        }
+    }
+    Ok(offset)
+}
+
+#[cfg(windows)]
+fn decode_polled_frame_header(
+    header: [u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES],
+) -> Result<(RequestId, atm_core::protocol::MessageKind, u16, usize), AtmError> {
+    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
+    if magic != atm_core::protocol::ATM_FRAME_MAGIC {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame magic 0x{magic:08x}"
+        ))
+        .with_recovery(
+            "Retry with an ATM client and daemon build that both speak the documented ATM daemon protocol.",
+        ));
+    }
+
+    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
+    if version != atm_core::protocol::ATM_FRAME_VERSION_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame version {version}"
+        ))
+        .with_recovery(
+            "Align the CLI and daemon builds so both sides use the same ATM daemon protocol version before retrying.",
+        ));
+    }
+
+    let message_kind = atm_core::protocol::MessageKind::try_from(u16::from_be_bytes(
+        header[6..8].try_into().expect("kind"),
+    ))?;
+    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
+    if flags != atm_core::protocol::ATM_FRAME_FLAGS_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
+        ))
+        .with_recovery(
+            "Retry with a supported ATM daemon client/server build that uses the version-1 flag contract.",
+        ));
+    }
+
+    let request_id = RequestId::new(u64::from_be_bytes(
+        header[10..18].try_into().expect("request id"),
+    ))?;
+    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
+    if payload_length > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(
+            "daemon request frame exceeded the maximum supported size",
+        )
+        .with_recovery(
+            "Reduce the daemon request/response payload size before retrying the ATM command.",
+        ));
+    }
+    Ok((request_id, message_kind, flags, payload_length))
+}
+
+#[cfg(windows)]
+fn daemon_request_read_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to read daemon request frame").with_source(source)
 }
 
 fn configure_request_deadlines(
