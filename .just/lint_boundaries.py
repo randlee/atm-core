@@ -93,12 +93,14 @@ SCB_RETAINED_TARGET_FILES = (
     Path("crates/atm/src/commands/teams.rs"),
     Path("crates/atm/src/commands/members.rs"),
     Path("crates/atm-core/src/team_admin.rs"),
+    Path("crates/atm-core/src/team_admin/member_mutation.rs"),
 )
 SCB_WORKSPACE_DIRECT_PATTERNS = ("load_config(",)
 SCB_WORKSPACE_TARGET_FILES = (
     Path("crates/atm/src/commands/teams.rs"),
     Path("crates/atm/src/commands/members.rs"),
     Path("crates/atm-core/src/team_admin.rs"),
+    Path("crates/atm-core/src/team_admin/member_mutation.rs"),
 )
 SCB_SINGLETON_ROOT_FORBIDDEN_PATTERNS = (
     "pub use service_runtime_store::install_default_runtime_factory",

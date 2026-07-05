@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-AD-PM-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-AD-PM-001" ;
+  triage:title "Boundary lint target lists did not follow the team_admin business-logic split" ;
+  triage:description "After the team-admin split moved guarded business logic into crates/atm-core/src/team_admin/member_mutation.rs, the SCB retained-runtime and workspace-config target lists still scanned only crates/atm-core/src/team_admin.rs plus the atm CLI command files. This left the moved business-logic file outside explicit boundary enforcement, so future direct service_runtime_store::default_runtime() or load_config() regressions there would not be reported. This follow-up closes the gap by adding member_mutation.rs to both explicit target lists and by moving the regression tests to the split file." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/lint_boundaries.py, .just/tests/test_lint_boundaries.py, crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD-PM-001/fix-phase-AD-pm-team-admin-split/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891> .
+
+<urn:atm:triage:occurrence/ARCH-AD-PM-001/fix-phase-AD-pm-team-admin-split/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 92 ;
+  triage:snippet "SCB_RETAINED_TARGET_FILES = (" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-team-admin-split" ;
+  triage:headSha "cd2f2891" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891> .
+
+<urn:atm:triage:worktree/fix-phase-AD-pm-team-admin-split/cd2f2891>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/phase-AD-pm-team-admin-split" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/fix/phase-AD-pm-team-admin-split" ;
+  triage:headSha "cd2f2891" ;
+  triage:status "closed" .
