@@ -238,8 +238,10 @@ fn shutdown_deadline_support(
     result: std::io::Result<()>,
     message: &'static str,
     recovery: &'static str,
-    _debug_message: &'static str,
+    debug_message: &'static str,
 ) -> Result<DeadlineSupport, AtmError> {
+    #[cfg(not(windows))]
+    let _ = debug_message;
     match result {
         Ok(()) => Ok(DeadlineSupport::Applied),
         #[cfg(windows)]
