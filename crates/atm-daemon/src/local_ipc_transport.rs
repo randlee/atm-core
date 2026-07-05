@@ -668,21 +668,14 @@ where
         return Ok(AcceptLoopOutcome::Continue);
     }
     if context.lifecycle_control.terminate_requested() || context.shutdown_beacon.is_tripped() {
-        return handle_shutdown_probe(
-            stream,
-            context.lifecycle_control,
-            context.shutdown_beacon,
-            context.registry,
-            context.codec,
-            context.endpoint_path,
-            terminate_probe_pending,
-        );
+        return handle_shutdown_probe(stream, context, terminate_probe_pending);
     }
     *terminate_probe_pending = false;
     let Some(stream) = reject_connection_when_capped(
         stream,
         context.codec,
         context.registry,
+        context.force_shutdown,
         context.registry.active_connections(),
     )?
     else {
@@ -745,18 +738,15 @@ where
 
 fn handle_shutdown_probe(
     stream: LocalSocketStream,
-    lifecycle_control: &LifecycleControlSourceAdapter,
-    shutdown_beacon: &ShutdownBeacon,
-    registry: &Arc<ActiveConnectionRegistry>,
-    codec: &JsonAtmProtocolCodec,
-    endpoint_path: &Path,
+    context: &AcceptLoopContext<'_>,
     terminate_probe_pending: &mut bool,
 ) -> Result<AcceptLoopOutcome, AtmError> {
-    record_shutdown_signal(lifecycle_control, shutdown_beacon);
+    record_shutdown_signal(context.lifecycle_control, context.shutdown_beacon);
     match write_shutdown_response(
         stream,
-        registry,
-        codec,
+        context.registry,
+        context.force_shutdown.as_ref(),
+        context.codec,
         ShutdownResponseDeadlineMode::ProbeConnection,
     )? {
         ShutdownResponseOutcome::RejectedRequest => Ok(AcceptLoopOutcome::Break(None)),
@@ -766,7 +756,7 @@ fn handle_shutdown_probe(
         ShutdownResponseOutcome::NoFrame => {
             *terminate_probe_pending = true;
             if let Err(error) = schedule_delayed_listener_wake(
-                endpoint_path.to_path_buf(),
+                context.endpoint_path.to_path_buf(),
                 TERMINATE_REJECTION_GRACE_DEADLINE,
             ) {
                 tracing::warn!(
@@ -774,10 +764,10 @@ fn handle_shutdown_probe(
                     subsystem = "local_ipc_transport",
                     action = "shutdown_probe_wake",
                     deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
-                    path = %endpoint_path.display(),
+                    path = %context.endpoint_path.display(),
                     "failed to schedule delayed listener wake during shutdown probe"
                 );
-                let _ = wake_listener(endpoint_path);
+                let _ = wake_listener(context.endpoint_path);
                 return Ok(AcceptLoopOutcome::Break(None));
             }
             Ok(AcceptLoopOutcome::Continue)
@@ -789,6 +779,7 @@ fn reject_connection_when_capped(
     stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
     _registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &Arc<AtomicBool>,
     active_connections: usize,
 ) -> Result<Option<LocalSocketStream>, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
@@ -822,7 +813,7 @@ fn reject_connection_when_capped(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
-        None,
+        Some(force_shutdown.as_ref()),
         &frame,
         (
             "failed to write daemon rejection response frame",

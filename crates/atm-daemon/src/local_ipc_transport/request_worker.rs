@@ -60,6 +60,7 @@ pub(super) fn handle_connection(
         return write_shutdown_response(
             stream,
             &registry,
+            force_shutdown,
             &codec,
             ShutdownResponseDeadlineMode::Strict,
         )
@@ -97,6 +98,7 @@ pub(super) fn handle_connection(
         stream,
         &codec,
         &registry,
+        force_shutdown,
         deadline_support.write,
         request_id,
         response,
@@ -338,6 +340,7 @@ fn write_response(
     stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
     _registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &AtomicBool,
     write_deadline_support: DeadlineSupport,
     request_id: RequestId,
     response: ResponseEnvelope,
@@ -347,7 +350,7 @@ fn write_response(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
-        None,
+        Some(force_shutdown),
         &frame,
         (
             "failed to write daemon response frame",

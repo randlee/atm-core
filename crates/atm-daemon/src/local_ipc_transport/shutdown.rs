@@ -172,6 +172,7 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
 pub(super) fn write_shutdown_response(
     mut stream: LocalSocketStream,
     _registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &AtomicBool,
     codec: &JsonAtmProtocolCodec,
     deadline_mode: ShutdownResponseDeadlineMode,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
@@ -190,7 +191,7 @@ pub(super) fn write_shutdown_response(
             .with_recovery("Retry the ATM command after the daemon restarts."),
     ));
     let frame = codec.response_to_frame(request_id, response)?;
-    let _ = write_shutdown_rejection_frame(stream, write_deadline_support, frame)?;
+    let _ = write_shutdown_rejection_frame(stream, write_deadline_support, force_shutdown, frame)?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
@@ -278,13 +279,14 @@ fn read_shutdown_rejection_frame(
 fn write_shutdown_rejection_frame(
     stream: LocalSocketStream,
     write_deadline_support: DeadlineSupport,
+    force_shutdown: &AtomicBool,
     frame: atm_core::protocol::FramePayload,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
     write_frame_with_optional_deadline(
         stream,
         REQUEST_DEADLINE,
         write_deadline_support,
-        None,
+        Some(force_shutdown),
         &frame,
         (
             "failed to write daemon shutdown rejection response frame",
