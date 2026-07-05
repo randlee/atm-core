@@ -791,25 +791,28 @@ fn handle_shutdown_probe(
             #[cfg(windows)]
             {
                 let _ = terminate_probe_pending;
-                return Ok(AcceptLoopOutcome::Break(None));
+                Ok(AcceptLoopOutcome::Break(None))
             }
-            *terminate_probe_pending = true;
-            if let Err(error) = schedule_delayed_listener_wake(
-                context.endpoint_path.to_path_buf(),
-                TERMINATE_REJECTION_GRACE_DEADLINE,
-            ) {
-                tracing::warn!(
-                    %error,
-                    subsystem = "local_ipc_transport",
-                    action = "shutdown_probe_wake",
-                    deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
-                    path = %context.endpoint_path.display(),
-                    "failed to schedule delayed listener wake during shutdown probe"
-                );
-                let _ = wake_listener(context.endpoint_path);
-                return Ok(AcceptLoopOutcome::Break(None));
+            #[cfg(not(windows))]
+            {
+                *terminate_probe_pending = true;
+                if let Err(error) = schedule_delayed_listener_wake(
+                    context.endpoint_path.to_path_buf(),
+                    TERMINATE_REJECTION_GRACE_DEADLINE,
+                ) {
+                    tracing::warn!(
+                        %error,
+                        subsystem = "local_ipc_transport",
+                        action = "shutdown_probe_wake",
+                        deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
+                        path = %context.endpoint_path.display(),
+                        "failed to schedule delayed listener wake during shutdown probe"
+                    );
+                    let _ = wake_listener(context.endpoint_path);
+                    return Ok(AcceptLoopOutcome::Break(None));
+                }
+                Ok(AcceptLoopOutcome::Continue)
             }
-            Ok(AcceptLoopOutcome::Continue)
         }
     }
 }

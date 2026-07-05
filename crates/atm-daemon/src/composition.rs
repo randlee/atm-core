@@ -753,6 +753,7 @@ pub(crate) fn compose_runtime(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use interprocess::local_socket::ListenerOptions;
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -862,9 +863,14 @@ mod tests {
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
-        let parent_file = tempdir.path().join("not-a-dir");
-        std::fs::write(&parent_file, "x").expect("parent file");
-        let socket_path = parent_file.join("atm.sock");
+        let socket_path = tempdir.path().join("atm.sock");
+        let _occupied_listener = ListenerOptions::new()
+            .name(
+                atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+                    .expect("ipc name"),
+            )
+            .create_sync()
+            .expect("occupy daemon endpoint");
         let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
         let error = runtime
