@@ -6,14 +6,10 @@ use atm_core::error::AtmError;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::prelude::*;
 
+use crate::local_ipc_deadline::{DeadlineSupport, apply_optional_deadline};
+
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DeadlineSupport {
-    Applied,
-    Unsupported,
-}
 
 pub(crate) fn schedule_delayed_listener_wake(
     endpoint_path: PathBuf,
@@ -109,16 +105,9 @@ fn apply_listener_wake_deadline(
     result: std::io::Result<()>,
     message: &'static str,
 ) -> Result<DeadlineSupport, AtmError> {
-    match result {
-        Ok(()) => Ok(DeadlineSupport::Applied),
-        #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
-            Ok(DeadlineSupport::Unsupported)
-        }
-        Err(source) => Err(AtmError::daemon_unavailable(message)
-            .with_recovery(
-                "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
-            )
-            .with_source(source)),
-    }
+    apply_optional_deadline(
+        result,
+        message,
+        "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
+    )
 }

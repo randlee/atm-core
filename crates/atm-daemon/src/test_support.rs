@@ -12,7 +12,7 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_deadline::{
-    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
+    DeadlineSupport, LocalIpcDeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
     run_owned_local_ipc_with_deadline,
 };
 use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
@@ -22,12 +22,6 @@ const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
     std::time::Duration::from_millis(1);
 const TEST_LOCAL_IPC_CONNECT_RETRY_MAX_DELAY: std::time::Duration =
     std::time::Duration::from_millis(25);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct TestLocalIpcDeadlineSupport {
-    pub(crate) read: DeadlineSupport,
-    pub(crate) write: DeadlineSupport,
-}
 
 pub(crate) struct LifecycleFlagResetGuard {
     lifecycle: LifecycleControlSourceAdapter,
@@ -213,7 +207,7 @@ pub(crate) fn connect_local_ipc_with_timeout(
 
 pub(crate) fn configure_test_local_ipc_timeouts(
     stream: &LocalSocketStream,
-) -> TestLocalIpcDeadlineSupport {
+) -> LocalIpcDeadlineSupport {
     let write = apply_test_deadline(
         stream.set_send_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
         "set send timeout",
@@ -222,12 +216,12 @@ pub(crate) fn configure_test_local_ipc_timeouts(
         stream.set_recv_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
         "set recv timeout",
     );
-    TestLocalIpcDeadlineSupport { read, write }
+    LocalIpcDeadlineSupport { read, write }
 }
 
 pub(crate) fn write_test_frame_with_deadline(
     stream: LocalSocketStream,
-    deadline_support: TestLocalIpcDeadlineSupport,
+    deadline_support: LocalIpcDeadlineSupport,
     frame: atm_core::protocol::FramePayload,
     write_error: &'static str,
     flush_error: &'static str,
@@ -249,6 +243,7 @@ pub(crate) fn write_test_frame_with_deadline(
             spawn_error_message: "failed to spawn test local IPC write helper",
             spawn_error_recovery:
                 "Inspect the daemon test runtime; the bounded local IPC write helper could not be created.",
+            background_work_registry: None,
         },
         move |stream| {
             atm_core::protocol::write_frame(stream, &frame, write_error)?;
@@ -265,7 +260,7 @@ pub(crate) fn write_test_frame_with_deadline(
 
 pub(crate) fn read_test_frame_with_deadline(
     stream: LocalSocketStream,
-    deadline_support: TestLocalIpcDeadlineSupport,
+    deadline_support: LocalIpcDeadlineSupport,
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> (LocalSocketStream, Option<atm_core::protocol::FramePayload>) {
@@ -286,6 +281,7 @@ pub(crate) fn read_test_frame_with_deadline(
             spawn_error_message: "failed to spawn test local IPC read helper",
             spawn_error_recovery:
                 "Inspect the daemon test runtime; the bounded local IPC read helper could not be created.",
+            background_work_registry: None,
         },
         move |stream| atm_core::protocol::read_frame(stream, read_error, oversize_error),
     )

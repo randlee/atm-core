@@ -11,13 +11,16 @@ use interprocess::local_socket::traits::Stream;
 
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::local_ipc_deadline::{
-    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
+    DeadlineSupport, LocalIpcDeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
     run_owned_local_ipc_with_deadline,
 };
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
-use super::{MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, write_shutdown_response};
+use super::{
+    MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, ShutdownResponseDeadlineMode,
+    write_shutdown_response,
+};
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -28,12 +31,6 @@ type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHan
 enum RequestExecutionRisk {
     ReadOnly,
     SideEffecting,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RequestDeadlineSupport {
-    read: DeadlineSupport,
-    write: DeadlineSupport,
 }
 
 #[cfg(windows)]
@@ -50,6 +47,14 @@ enum ReadRequestFrameResult {
     TimedOut,
 }
 
+struct AdvisoryStreamSinkContext<'a> {
+    codec: &'a JsonAtmProtocolCodec,
+    request_id: RequestId,
+    force_shutdown: &'a AtomicBool,
+    registry: &'a Arc<ActiveConnectionRegistry>,
+    write_deadline_support: DeadlineSupport,
+}
+
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -58,23 +63,68 @@ pub(super) fn handle_connection(
     codec: JsonAtmProtocolCodec,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
-        return write_shutdown_response(stream, &codec).map(|_| ());
+        return write_shutdown_response(
+            stream,
+            &registry,
+            &codec,
+            ShutdownResponseDeadlineMode::Strict,
+        )
+        .map(|_| ());
     }
     let deadline_support = configure_request_deadlines(&stream)?;
 
-    let frame = match read_request_frame_with_deadline(
+    let Some((resumed_stream, frame)) =
+        read_request_frame_or_terminate(stream, force_shutdown, &registry, deadline_support.read)?
+    else {
+        return Ok(());
+    };
+    stream = resumed_stream;
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
+    let (request_id, request) = codec.request_from_frame(frame)?;
+    if let RequestEnvelope::AdvisoryStream(request) = request {
+        return handle_advisory_stream_request(
+            stream,
+            request,
+            dispatcher.as_ref(),
+            AdvisoryStreamSinkContext {
+                codec: &codec,
+                request_id,
+                force_shutdown,
+                registry: &registry,
+                write_deadline_support: deadline_support.write,
+            },
+        );
+    }
+
+    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
+    write_response(
         stream,
-        force_shutdown,
-        deadline_support.read,
-    )? {
-        ReadRequestFrameResult::EndOfStream => return Ok(()),
+        &codec,
+        &registry,
+        deadline_support.write,
+        request_id,
+        response,
+    )?;
+    registry.reap_finished_dispatches()?;
+    Ok(())
+}
+
+fn read_request_frame_or_terminate(
+    stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+    registry: &Arc<ActiveConnectionRegistry>,
+    read_deadline_support: DeadlineSupport,
+) -> Result<Option<(LocalSocketStream, atm_core::protocol::FramePayload)>, AtmError> {
+    match read_request_frame_with_deadline(stream, force_shutdown, registry, read_deadline_support)?
+    {
+        ReadRequestFrameResult::EndOfStream => Ok(None),
         ReadRequestFrameResult::Frame {
             stream: resumed_stream,
             frame,
-        } => {
-            stream = resumed_stream;
-            frame
-        }
+        } => Ok(Some((resumed_stream, frame))),
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
             tracing::info!(
@@ -83,7 +133,7 @@ pub(super) fn handle_connection(
                 outcome = "forced_shutdown",
                 "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
             );
-            return Ok(());
+            Ok(None)
         }
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
@@ -94,43 +144,40 @@ pub(super) fn handle_connection(
                 deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
                 "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
             );
-            return Ok(());
+            Ok(None)
         }
-    };
-    tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
-    );
-    let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::AdvisoryStream(request) = request {
-        return dispatch_advisory_stream(
-            stream,
-            dispatcher.as_ref(),
-            force_shutdown,
-            &codec,
-            deadline_support.write,
-            request_id,
-            request,
-        );
     }
+}
 
-    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
-    write_response(stream, &codec, deadline_support.write, request_id, response)?;
-    registry.reap_finished_dispatches()?;
-    Ok(())
+fn handle_advisory_stream_request(
+    stream: LocalSocketStream,
+    request: atm_core::AdvisoryStreamRequest,
+    dispatcher: &dyn RequestDispatcher,
+    sink_context: AdvisoryStreamSinkContext<'_>,
+) -> Result<(), AtmError> {
+    let mut sink = LocalIpcAdvisoryStreamSink {
+        stream: Some(stream),
+        codec: sink_context.codec,
+        request_id: sink_context.request_id,
+        force_shutdown: sink_context.force_shutdown,
+        registry: sink_context.registry,
+        write_deadline_support: sink_context.write_deadline_support,
+    };
+    dispatcher.dispatch_advisory_stream(request, &mut sink)
 }
 
 fn read_request_frame_with_deadline(
     mut stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
+    registry: &Arc<ActiveConnectionRegistry>,
     read_deadline_support: DeadlineSupport,
 ) -> Result<ReadRequestFrameResult, AtmError> {
     #[cfg(windows)]
     if read_deadline_support == DeadlineSupport::Unsupported {
-        return read_request_frame_with_helper(stream, force_shutdown);
+        return read_request_frame_with_helper(stream, force_shutdown, registry);
     }
     #[cfg(not(windows))]
-    let _ = (force_shutdown, read_deadline_support);
+    let _ = (force_shutdown, registry, read_deadline_support);
 
     match read_request_frame(&mut stream)? {
         None => Ok(ReadRequestFrameResult::EndOfStream),
@@ -142,11 +189,14 @@ fn read_request_frame_with_deadline(
 fn read_request_frame_with_helper(
     mut stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
+    registry: &Arc<ActiveConnectionRegistry>,
 ) -> Result<ReadRequestFrameResult, AtmError> {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let registry = Arc::clone(registry);
     std::thread::Builder::new()
         .name("local-ipc-read-helper".to_string())
         .spawn(move || {
+            let _background_work = registry.register_background_work();
             let result = read_request_frame(&mut stream);
             let _ = result_tx.send((stream, result));
         })
@@ -196,7 +246,7 @@ fn read_request_frame(
 
 fn configure_request_deadlines(
     stream: &LocalSocketStream,
-) -> Result<RequestDeadlineSupport, AtmError> {
+) -> Result<LocalIpcDeadlineSupport, AtmError> {
     let read = apply_optional_deadline(
         stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
         "failed to apply daemon request read deadline",
@@ -207,26 +257,7 @@ fn configure_request_deadlines(
         "failed to apply daemon response write deadline",
         "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
     )?;
-    Ok(RequestDeadlineSupport { read, write })
-}
-
-fn dispatch_advisory_stream(
-    stream: LocalSocketStream,
-    dispatcher: &dyn RequestDispatcher,
-    force_shutdown: &AtomicBool,
-    codec: &JsonAtmProtocolCodec,
-    write_deadline_support: DeadlineSupport,
-    request_id: RequestId,
-    request: atm_core::AdvisoryStreamRequest,
-) -> Result<(), AtmError> {
-    let mut sink = LocalIpcAdvisoryStreamSink {
-        stream: Some(stream),
-        codec,
-        request_id,
-        force_shutdown,
-        write_deadline_support,
-    };
-    dispatcher.dispatch_advisory_stream(request, &mut sink)
+    Ok(LocalIpcDeadlineSupport { read, write })
 }
 
 fn dispatch_request(
@@ -346,6 +377,7 @@ fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEn
 fn write_response(
     stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
+    registry: &Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
     request_id: RequestId,
     response: ResponseEnvelope,
@@ -353,13 +385,14 @@ fn write_response(
     let frame = codec.response_to_frame(request_id, response)?;
     let _ = run_owned_local_ipc_with_deadline(
         stream,
-        response_write_deadline_config(write_deadline_support),
+        response_write_deadline_config(Arc::clone(registry), write_deadline_support),
         move |stream| write_response_frame(stream, &frame),
     )?;
     Ok(())
 }
 
 fn response_write_deadline_config(
+    background_work_registry: Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
 ) -> OwnedLocalIpcDeadlineConfig {
     OwnedLocalIpcDeadlineConfig {
@@ -381,6 +414,7 @@ fn response_write_deadline_config(
         spawn_error_message: "failed to spawn daemon response write helper",
         spawn_error_recovery:
             "Restart the daemon; the same-host response write helper could not be created.",
+        background_work_registry: Some(background_work_registry),
     }
 }
 
@@ -403,6 +437,7 @@ struct LocalIpcAdvisoryStreamSink<'a> {
     codec: &'a JsonAtmProtocolCodec,
     request_id: RequestId,
     force_shutdown: &'a AtomicBool,
+    registry: &'a Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
 }
 
@@ -437,6 +472,7 @@ impl AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
                 ),
                 spawn_error_message: "failed to spawn daemon advisory-stream write helper",
                 spawn_error_recovery: "Restart the daemon; the same-host advisory-stream write helper could not be created.",
+                background_work_registry: Some(Arc::clone(self.registry)),
             },
             move |stream| {
                 atm_core::protocol::write_frame(

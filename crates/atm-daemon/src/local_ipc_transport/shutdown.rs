@@ -4,9 +4,14 @@ use std::fs;
 use std::time::Instant;
 
 use crate::local_ipc_deadline::{
-    DeadlineSupport, OwnedLocalIpcDeadlineConfig, apply_optional_deadline,
-    run_owned_local_ipc_with_deadline,
+    DeadlineSupport, OwnedLocalIpcDeadlineConfig, run_owned_local_ipc_with_deadline,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ShutdownResponseDeadlineMode {
+    Strict,
+    ProbeConnection,
+}
 
 pub(super) fn finalize_serve_loop<BeginShutdown, FinalizeShutdown>(
     begin_shutdown: &BeginShutdown,
@@ -165,11 +170,14 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
 
 pub(super) fn write_shutdown_response(
     mut stream: LocalSocketStream,
+    registry: &Arc<ActiveConnectionRegistry>,
     codec: &JsonAtmProtocolCodec,
+    deadline_mode: ShutdownResponseDeadlineMode,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let (read_deadline_support, write_deadline_support) =
-        shutdown_rejection_deadline_support(&stream);
-    let (resumed_stream, frame) = read_shutdown_rejection_frame(stream, read_deadline_support)?;
+        shutdown_rejection_deadline_support(&stream, deadline_mode)?;
+    let (resumed_stream, frame) =
+        read_shutdown_rejection_frame(stream, Arc::clone(registry), read_deadline_support)?;
     stream = resumed_stream;
     let Some(frame) = frame else {
         return Ok(ShutdownResponseOutcome::NoFrame);
@@ -182,45 +190,75 @@ pub(super) fn write_shutdown_response(
             .with_recovery("Retry the ATM command after the daemon restarts."),
     ));
     let frame = codec.response_to_frame(request_id, response)?;
-    let _ = write_shutdown_rejection_frame(stream, write_deadline_support, frame)?;
+    let _ = write_shutdown_rejection_frame(
+        stream,
+        Arc::clone(registry),
+        write_deadline_support,
+        frame,
+    )?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
 fn shutdown_rejection_deadline_support(
     stream: &LocalSocketStream,
-) -> (DeadlineSupport, DeadlineSupport) {
-    let read = shutdown_deadline_support(
-        stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
-        "failed to apply daemon shutdown rejection read deadline",
-        "Restart the daemon; the shutdown rejection socket could not apply its bounded read deadline.",
-        "daemon shutdown rejection read deadline was unavailable; using helper-thread fallback",
-    );
-    let write = shutdown_deadline_support(
-        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
-        "failed to apply daemon shutdown rejection write deadline",
-        "Restart the daemon; the shutdown rejection socket could not apply its bounded write deadline.",
-        "daemon shutdown rejection write deadline was unavailable; using helper-thread fallback",
-    );
-    (read, write)
+    deadline_mode: ShutdownResponseDeadlineMode,
+) -> Result<(DeadlineSupport, DeadlineSupport), AtmError> {
+    let (read, write) = match deadline_mode {
+        ShutdownResponseDeadlineMode::Strict => {
+            let read = shutdown_deadline_support(
+                stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
+                "failed to apply daemon shutdown rejection read deadline",
+                "Restart the daemon; the shutdown rejection socket could not apply its bounded read deadline.",
+                "daemon shutdown rejection read deadline was unavailable; using helper-thread fallback",
+            )?;
+            let write = shutdown_deadline_support(
+                stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+                "failed to apply daemon shutdown rejection write deadline",
+                "Restart the daemon; the shutdown rejection socket could not apply its bounded write deadline.",
+                "daemon shutdown rejection write deadline was unavailable; using helper-thread fallback",
+            )?;
+            (read, write)
+        }
+        ShutdownResponseDeadlineMode::ProbeConnection => {
+            // The accept-loop shutdown probe also consumes the daemon's own wake connections,
+            // which intentionally carry no request frame and can reach this path after the peer
+            // has already dropped its side. Some supported Unix stacks reject timeout setters on
+            // that empty probe stream with InvalidInput even though the shared bounded helper is
+            // still the correct contract for "read at most one frame / write at most one
+            // rejection". Use the helper path directly for probe-only connections so we do not
+            // misclassify the daemon's internal accept wake-up as a fatal socket configuration
+            // failure.
+            (DeadlineSupport::Unsupported, DeadlineSupport::Unsupported)
+        }
+    };
+    Ok((read, write))
 }
 
 fn shutdown_deadline_support(
     result: std::io::Result<()>,
     message: &'static str,
     recovery: &'static str,
-    debug_message: &'static str,
-) -> DeadlineSupport {
-    match apply_optional_deadline(result, message, recovery) {
-        Ok(support) => support,
-        Err(error) => {
+    _debug_message: &'static str,
+) -> Result<DeadlineSupport, AtmError> {
+    match result {
+        Ok(()) => Ok(DeadlineSupport::Applied),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            let error = AtmError::daemon_unavailable(message)
+                .with_recovery(recovery)
+                .with_source(source);
             tracing::debug!(%error, "{debug_message}");
-            DeadlineSupport::Unsupported
+            Ok(DeadlineSupport::Unsupported)
         }
+        Err(source) => Err(AtmError::daemon_unavailable(message)
+            .with_recovery(recovery)
+            .with_source(source)),
     }
 }
 
 fn read_shutdown_rejection_frame(
     stream: LocalSocketStream,
+    background_work_registry: Arc<ActiveConnectionRegistry>,
     read_deadline_support: DeadlineSupport,
 ) -> Result<(LocalSocketStream, Option<atm_core::protocol::FramePayload>), AtmError> {
     run_owned_local_ipc_with_deadline(
@@ -239,6 +277,7 @@ fn read_shutdown_rejection_frame(
             .with_recovery("Retry the ATM command after the daemon restarts."),
             spawn_error_message: "failed to spawn daemon shutdown rejection read helper",
             spawn_error_recovery: "Restart the daemon; the shutdown rejection read helper could not be created.",
+            background_work_registry: Some(background_work_registry),
         },
         |stream| {
             atm_core::protocol::read_frame(
@@ -252,6 +291,7 @@ fn read_shutdown_rejection_frame(
 
 fn write_shutdown_rejection_frame(
     stream: LocalSocketStream,
+    background_work_registry: Arc<ActiveConnectionRegistry>,
     write_deadline_support: DeadlineSupport,
     frame: atm_core::protocol::FramePayload,
 ) -> Result<(LocalSocketStream, ()), AtmError> {
@@ -276,6 +316,7 @@ fn write_shutdown_rejection_frame(
             spawn_error_message: "failed to spawn daemon shutdown rejection write helper",
             spawn_error_recovery:
                 "Restart the daemon; the shutdown rejection write helper could not be created.",
+            background_work_registry: Some(background_work_registry),
         },
         move |stream| {
             atm_core::protocol::write_frame(

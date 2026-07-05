@@ -66,6 +66,10 @@ impl ActiveConnectionRegistry {
         }
     }
 
+    pub(crate) fn register_background_work(self: &Arc<Self>) -> ActiveDispatchGuard {
+        self.register_dispatch_work()
+    }
+
     pub(crate) fn active_connections(&self) -> usize {
         self.active_connections.load(Ordering::SeqCst)
     }

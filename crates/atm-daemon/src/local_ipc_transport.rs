@@ -39,8 +39,8 @@ use request_worker::handle_connection;
 #[cfg(all(test, unix))]
 use request_worker::install_injected_accept_error_for_test;
 use shutdown::{
-    emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
-    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
+    ShutdownResponseDeadlineMode, emit_ready_signal_if_requested, finalize_serve_loop,
+    finish_serve_shutdown, prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
     write_shutdown_response,
 };
 
@@ -667,6 +667,7 @@ where
             stream,
             context.lifecycle_control,
             context.shutdown_beacon,
+            context.registry,
             context.codec,
             context.endpoint_path,
             terminate_probe_pending,
@@ -676,6 +677,7 @@ where
     let Some(stream) = reject_connection_when_capped(
         stream,
         context.codec,
+        context.registry,
         context.registry.active_connections(),
     )?
     else {
@@ -740,12 +742,18 @@ fn handle_shutdown_probe(
     stream: LocalSocketStream,
     lifecycle_control: &LifecycleControlSourceAdapter,
     shutdown_beacon: &ShutdownBeacon,
+    registry: &Arc<ActiveConnectionRegistry>,
     codec: &JsonAtmProtocolCodec,
     endpoint_path: &Path,
     terminate_probe_pending: &mut bool,
 ) -> Result<AcceptLoopOutcome, AtmError> {
     record_shutdown_signal(lifecycle_control, shutdown_beacon);
-    match write_shutdown_response(stream, codec)? {
+    match write_shutdown_response(
+        stream,
+        registry,
+        codec,
+        ShutdownResponseDeadlineMode::ProbeConnection,
+    )? {
         ShutdownResponseOutcome::RejectedRequest => Ok(AcceptLoopOutcome::Break(None)),
         ShutdownResponseOutcome::NoFrame if *terminate_probe_pending => {
             Ok(AcceptLoopOutcome::Break(None))
@@ -775,6 +783,7 @@ fn handle_shutdown_probe(
 fn reject_connection_when_capped(
     stream: LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
+    registry: &Arc<ActiveConnectionRegistry>,
     active_connections: usize,
 ) -> Result<Option<LocalSocketStream>, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
@@ -821,6 +830,7 @@ fn reject_connection_when_capped(
             spawn_error_message: "failed to spawn daemon capped-connection rejection write helper",
             spawn_error_recovery:
                 "Restart the daemon; the capped-connection rejection write helper could not be created.",
+            background_work_registry: Some(Arc::clone(registry)),
         },
         move |stream| {
             atm_core::protocol::write_frame(
@@ -1287,7 +1297,7 @@ mod tests {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let join_handle = std::thread::spawn(move || {
             let _dispatch = dispatch_registry.register_dispatch_work();
-            let _ = release_rx.recv();
+            let _ = release_rx.recv_timeout(Duration::from_secs(5));
             let _ = completion_tx.send(());
         });
         registry
@@ -1372,7 +1382,7 @@ mod tests {
         let (release_first_tx, release_first_rx) = mpsc::sync_channel(1);
         let (completion_first_tx, completion_first_rx) = mpsc::sync_channel(1);
         let first_join = std::thread::spawn(move || {
-            let _ = release_first_rx.recv();
+            let _ = release_first_rx.recv_timeout(Duration::from_secs(5));
             let _ = completion_first_tx.send(());
         });
         registry
