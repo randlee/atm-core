@@ -22,8 +22,10 @@ use crate::DaemonSubsystem;
 use crate::GraftStreamSink;
 use crate::SubsystemObservability;
 use crate::daemon_runtime_observability::DaemonEvent;
+use crate::local_ipc_transport::MAX_CONCURRENT_CONNECTIONS;
 
-const MAX_ADVISORY_SESSIONS: usize = 128;
+const RESERVED_UNARY_CONNECTION_SLOTS: usize = 16;
+const MAX_ADVISORY_SESSIONS: usize = MAX_CONCURRENT_CONNECTIONS - RESERVED_UNARY_CONNECTION_SLOTS;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
 const ADVISORY_SESSION_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
 const ADVISORY_SESSION_IDLE_TTL: Duration = Duration::from_secs(30);
