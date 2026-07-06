@@ -1,0 +1,317 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-TMPPATH-001>
+  a triage:Finding ;
+  triage:findingId "AD16-TMPPATH-001" ;
+  triage:title "New hardcoded /tmp/... path literals in atm-graft test fixtures" ;
+  triage:description "crates/atm-graft/src/lib.rs:631,699,700,714,715,734,735 and crates/atm-graft/src/runtime.rs:419,481,526,598 contain new hardcoded /tmp/... PathBuf literals introduced on pAD-s16, confirmed absent from integrate/phase-AD baseline. Violates docs/cross-platform-guidelines.md ban on hardcoded /tmp paths. Reported by rust-qa-agent as QA-001 in AD16-QA-1 (PR #481). Fix: replace with tempfile::tempdir()-derived paths, already used elsewhere in the same test modules." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/12> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/c4653158> .
+
+# Occurrences on pAD-s16
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 631 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 699 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 700 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 714 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 715 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 734 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 735 ;
+  triage:snippet "current_dir: PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 419 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 481 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 526 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s16/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 598 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+# Occurrences on pAD-s17 (merge-forward without fix)
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 631 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 699 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 700 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 714 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 715 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 734 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 735 ;
+  triage:snippet "current_dir: PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 419 ;
+  triage:snippet "PathBuf::from(\"/tmp/workspace\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 481 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 526 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-TMPPATH-001/s17/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 598 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\")," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .

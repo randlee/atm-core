@@ -1,0 +1,134 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-LEGACY-CWD-001>
+  a triage:Finding ;
+  triage:findingId "AD-LEGACY-CWD-001" ;
+  triage:title "Live pre-AD 'cwd' compatibility-read bridge (LEGACY_CWD_METADATA_KEY / compatible_home_dir) scheduled for removal" ;
+  triage:description "Discovered during the Phase-AD phase-ending review's follow-up 'legacy message key' investigation. crates/atm-core/src/schema/agent_member.rs defines LEGACY_CWD_METADATA_KEY (const 'cwd', already #[deprecated(note = \"Phase AD obsolete: derived compatibility field only\")]) and compatible_home_dir() (already #[allow(deprecated, reason = \"Phase AD obsolete: bounded fallback remains only to read pre-AD compatibility metadata.\")]). Both are self-labeled as a temporary bridge, but remain live: called from crates/atm-core/src/send/hook.rs:601 and crates/atm-core/src/team_admin/projection.rs:8,126,157 (which also strips the key from projected metadata), plus test usages in send/hook.rs:877,1094,1118. Repo owner explicitly directed that this be removed in the next cleanup pass; recorded here so it is tracked rather than forgotten." ;
+  triage:category "cleanup/dead-code-scheduled" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/9> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AD/10202628> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/agent_member.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub const LEGACY_CWD_METADATA_KEY: &str = \"cwd\"; — #[deprecated(note = \"Phase AD obsolete: derived compatibility field only\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/agent_member.rs" ;
+  triage:line 49 ;
+  triage:snippet "compatible_home_dir() — #[allow(deprecated, reason = \"Phase AD obsolete: bounded fallback remains only to read pre-AD compatibility metadata.\")], body through line 56" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 601 ;
+  triage:snippet "active caller of compatible_home_dir()/LEGACY_CWD_METADATA_KEY bridge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/projection.rs" ;
+  triage:line 8 ;
+  triage:snippet "import/reference of legacy 'cwd' metadata key in projection module" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/projection.rs" ;
+  triage:line 126 ;
+  triage:snippet "strips legacy 'cwd' key from projected metadata" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/projection.rs" ;
+  triage:line 157 ;
+  triage:snippet "strips legacy 'cwd' key from projected metadata" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 877 ;
+  triage:snippet "test usage of legacy 'cwd' compatibility bridge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 1094 ;
+  triage:snippet "test usage of legacy 'cwd' compatibility bridge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-CWD-001/integrate-phase-AD/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 1118 ;
+  triage:snippet "test usage of legacy 'cwd' compatibility bridge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:worktree/integrate-phase-AD/10202628>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:orderIndex 9999 .

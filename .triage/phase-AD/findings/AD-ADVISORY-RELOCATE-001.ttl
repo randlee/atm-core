@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-ADVISORY-RELOCATE-001>
+  a triage:Finding ;
+  triage:findingId "AD-ADVISORY-RELOCATE-001" ;
+  triage:title "Graft Boundary Surface Not Deleted Per AD.12" ;
+  triage:description "Sprint AD.14 was supposed to delete the graft-only advisory session/stream protocol surface (AdvisorySessionPort, AdvisorySession/SessionState, AdvisorySessionRegistration/Unregistration, AdvisoryFetch/Drain/Stream Request/Response, dispatch_advisory_stream) from the shared atm-core/atm-daemon-client boundary per AD.12's ratified unary-only RequestDispatcher/AtmGraftClient interfaces. Instead, the surface was relocated verbatim into crates/atm-daemon-client/src/graft_rpc.rs and crates/atm-daemon/src/advisory_runtime.rs + graft_dispatch.rs, with boundary documentation re-ratified as permanent architecture without ADR." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/3> ;
+  triage:openOn <urn:atm:triage:worktree/AD14/2bc4667c> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD15/0ab5d105> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/graft_rpc.rs" ;
+  triage:line 1 ;
+  triage:snippet "use std::fmt; use std::io::{Read, Write}; use std::num::NonZeroUsize;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "advisory_runtime: module for graft protocol session management" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 1 ;
+  triage:snippet "graft_dispatch: RequestEnvelope dispatch handler" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+
+<urn:atm:triage:worktree/AD14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 14 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/AD15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 15 ;
+  triage:branchState "fixed_partial" .
+
+<urn:atm:triage:worktree/AD16/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 16 ;
+  triage:branchState "fixed_partial" .

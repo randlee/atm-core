@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-LEGACY-STORAGE-ADAPTERS-001>
+  a triage:Finding ;
+  triage:findingId "AD-LEGACY-STORAGE-ADAPTERS-001" ;
+  triage:title "legacy_storage_adapters module is a self-documented temporary compile bridge pending AC.4 consumer cutover" ;
+  triage:description "Discovered during the Phase-AD phase-ending review's follow-up 'legacy message key' investigation. crates/atm-runtime/src/lib.rs:10 and crates/atm-runtime/src/composition.rs:15 both declare 'mod legacy_storage_adapters;', marked #[allow(deprecated, reason=\"AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge until atm-core consumer cutover is complete.\")]. The whole module is self-documented as a temporary bridge pending the AC.4 atm-core consumer cutover. Repo owner explicitly directed that this be removed in the next cleanup pass once that cutover is confirmed complete; recorded here so it is tracked rather than forgotten." ;
+  triage:category "cleanup/dead-code-scheduled" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-STORAGE-ADAPTERS-001/integrate-phase-AD/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-STORAGE-ADAPTERS-001/integrate-phase-AD/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AD/10202628> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-STORAGE-ADAPTERS-001/integrate-phase-AD/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/lib.rs" ;
+  triage:line 10 ;
+  triage:snippet "mod legacy_storage_adapters; — #[allow(deprecated, reason=\"AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge until atm-core consumer cutover is complete.\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-STORAGE-ADAPTERS-001/integrate-phase-AD/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 15 ;
+  triage:snippet "mod legacy_storage_adapters; — #[allow(deprecated, reason=\"AC.4 keeps the legacy mail bootstrap surface as a temporary compile bridge until atm-core consumer cutover is complete.\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:worktree/integrate-phase-AD/10202628>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:orderIndex 9999 .
