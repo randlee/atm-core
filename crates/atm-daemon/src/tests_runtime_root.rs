@@ -192,7 +192,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path.clone())
+        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
         .expect("prepare runtime");
     let mut runtime = runtime;
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
