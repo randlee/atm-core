@@ -404,6 +404,76 @@ NORMAL_ROWS = FAST_ROWS + [
         ],
         pass_note="fixture-backed smoke evidence proves pane repair survives the accepted team-admin and doctor projection paths",
     ),
+    SuiteRowSpec(
+        id="AD17-ULID-001",
+        flow="retained ATM message identity stays ULID-only on the accepted line",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "schema::inbox_message::tests::atm_message_id_parses_from_ulid_string",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "workflow::tests::workflow_key_uses_atm_message_id",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="ULID-only message identity remains enforced in retained schema and workflow state",
+    ),
+    SuiteRowSpec(
+        id="AD17-READ-001",
+        flow="read mutation and contains filtering stay self-consistent on the durable store-backed path",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "read_store_backed_display_mutation_ignores_mailbox_file_lock",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "read::tests::actionable_selection_preserves_parent_context_for_add_details",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="read mutation still reports the post-mutation state and contains filtering still sees the durable full-body projection",
+    ),
+    SuiteRowSpec(
+        id="AD17-CI-001",
+        flow="windows CI retains the explicit atm-daemon lane on the accepted line",
+        commands=[
+            [
+                "rg",
+                "-n",
+                "Run atm-daemon tests",
+                ".github/workflows/ci.yml",
+            ],
+            [
+                "python3",
+                "-c",
+                "from pathlib import Path; data = Path('.github/workflows/ci.yml').read_text(encoding='utf-8'); raise SystemExit(1 if \"if: runner.os != 'Windows'\" in data else 0)",
+            ],
+        ],
+        pass_note="the explicit atm-daemon CI lane remains present and the Windows skip guard is absent",
+    ),
 ]
 
 
