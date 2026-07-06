@@ -7,16 +7,18 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
-    AtmObservabilityHealthState, CommandEvent, LogTailSession, ObservabilityPort,
-    RetainedSinkFaultMode,
+    AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
+    AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState,
+    CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
 };
 use serde_json::Map;
 
 use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
 #[cfg(test)]
-use sc_observability::{JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration};
+use sc_observability::{
+    JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration,
+};
 use sc_observability_types::DiagnosticInfo;
 
 type ActionName = sc_observability_types::ActionName;
@@ -379,8 +381,14 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: event.action.clone(),
-            outcome: event.outcome.clone(),
+            action: ActionName::new(event.action.as_str()).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon command action")
+                    .with_source(source)
+            })?,
+            outcome: OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon command outcome")
+                    .with_source(source)
+            })?,
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
@@ -457,7 +465,7 @@ impl ObservabilityPort for DaemonObservability {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state: None,
-            maintenance: report.maintenance.clone(),
+            maintenance: report.maintenance.clone().map(map_maintenance_report),
             diagnostic,
             detail,
         })
@@ -888,11 +896,49 @@ fn map_logging_state(
     }
 }
 
+fn map_maintenance_report(
+    report: sc_observability_types::MaintenanceHealthReport,
+) -> AtmMaintenanceHealthReport {
+    AtmMaintenanceHealthReport {
+        state: match report.state {
+            sc_observability_types::MaintenanceWorkerState::Running => {
+                AtmMaintenanceWorkerState::Running
+            }
+            sc_observability_types::MaintenanceWorkerState::Degraded => {
+                AtmMaintenanceWorkerState::Degraded
+            }
+            sc_observability_types::MaintenanceWorkerState::Stopped => {
+                AtmMaintenanceWorkerState::Stopped
+            }
+        },
+        rotated_files_total: report.rotated_files_total.as_usize() as u64,
+        pruned_files_total: report.pruned_files_total.as_usize() as u64,
+        last_pass_at: report
+            .last_pass_at
+            .map(|timestamp| {
+                chrono::DateTime::parse_from_rfc3339(&timestamp.to_string())
+                    .map(|datetime| datetime.with_timezone(&chrono::Utc).into())
+                    .map_err(|source| {
+                        AtmError::observability_query(
+                            "shared maintenance timestamp could not be converted to chrono",
+                        )
+                        .with_source(source)
+                    })
+            })
+            .transpose()
+            .expect("shared maintenance timestamps must project into ATM timestamps"),
+    }
+}
+
 fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary.code,
+        code: summary
+            .code
+            .map(|code| diagnostic_code(code.as_str().to_string()))
+            .transpose()
+            .expect("shared diagnostic codes must project into ATM diagnostics"),
         message: summary.message,
     }
 }
@@ -983,7 +1029,9 @@ impl sc_observability::LogSink for RetainedSinkHealthOverride {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use atm_core::observability::{AtmObservabilityHealthState, ObservabilityPort};
+    use atm_core::observability::{
+        AtmMaintenanceWorkerState, AtmObservabilityHealthState, ObservabilityPort,
+    };
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -1078,7 +1126,7 @@ mod tests {
         assert_eq!(health.logging_state, AtmObservabilityHealthState::Unavailable);
         assert_eq!(
             health.maintenance.as_ref().map(|report| report.state),
-            Some(sc_observability_types::MaintenanceWorkerState::Stopped)
+            Some(AtmMaintenanceWorkerState::Stopped)
         );
     }
 
@@ -1212,7 +1260,7 @@ mod tests {
                 || health
                     .maintenance
                     .as_ref()
-                    .is_none_or(|report| report.pruned_files_total.as_u64() < 1))
+                    .is_none_or(|report| report.pruned_files_total < 1))
         {
             health = observability.health().expect("health during prune wait");
             std::thread::yield_now();
@@ -1227,7 +1275,7 @@ mod tests {
             health
                 .maintenance
                 .as_ref()
-                .is_some_and(|report| report.pruned_files_total.as_u64() >= 1),
+                .is_some_and(|report| report.pruned_files_total >= 1),
             "maintenance stats should record the background prune pass"
         );
     }
