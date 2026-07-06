@@ -70,6 +70,9 @@ The accepted verification target after this sprint is:
   reset
 - regression evidence proving the local IPC receive loop no longer hangs on the
   deleted graft stream path
+- restored Windows `atm-daemon` CI coverage on the accepted line, with the
+  Windows daemon lane exercising the repaired local-IPC path instead of
+  leaving Windows daemon validation disabled
 - regression evidence proving raw CLI sibling-worktree invocation does not
   switch stores or message-id formats
 - regression evidence proving read-state mutation returns the mutated message
@@ -94,6 +97,8 @@ The accepted verification target after this sprint is:
   advisory session packet families
 - targeted Windows/local-IPC regression coverage proves the removed stream path
   no longer blocks command completion
+- Windows `atm-daemon` CI coverage is restored and green on the accepted line;
+  `AD.17` does not close while that lane remains disabled, cancelled, or red
 - targeted raw multi-worktree CLI regression coverage proves wrappers are not
   a release requirement
 - targeted read-mutation regression coverage proves returned payload/counts
@@ -113,4 +118,5 @@ The accepted verification target after this sprint is:
 - `just smoke normal`
 - `just smoke thorough`
 - targeted Windows/local-IPC regression coverage for the former advisory-stream lane
+- GitHub CI with the Windows `atm-daemon` lane restored and green
 - `git diff --check`
