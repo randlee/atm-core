@@ -289,6 +289,30 @@ impl PreparedRuntimeServer {
             LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
         let ownership =
             HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    #[cfg(test)]
+    fn bind_with_observability_and_home_for_test(
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
+        let lifecycle_control =
+            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
+        let ownership = HostOwnershipAdapter::new_with_observability(host_ownership_observability)
+            .acquire_at_home_for_test(host_home_dir)?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    fn bind_after_install(
+        endpoint_path: PathBuf,
+        observability: SubsystemObservability,
+        lifecycle_control: LifecycleControlSourceAdapter,
+        ownership: HostOwnershipGuard,
+    ) -> Result<Self, AtmError> {
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
@@ -895,6 +919,21 @@ impl LocalIpcServerTransportAdapter {
     ) -> Result<PreparedRuntimeServer, AtmError> {
         PreparedRuntimeServer::bind_with_observability(
             endpoint_path,
+            self.observability.clone(),
+            self.host_ownership_observability.clone(),
+            self.lifecycle_observability.clone(),
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_runtime_at_socket_path_for_home(
+        &self,
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        PreparedRuntimeServer::bind_with_observability_and_home_for_test(
+            endpoint_path,
+            host_home_dir,
             self.observability.clone(),
             self.host_ownership_observability.clone(),
             self.lifecycle_observability.clone(),
