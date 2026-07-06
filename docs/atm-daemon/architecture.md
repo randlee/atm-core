@@ -433,7 +433,7 @@ Privacy boundary:
   crate-private
 - status-cache submodules expose only the boundary needed for daemon health and
   routing decisions; cache internals and mutation helpers remain crate-private
-- post-send/advisory submodules expose only the owned post-send/advisory
+- post-send receiver-handoff submodules expose only the owned post-send
   boundary traits or façades required by runtime composition; delivery
   internals remain
   crate-private

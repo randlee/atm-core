@@ -797,10 +797,10 @@ Architectural rules:
 - ATM-owned machine state belongs in SQLite-backed state and projections.
 - `metadata.atm` is not an approved namespace and must not survive in active
   compatibility output.
-- ATM keeps one logical message identity; shared inbox `message_id` is the
-  compatibility wire encoding of that identity.
+- ATM keeps one logical message identity; retained `message_id` is the ULID
+  text form of that identity.
 - if SQLite persists `message_id`, it stores that same identity in the
-  compatibility wire form rather than as a second ATM-owned id.
+  retained ULID text form rather than as a second ATM-owned id.
 - compatibility reads may tolerate established historical top-level additive
   fields and `metadata.atm` derivatives, but they remain read-compatible
   inputs rather than the active or forward-write contract
@@ -867,7 +867,7 @@ Current runtime note:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `MessageId` | The one logical ATM message identity rendered in the compatibility form used by ATM and Claude-compatible consumers. |
+| `message_id` | `MessageId` | The one logical ATM message identity rendered in retained ULID text form. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -889,8 +889,8 @@ Normal send JSON output includes:
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
 
-For the ATM-authored compatibility wire shape, `message_id` is the shared
-inbox identifier used by ATM and Claude-compatible consumers.
+For the retained ATM wire shape, `message_id` is the shared ULID identifier
+used by ATM-authored messages.
 
 Dry-run send JSON output includes:
 - `action = "send"`
@@ -1065,8 +1065,8 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
-  `AckOutcome.reply_message_id` uses the one logical message identity in the
-  CLI/output-compatible form
+`AckOutcome.reply_message_id` uses the one logical message identity in the
+retained CLI/output ULID form
 - reply text
 - warnings: Vec<String>
 - Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -2427,8 +2427,8 @@ Minimum key rules:
 - `message_key` must be source-typed:
   - `atm:<ulid>` for ATM-authored rows
   - `ext:<fingerprint>` for imported external rows without ATM ids
-- the shared inbox `message_id` is the compatibility wire encoding of the one
-  logical ATM message identity
+- retained `message_id` is the ULID text encoding of the one logical ATM
+  message identity
 
 Minimum index/constraint rules:
 - unique identity enforcement on `message_key`

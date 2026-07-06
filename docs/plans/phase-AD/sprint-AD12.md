@@ -28,8 +28,11 @@ target: integrate/phase-AD
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/boundaries.md`
+- `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-graft/requirements.md`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/boundaries.md`
@@ -112,6 +115,8 @@ pub trait AtmGraftClient: Send + Sync {
 - each new sprint doc names the exact files, deletion targets, and validation
   commands needed for its closure without relying on downstream prompt
   interpretation
+- each new sprint doc explicitly lists every associated accepted
+  requirements/ADR/boundary/protocol doc in `Exact Targets`
 
 ## Required Validation
 

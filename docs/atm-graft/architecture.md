@@ -100,8 +100,8 @@ Required follow-on ownership in `atm-core`:
   - `send`
   - `read`
   - `ack`
-  - no additional graft-private session or stream packet family unless it is
-    proven to be shared ATM semantics
+  - no additional graft-private packet family unless it is proven to be shared
+    ATM semantics
 - typed daemon-originated event payloads needed by `atm-graft`, at minimum:
   - post-send hook event payloads sufficient for host handoff
   - activation rejection / shutdown notices if surfaced to the client
@@ -190,7 +190,7 @@ Architectural rules:
 - the host supplies the execution model for any internal receive task, callback
   pump, or equivalent mechanism, but that choice stays private to `atm-graft`
 - the accepted architecture does not require a dedicated shared daemon
-  advisory-stream connection or shared daemon session registration protocol
+  stream connection or shared daemon session registration protocol
 
 Receiver-state rule:
 - if `atm-graft` keeps active/inactive status, wake signals, or temporary

@@ -30,6 +30,9 @@ target: integrate/phase-AD
 - `crates/atm-daemon/src/tests_advisory.rs`
 - `crates/atm-daemon/src/test_support.rs`
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
 ## Interfaces To Add Or Modify
@@ -73,6 +76,8 @@ protocol.response_to_frame(response)?;
 - daemon dispatcher no longer owns graft-specific request routing
 - local IPC request handling no longer owns receiver-specific streaming logic
 - the direct post-send emission path remains intact after the deletion
+- daemon requirements, architecture, and boundary docs no longer describe the
+  deleted runtime as accepted design
 
 ## This Sprint Does Not Close
 
@@ -88,6 +93,9 @@ protocol.response_to_frame(response)?;
   stream plumbing
 - send/ack post-send warning behavior still flows through the accepted
   `PostSendHookEmitter` contract
+- `ADR-019`, `docs/atm-daemon/requirements.md`,
+  `docs/atm-daemon/architecture.md`, and `docs/atm-daemon/boundaries.md`
+  no longer describe daemon-owned graft advisory runtime behavior as accepted
 
 ## Required Validation
 

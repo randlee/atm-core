@@ -56,7 +56,8 @@ Initial crate requirement IDs:
 - `REQ-GRAFT-CLIENT-001` `atm-graft` owns the embedded same-host daemon client
   surface for first-party Rust host agents. Satisfies:
   `REQ-P-GRAFT-001`, `REQ-CORE-TRANSPORT-001`.
-- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing advisory-delivery
+- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing post-send nudge
+  delivery
   contract and structured payload rendering used for between-tool-call
   injection. Satisfies:
   `REQ-P-GRAFT-001`.
@@ -136,8 +137,8 @@ Required rules:
 - the intended production integration is a custom host CLI with `atm-graft`
   linked in-process so context injection happens without terminal automation
 - the host executable owns the final insertion point between tool calls, but
-  `atm-graft` must drive that path automatically through its session/runtime
-  bridge rather than exposing only a passive fetch API
+  `atm-graft` must drive that path automatically through its host injection
+  seam rather than exposing only a passive fetch API
 - `atm-graft` must expose a small library surface rather than mirroring the
   full CLI:
   - daemon client operations for `send`, `read`, and `ack`

@@ -31,6 +31,7 @@ target: integrate/phase-AD
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/boundaries.md`
 
 ## Interfaces To Add Or Modify
 
@@ -98,9 +99,9 @@ pub trait AtmGraftClient: Send + Sync {
 
 - `atm-core` exports no shared graft advisory session/stream DTO surface
 - `atm-daemon-client` exports no graft-only advisory packet kinds
-- `docs/atm-daemon/protocol-icd.md`, `docs/atm-daemon/requirements.md`, and
-  `docs/atm-core/boundaries.md` describe the reset boundary rather than
-  daemon-owned graft session queues
+- `docs/atm-daemon/protocol-icd.md`, `docs/atm-daemon/requirements.md`,
+  `docs/atm-daemon/boundaries.md`, and `docs/atm-core/boundaries.md`
+  describe the reset boundary rather than daemon-owned graft session queues
 - `docs/atm-core/requirements.md` and `docs/atm-daemon/architecture.md` no
   longer lock the shared boundary into graft session/stream packet families
 - no remaining accepted boundary doc tells implementers to add graft-specific

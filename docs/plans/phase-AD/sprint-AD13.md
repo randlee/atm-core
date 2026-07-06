@@ -38,6 +38,7 @@ target: integrate/phase-AD
 - `docs/adr/ADR-012-one-message-identity.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
+- `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 
 ## Interfaces To Add Or Modify
@@ -110,8 +111,8 @@ pub struct InboxMessage {
 - retained uniqueness helpers use ULID or another non-UUID mechanism, with no
   remaining `uuid::` imports in the workspace
 - `ADR-012`, `docs/requirements.md`, `docs/architecture.md`, and
-  `docs/atm-core/architecture.md` describe ULID-only retained ATM message
-  identity
+  `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md`
+  describe ULID-only retained ATM message identity
 - no accepted implementation or doc path tells developers to preserve
   UUID/ULID bridge code
 

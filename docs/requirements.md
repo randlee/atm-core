@@ -521,8 +521,8 @@ Required rules:
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
 - no `metadata.atm` namespace may survive in active compatibility output
-- shared inbox `message_id` is the compatibility wire encoding of the one
-  logical ATM message identity
+- retained `message_id` is the ULID text form of the one logical ATM message
+  identity
 - ATM-owned workflow, delete/close, expiry, sender-projection, and repair
   state must live in SQLite-owned state, not in shared JSON
 - write-path validation may reject wrong-format ATM-owned compatibility fields
@@ -992,7 +992,8 @@ Retired from the current implementation:
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
-- `message_id` is the shared-wire form of the one logical ATM message identity
+- `message_id` is the retained ULID form of the one logical ATM message
+  identity
 
 `message_id` is required on every message written by `atm send`.
 
@@ -2436,9 +2437,8 @@ Required testing architecture:
     SKIP row output and root-cause notes for every deviation
   - `just smoke thorough` must also include one real same-host `atm-graft`
     lane that proves:
-    - one graft host session registers against the same daemon used by the CLI
-      lane
-    - advisory nudge delivery succeeds end-to-end
+    - one graft host session connects to the same daemon used by the CLI lane
+    - post-send nudge delivery succeeds end-to-end
     - unary graft `read`, `ack`, and `send` all succeed over the shared daemon
       contract
     - the CLI operator can observe the graft-host reply/follow-up effects

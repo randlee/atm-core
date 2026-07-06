@@ -173,6 +173,9 @@ The governing rules are:
   with a matching `boundaries/atm-core/*.toml` governance record and a
   `docs/atm-core/boundaries.md` inventory entry before implementation
   dependents close
+- every sprint that changes accepted requirements, ADRs, protocol docs, or
+  boundary inventories must list those exact documents in its `Exact Targets`
+  so review does not depend on downstream prompt reconstruction
 
 ## Scope Rules
 

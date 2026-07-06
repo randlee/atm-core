@@ -29,12 +29,6 @@ Notes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
-  - typed advisory-session envelopes for:
-    - register
-    - unregister
-    - fetch
-    - drain
-    - live advisory stream
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
@@ -61,9 +55,9 @@ Notes:
 - `atm-graft` now lands as one such thin client crate and is expected to stay
   on this boundary plus the shared ATM envelopes rather than on any daemon-
   private request family.
-- Long-lived advisory registration, fetch/drain inspection, and live advisory
-  stream traffic are part of this shared boundary family rather than a
-  plugin-private daemon API.
+- Receiver-private lifecycle, buffering, or wakeup state must not be promoted
+  into shared transport methods or shared request/response DTOs on this
+  boundary.
 
 ## WatchEventSource
 
