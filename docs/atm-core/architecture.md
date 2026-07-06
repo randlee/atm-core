@@ -102,8 +102,8 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
-- Shared core request and query surfaces must resolve both ULID text and UUID
-  wire text to the same `AtmMessageId`.
+- Shared core request and query surfaces must resolve only canonical ULID text
+  to `AtmMessageId`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose

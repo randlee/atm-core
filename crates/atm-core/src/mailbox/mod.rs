@@ -390,7 +390,7 @@ fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
             mailbox_path = %path.display(),
             line = line_number,
             field = "message_id",
-            expected_format = "ULID or UUID wire string",
+            expected_format = "ULID string",
             raw_value = %raw_message_id,
             "treating malformed ATM-owned field as absent during mailbox read"
         );
@@ -580,9 +580,8 @@ mod tests {
 
     use chrono::{TimeZone, Utc};
     use tempfile::TempDir;
-    use uuid::Uuid;
 
-    use crate::schema::InboxMessage;
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -596,7 +595,7 @@ mod tests {
     fn append_message_persists_one_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-message.jsonl");
-        let envelope = sample_message(Uuid::new_v4(), "first");
+        let envelope = sample_message(AtmMessageId::new(), "first");
 
         append_message(&path, &envelope).expect("append");
 
@@ -613,7 +612,7 @@ mod tests {
     fn append_message_keeps_approved_machine_fields_top_level() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-message-top-level.jsonl");
-        let envelope = sample_message(Uuid::new_v4(), "first");
+        let envelope = sample_message(AtmMessageId::new(), "first");
 
         append_message(&path, &envelope).expect("append");
 
@@ -629,13 +628,13 @@ mod tests {
     fn locked_read_modify_write_reads_mutates_and_rewrites_under_lock() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("locked-rmw.json");
-        let first = sample_message(Uuid::new_v4(), "first");
+        let first = sample_message(AtmMessageId::new(), "first");
         append_message(&path, &first).expect("seed");
 
         locked_read_modify_write(&path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
             assert_eq!(messages.len(), 1);
             messages[0].read = true;
-            messages.push(sample_message(Uuid::new_v4(), "second"));
+            messages.push(sample_message(AtmMessageId::new(), "second"));
             Ok(())
         })
         .expect("locked read modify write");
@@ -652,7 +651,7 @@ mod tests {
         let path = tempdir.path().join("append-removes-lock.jsonl");
 
         assert!(!lock::sentinel_path(&path).exists());
-        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+        append_message(&path, &sample_message(AtmMessageId::new(), "first")).expect("append");
 
         assert!(!lock::sentinel_path(&path).exists());
     }
@@ -663,7 +662,7 @@ mod tests {
         let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
         fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
 
-        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+        append_message(&path, &sample_message(AtmMessageId::new(), "first")).expect("append");
 
         assert!(lock::sentinel_path(&path).exists());
     }
@@ -672,8 +671,8 @@ mod tests {
     fn load_compat_mailbox_messages_skips_malformed_lines() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("skip-malformed.jsonl");
-        let valid =
-            serde_json::to_string(&sample_message(Uuid::new_v4(), "valid")).expect("valid json");
+        let valid = serde_json::to_string(&sample_message(AtmMessageId::new(), "valid"))
+            .expect("valid json");
         fs::write(&path, format!("{valid}\n{{not-json}}\n")).expect("write");
 
         let messages = load_compat_mailbox_messages(&path).expect("read");
@@ -685,8 +684,8 @@ mod tests {
     fn load_compat_mailbox_items_reports_malformed_jsonl_lines_without_hiding_valid_messages() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("jsonl-degraded-items.jsonl");
-        let valid =
-            serde_json::to_string(&sample_message(Uuid::new_v4(), "valid")).expect("valid json");
+        let valid = serde_json::to_string(&sample_message(AtmMessageId::new(), "valid"))
+            .expect("valid json");
         fs::write(&path, format!("{valid}\n{{not-json}}\n")).expect("write");
 
         let items = load_compat_mailbox_items(&path).expect("read items");
@@ -704,8 +703,8 @@ mod tests {
     fn read_messages_jsonl_format_still_works() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("jsonl-ingress-still-works.jsonl");
-        let first = sample_message(Uuid::new_v4(), "first");
-        let second = sample_message(Uuid::new_v4(), "second");
+        let first = sample_message(AtmMessageId::new(), "first");
+        let second = sample_message(AtmMessageId::new(), "second");
         let contents = format!(
             "{}\n{}\n",
             serde_json::to_string(&first).expect("json"),
@@ -721,8 +720,8 @@ mod tests {
     fn append_message_appends_after_existing_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("jsonl-appends-second-record.jsonl");
-        let first = sample_message(Uuid::new_v4(), "first");
-        let second = sample_message(Uuid::new_v4(), "second");
+        let first = sample_message(AtmMessageId::new(), "first");
+        let second = sample_message(AtmMessageId::new(), "second");
         fs::write(
             &path,
             format!("{}\n", serde_json::to_string(&first).expect("json line")),
@@ -766,7 +765,7 @@ mod tests {
     fn load_compat_mailbox_messages_preserves_duplicate_message_ids_for_surface_canonicalization() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("dedupe.jsonl");
-        let message_id = Uuid::new_v4();
+        let message_id = AtmMessageId::new();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
         second.timestamp = IsoTimestamp::from_datetime(
@@ -835,7 +834,7 @@ mod tests {
     fn load_compat_mailbox_messages_supports_json_array_mailboxes_with_atm_fields() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("array-with-atm-fields.json");
-        let message = sample_message(Uuid::new_v4(), "array with id");
+        let message = sample_message(AtmMessageId::new(), "array with id");
         fs::write(
             &path,
             serde_json::to_vec(&vec![message.clone()]).expect("json"),
@@ -850,8 +849,10 @@ mod tests {
     fn load_compat_mailbox_items_salvages_valid_messages_around_malformed_array_fragment() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("array-salvage-middle.json");
-        let first = serde_json::to_string(&sample_message(Uuid::new_v4(), "first")).expect("json");
-        let third = serde_json::to_string(&sample_message(Uuid::new_v4(), "third")).expect("json");
+        let first =
+            serde_json::to_string(&sample_message(AtmMessageId::new(), "first")).expect("json");
+        let third =
+            serde_json::to_string(&sample_message(AtmMessageId::new(), "third")).expect("json");
         fs::write(&path, format!("[{first}, {{not-json}}, {third}]")).expect("write");
 
         let items = load_compat_mailbox_items(&path).expect("read items");
@@ -875,7 +876,8 @@ mod tests {
     fn load_compat_mailbox_items_salvages_valid_messages_before_truncated_array_tail() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("array-salvage-tail.json");
-        let first = serde_json::to_string(&sample_message(Uuid::new_v4(), "first")).expect("json");
+        let first =
+            serde_json::to_string(&sample_message(AtmMessageId::new(), "first")).expect("json");
         fs::write(&path, format!("[{first}, {{\"from\":\"broken\"")).expect("write");
 
         let items = load_compat_mailbox_items(&path).expect("read items");
@@ -908,7 +910,7 @@ mod tests {
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
             "summary": "hello",
-            "message_id": "11111111-1111-4111-8111-111111111111",
+            "message_id": "01KRFK5QTF2R6NRS3Q0F8Z9K0S",
             "source_team": TEST_TEAM,
             "pendingAckAt": "2026-03-30T00:00:01Z",
             "taskId": "TASK-123"
@@ -972,7 +974,7 @@ mod tests {
             let path = path.clone();
             let barrier = Arc::clone(&barrier);
             handles.push(thread::spawn(move || {
-                let envelope = sample_message(Uuid::new_v4(), body);
+                let envelope = sample_message(AtmMessageId::new(), body);
                 barrier.wait();
                 append_message(&path, &envelope).expect("append");
             }));
@@ -989,9 +991,7 @@ mod tests {
         assert!(messages.iter().any(|message| message.text == "second"));
     }
 
-    fn sample_message(message_id: Uuid, body: &str) -> InboxMessage {
-        let atm_message_id = crate::schema::AtmMessageId::from(message_id);
-
+    fn sample_message(message_id: AtmMessageId, body: &str) -> InboxMessage {
         InboxMessage {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
             text: body.into(),
@@ -1003,7 +1003,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(atm_message_id),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

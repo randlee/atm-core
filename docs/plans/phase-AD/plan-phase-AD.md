@@ -132,6 +132,8 @@ The governing rules are:
 - backend interoperability does not require multiple live concrete backends on
   the accepted line; it requires that the shared contract stays future-backend
   ready without another architectural rewrite
+- `AD.17` owns re-enabling the Windows `atm-daemon` CI lane on the accepted
+  line and must not close while that lane remains disabled, cancelled, or red
 - any new sealed `atm-core` boundary trait introduced in this phase must land
   with a matching `boundaries/atm-core/*.toml` governance record and a
   `docs/atm-core/boundaries.md` inventory entry before implementation

@@ -211,7 +211,7 @@ mod tests {
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
         command.actor = Some(ROLE_TEAM_LEAD.to_string());
-        command.message_id = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
         command.no_since_last_seen = true;
         command.no_mark = true;
         command.no_update_seen = true;

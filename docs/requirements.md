@@ -1529,7 +1529,7 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_message_id` (Uuid of the reply message sent)
+- `reply_message_id` (ULID of the reply message sent)
 - `reply_text` (String body of the reply message sent)
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
@@ -2055,8 +2055,7 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - ATM uses one logical message identity and exports it through `message_id` on
   the shared compatibility surface
-- ATM service addressing may accept either ULID text or UUID-wire text, but
-  both must resolve to the same logical identity
+- ATM service addressing accepts only ULID text for `message_id`
 - thread/update metadata uses `parentMessageId` plus `threadMode`
 - time-bounded ephemeral retention uses SQLite-owned `expires_at`
 - ATM-authored machine identifiers must not be null or blank

@@ -74,7 +74,7 @@ mod tests {
 
     use super::AckCommand;
 
-    const VALID_MESSAGE_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+    const VALID_MESSAGE_ID: &str = "01KRFK5QTF2R6NRS3Q0F8Z9K0S";
 
     fn test_paths() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
         let tempdir = TempDir::new().expect("tempdir");

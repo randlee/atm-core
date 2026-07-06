@@ -27,7 +27,6 @@ use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
 use tempfile::TempDir;
-use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
@@ -141,7 +140,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         &[read_message(
             SECONDARY_AGENT,
             "clearable history entry",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
@@ -195,7 +194,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     drop(clear_fixture);
     let ack_fixture = Fixture::new();
-    let pending_message_id = AtmMessageId::from(Uuid::new_v4());
+    let pending_message_id = AtmMessageId::new();
     ack_fixture.write_primary_inbox(
         PRIMARY_AGENT,
         &[pending_ack_message(
@@ -529,7 +528,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[unread_message(
             TEAM_LEAD,
             "primary unread",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     fixture.write_origin_inbox(
@@ -538,7 +537,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[unread_message(
             SECONDARY_AGENT,
             "origin unread b",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     fixture.write_origin_inbox(
@@ -547,7 +546,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[read_message(
             SECONDARY_AGENT,
             "origin read a",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
 
@@ -635,7 +634,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
         &[unread_message(
             TEAM_LEAD,
             "read without lock",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let lock_path = sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -673,7 +672,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         &[unread_message(
             TEAM_LEAD,
             "needs mark-read",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -697,11 +696,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
         PRIMARY_AGENT,
-        &[read_message(
-            TEAM_LEAD,
-            "already read",
-            AtmMessageId::from(Uuid::new_v4()),
-        )],
+        &[read_message(TEAM_LEAD, "already read", AtmMessageId::new())],
     );
     let no_mutation_lock_path =
         sentinel_path(&no_mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -814,7 +809,7 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
         &[read_message(
             SECONDARY_AGENT,
             "origin read a",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let before_primary = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))

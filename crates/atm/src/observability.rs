@@ -267,7 +267,7 @@ mod tests {
                 .expect("concrete adapter");
 
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S")))
             .expect("emit backlog");
 
         let health = observability.health().expect("health");
@@ -298,7 +298,7 @@ mod tests {
                 .expect("concrete adapter");
 
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S")))
             .expect("emit backlog");
 
         let initial = observability
@@ -338,10 +338,10 @@ mod tests {
             })
             .expect("follow");
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440001")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0T")))
             .expect("emit followed");
 
-        let followed_message_id = "550e8400-e29b-41d4-a716-446655440001"
+        let followed_message_id = "01KRFK5QTF2R6NRS3Q0F8Z9K0T"
             .parse::<atm_core::schema::AtmMessageId>()
             .expect("message id")
             .to_string();
