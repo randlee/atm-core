@@ -14,14 +14,10 @@ LOG_DIR = Path(".just/logs")
 CONFIG_PATH = Path(".just/lint-config.toml")
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-DIRECTIVE_RE = re.compile(
-    r"(?P<label>(?:lint-[A-Za-z0-9._-]+|rule-\d{3}|lint-all))\s*:\s*"
-    r"(?P<action>allow-next-line|allow-start|allow-end)\b",
-    re.IGNORECASE,
-)
 STRING_LITERAL_RE = re.compile(
     r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
 )
+DIRECTIVE_ACTIONS = ("allow-next-line", "allow-start", "allow-end")
 
 
 @dataclass(frozen=True)
@@ -41,10 +37,15 @@ class LintDirectivePolicy:
     aliases: tuple[str, ...] = ()
 
     @property
-    def labels(self) -> set[str]:
-        labels = {"lint-all", f"lint-{self.tool_key.lower()}"}
-        labels.update(alias.lower() for alias in self.aliases)
-        return labels
+    def labels(self) -> tuple[str, ...]:
+        ordered_labels = ["lint-all", f"lint-{self.tool_key.lower()}"]
+        for alias_value in self.aliases:
+            ordered_labels.append(str(alias_value).lower())
+
+        unique_labels: dict[str, None] = {}
+        for label in ordered_labels:
+            unique_labels.setdefault(label, None)
+        return tuple(unique_labels.keys())
 
 
 @dataclass(frozen=True)
@@ -350,12 +351,45 @@ def is_code_line(line: str) -> bool:
     return not is_comment_or_empty(line)
 
 
+def _is_directive_label_boundary(text: str, start: int, end: int) -> bool:
+    if start > 0:
+        previous = text[start - 1]
+        if previous.isalnum() or previous == "_":
+            return False
+    if end < len(text):
+        following = text[end]
+        if following.isalnum() or following in {"_", "-"}:
+            return False
+    return True
+
+
 def matching_directive_actions(line: str, policy: LintDirectivePolicy) -> list[str]:
     actions: list[str] = []
-    for match in DIRECTIVE_RE.finditer(line):
-        label = match.group("label").lower()
-        if label in policy.labels:
-            actions.append(match.group("action").lower())
+    lowered = line.lower()
+    for label in sorted(policy.labels, key=len, reverse=True):
+        search_start = 0
+        while True:
+            match_start = lowered.find(label, search_start)
+            if match_start == -1:
+                break
+            match_end = match_start + len(label)
+            search_start = match_end
+            if not _is_directive_label_boundary(lowered, match_start, match_end):
+                continue
+
+            remainder = lowered[match_end:].lstrip()
+            if not remainder.startswith(":"):
+                continue
+            remainder = remainder[1:].lstrip()
+
+            for action in DIRECTIVE_ACTIONS:
+                if not remainder.startswith(action):
+                    continue
+                action_end = len(action)
+                if not _is_directive_label_boundary(remainder, 0, action_end):
+                    continue
+                actions.append(action)
+                break
     return actions
 
 
