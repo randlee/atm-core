@@ -57,13 +57,7 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    let read_deadline_support = configure_request_deadlines(&stream)?;
-
-    let frame = match read_request_frame_with_deadline(
-        stream,
-        force_shutdown,
-        read_deadline_support,
-    )? {
+    let frame = match read_connection_frame(stream, force_shutdown)? {
         ReadRequestFrameResult::EndOfStream => return Ok(()),
         ReadRequestFrameResult::Frame {
             stream: resumed_stream,
@@ -73,26 +67,7 @@ pub(super) fn handle_connection(
             frame
         }
         #[cfg(windows)]
-        ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
-            tracing::info!(
-                subsystem = "local_ipc",
-                action = "request_read",
-                outcome = "forced_shutdown",
-                "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
-            );
-            return Ok(());
-        }
-        #[cfg(windows)]
-        ReadRequestFrameResult::TimedOut => {
-            tracing::warn!(
-                subsystem = "local_ipc",
-                action = "request_read",
-                outcome = "deadline_exceeded",
-                deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
-                "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
-            );
-            return Ok(());
-        }
+        ReadRequestFrameResult::TimedOut => return Ok(()),
     };
     tracing::debug!(
         max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
@@ -103,6 +78,40 @@ pub(super) fn handle_connection(
     write_response(&mut stream, &codec, request_id, response)?;
     registry.reap_finished_dispatches()?;
     Ok(())
+}
+
+fn read_connection_frame(
+    stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    let read_deadline_support = configure_request_deadlines(&stream)?;
+    match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)? {
+        ReadRequestFrameResult::EndOfStream => Ok(ReadRequestFrameResult::EndOfStream),
+        ReadRequestFrameResult::Frame { stream, frame } => {
+            Ok(ReadRequestFrameResult::Frame { stream, frame })
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
+            tracing::info!(
+                subsystem = "local_ipc",
+                action = "request_read",
+                outcome = "forced_shutdown",
+                "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
+            );
+            Ok(ReadRequestFrameResult::TimedOut)
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut => {
+            tracing::warn!(
+                subsystem = "local_ipc",
+                action = "request_read",
+                outcome = "deadline_exceeded",
+                deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+                "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
+            );
+            Ok(ReadRequestFrameResult::TimedOut)
+        }
+    }
 }
 
 fn read_request_frame_with_deadline(
