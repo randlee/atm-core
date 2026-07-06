@@ -105,24 +105,27 @@ Typed identifier decisions:
     - retaining the newtype keeps task identifiers consistent across CLI,
       daemon, and schema boundaries
 
-Recommended daemon subsystem enum members:
+Recommended live daemon subsystem enum members:
 - `Bootstrap`
 - `Composition`
 - `LocalIpcTransport`
-- `NotificationRuntime`
 - `PeerTransport`
-- `WatchRuntime`
-- `ReconcileRuntime`
 - `RuntimeHealth`
 - `HostOwnership`
 - `LifecycleControl`
 - `RuntimeStatusCache`
 - `ObservabilitySink`
 
+Historical-only subsystem names retained in this record:
+- `AdvisoryRuntime`
+- `NotificationRuntime`
+- `WatchRuntime`
+- `ReconcileRuntime`
+
 Historical-runtime note:
-- `AdvisoryRuntime`, `NotificationRuntime`, `WatchRuntime`, and
-  `ReconcileRuntime` are retained in this Phase V.1 observability record as
-  historical subsystem names from the earlier compatibility line
+- the subsystem names above are retained in this Phase V.1 observability
+  record only for historical migration bookkeeping from the earlier
+  compatibility line
 - they are not accepted live runtime lanes after `ADR-019`
 
 ## Per-Event Context Fields
