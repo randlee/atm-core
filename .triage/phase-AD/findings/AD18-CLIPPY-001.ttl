@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD18-CLIPPY-001>
+  a triage:Finding ;
+  triage:findingId "AD18-CLIPPY-001" ;
+  triage:title "cargo clippy fails to compile — needless_lifetimes on caller_context_payload_object" ;
+  triage:description "crates/atm-core/src/protocol.rs:391 — new function caller_context_payload_object<'a> has an explicit lifetime clippy flags as needless. This is a hard build break; CI is red on all 3 platforms and Clippy/Test jobs never even run because Format/Lint gates fail first." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-CLIPPY-001/AD-s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD-s18/0c8b7d5b> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD-s19/0c8b7d5b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD-s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-CLIPPY-001/AD-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 391 ;
+  triage:snippet "fn caller_context_payload_object<'a>(message_kind: MessageKind, envelope: &'a serde_json::Map<String, serde_json::Value>,) -> Result<&'a serde_json::Map<String, serde_json::Value>, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "0c8b7d5b" ;
+  triage:branch "AD-s18" ;
+  triage:occursIn <urn:atm:triage:worktree/AD-s18/0c8b7d5b> .
+
+<urn:atm:triage:worktree/AD-s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s13" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s14" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/AD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s15" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/AD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s16" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/AD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s17" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/AD-s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AD-s19/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD-s19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 19 .

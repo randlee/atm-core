@@ -1,0 +1,96 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD18-TESTENV-001>
+  a triage:Finding ;
+  triage:findingId "AD18-TESTENV-001" ;
+  triage:title "Test failure possibly environmental -- live host daemon lock collision" ;
+  triage:description "rust-qa-agent QA-004: local_ipc_runtime_round_trips_send_after_add_member_roster_state panicked locally due to contending for a real, live running atm-daemon's owner.lock instead of a tempdir-scoped isolated one -- flagged as likely environmental but needs a clean-environment re-run to confirm whether this is a genuine test-isolation gap (related in root cause to AD18-RSH-001/AD18-RSH-002's atm_home() isolation issues, and to the FTQ-003 host_ownership.rs isolation defect already diagnosed on AD.17/PR #482)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:severity "Important" ;
+  triage:category "AD18" ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "FTQ-003" ;
+  triage:rootCauseNote "Test calls PreparedRuntimeServer::bind_with_observability() which invokes HostOwnershipAdapter::acquire() using host_runtime_lock_path(). This resolves to real ~/.atm/daemon/owner.lock instead of tempdir-scoped atm_home created at line 530. If a live atm-daemon is running or parallel tests contend for the same lock, acquire() fails. Same root cause as FTQ-003 documented in PR #482 Windows CI diagnosis." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-TESTENV-001/s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/0c8b7d5b> ;
+  triage:promoteTo <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-TESTENV-001/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 528 ;
+  triage:snippet "fn local_ipc_runtime_round_trips_send_after_add_member_roster_state()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:worktree/s13/222c57da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "222c57da" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/3af451b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "3af451b0" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/f5e8732f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/5ac7f11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/integrate/876241aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "876241aa" ;
+  triage:orderIndex 100 .
