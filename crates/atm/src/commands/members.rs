@@ -4,6 +4,7 @@
 )]
 
 use anyhow::Result;
+use atm_core::home;
 use atm_core::team_admin::{self, MembersQuery};
 use clap::Args;
 
@@ -36,7 +37,7 @@ impl MembersCommand {
     }
 
     fn build_query(self) -> Result<MembersQuery> {
-        let current_dir = std::env::current_dir()?;
+        let current_dir = home::command_invocation_dir()?;
         let caller_context = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
@@ -55,6 +56,7 @@ mod tests {
     use std::path::PathBuf;
 
     use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
+    use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_runtime_test_support::open_sqlite_boundary;
@@ -76,7 +78,7 @@ mod tests {
 
     impl CwdGuard {
         fn change_to(path: &std::path::Path) -> Self {
-            let original = std::env::current_dir().expect("current dir");
+            let original = home::command_invocation_dir().expect("current dir");
             std::env::set_current_dir(path).expect("set current dir");
             Self { original }
         }
@@ -196,6 +198,26 @@ mod tests {
         let error = command.build_query().expect_err("invalid team");
 
         assert!(error.to_string().contains("team name"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_command_invocation_dir_for_live_cwd() {
+        let fixture = Fixture::new();
+        let command = MembersCommand {
+            team: Some(TEST_TEAM.to_string()),
+            json: false,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            let query = command.build_query().expect("query");
+            let canonical_current_dir =
+                std::fs::canonicalize(&fixture.current_dir).expect("canonical current dir");
+            assert_eq!(
+                query.live_cwd.as_deref(),
+                Some(canonical_current_dir.as_path())
+            );
+        });
     }
 
     #[test]
