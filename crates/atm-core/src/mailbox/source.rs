@@ -57,10 +57,8 @@ pub(crate) fn resolve_target(
         .and_then(|team| team.parse().ok())
         .or_else(|| Some(caller_team.clone()))
         .ok_or_else(AtmError::team_unavailable)?;
-    let agent = config::aliases::resolve_agent(&target_address.agent, config);
-
     Ok(ResolvedTarget {
-        agent: AgentName::from_validated(agent),
+        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
         team,
         explicit: true,
     })
@@ -285,6 +283,27 @@ mod tests {
         .expect("target");
         assert_eq!(target.agent, ROLE_TEAM_LEAD);
         assert!(target.explicit);
+    }
+
+    #[test]
+    fn resolve_target_rejects_invalid_alias_target() {
+        let mut aliases = BTreeMap::new();
+        aliases.insert("tl".to_string(), "../bad-agent".to_string());
+        let config = AtmConfig {
+            default_team: Some(TEST_TEAM.parse().expect("team")),
+            aliases,
+            ..Default::default()
+        };
+
+        let error = resolve_target(
+            Some(&"tl".parse().expect("address")),
+            &TEST_SENDER.parse().expect("agent"),
+            &TEST_TEAM.parse().expect("team"),
+            Some(&config),
+        )
+        .expect_err("invalid alias target");
+
+        assert!(error.is_address());
     }
 
     #[test]

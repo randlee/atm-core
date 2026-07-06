@@ -355,13 +355,9 @@ fn write_workspace_config(workspace_dir: &std::path::Path) {
     std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
 }
 
-fn read_notification_output(path: &std::path::Path) -> String {
-    std::fs::read_to_string(path).expect("notification output")
-}
-
 #[test]
 #[serial_test::serial(env)]
-fn production_runtime_appends_notification_log_directly() {
+fn production_runtime_only_logs_notifications_after_successful_post_send_emission() {
     let tempdir = TempDir::new().expect("tempdir");
     let workspace_dir = tempdir.path().join("workspace");
     let atm_home = tempdir.path().join("atm-home");
@@ -404,15 +400,9 @@ fn production_runtime_appends_notification_log_directly() {
 
     send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
 
-    let output = read_notification_output(&notification_path);
-    let event: atm_core::protocol::NotificationEvent =
-        serde_json::from_str(output.trim()).expect("notification event");
-    let detail: serde_json::Value =
-        serde_json::from_str(&event.detail).expect("notification detail");
-    assert_eq!(event.kind, atm_core::protocol::NotificationKind::Delivery);
-    assert_eq!(
-        detail.get("sender").and_then(serde_json::Value::as_str),
-        Some(ROLE_TEAM_LEAD)
+    assert!(
+        !notification_path.exists(),
+        "notification log should only be appended after a successful post-send emission"
     );
 }
 

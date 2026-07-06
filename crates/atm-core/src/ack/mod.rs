@@ -174,7 +174,8 @@ fn ack_mail_with_runtime_sqlite<
             Ok(config) => (config, Vec::new()),
             Err(error) => (
                 None,
-                vec![crate::send::WarningEntry::new(
+                vec![crate::send::WarningEntry::with_code(
+                    error.code,
                     format!(
                         "warning: post-send hook config lookup failed for {}@{}: {}.",
                         actor, team, error.message

@@ -238,6 +238,34 @@ Error codes should describe the failure class, not a specific prose message.
   - emitted only after durable message persistence succeeds
   - must be logged with sender, recipient, recipient team, pane id, and tmux
     failure detail
+
+#### 5.8.7 `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+
+- code: `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+- description: ATM attempted graft-backed post-send emission but no graft
+  advisory/session delivery surface was available
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - must preserve sender, recipient, recipient team, and message id in warning
+    context so the degraded graft handoff is auditable
+  - recovery should direct the operator to restore the graft advisory/session
+    path before relying on automatic graft nudges
+
+#### 5.8.8 `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+
+- code: `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+- description: ATM reached the graft advisory/session handoff but delivery of
+  the post-send event still failed
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - must preserve sender, recipient, recipient team, and message id in warning
+    context so the failed graft advisory handoff is auditable
+  - recovery should direct the operator to investigate the graft receiver
+    availability or advisory transport health before retrying automated nudges
   - must surface as a sender-visible warning rather than rolling back send/ack
   - recovery should direct the operator to verify the pane still exists and
     repair stale pane metadata through `atm teams update-member`

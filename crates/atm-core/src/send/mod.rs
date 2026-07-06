@@ -20,6 +20,7 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -151,6 +152,8 @@ impl SendCommandOutcome {
 pub struct WarningEntry {
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery: Option<String>,
 }
 
@@ -158,14 +161,33 @@ impl WarningEntry {
     pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
         Self {
             message: message.into(),
+            code: None,
+            recovery: recovery.map(Into::into),
+        }
+    }
+
+    pub fn with_code(
+        code: AtmErrorCode,
+        message: impl Into<String>,
+        recovery: Option<impl Into<String>>,
+    ) -> Self {
+        Self {
+            message: message.into(),
+            code: Some(code),
             recovery: recovery.map(Into::into),
         }
     }
 
     pub fn render(&self) -> String {
+        let message = match self.code {
+            Some(code) if !self.message.contains(code.as_str()) => {
+                format!("{} [{}]", self.message, code.as_str())
+            }
+            _ => self.message.clone(),
+        };
         match &self.recovery {
-            Some(recovery) => format!("{} Recovery: {recovery}", self.message),
-            None => self.message.clone(),
+            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            None => message,
         }
     }
 }
@@ -470,7 +492,8 @@ fn prepare_send_context<
         Ok(config) => (config, Vec::new()),
         Err(error) => (
             None,
-            vec![WarningEntry::new(
+            vec![WarningEntry::with_code(
+                error.code,
                 format!(
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
                     request.caller_identity, request.caller_team, error.message
@@ -611,10 +634,7 @@ fn resolve_recipient(
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: AgentName::from_validated(config::aliases::resolve_agent(
-            &target_address.agent,
-            config,
-        )),
+        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
         team,
     })
 }
