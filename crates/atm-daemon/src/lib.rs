@@ -13,6 +13,7 @@ mod claude_compat;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
 mod direct_boundaries;
+mod graft_dispatch;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -51,6 +52,7 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
+pub(crate) use graft_dispatch::{GraftRequestDispatcher, GraftStreamSink};
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
 pub(crate) use peer_transport::PeerTransportRuntime;
 

@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let activation_snapshot = session.snapshot()?;
-    if activation_snapshot.state != atm_core::graft::AdvisorySessionState::Registered {
+    if activation_snapshot.state != atm_daemon_client::graft_rpc::AdvisorySessionState::Registered {
         return Err(io::Error::other(format!(
             "expected registered graft session, found {:?}",
             activation_snapshot.state

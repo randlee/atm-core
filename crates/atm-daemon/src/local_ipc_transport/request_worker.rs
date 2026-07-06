@@ -1,14 +1,17 @@
+use std::io::Read;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use atm_core::boundary::{AdvisoryStreamSink, AtmProtocol, RequestDispatcher};
+use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
     JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
 };
+use atm_daemon_client::{RequestId as DaemonRequestId, graft_rpc};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
 
+use crate::GraftRequestDispatcher;
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 
 #[cfg(test)]
@@ -41,15 +44,23 @@ enum ReadRequestFrameResult {
     EndOfStream,
     Frame {
         stream: LocalSocketStream,
-        frame: atm_core::protocol::FramePayload,
+        frame: RawRequestFrame,
     },
     #[cfg(windows)]
     TimedOut,
 }
 
+struct RawRequestFrame {
+    request_id: u64,
+    message_kind_code: u16,
+    flags: u16,
+    bytes: Vec<u8>,
+}
+
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    graft_dispatcher: Option<Arc<dyn GraftRequestDispatcher + Send + Sync>>,
     force_shutdown: &AtomicBool,
     registry: Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
@@ -98,17 +109,43 @@ pub(super) fn handle_connection(
         max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
         "daemon request frame accepted under configured size cap"
     );
-    let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::AdvisoryStream(request) = request {
-        return dispatch_advisory_stream(
-            &mut stream,
-            dispatcher.as_ref(),
-            force_shutdown,
-            &codec,
+    if graft_rpc::is_graft_message_kind_code(frame.message_kind_code) {
+        let graft_dispatcher = graft_dispatcher.ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "graft local IPC request reached a daemon transport without a graft dispatcher",
+            )
+            .with_recovery(
+                "Restart atm-daemon through RuntimeComposition::start() so graft-only IPC routes through the daemon-private graft dispatcher.",
+            )
+        })?;
+        let request_id = DaemonRequestId::new(frame.request_id)?;
+        let (_, request) = graft_rpc::request_from_raw_parts(
             request_id,
-            request,
-        );
+            frame.message_kind_code,
+            frame.flags,
+            frame.bytes,
+        )?;
+        if let graft_rpc::RequestEnvelope::AdvisoryStream(request) = request {
+            return dispatch_advisory_stream(
+                &mut stream,
+                graft_dispatcher.as_ref(),
+                force_shutdown,
+                request_id,
+                request,
+            );
+        }
+        let response = dispatch_graft_request(request_id, request, graft_dispatcher, &registry)?;
+        write_graft_response(&mut stream, request_id, response)?;
+        registry.reap_finished_dispatches()?;
+        return Ok(());
     }
+    let frame = atm_core::protocol::FramePayload {
+        request_id: RequestId::new(frame.request_id)?,
+        message_kind: atm_core::protocol::MessageKind::try_from(frame.message_kind_code)?,
+        flags: frame.flags,
+        bytes: frame.bytes,
+    };
+    let (request_id, request) = codec.request_from_frame(frame)?;
 
     let response = dispatch_request(request_id, request, dispatcher, &registry)?;
     write_response(&mut stream, &codec, request_id, response)?;
@@ -180,14 +217,58 @@ fn read_request_frame_with_helper(
     }
 }
 
-fn read_request_frame(
-    stream: &mut LocalSocketStream,
-) -> Result<Option<atm_core::protocol::FramePayload>, AtmError> {
-    atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame",
-        "daemon request frame exceeded the maximum supported size",
-    )
+fn read_request_frame(stream: &mut LocalSocketStream) -> Result<Option<RawRequestFrame>, AtmError> {
+    let mut header = [0u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES];
+    let read = stream.read(&mut header[..1]).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read daemon request frame header")
+            .with_source(source)
+    })?;
+    if read == 0 {
+        return Ok(None);
+    }
+    stream.read_exact(&mut header[1..]).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read daemon request frame header")
+            .with_source(source)
+    })?;
+    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
+    if magic != atm_core::protocol::ATM_FRAME_MAGIC {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame magic 0x{magic:08x}"
+        ))
+        .with_recovery(
+            "Retry with an ATM client and daemon build that both speak the documented ATM daemon protocol.",
+        ));
+    }
+    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
+    if version != atm_core::protocol::ATM_FRAME_VERSION_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame version {version}"
+        ))
+        .with_recovery(
+            "Align the CLI, atm-graft, and daemon builds so both sides use the same ATM daemon protocol version before retrying.",
+        ));
+    }
+    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
+    let request_id = u64::from_be_bytes(header[10..18].try_into().expect("request id"));
+    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
+    if payload_length > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(
+            "daemon request frame exceeded the maximum supported size",
+        )
+        .with_recovery(
+            "Reduce the daemon request/response payload size before retrying the ATM command.",
+        ));
+    }
+    let mut bytes = vec![0u8; payload_length];
+    stream.read_exact(&mut bytes).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read daemon request frame").with_source(source)
+    })?;
+    Ok(Some(RawRequestFrame {
+        request_id,
+        message_kind_code: u16::from_be_bytes(header[6..8].try_into().expect("kind")),
+        flags,
+        bytes,
+    }))
 }
 
 fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSupport, AtmError> {
@@ -204,11 +285,10 @@ fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSup
 
 fn dispatch_advisory_stream(
     stream: &mut LocalSocketStream,
-    dispatcher: &dyn RequestDispatcher,
+    dispatcher: &dyn GraftRequestDispatcher,
     force_shutdown: &AtomicBool,
-    codec: &JsonAtmProtocolCodec,
-    request_id: RequestId,
-    request: atm_core::AdvisoryStreamRequest,
+    request_id: DaemonRequestId,
+    request: atm_daemon_client::graft_rpc::AdvisoryStreamRequest,
 ) -> Result<(), AtmError> {
     apply_deadline_contract(
         stream.set_send_timeout(Some(REQUEST_DEADLINE)),
@@ -216,11 +296,10 @@ fn dispatch_advisory_stream(
     )?;
     let mut sink = LocalIpcAdvisoryStreamSink {
         stream,
-        codec,
         request_id,
         force_shutdown,
     };
-    dispatcher.dispatch_advisory_stream(request, &mut sink)
+    dispatcher.dispatch_graft_stream(request, &mut sink)
 }
 
 fn apply_deadline_contract(
@@ -271,6 +350,93 @@ fn dispatch_request(
         execution_risk,
         result_rx,
     ))
+}
+
+type GraftDispatchResultRx =
+    std::sync::mpsc::Receiver<Result<graft_rpc::ResponseEnvelope, AtmError>>;
+type GraftDispatchWorker = (
+    GraftDispatchResultRx,
+    DispatchCompletionRx,
+    DispatchWorkerHandle,
+);
+
+fn dispatch_graft_request(
+    request_id: DaemonRequestId,
+    request: graft_rpc::RequestEnvelope,
+    dispatcher: Arc<dyn GraftRequestDispatcher + Send + Sync>,
+    registry: &Arc<ActiveConnectionRegistry>,
+) -> Result<graft_rpc::ResponseEnvelope, AtmError> {
+    let execution_risk = request_execution_risk_graft(&request);
+    let (result_rx, completion_rx, dispatch_handle) =
+        spawn_graft_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle: dispatch_handle,
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    Ok(await_graft_dispatch_response(
+        request_id,
+        execution_risk,
+        result_rx,
+    ))
+}
+
+fn spawn_graft_dispatch_worker(
+    request: graft_rpc::RequestEnvelope,
+    dispatcher: Arc<dyn GraftRequestDispatcher + Send + Sync>,
+    dispatch_registry: Arc<ActiveConnectionRegistry>,
+) -> Result<GraftDispatchWorker, AtmError> {
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+    let dispatch_handle = std::thread::Builder::new()
+        .name("local-ipc-graft-dispatch".to_string())
+        .spawn(move || {
+            let _dispatch_work = dispatch_registry.register_dispatch_work();
+            let _ = result_tx.send(dispatcher.dispatch_graft(request));
+            let _ = completion_tx.send(());
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn graft local IPC dispatch worker")
+                .with_recovery(
+                    "Retry the graft request after atm-daemon restarts; the same-host graft request worker could not be created.",
+                )
+                .with_source(source)
+        })?;
+    Ok((result_rx, completion_rx, dispatch_handle))
+}
+
+fn await_graft_dispatch_response(
+    request_id: DaemonRequestId,
+    execution_risk: RequestExecutionRisk,
+    result_rx: std::sync::mpsc::Receiver<Result<graft_rpc::ResponseEnvelope, AtmError>>,
+) -> graft_rpc::ResponseEnvelope {
+    match result_rx.recv_timeout(REQUEST_DEADLINE) {
+        Ok(Ok(response)) => response,
+        Ok(Err(error)) => graft_rpc::ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            tracing::warn!(
+                subsystem = "local_ipc",
+                action = "graft_dispatch",
+                outcome = "deadline_exceeded",
+                request_id = %request_id,
+                deadline_ms = REQUEST_DEADLINE.as_millis(),
+                "daemon graft request dispatcher exceeded the runtime deadline"
+            );
+            dispatch_timeout_response_graft(execution_risk)
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => graft_rpc::ResponseEnvelope::Error(
+            ProtocolErrorEnvelope::from_error(
+                &AtmError::daemon_unavailable(
+                    "daemon graft request dispatcher stopped before returning a response",
+                )
+                .with_recovery(
+                    "Retry the graft request after the daemon finishes recovering the request runtime.",
+                ),
+            ),
+        ),
+    }
 }
 
 fn spawn_dispatch_worker(
@@ -338,17 +504,22 @@ fn await_dispatch_response(
 
 fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
     match request {
-        RequestEnvelope::List(_)
-        | RequestEnvelope::Receive(_)
-        | RequestEnvelope::Doctor(_)
-        | RequestEnvelope::AdvisoryFetch(_) => RequestExecutionRisk::ReadOnly,
-        RequestEnvelope::Send(_)
-        | RequestEnvelope::Heartbeat(_)
-        | RequestEnvelope::Clear(_)
-        | RequestEnvelope::AdvisoryRegister(_)
-        | RequestEnvelope::AdvisoryUnregister(_)
-        | RequestEnvelope::AdvisoryDrain(_)
-        | RequestEnvelope::AdvisoryStream(_) => RequestExecutionRisk::SideEffecting,
+        RequestEnvelope::List(_) | RequestEnvelope::Receive(_) | RequestEnvelope::Doctor(_) => {
+            RequestExecutionRisk::ReadOnly
+        }
+        RequestEnvelope::Send(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
+            RequestExecutionRisk::SideEffecting
+        }
+    }
+}
+
+fn request_execution_risk_graft(request: &graft_rpc::RequestEnvelope) -> RequestExecutionRisk {
+    match request {
+        graft_rpc::RequestEnvelope::AdvisoryFetch(_) => RequestExecutionRisk::ReadOnly,
+        graft_rpc::RequestEnvelope::AdvisoryRegister(_)
+        | graft_rpc::RequestEnvelope::AdvisoryUnregister(_)
+        | graft_rpc::RequestEnvelope::AdvisoryDrain(_)
+        | graft_rpc::RequestEnvelope::AdvisoryStream(_) => RequestExecutionRisk::SideEffecting,
     }
 }
 
@@ -362,6 +533,20 @@ fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEn
         ),
     };
     ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error))
+}
+
+fn dispatch_timeout_response_graft(
+    execution_risk: RequestExecutionRisk,
+) -> graft_rpc::ResponseEnvelope {
+    let error = match execution_risk {
+        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(
+            "daemon graft request exceeded the 3s runtime deadline; retry the read-only graft command after the same-host daemon catches up",
+        ),
+        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(
+            "daemon graft request exceeded the 3s runtime deadline after side-effecting work may have started",
+        ),
+    };
+    graft_rpc::ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error))
 }
 
 fn write_response(
@@ -381,6 +566,26 @@ fn write_response(
     })
 }
 
+fn write_graft_response(
+    stream: &mut LocalSocketStream,
+    request_id: DaemonRequestId,
+    response: graft_rpc::ResponseEnvelope,
+) -> Result<(), AtmError> {
+    let frame = graft_rpc::response_to_frame_payload(request_id, response)?;
+    graft_rpc::write_frame(
+        stream,
+        &frame,
+        "failed to write graft daemon response frame",
+    )?;
+    std::io::Write::flush(stream).map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft daemon response frame")
+            .with_recovery(
+                "Retry the graft request after the daemon finishes recovering the same-host graft runtime.",
+            )
+            .with_source(source)
+    })
+}
+
 #[cfg(test)]
 #[cfg_attr(not(unix), allow(dead_code))]
 pub(super) fn install_injected_accept_error_for_test(
@@ -392,15 +597,14 @@ pub(super) fn install_injected_accept_error_for_test(
 
 struct LocalIpcAdvisoryStreamSink<'a> {
     stream: &'a mut LocalSocketStream,
-    codec: &'a JsonAtmProtocolCodec,
-    request_id: RequestId,
+    request_id: DaemonRequestId,
     force_shutdown: &'a AtomicBool,
 }
 
-impl AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
-    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
-        let frame = self.codec.response_to_frame(self.request_id, response)?;
-        atm_core::protocol::write_frame(
+impl crate::GraftStreamSink for LocalIpcAdvisoryStreamSink<'_> {
+    fn emit(&mut self, response: graft_rpc::ResponseEnvelope) -> Result<(), AtmError> {
+        let frame = graft_rpc::response_to_frame_payload(self.request_id, response)?;
+        graft_rpc::write_frame(
             self.stream,
             &frame,
             "failed to write daemon advisory-stream response frame",

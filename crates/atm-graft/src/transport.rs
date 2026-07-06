@@ -1,7 +1,8 @@
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
-use atm_core::protocol::{self, RequestEnvelope, RequestId, ResponseEnvelope};
+use atm_core::protocol::{self, RequestEnvelope, RequestId as CoreRequestId, ResponseEnvelope};
+use atm_daemon_client::graft_rpc;
 use atm_daemon_client::{
     DaemonLocalIpcEndpoint, FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
@@ -10,7 +11,12 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::io::Write;
 
-use crate::{ADVISORY_STREAM_READ_DEADLINE, SAME_HOST_REQUEST_DEADLINE};
+use crate::{
+    ADVISORY_STREAM_READ_DEADLINE, AdvisoryFetchRequest, AdvisoryFetchResponse,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest, AdvisoryTransport, SAME_HOST_REQUEST_DEADLINE,
+};
 
 pub(crate) use atm_daemon_client::unexpected_response;
 
@@ -21,7 +27,7 @@ pub(crate) struct GraftLocalIpcClientTransport {
 
 pub(crate) struct ActiveAdvisoryStream {
     pub(crate) stream: LocalSocketStream,
-    pub(crate) request_id: RequestId,
+    pub(crate) request_id: DaemonRequestId,
 }
 
 impl GraftLocalIpcClientTransport {
@@ -47,7 +53,7 @@ impl GraftLocalIpcClientTransport {
 
     pub(crate) fn open_advisory_stream(
         &self,
-        request: atm_core::graft::AdvisoryStreamRequest,
+        request: AdvisoryStreamRequest,
     ) -> Result<ActiveAdvisoryStream, AtmError> {
         let mut stream = self.probe_connection()?;
         stream
@@ -58,11 +64,12 @@ impl GraftLocalIpcClientTransport {
                 )
                 .with_source(source)
             })?;
-        let (request_id, envelope) =
-            encode_request_envelope(RequestEnvelope::AdvisoryStream(request))?;
-        let frame = envelope.into_frame_payload();
-        let frame = decode_daemon_frame(frame)?;
-        protocol::write_frame(
+        let request_id = DaemonRequestId::new(protocol::next_request_id().into_inner())?;
+        let frame = graft_rpc::request_to_frame_payload(
+            request_id,
+            graft_rpc::RequestEnvelope::AdvisoryStream(request),
+        )?;
+        graft_rpc::write_frame(
             &mut stream,
             &frame,
             "failed to write graft advisory-stream request frame",
@@ -91,7 +98,122 @@ impl GraftLocalIpcClientTransport {
     }
 }
 
-fn encode_request_envelope(request: RequestEnvelope) -> Result<(RequestId, RpcEnvelope), AtmError> {
+impl AdvisoryTransport for GraftLocalIpcClientTransport {
+    fn register_session(
+        &self,
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+        match self.round_trip_graft(graft_rpc::RequestEnvelope::AdvisoryRegister(request))? {
+            graft_rpc::ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
+            graft_rpc::ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            other => Err(unexpected_response("graft register", other)),
+        }
+    }
+
+    fn unregister_session(
+        &self,
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+        match self.round_trip_graft(graft_rpc::RequestEnvelope::AdvisoryUnregister(request))? {
+            graft_rpc::ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
+            graft_rpc::ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            other => Err(unexpected_response("graft unregister", other)),
+        }
+    }
+
+    fn fetch_nudges(
+        &self,
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
+        match self.round_trip_graft(graft_rpc::RequestEnvelope::AdvisoryFetch(request))? {
+            graft_rpc::ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
+            graft_rpc::ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            other => Err(unexpected_response("graft fetch", other)),
+        }
+    }
+
+    fn drain_nudges(
+        &self,
+        request: crate::AdvisoryDrainRequest,
+    ) -> Result<crate::AdvisoryDrainResponse, AtmError> {
+        match self.round_trip_graft(graft_rpc::RequestEnvelope::AdvisoryDrain(request))? {
+            graft_rpc::ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
+            graft_rpc::ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            other => Err(unexpected_response("graft drain", other)),
+        }
+    }
+
+    fn supports_live_advisory_stream(&self) -> bool {
+        true
+    }
+
+    fn open_advisory_stream(
+        &self,
+        request: AdvisoryStreamRequest,
+    ) -> Result<ActiveAdvisoryStream, AtmError> {
+        GraftLocalIpcClientTransport::open_advisory_stream(self, request)
+    }
+}
+
+impl GraftLocalIpcClientTransport {
+    fn round_trip_graft(
+        &self,
+        request: graft_rpc::RequestEnvelope,
+    ) -> Result<graft_rpc::ResponseEnvelope, AtmError> {
+        let mut stream = self.probe_connection()?;
+        stream
+            .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
+            .map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "failed to configure graft local IPC request write timeout",
+                )
+                .with_source(source)
+            })?;
+        stream
+            .set_recv_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
+            .map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "failed to configure graft local IPC response read timeout",
+                )
+                .with_source(source)
+            })?;
+        let request_id = DaemonRequestId::new(protocol::next_request_id().into_inner())?;
+        let frame = graft_rpc::request_to_frame_payload(request_id, request)?;
+        graft_rpc::write_frame(
+            &mut stream,
+            &frame,
+            "failed to write graft local IPC request",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable("failed to flush graft local IPC request")
+                .with_source(source)
+        })?;
+        let response = graft_rpc::read_frame(
+            &mut stream,
+            "failed to read graft local IPC response",
+            "graft local IPC response frame exceeded the maximum supported size",
+        )?
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "daemon closed the graft local IPC connection before returning a response frame",
+            )
+            .with_recovery(
+                "Retry the graft request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
+            )
+        })?;
+        let (_, response) = graft_rpc::response_from_raw_parts(
+            response.request_id,
+            response.message_kind.code(),
+            response.flags,
+            response.bytes,
+        )?;
+        Ok(response)
+    }
+}
+
+fn encode_request_envelope(
+    request: RequestEnvelope,
+) -> Result<(CoreRequestId, RpcEnvelope), AtmError> {
     let request_id = protocol::next_request_id();
     let frame = protocol::request_to_frame_payload(request_id, request)?;
     Ok((
@@ -117,7 +239,7 @@ fn encode_daemon_frame(frame: protocol::FramePayload) -> Result<FramePayload, At
 
 fn decode_daemon_frame(frame: FramePayload) -> Result<protocol::FramePayload, AtmError> {
     Ok(protocol::FramePayload {
-        request_id: RequestId::new(frame.request_id.into_inner())?,
+        request_id: CoreRequestId::new(frame.request_id.into_inner())?,
         message_kind: protocol::MessageKind::try_from(frame.message_kind.code())?,
         flags: frame.flags,
         bytes: frame.bytes,
