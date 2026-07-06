@@ -998,10 +998,7 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path_from_home(tempdir.path()),
-            tempdir
-                .path()
-                .join(".atm")
-                .join("daemon")
+            crate::home::host_runtime_dir_from_home(tempdir.path())
                 .join(super::DAEMON_SOCKET_FILENAME)
         );
     }
@@ -1018,10 +1015,7 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path().expect("daemon socket path"),
-            PathBuf::from(&atm_home)
-                .join(".atm")
-                .join("daemon")
-                .join(super::DAEMON_SOCKET_FILENAME)
+            crate::home::host_runtime_dir_from_home(&atm_home).join(super::DAEMON_SOCKET_FILENAME)
         );
     }
 

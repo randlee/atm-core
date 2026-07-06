@@ -1,4 +1,23 @@
 use super::*;
+use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::error::AtmError;
+use atm_core::protocol::{
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    SendResponseEnvelope, next_request_id,
+};
+use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
+use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
+use std::io::Write;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Duration;
+use tempfile::TempDir;
+
+use crate::test_support::{
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+};
 
 fn add_member_via_retained_admin(
     db_path: &std::path::Path,
@@ -148,6 +167,19 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
     );
     add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
 
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        (
+            SQLITE_RUNTIME_PATH_ENV,
+            Some(db_path.to_str().expect("utf8 sqlite db path")),
+        ),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport

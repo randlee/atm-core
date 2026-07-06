@@ -1,0 +1,698 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AD16-RBP-F001" ;
+  triage:title "Misleading error-code reuse for non-daemon failures" ;
+  triage:description "crates/atm-graft/src/runtime.rs and lib.rs construct distinct non-daemon-connectivity failure modes (lock poisoning, thread panic, spawn failure, join timeout, join-channel disconnect, missing-message-id contract violations) via AtmError::daemon_unavailable(...), hard-coding a misleading 'ensure daemon is reachable' recovery hint. Existing AtmErrorCode::InternalError/WaitTimeout codes are unused." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/11> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667c> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 37 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 48 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 134 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"graft receive loop panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 142 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive-loop join helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 152 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 165 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft receive loop shutdown exceeded...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 176 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 183 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper disconnected unexpectedly\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 260 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"advisory stream response request_id...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 614 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"simulated unregister failure\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 867 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 918 ;
+  triage:snippet "AtmError::daemon_unavailable(\"stream read failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 1055 ;
+  triage:snippet "AtmError::daemon_unavailable(\"stream read failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 798 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive loop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1443 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"temporary failure\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s14/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1713 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 37 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 48 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 134 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"graft receive loop panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 142 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive-loop join helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 152 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 165 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft receive loop shutdown exceeded...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 176 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 183 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper disconnected unexpectedly\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 260 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"advisory stream response request_id...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 614 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"simulated unregister failure\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 867 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 918 ;
+  triage:snippet "AtmError::daemon_unavailable(\"stream read failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 1055 ;
+  triage:snippet "AtmError::daemon_unavailable(\"stream read failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 798 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive loop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1443 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"temporary failure\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s15/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1713 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 32 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 43 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 70 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"graft receive loop panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 78 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive-loop join helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 88 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 101 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft receive loop shutdown exceeded...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 119 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper disconnected unexpectedly\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 251 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft read for message...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 260 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft read for message...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s16/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 541 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive loop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 32 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 43 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft session snapshot lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 70 ;
+  triage:snippet "Err(AtmError::daemon_unavailable(\"graft receive loop panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 78 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive-loop join helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 88 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 101 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft receive loop shutdown exceeded...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper panicked\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 119 ;
+  triage:snippet "AtmError::daemon_unavailable(\"graft receive-loop join helper disconnected unexpectedly\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 251 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft read for message...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 260 ;
+  triage:snippet "AtmError::daemon_unavailable(format!(\"graft read for message...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RBP-F001/pAD-s17/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 541 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to spawn graft receive loop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .

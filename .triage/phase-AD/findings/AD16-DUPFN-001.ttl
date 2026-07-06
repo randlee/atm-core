@@ -1,0 +1,96 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-DUPFN-001>
+  a triage:Finding ;
+  triage:findingId "AD16-DUPFN-001" ;
+  triage:title "Duplicate cfg(test)/cfg(not(test)) function with no behavioral difference" ;
+  triage:description "crates/atm-graft/src/lib.rs:348-429 — activate_with_graft_config_and_home_dir is duplicated byte-for-byte under #[cfg(test)] and #[cfg(not(test))] with no behavioral difference; dead duplication. Reported by rust-qa-agent as QA-002 (minor) in AD16-QA-1 (PR #481)." ;
+  triage:category "minor" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:severity "minor" ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s17/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 348 ;
+  triage:snippet "#[cfg(test)] fn activate_with_graft_config_and_home_dir(...) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s16/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 390 ;
+  triage:snippet "#[cfg(not(test))] fn activate_with_graft_config_and_home_dir(...) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 348 ;
+  triage:snippet "#[cfg(test)] fn activate_with_graft_config_and_home_dir(...) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-DUPFN-001/pAD-s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 390 ;
+  triage:snippet "#[cfg(not(test))] fn activate_with_graft_config_and_home_dir(...) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .
