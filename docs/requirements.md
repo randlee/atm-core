@@ -1156,6 +1156,8 @@ Shared rules:
 - both commands must support the same semantic message filters even when their
   output shapes differ
 - `--contains` must search both summary text and full message body text
+- on metadata-backed read/list paths, `--contains` must stay full-body correct
+  without widening the bounded metadata query into an eager full-body scan
 - both commands must preserve origin-inbox visibility when bridge remotes are
   configured
 
@@ -1176,6 +1178,9 @@ Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
 - query logical current messages rather than superseded predecessors
 - return compact rows only, not full message bodies
+- when `--contains` is present, apply sender/timestamp/task and logical-current
+  filtering on bounded metadata rows first, then reload durable body text only
+  for surviving summary-miss candidates that still need a body check
 - support the canonical row fields:
   - `message_id`
   - `summary`
@@ -1214,6 +1219,9 @@ Required behavior:
 - when selectors such as `--task`, `--from`, `--since`, `--contains`,
   `--unread`, or `--pending-ack` match multiple messages, return the most
   recent match
+- when `--contains` is present on the metadata-backed path, selector
+  correctness must be preserved by checking bounded summary text first and
+  reloading durable body text only for surviving summary-miss candidates
 - when multiple matches exist, include:
   - `selected_message_id`
   - `match_count`

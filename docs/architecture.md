@@ -1039,6 +1039,10 @@ Queue-inspection architectural rules:
   logical task thread does not surface as several superseded matches
 - `--contains` applies to both summary text and full durable message body text
 - summary/count queries must remain separable from full-body detail fetch
+- metadata-backed `--contains` evaluation must remain summary-first and bounded:
+  rows rejected by earlier metadata-only filters or already matched by summary
+  must not trigger durable-body reload, and only surviving summary-miss
+  candidates may fetch durable body text for the final contains check
 
 Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most

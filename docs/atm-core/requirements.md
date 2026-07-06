@@ -113,6 +113,10 @@ Initial crate requirement IDs:
   U.3 note: logical-current projection must remain mode-aware; terminal
   `add-details` preserves predecessor context in the effective current body,
   while terminal `supersede` does not.
+  AD.20 note: metadata-backed `--contains` stays summary-first and bounded, but
+  must reload durable body text for surviving summary-miss candidates so read
+  and list never degrade the documented full-body contains contract into
+  summary-only matching.
 - `REQ-CORE-READ-001` `atm-core` owns the single-message read-mutation output
   contract: when read-side mutation is applied, the returned selected message,
   `selected_message_id`, and `bucket_counts` must stay self-consistent with

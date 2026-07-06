@@ -264,6 +264,10 @@ Phase AC supersession note:
   reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
+- the metadata-backed queue-query path must not reconstruct fake body text from
+  summary-only rows; when `--contains` is present, `atm-core` may reload
+  durable body text only for surviving summary-miss candidates after the
+  bounded metadata-only filters have already reduced the candidate set
 - `atm-core` owns the read-mutation output invariant that the selected
   full-body payload, `selected_message_id`, and returned bucket counts remain
   aligned with the same durable post-mutation message/state after a successful
