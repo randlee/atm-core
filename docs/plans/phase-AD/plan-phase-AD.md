@@ -284,6 +284,15 @@ Phase `AD` orchestration rule:
 - `Phase AD` is a strict merge-forward line
 - Phase `AD` sprints execute back-to-back without stopping for QA or waiting
   for all prior branches to be green
+- `AD.13` through `AD.20` each also have a companion `*-win` execution doc on
+  the same branch/worktree as the original sprint
+- companion `*-win` docs are Windows-host execution overlays only; they do not
+  create new sprint branches, do not widen original sprint scope, and do not
+  move closure ownership away from the original sprint branch
+- the original sprint doc remains the source of truth for scope, interfaces,
+  deletions, deliverables, acceptance, and non-Windows validation; each
+  `*-win` doc only adds native Windows execution, Windows-only fix-forward,
+  and Windows evidence/reporting requirements
 - quality review trails implementation and must not be used to pause
   downstream sprint development
 - before starting work on a sprint branch/worktree, merge forward from the
