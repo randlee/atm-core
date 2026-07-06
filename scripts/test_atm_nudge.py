@@ -480,9 +480,8 @@ class TestMainBehavior(unittest.TestCase):
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, unittest.mock.ANY)
         self.assertEqual(stderr_json["status"], "warning")
-        self.assertIn("obsolete .atm.toml fallback", " ".join(stderr_json["call_to_action"]))
+        self.assertIn(".atm.toml fallback", " ".join(stderr_json["call_to_action"]))
         self.assertIn("SQLite-backed pane metadata", " ".join(stderr_json["call_to_action"]))
-        self.assertIn("Phase AD obsolete", stderr_json["pane_resolution"]["toml_fallback_status"])
         self.assertIn("--pane %1", stderr_json["nudge_command"])
         self.assertEqual(stderr_json["pane_resolution"]["delivered_pane"], "%1")
         self.assertEqual(stdout_json["level"], "warn")
@@ -516,7 +515,7 @@ class TestMainBehavior(unittest.TestCase):
         self.assertIn("VERIFY the pane id", " ".join(stderr_json["call_to_action"]))
         self.assertIn(f"--pane {CODEX_DEFAULT_PANE}", stderr_json["nudge_command"])
         self.assertIn("Repair canonical ATM roster pane metadata", " ".join(stderr_json["fix"]))
-        self.assertIn("obsolete compatibility fallback", " ".join(stderr_json["fix"]))
+        self.assertIn("Fix or restore the repo-local .atm.toml", " ".join(stderr_json["fix"]))
 
     def test_neither_source_found_uses_default_pane(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(

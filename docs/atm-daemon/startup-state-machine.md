@@ -115,7 +115,7 @@ When communicating startup status, use these layers separately:
    - did the runtime reach `Starting`, `Running`, `Draining`, or `Stopped`?
 3. startup dependency result
    - replay store ready?
-   - runtime prepared and activated?
+   - runtime lanes started?
    - SQLite schema/init succeeded?
    - roster truth hydrated or still empty?
 
@@ -135,7 +135,7 @@ the exact failing transition is still unknown.
 | CLI bootstrap | `daemon_connect = NotFound` | no same-host daemon connection yet |
 | CLI bootstrap | `daemon_launch_gate = Launched` | this client owned launch admission |
 | CLI bootstrap | `daemon_auto_start = AutoStarted` | client launched daemon and later connected |
-| daemon lifecycle | `Starting` | replay and runtime preparation are in progress |
+| daemon lifecycle | `Starting` | replay/lane/runtime preparation in progress |
 | daemon lifecycle | `Running` | daemon accepted activation and entered serve path |
 | daemon lifecycle | `Draining` | shutdown path is in progress |
 | daemon lifecycle | `Stopped` | runtime is fully stopped or rolled back |

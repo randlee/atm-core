@@ -314,13 +314,10 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Historical/test-only daemon adapter behind the SourceIngress contract.
+- Owns the daemon runtime adapter behind the SourceIngress contract.
 
 Notes:
-- The accepted Phase AD runtime no longer uses this adapter on live command
-  paths.
-- Remaining inbox import and fingerprint helpers are retained only for
-  historical compatibility tests until the residual scaffolding is deleted.
+- This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
 
 ## DaemonInboxExportAdapter
 

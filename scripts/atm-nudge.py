@@ -10,11 +10,6 @@ Normal mode:
   pane id, the script falls back to the repo-local `.atm.toml` pane mapping as
   a last-resort compatibility seam.
 
-Phase AD obsolete fallback notice:
-  pane truth lives in SQLite-backed ATM roster state. `.atm.toml` pane lookup
-  remains only as a clearly marked compatibility fallback until the residual
-  fallback lane is deleted.
-
 Override mode:
   atm-nudge.py --pane <id> <recipient> [<message>]
   Bypasses file lookup and nudges directly.
@@ -52,10 +47,6 @@ ERR_NO_TOMLLIB = "no_tomllib"
 ERR_AMBIGUOUS = "ambiguous_match"
 ERR_INVALID_STRUCTURE = "invalid_structure"
 ERR_COMMAND_FAILED = "command_failed"
-OBSOLETE_TOML_FALLBACK_NOTE = (
-    "Phase AD obsolete: pane truth lives in SQLite-backed ATM roster state; "
-    ".atm.toml pane lookup remains a last-resort compatibility fallback only."
-)
 
 
 class PaneLookup(NamedTuple):
@@ -247,7 +238,7 @@ def read_pane_from_roster(
 
 
 def read_pane_from_toml(recipient: str, team: str) -> PaneLookup:
-    """Read an obsolete compatibility fallback pane from the repo-local .atm.toml."""
+    """Read a fallback pane from the repo-local .atm.toml."""
     if tomllib is None:
         return PaneLookup(
             None,
@@ -430,7 +421,7 @@ def build_error_payload(
     toml: PaneLookup,
 ) -> dict[str, object]:
     recommended_pane = toml.pane_id or CODEX_DEFAULT_PANE
-    recommended_source = ".atm.toml obsolete fallback" if toml.pane_id else "default"
+    recommended_source = ".atm.toml fallback" if toml.pane_id else "default"
     discovered_toml = discover_atm_toml()
     toml_path = toml.source_path or (str(discovered_toml) if discovered_toml else None)
     nudge_command = build_nudge_command(recommended_pane, recipient, message)
@@ -444,7 +435,6 @@ def build_error_payload(
         f"Run nudge_command NOW to deliver the message manually using suggested pane {recommended_pane} from {recommended_source}.",
         "VERIFY the pane id before running it; the suggested pane may be stale or incorrect.",
         "THEN fix the configuration in fix[] so future sends work automatically.",
-        OBSOLETE_TOML_FALLBACK_NOTE,
     ]
 
     fix: list[str] = []
@@ -474,26 +464,18 @@ def build_error_payload(
         )
 
     if toml.error_code in {ERR_FILE_MISSING, ERR_PARSE_ERROR, ERR_INVALID_STRUCTURE}:
-        fix.append(
-            "Fix or restore the repo-local .atm.toml only if the obsolete compatibility fallback must remain available temporarily."
-        )
+        fix.append("Fix or restore the repo-local .atm.toml so the compatibility fallback can resolve a pane if roster lookup fails again.")
     elif toml.error_code == ERR_NOT_FOUND:
-        fix.append(
-            f"Add [[rmux.windows.panes]] name='{recipient}' with env.ATM_TEAM='{team}' and a tmux_pane_id in .atm.toml only if the obsolete fallback must remain available temporarily."
-        )
+        fix.append(f"Add [[rmux.windows.panes]] name='{recipient}' with env.ATM_TEAM='{team}' and a tmux_pane_id in .atm.toml as a last-resort fallback.")
     elif toml.error_code == ERR_EMPTY_PANE:
-        fix.append(
-            f"Set tmux_pane_id for '{recipient}@{team}' in .atm.toml only if the obsolete fallback mapping must remain available temporarily."
-        )
+        fix.append(f"Set tmux_pane_id for '{recipient}@{team}' in .atm.toml if the fallback mapping should remain available.")
     elif toml.error_code == ERR_AMBIGUOUS:
         fix.append(f"Make the .atm.toml fallback mapping for '{recipient}@{team}' unique so the hook can select exactly one pane.")
     elif toml.error_code == ERR_NO_TOMLLIB:
         fix.append("Install tomli (Python < 3.11) or run the hook under Python 3.11+.")
 
     if not fix:
-        fix.append(
-            "Review canonical ATM roster state first; consult the repo-local .atm.toml only if the obsolete compatibility fallback must remain available temporarily."
-        )
+        fix.append("Review canonical ATM roster state and the repo-local .atm.toml fallback before retrying the nudge.")
 
     return {
         "status": "error",
@@ -522,7 +504,6 @@ def build_error_payload(
             "toml_path": toml_path,
             "toml_error_code": toml.error_code,
             "toml_error": toml.error_msg,
-            "toml_fallback_status": OBSOLETE_TOML_FALLBACK_NOTE,
         },
     }
 
@@ -541,7 +522,7 @@ def build_warning_payload(
     except Exception:
         cwd = None
     detail = (
-        f"Nudge sent to pane {delivered_pane} from obsolete .atm.toml fallback for "
+        f"Nudge sent to pane {delivered_pane} from .atm.toml fallback for "
         f"'{recipient}@{team}' because canonical ATM roster lookup did not yield a usable pane"
     )
     fix = [
@@ -567,10 +548,9 @@ def build_warning_payload(
         "team": team,
         "detail": detail,
         "call_to_action": [
-            f"NOTICE: nudge already sent to pane {delivered_pane} from the obsolete .atm.toml fallback.",
+            f"NOTICE: nudge already sent to pane {delivered_pane} from the .atm.toml fallback.",
             f"NOW repair canonical ATM roster state so future nudges use SQLite-backed pane metadata first for '{recipient}@{team}'.",
             "If you need to resend manually, use nudge_command below and verify the pane id first.",
-            OBSOLETE_TOML_FALLBACK_NOTE,
         ],
         "nudge_command": build_nudge_command(delivered_pane, recipient, message),
         "fix": fix,
@@ -585,12 +565,11 @@ def build_warning_payload(
         "pane_resolution": {
             "authoritative_source": "atm roster",
             "delivered_pane": delivered_pane,
-            "delivered_source": ".atm.toml obsolete fallback",
+            "delivered_source": ".atm.toml fallback",
             "roster_lookup": roster.source_path,
             "roster_error_code": roster.error_code,
             "roster_error": roster.error_msg,
             "toml_path": toml.source_path,
-            "toml_fallback_status": OBSOLETE_TOML_FALLBACK_NOTE,
         },
     }
 

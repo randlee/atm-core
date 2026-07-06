@@ -7,10 +7,12 @@
 %% sets: daemon
 flowchart TD
     A["<b>Stopped</b>"] -->|start_requested| B["StartingReplay"]
-    B -->|resume_pending_replay ok| D["PreparingRuntime"]
+    B -->|resume_pending_replay ok| C["StartingLanes"]
     B -->|resume_pending_replay err| X["StartupFailed
 caller: typed runtime error
 doctor: no report"]
+    C -->|start_background_lanes ok| D["PreparingRuntime"]
+    C -->|start_background_lanes err| X
     D -->|prepare_runtime ok| E["ActivatingRuntime"]
     D -->|prepare_runtime err| X
     E -->|activate_runtime ok| F["Running"]
@@ -24,4 +26,4 @@ doctor: no report"]
 
     class A,F,H happy;
     class X error;
-    class B,D,E,G neutral;
+    class B,C,D,E,G neutral;
