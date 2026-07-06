@@ -276,6 +276,7 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
+            None,
             RuntimeServeHooks {
                 endpoint_guard,
                 graceful_drain_deadline: Duration::from_millis(500),
