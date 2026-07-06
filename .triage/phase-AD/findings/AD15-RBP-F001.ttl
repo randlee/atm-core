@@ -11,7 +11,8 @@
   triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:fixedBy "cf3b1e71" ;
   triage:dispatchReady true ;
   triage:highestOpenBranch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
   triage:highestFixedBranch "feature/pAD-s16-thin-graft-receiver-reset" ;
@@ -30,8 +31,9 @@
   triage:file "crates/atm-graft/src/lib.rs" ;
   triage:line 73 ;
   triage:snippet "pub trait AdvisorySessionPort: Send + Sync { fn register_session(...) fn unregister_session(...) fn fetch_nudges(...) fn drain_nudges(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedBy "cf3b1e71" ;
   triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
   triage:headSha "b0285943" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s15/b0285943> .
@@ -41,8 +43,9 @@
   triage:file "crates/atm-graft/src/transport.rs" ;
   triage:line 106 ;
   triage:snippet "fn round_trip_graft(&self, request: graft_rpc::RequestEnvelope) -> Result<graft_rpc::ResponseEnvelope, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedBy "cf3b1e71" ;
   triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
   triage:headSha "b0285943" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s15/b0285943> .
@@ -52,8 +55,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 217 ;
   triage:snippet "pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> { ... ctx.client.drain_nudges(ctx.drain_request.clone()) ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedBy "cf3b1e71" ;
   triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
   triage:headSha "b0285943" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s15/b0285943> .
