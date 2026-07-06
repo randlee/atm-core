@@ -32,6 +32,8 @@ target: integrate/phase-AD
 - `crates/atm-core/tests/mailbox_locking.rs`
 - `scripts/smoke/run.py`
 - `scripts/smoke/run_thorough.py`
+- `docs/atm-rusqlite/query-diagrams.md`
+- `docs/atm-rusqlite/sql_query-mailbox-metadata-rows.mmd`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
@@ -58,6 +60,11 @@ with these invariants:
 - if the bounded metadata row cannot satisfy the documented full-body search
   contract by itself, the implementation must fetch enough durable body detail
   to preserve correctness before final contains-filter selection
+- boundedness rule: body fetch is forbidden for rows whose summary already
+  matches the needle and forbidden for rows rejected by earlier metadata-only
+  filters; body fetch is permitted only for rows that survive metadata-only
+  filters and still need a durable-body check to satisfy the documented
+  `--contains` contract
 
 ## Paths To Delete
 
@@ -71,8 +78,9 @@ with these invariants:
 
 - `atm read --contains <needle>` can find a message whose durable body contains
   the needle even when the summary does not
-- metadata-backed contains filtering remains bounded where possible without
-  sacrificing the documented full-body correctness contract
+- metadata-backed contains filtering preserves the accepted bounded fetch
+  pattern by limiting durable-body fetches to surviving candidate rows that
+  still need a body-only contains check
 - regression coverage proves summary-only and body-only matches both behave
   correctly on the accepted read path
 
@@ -91,8 +99,18 @@ with these invariants:
     body contains the needle
   - metadata-backed selection does not return a false negative merely because
     the bounded row lacked body text
+- a targeted boundedness regression test proves:
+  - rows rejected by earlier metadata-only filters do not trigger durable-body
+    fetch
+  - rows whose summary already matches do not trigger durable-body fetch just
+    to re-check the same needle
+  - durable-body fetch occurs only for surviving candidate rows whose summary
+    did not already satisfy the `--contains` contract
 - targeted regression coverage proves list/read selector behavior remains
   consistent for summary-only versus body-only matches
+- `docs/atm-rusqlite/query-diagrams.md` and
+  `docs/atm-rusqlite/sql_query-mailbox-metadata-rows.mmd` describe the updated
+  metadata-query-plus-selective-body-fetch pattern accurately
 - `docs/requirements.md`, `docs/architecture.md`,
   `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md`
   describe `--contains` as a full-body-correct selector even on metadata-backed
@@ -105,5 +123,6 @@ with these invariants:
 - `python3 .just/run_lint.py all`
 - targeted contains-filter regression coverage
 - targeted metadata-row/body-fetch regression coverage
+- targeted boundedness/query-pattern regression coverage
 - `just smoke normal`
 - `git diff --check`
