@@ -36,6 +36,8 @@ target: integrate/phase-AD
 - `docs/atm-graft/requirements.md`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/boundaries.md`
+- `boundaries/atm-daemon-client/rpc-envelope.toml`
+- `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/violation-inventory.md`
 - `docs/plans/phase-AD/sprint-AD12.md`
@@ -45,6 +47,7 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD16.md`
 - `docs/plans/phase-AD/sprint-AD17.md`
 - `docs/plans/phase-AD/sprint-AD18.md`
+- `docs/plans/phase-AD/sprint-AD19.md`
 
 ## Interfaces To Ratify
 
@@ -83,6 +86,8 @@ pub trait AtmGraftClient: Send + Sync {
   boundary-reset drift
 - `plan-phase-AD.md` extends the phase through `AD.19` and records the new
   boundary-reset exit gates
+- `docs/project-plan.md` records the same `AD.12` through `AD.19` corrective
+  line so the global project index does not stop Phase AD at `AD.11`
 - `AD.13` defines the ULID-only message-identity closure with exact deletion
   targets, explicit boundary contracts, and validation gates
 - `AD.14` through `AD.17` each define one production-ready graft-boundary
@@ -101,6 +106,25 @@ pub trait AtmGraftClient: Send + Sync {
 - `atm-graft` runtime rewrite
 - final smoke/readiness verification
 
+## Closure Ownership Split
+
+- `AD.12` owns the planning baseline only: phase plan, project-plan indexing,
+  violation inventory, ADR ratification, and sprint-by-sprint ownership
+  assignment
+- `AD.14` owns the shared advisory boundary deletion in
+  `crates/atm-core/src/{boundary/mod.rs,graft.rs,protocol.rs}`,
+  `crates/atm-daemon-client/src/wire.rs`,
+  `boundaries/atm-daemon-client/rpc-envelope.toml`,
+  `crates/atm/src/composition.rs` advisory-trait implementation sections,
+  `docs/atm-core/{requirements,boundaries}.md`, and
+  `docs/atm-daemon/protocol-icd.md`
+- `AD.15` owns daemon runtime deletion plus final closure of
+  `docs/atm-daemon/{requirements,architecture,boundaries}.md`
+- `AD.16` owns `atm-graft` runtime deletion plus final closure of
+  `docs/atm-graft/{requirements,architecture,boundaries}.md`
+- `AD.17` owns only final verification, readiness evidence, and phase-close
+  documentation updates after `AD.13` through `AD.19` land
+
 ## Acceptance Criteria
 
 - `ADR-019`, `docs/atm-core/requirements.md`,
@@ -117,6 +141,8 @@ pub trait AtmGraftClient: Send + Sync {
   session/register/fetch/drain/stream behavior is the accepted release design
 - the phase plan explicitly states that `AD.12` through `AD.19` are required
   to close `Phase AD`
+- the ownership split above leaves no shared deletion target or accepted
+  requirements/ADR/boundary/protocol doc without one final closing sprint
 - each new sprint doc names the exact files, deletion targets, and validation
   commands needed for its closure without relying on downstream prompt
   interpretation

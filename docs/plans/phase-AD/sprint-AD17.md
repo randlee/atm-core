@@ -12,7 +12,7 @@ target: integrate/phase-AD
 ## Goal
 
 - prove the graft boundary reset on the accepted line and close the added
-  `AD.12` through `AD.16` corrective scope
+  `AD.12` through `AD.19` corrective scope
 
 ## Hard Dependencies
 
@@ -20,6 +20,8 @@ target: integrate/phase-AD
 - `AD.14` complete
 - `AD.15` complete
 - `AD.16` complete
+- `AD.18` complete
+- `AD.19` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 
 ## Exact Targets
@@ -40,6 +42,10 @@ The accepted verification target after this sprint is:
   command paths
 - post-send emission still happens after persistence through the accepted
   `PostSendHookEmitter` seam
+- raw CLI runtime-root selection stays host-home-based rather than
+  invocation-directory-based across sibling worktrees
+- `atm read` mutation output remains self-consistent after durable read-state
+  changes
 - graft-backed receiver behavior is verified without reintroducing shared
   advisory session protocol families
 
@@ -60,7 +66,11 @@ The accepted verification target after this sprint is:
   reset
 - regression evidence proving the local IPC receive loop no longer hangs on the
   deleted graft stream path
-- final readiness verdict for the `AD.12` through `AD.16` corrective line
+- regression evidence proving raw CLI sibling-worktree invocation does not
+  switch stores or message-id formats
+- regression evidence proving read-state mutation returns the mutated message
+  plus post-mutation counts
+- final readiness verdict for the `AD.12` through `AD.19` corrective line
 
 ## This Sprint Does Not Close
 
@@ -76,8 +86,12 @@ The accepted verification target after this sprint is:
   advisory session packet families
 - targeted Windows/local-IPC regression coverage proves the removed stream path
   no longer blocks command completion
+- targeted raw multi-worktree CLI regression coverage proves wrappers are not
+  a release requirement
+- targeted read-mutation regression coverage proves returned payload/counts
+  correspond to the same post-mutation durable state
 - readiness artifacts record `Phase AD` as closed only if the original
-  `AD.1` through `AD.11` gates and the added `AD.12` through `AD.16` reset
+  `AD.1` through `AD.11` gates and the added `AD.12` through `AD.19` reset
   gates all pass on the accepted line
 
 ## Required Validation

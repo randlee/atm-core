@@ -29,7 +29,6 @@ target: integrate/phase-AD
 ## Exact Targets
 
 - `crates/atm-core/src/home.rs`
-- `crates/atm-core/src/protocol.rs`
 - `crates/atm/src/composition.rs`
 - `crates/atm/src/commands/send.rs`
 - `crates/atm/src/commands/read.rs`
@@ -77,6 +76,9 @@ The accepted runtime-root rule after this sprint is:
 - no retained raw CLI command may switch to a JSON-only compatibility path,
   UUID-style message-id output, or an alternate mailbox store because the user
   invoked the command from a sibling worktree or another repo checkout
+- any advisory-session deletion work inside `crates/atm/src/composition.rs`
+  remains owned by `AD.14`; this sprint may touch that file only for
+  runtime-root/bootstrap selection logic
 
 ## Paths To Delete
 

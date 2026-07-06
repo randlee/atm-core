@@ -87,8 +87,12 @@ Phase-AD planning note:
   Claude/reconcile/notification-runtime paths
 - the authoritative planning document is
   [`docs/plans/phase-AD/plan-phase-AD.md`](./plans/phase-AD/plan-phase-AD.md)
-- the planning branch is `plan/post-send-hook-fix`
+- the planning branch is `plan/daemon-graft-boundary-reset`
 - the execution integration branch is `integrate/phase-AD`
+- the corrective release line extends beyond `AD.11`; `AD.12` through `AD.19`
+  are required closure sprints for the graft-boundary reset, ULID-only
+  identity cleanup, raw CLI runtime-root unification, and read-output
+  consistency repair
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -635,7 +639,7 @@ Status summary:
   that no longer belong on the accepted line
 
 Planning branch:
-- `plan/post-send-hook-fix`
+- `plan/daemon-graft-boundary-reset`
 
 Integration branch:
 - `integrate/phase-AD`
@@ -656,6 +660,11 @@ Deliverables:
   notification queue/worker runtime
 - `atm teams update-member` as the accepted repair path for existing member
   metadata
+- corrective `AD.12` through `AD.19` closure of:
+  - ULID-only retained message identity
+  - graft advisory boundary reset
+  - raw CLI runtime-root unification
+  - read-mutation output consistency
 
 Sprint line:
 - `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
@@ -669,10 +678,20 @@ Sprint line:
 - `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
 - `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
 - `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.12` `feature/pAD-s12-graft-boundary-reset-planning`
+- `AD.13` `feature/pAD-s13-ulid-only-message-identity-closeout`
+- `AD.14` `feature/pAD-s14-shared-graft-boundary-surface-reset`
+- `AD.15` `feature/pAD-s15-daemon-advisory-runtime-deletion`
+- `AD.16` `feature/pAD-s16-thin-graft-receiver-reset`
+- `AD.17` `feature/pAD-s17-boundary-reset-verification-closeout`
+- `AD.18` `feature/pAD-s18-raw-cli-runtime-root-unification`
+- `AD.19` `feature/pAD-s19-read-mutation-output-consistency-repair`
 
 Acceptance:
 - the phase closes only through
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
+- readiness is valid only if `AD.1` through `AD.11` and `AD.12` through
+  `AD.19` all pass on the accepted line
 
 ## 39. Chore: ADR Rationale Audit [COMPLETE]
 

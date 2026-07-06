@@ -78,6 +78,9 @@ protocol.response_to_frame(response)?;
 - the direct post-send emission path remains intact after the deletion
 - daemon requirements, architecture, and boundary docs no longer describe the
   deleted runtime as accepted design
+- final closure ownership for `docs/atm-daemon/requirements.md`,
+  `docs/atm-daemon/architecture.md`, and `docs/atm-daemon/boundaries.md`
+  resides in this sprint after `AD.14` removes the shared boundary surface
 
 ## This Sprint Does Not Close
 
