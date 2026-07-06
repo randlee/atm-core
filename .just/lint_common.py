@@ -14,11 +14,6 @@ LOG_DIR = Path(".just/logs")
 CONFIG_PATH = Path(".just/lint-config.toml")
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-DIRECTIVE_RE = re.compile(
-    r"(?P<label>(?:lint-[A-Za-z0-9._-]+|rule-\d{3}|lint-all))\s*:\s*"
-    r"(?P<action>allow-next-line|allow-start|allow-end)\b",
-    re.IGNORECASE,
-)
 STRING_LITERAL_RE = re.compile(
     r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
 )
@@ -33,18 +28,6 @@ class LintReport:
     transcript: list[str]
     duration_seconds: float
     log_path: Path
-
-
-@dataclass(frozen=True)
-class LintDirectivePolicy:
-    tool_key: str
-    aliases: tuple[str, ...] = ()
-
-    @property
-    def labels(self) -> set[str]:
-        labels = {"lint-all", f"lint-{self.tool_key.lower()}"}
-        labels.update(alias.lower() for alias in self.aliases)
-        return labels
 
 
 @dataclass(frozen=True)
@@ -348,61 +331,6 @@ def is_comment_or_empty(line: str) -> bool:
 
 def is_code_line(line: str) -> bool:
     return not is_comment_or_empty(line)
-
-
-def matching_directive_actions(line: str, policy: LintDirectivePolicy) -> list[str]:
-    actions: list[str] = []
-    for match in DIRECTIVE_RE.finditer(line):
-        label = match.group("label").lower()
-        if label in policy.labels:
-            actions.append(match.group("action").lower())
-    return actions
-
-
-def line_has_allow_next_line(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    if line_number <= 1:
-        return False
-    index = line_number - 2
-    while index >= 0:
-        line = lines[index]
-        actions = matching_directive_actions(line, policy)
-        if "allow-next-line" in actions:
-            return True
-        if not is_comment_line(line):
-            return False
-        index -= 1
-    return False
-
-
-def line_is_inside_allow_block(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    allow_depth = 0
-    for line in lines[: line_number - 1]:
-        for action in matching_directive_actions(line, policy):
-            if action == "allow-start":
-                allow_depth += 1
-            elif action == "allow-end":
-                allow_depth = max(0, allow_depth - 1)
-    return allow_depth > 0
-
-
-def line_is_suppressed(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    return line_has_allow_next_line(line_number, lines, policy) or line_is_inside_allow_block(
-        line_number,
-        lines,
-        policy,
-    )
 
 
 def classify_rust_test_scope(
