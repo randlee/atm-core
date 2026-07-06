@@ -31,6 +31,9 @@ model in several release-blocking ways:
   path can complete a send with no nudge and no warning
 - the current post-send path is obscured by generic delivery/notification
   machinery instead of one direct post-commit emission path
+- graft-specific session, queue, and stream concepts have leaked into
+  `atm-core`, daemon request dispatch, and the local IPC protocol even though
+  graft is only one receiver implementation behind the post-send boundary
 - `ReconcileRuntime` and its file-watch/import lane remain in the daemon even
   though Claude Code no longer uses that subsystem
 - daemon notification delivery is currently a separate queue/worker subsystem
@@ -51,6 +54,27 @@ model in several release-blocking ways:
   `ATM_WARNING_IDENTITY_DRIFT`
 - current doctor output shows blank `tmux_pane_id` values in roster state for
   `team-lead` and `arch-ctm`
+
+## Boundary Reset Entry Finding
+
+The current accepted `AD` sprint line does not fully restore the intended
+daemon boundary. The new review artifact
+[`violation-inventory.md`](./violation-inventory.md) records the concrete drift:
+
+- daemon request dispatch currently owns graft session registration,
+  fetch/drain, and long-lived advisory stream request families
+- daemon runtime currently owns graft-specific session state, per-session
+  nudge queues, and stream-loop control
+- `atm-core` currently exposes graft advisory DTOs and dispatcher methods as
+  shared infrastructure even though they are not fundamental ATM semantics
+- `atm-daemon-client` currently serializes graft advisory packet families as
+  first-class daemon protocol kinds
+- current daemon, graft, and protocol docs now bless the leaked
+  daemon-owned graft session model
+
+`Phase AD` therefore extends past `AD.11` with a corrective boundary-reset
+line. `AD.12` through `AD.16` are not optional cleanup; they are required to
+reach the accepted post-send and graft architecture.
 
 ## Design Rules
 
@@ -103,6 +127,9 @@ The governing rules are:
 - ATM owns post-send emission, emission logging, and sender warnings on
   emission failure
 - ATM does not own receiver-side consumption after successful emission
+- graft and tmux remain receiver implementations behind the post-send boundary;
+  daemon/core contracts must not model graft-specific session registration,
+  fetch/drain, stream control, or queue semantics as shared infrastructure
 - `atm read` is a database read path only
 - active `tmux_pane_id` already exists in SQLite roster state and must remain
   authoritative there rather than drifting back to repo config assumptions
@@ -122,6 +149,9 @@ The governing rules are:
 - directory and roster cleanup in this phase must prefer deletion and direct
   field ownership over adding new coordinator structs, planner structs, or
   compatibility-only state machines
+- if a receiver implementation needs active/inactive runtime state, that state
+  belongs behind the receiver-owned capability and must not leak back into the
+  daemon dispatcher, shared protocol DTOs, or transport receive loop
 - shared backend interoperability remains mandatory through the `atm-storage`
   contract; SQLite is one backend and future SQL backend support remains a
   requirement after the Claude backend is retired
@@ -148,6 +178,9 @@ Phase `AD` may:
 - simplify the post-send nudge path to one post-commit emission seam
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
+- remove graft-only session registration, fetch/drain, queue, and advisory
+  stream concepts from shared `atm-core`, daemon request dispatch, and the
+  accepted daemon packet registry
 - remove `ReconcileRuntime` and the daemon watch/import subsystem
 - remove daemon notification queue/worker delivery and replace any retained
   notification logging with direct append logic if the log still has value
@@ -169,13 +202,15 @@ Phase `AD` must not:
   emission
 - preserve stale post-send behavior just because it is already threaded through
   `DeliveryPlan`, `NotificationSink`, or advisory queue code
+- preserve graft-specific session/stream protocol families in shared daemon or
+  transport contracts just because they already exist
 - keep Claude inbox append as a hidden runtime fallback
 - collapse the architecture into a permanent SQLite-only contract
 - preserve dead daemon subsystems just because they already exist
 
 ## Baseline
 
-- planning branch: `plan/post-send-hook-fix`
+- planning branch: `plan/daemon-graft-boundary-reset`
 - execution integration branch: `integrate/phase-AD`
 - prerequisite accepted line:
   - current `develop` as merged through the accepted `1.2.3` baseline
@@ -251,6 +286,10 @@ No accepted `Phase AD` design should require:
 - `NotificationSink` for post-send emission
 - daemon queue/worker orchestration just to append one notification event
 - watched-file reconcile/import machinery to make send or read work
+- daemon-owned graft session registration, fetch/drain, or stream packet
+  families as part of the shared ATM command/runtime contract
+- a `RequestDispatcher` method dedicated to one receiver implementation's
+  long-lived stream protocol
 
 ## Claude Harness Constraint
 
@@ -300,6 +339,11 @@ Phase `AD` orchestration rule:
 9. [AD.9 Update-Member CLI And Roster Repair Path](./sprint-AD9.md)
 10. [AD.10 Directory Metadata And Doctor Contract Cleanup](./sprint-AD10.md)
 11. [AD.11 Smoke And Readiness Closeout](./sprint-AD11.md)
+12. [AD.12 Graft Boundary Reset Planning And Contract Tightening](./sprint-AD12.md)
+13. [AD.13 Shared Graft Boundary Surface Reset](./sprint-AD13.md)
+14. [AD.14 Daemon Advisory Runtime Deletion](./sprint-AD14.md)
+15. [AD.15 Thin Graft Receiver Reset](./sprint-AD15.md)
+16. [AD.16 Boundary Reset Verification Closeout](./sprint-AD16.md)
 
 ## Phase Exit Criteria
 
@@ -326,6 +370,17 @@ Phase `AD` closes only when:
   notification log append is direct
 - local tmux-backed members use the approved local emitter
 - graft-backed recipients use the approved graft emitter
+- the accepted shared ATM contracts no longer expose graft-only advisory
+  register/unregister/fetch/drain/stream packet families
+- the daemon request dispatcher and transport receive loop no longer own
+  graft-specific stream/session behavior
+- daemon runtime no longer owns graft-specific session maps or per-session
+  nudge queues
+- implementation-specific graft receive-loop/session state, if any remains,
+  lives entirely inside `atm-graft` and not in `atm-core`, `atm-daemon`, or
+  `atm-daemon-client` shared protocol/boundary surfaces
+- daemon, graft, and protocol docs no longer describe daemon-owned graft
+  advisory queues or dedicated advisory-stream sockets as the accepted design
 - `atm-storage-claude` is removed from the accepted line
 - the shared backend contract remains intact and documented as future-SQL-ready
 - no approved runtime path still treats Claude inbox append as mailbox
