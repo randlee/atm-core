@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD14-ARCH-004>
+  a triage:Finding ;
+  triage:findingId "AD14-ARCH-004" ;
+  triage:title "Large single-purpose files approaching RULE-003 ceiling; corroborated by red CI" ;
+  triage:description "advisory_runtime.rs (938 lines) and atm-graft/src/lib.rs (869 lines pre-tests) in AD.14 reflected addition of new stateful subsystem rather than surface reduction. CI Just lint failed on all 3 platforms with RULE-002 function-length violation. advisory_runtime.rs was deleted in AD.15 (PR #480). atm-graft/src/lib.rs reduced in AD.16 (PR scheduled per sprint-AD12.md ownership split)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-ARCH-004/pAD-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-ARCH-004/pAD-s14/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-ARCH-004/pAD-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "advisory_runtime.rs (938 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-ARCH-004/pAD-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "atm-graft/src/lib.rs (63 KB / 1750 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 ;
+  triage:branchState "fixed" ;
+  triage:branchStateDetail "advisory_runtime.rs deleted; atm-graft/src/lib.rs still 63 KB (fixed in later sprint)" .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 ;
+  triage:branchState "fixed" ;
+  triage:branchStateDetail "atm-graft/src/lib.rs reduced to 27 KB; advisory_runtime.rs already deleted" .

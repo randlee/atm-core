@@ -1,0 +1,239 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: Ad-hoc format!() construction used instead of From impl for MessageKey
+# Category: RBP (Rust Best Practices)
+# Severity: important
+# Initial Pass - both branches have the pattern
+
+<urn:atm:triage:finding/AD13-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AD13-RBP-F001" ;
+  triage:title "Ad-hoc format!() construction used instead of From impl for MessageKey" ;
+  triage:description "Ad-hoc format!(\"atm:{message_id}\") + MessageKey::new(...) construction is used at multiple call sites instead of the existing impl From<AtmMessageId> for MessageKey. This pattern is used instead of leveraging the trait impl which would be more idiomatic." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T06:57:54Z"^^xsd:dateTime ;
+  # Occurrences on s13
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/contract-45> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/ack-1488> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/persistence-159> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-791> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-1163> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-1256> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/composition-738> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s13/read-520> ;
+  # Occurrences on s14
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/contract-45> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/ack-1488> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/composition-664> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/persistence-159> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/read-520> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-791> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-1163> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-1256> ;
+  # Branch states
+  triage:openOn <urn:atm:triage:worktree/s14/2bc4667c> ;
+  triage:openOn <urn:atm:triage:worktree/s13/5e30c20f> ;
+  triage:promoteTo <urn:atm:triage:worktree/s14/2bc4667c> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 14 .
+
+# S13 Occurrences
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/contract-45>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 45 ;
+  triage:snippet "Self(format!(\"atm:{value}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/ack-1488>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1488 ;
+  triage:snippet "let source_key = MessageKey::new(format!(\"atm:{source_message_id}\")).expect(\"message key\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/persistence-159>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 159 ;
+  triage:snippet "let message_key = boundary::MessageKey::new(format!(\"atm:{message_id}\"))?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-791>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 791 ;
+  triage:snippet "workflow[\"messages\"][format!(\"atm:{logical_message_id}\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-1163>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1163 ;
+  triage:snippet "atm_core::boundary::MessageKey::new(format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/mailbox-1256>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1256 ;
+  triage:snippet ".map(|message_id| format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/composition-738>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 738 ;
+  triage:snippet "boundary::MessageKey::new(format!(\"atm:{message_id}\")).expect(\"message key\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s13/read-520>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 520 ;
+  triage:snippet "boundary::MessageKey::new(format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/5e30c20f> .
+
+# S14 Occurrences
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/contract-45>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 45 ;
+  triage:snippet "Self(format!(\"atm:{value}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/ack-1488>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1488 ;
+  triage:snippet "let source_key = MessageKey::new(format!(\"atm:{source_message_id}\")).expect(\"message key\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/composition-664>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 664 ;
+  triage:snippet "boundary::MessageKey::new(format!(\"atm:{message_id}\")).expect(\"message key\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/persistence-159>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 159 ;
+  triage:snippet "let message_key = boundary::MessageKey::new(format!(\"atm:{message_id}\"))?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/read-520>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 520 ;
+  triage:snippet "boundary::MessageKey::new(format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-791>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 791 ;
+  triage:snippet "workflow[\"messages\"][format!(\"atm:{logical_message_id}\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-1163>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1163 ;
+  triage:snippet "atm_core::boundary::MessageKey::new(format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD13-RBP-F001/s14/mailbox-1256>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1256 ;
+  triage:snippet ".map(|message_id| format!(\"atm:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .

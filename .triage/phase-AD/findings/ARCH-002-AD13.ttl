@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002-AD13>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-AD13" ;
+  triage:title "ADR-012 stale relative to AD.13 UUID removal implementation" ;
+  triage:description "docs/adr/ADR-012-one-message-identity.md documents only Phase U legacy_message_id dual-id removal (closed by AA.11), with no mention of the uuid crate/UUID-compatibility removal this sprint (AD.13) performs. ADR-012 implementation-status section must be updated with AD.13 entry." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-05T22:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AD13/pAD-s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/ARCH-002-AD13/pAD-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-012-one-message-identity.md" ;
+  triage:line 62 ;
+  triage:snippet "Implementation status: `AA.11` closes the SQLite-side `legacy_*` consequence on `feature/pAA-s11-delete-sqlite-legacy-compat`. No `legacy_message_id` code paths remain under `crates/atm-rusqlite/`; any surviving `legacy_*` references are historical planning or removal-ledger context only." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:worktree/pAD-s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:orderIndex 999 .
