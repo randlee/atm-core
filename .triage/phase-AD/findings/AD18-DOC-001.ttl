@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD18-DOC-001>
+  a triage:Finding ;
+  triage:findingId "AD18-DOC-001" ;
+  triage:title "Required invocation-dir-not-a-selector doc statement missing from 5 of 6 named docs" ;
+  triage:description "req-qa ATM-QA-002: only docs/atm-daemon/architecture.md:340 states invocation-directory-is-not-a-selector; docs/requirements.md, docs/architecture.md, docs/atm-core/requirements.md, docs/atm-core/architecture.md, docs/atm-daemon/requirements.md do not." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA-002" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/requirements.md, docs/architecture.md, docs/atm-core/requirements.md, docs/atm-core/architecture.md, docs/atm-daemon/requirements.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:promoteToBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s20/5ac7f11b> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:worktree/s20/5ac7f11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 .
