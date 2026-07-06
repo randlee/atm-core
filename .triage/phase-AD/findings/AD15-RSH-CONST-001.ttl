@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-RSH-CONST-001>
+  a triage:Finding ;
+  triage:findingId "AD15-RSH-CONST-001" ;
+  triage:title "Undocumented magic value now more exposed after advisory-session cap deletion" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs -- MAX_CONCURRENT_CONNECTIONS = 64 has lost its implicit rationale (the deleted 128-session advisory cap it was sized relative to) and is now an undocumented constant. Found new on AD15-QA-1 (PR #480) as RSH-003." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 43 ;
+  triage:snippet "const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 43 ;
+  triage:snippet "const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 43 ;
+  triage:snippet "const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 3 .

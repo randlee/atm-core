@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "No CHANGELOG.md entry for ULID-only message identity change" ;
+  triage:description "CHANGELOG.md lacks an entry documenting the ULID-only message identity change for AD.13. Required for release traceability and user-facing changelog." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-05T22:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pAD-s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pAD-s13/1>
+  a triage:Occurrence ;
+  triage:file "CHANGELOG.md" ;
+  triage:line 1 ;
+  triage:snippet "CHANGELOG.md top sections (v1.2.3, v1.2.2, v1.2.1, v1.2.0, v1.1.2, v1.1.1) lack any entry for ULID-only message identity change completed in AD.13" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:worktree/pAD-s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:orderIndex 999 .

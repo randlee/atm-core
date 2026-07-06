@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AD16-RSH-001" ;
+  triage:title "Unbounded synchronous host-injection callback in poll_once()" ;
+  triage:description "crates/atm-graft/src/runtime.rs:192 — poll_once() calls ctx.injector.inject_nudge() synchronously with no timeout. A hanging HostNudgeInjector implementation can leak the receive-loop/join-helper threads indefinitely. Reported by rust-service-hardening-agent as RSH-001 in AD16-QA-1 (PR #481). Fix: wrap the call with a bounded timeout/join-deadline consistent with the pattern already used elsewhere in this file. Note: this is a DIFFERENT finding from already-triaged AD15-RSH-CONST-001 and AD14-RSH-001/RSH-002 — use this distinct ID." ;
+  triage:category "RSH" ;
+  triage:severity triage:important ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RSH-001/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-RSH-001/s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-RSH-001/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 192 ;
+  triage:snippet "ctx.injector.inject_nudge(event.clone())?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-RSH-001/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 192 ;
+  triage:snippet "ctx.injector.inject_nudge(event.clone())?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:worktree/s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .
