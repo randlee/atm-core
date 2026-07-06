@@ -76,3 +76,43 @@ target: integrate/phase-AD
 7. Re-run the failed validation plus the full original validation set.
 8. Push the branch and report the final commit hash, validation results, and
    any CI evidence.
+
+## Windows Execution Report
+
+- execution date: `2026-07-06`
+- host: native Windows
+- branch: `feature/pAD-s14-shared-graft-boundary-surface-reset`
+
+### Windows-only fix applied
+
+- updated `crates/atm-daemon/src/tests.rs` to pass the current
+  `graft_dispatcher` argument (`None`) to
+  `serve_with_runtime_hooks(...)`
+- this fixed the Windows compile/test failure introduced after the AD.13
+  merge-forward
+
+### Commands run
+
+- `python .just/run_lint.py all`
+- `just test`
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `git diff --check`
+- `rg -n "dispatch_advisory_stream|AdvisoryStreamSink|AdvisorySessionPort|Advisory(Register|Unregister|Fetch|Drain|Stream)|open_advisory_stream" crates/atm-core crates/atm-daemon-client crates/atm boundaries/atm-daemon-client/rpc-envelope.toml`
+
+### Results
+
+- `python .just/run_lint.py all`: PASS
+- `just test`: PASS
+- `cargo test --workspace`: PASS
+- `cargo clippy --workspace -- -D warnings`: PASS
+- `git diff --check`: PASS
+- sprint grep: FAIL
+
+### Remaining findings for mac follow-up
+
+- `AD.14` branch still contains advisory/graft RPC matches in
+  `crates/atm-daemon-client/src/graft_rpc.rs`
+- this is not caused by the Windows fix
+- boundary lint passes when the branch contract is kept unchanged
+- no boundary-contract changes were kept in this Windows fix-forward
