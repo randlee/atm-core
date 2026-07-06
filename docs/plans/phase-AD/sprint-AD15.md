@@ -1,100 +1,98 @@
 ---
 id: AD.15
-title: Thin Graft Receiver Reset
+title: Daemon Advisory Runtime Deletion
 status: planned
-branch: feature/pAD-s15-thin-graft-receiver-reset
-worktree: ../atm-core-worktrees/feature/pAD-s15-thin-graft-receiver-reset
+branch: feature/pAD-s15-daemon-advisory-runtime-deletion
+worktree: ../atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion
 target: integrate/phase-AD
 ---
 
-# Sprint AD.15 — Thin Graft Receiver Reset
+# Sprint AD.15 — Daemon Advisory Runtime Deletion
 
 ## Goal
 
-- reset `atm-graft` to a thin receiver implementation that no longer depends
-  on daemon-owned advisory session protocol families
+- delete the daemon-owned graft advisory runtime and return the daemon
+  transport/dispatcher path to thin unary request routing plus direct
+  post-send emission
 
 ## Hard Dependencies
 
 - `AD.14` complete
+- `AD.6` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 
 ## Exact Targets
 
-- `crates/atm-graft/src/lib.rs`
-- `crates/atm-graft/src/runtime.rs`
-- `crates/atm-graft/src/transport.rs`
-- `crates/atm-graft/examples/smoke_same_host.rs`
-- `docs/atm-graft/architecture.md`
-- `docs/atm-graft/boundaries.md`
-- `docs/atm-graft/requirements.md`
+- `crates/atm-daemon/src/advisory_runtime.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
+- `crates/atm-daemon/src/local_ipc_transport.rs`
+- `crates/atm-daemon/src/tests_advisory.rs`
+- `crates/atm-daemon/src/test_support.rs`
+- `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- `docs/atm-daemon/boundaries.md`
 
 ## Interfaces To Add Or Modify
 
-The host injection seam remains receiver-owned:
+The accepted post-commit daemon behavior after this sprint is:
 
 ```rust
-pub trait HostNudgeInjector: Send + Sync {
-    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError>;
+let outcome = persist_message(...)?;
+if recipient_has_post_send_hook {
+    if let Err(error) = post_send_hook_emitter.emit(&event) {
+        log_post_send_failure(&error);
+        append_sender_warning(render_post_send_warning(&error));
+    }
 }
 ```
 
-The accepted implementation rule after this sprint is:
+The transport receive loop stays unary-only:
 
-- any receiver-side active/inactive state lives inside `atm-graft`
-- no `atm-graft` public API depends on shared daemon advisory registration,
-  fetch/drain, or stream DTOs
-- if `atm-graft` needs a graft-local projection of `PostSendHookEvent`, that
-  projection stays private to `atm-graft`
-- if `atm-graft` still uses a same-host listener or receive task, that detail
-  stays internal to `atm-graft` and must not reappear in `atm-core`,
-  `atm-daemon`, or `atm-daemon-client`
+```rust
+let request = protocol.request_from_frame(frame)?;
+let response = dispatcher.dispatch(request)?;
+protocol.response_to_frame(response)?;
+```
 
 ## Paths To Delete
 
-- `GraftSessionClient: AtmGraftClient + AdvisorySessionPort`
-- `ActiveAdvisoryStream`
-- registration/unregistration helpers that depend on daemon-owned advisory
-  session protocol
-- fetch/drain helpers that depend on daemon-owned advisory queue DTOs
-- dedicated advisory-stream transport helpers in `crates/atm-graft/src/transport.rs`
-- public `atm-graft` option/state fields that exist only to drive the deleted
-  shared advisory session model
-- dedicated advisory-stream and persistent-receive-thread requirements from
-  `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
-  `docs/atm-graft/boundaries.md`
+- `crates/atm-daemon/src/advisory_runtime.rs`
+- `AdvisoryRuntime` field ownership from `DaemonRequestDispatcher`
+- advisory register/unregister/fetch/drain routing in
+  `crates/atm-daemon/src/runtime_health.rs`
+- advisory-stream special handling in
+  `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
+- advisory-stream support code in `crates/atm-daemon/src/local_ipc_transport.rs`
+- advisory-runtime-only tests and helpers that exist solely to support the
+  deleted session runtime
 
 ## Deliverables
 
-- `atm-graft` no longer consumes shared advisory register/fetch/drain/stream
-  packet families
-- any remaining receiver-side runtime state is private to `atm-graft`
-- host-facing injection remains capability-based and independent from daemon
-  dispatcher/session ownership
-- graft-local docs no longer prescribe daemon-owned session registration,
-  daemon-owned queues, or a dedicated shared advisory-stream path
+- daemon runtime no longer stores graft session maps or per-session nudge
+  queues
+- daemon dispatcher no longer owns graft-specific request routing
+- local IPC request handling no longer owns receiver-specific streaming logic
+- the direct post-send emission path remains intact after the deletion
 
 ## This Sprint Does Not Close
 
-- final smoke/readiness verification
-- unrelated cross-host feature expansion
+- `atm-graft` internal receiver/runtime rewrite
+- final smoke/readiness proof
 
 ## Acceptance Criteria
 
-- `atm-graft` builds and tests without depending on deleted shared advisory
-  session/stream DTOs
-- `atm-graft` public API exposes only the retained thin client and host
-  injection concepts
-- no daemon-facing graft code path requires session registration, fetch/drain,
-  or dedicated advisory-stream protocol families
-- `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
-  `docs/atm-graft/boundaries.md` describe only receiver-local runtime detail
-  plus the retained thin shared client contract
+- no `AdvisoryRuntime` implementation remains in `atm-daemon`
+- daemon request dispatch no longer switches on graft-specific advisory
+  request families
+- local IPC receive/dispatch code no longer contains special receiver-specific
+  stream plumbing
+- send/ack post-send warning behavior still flows through the accepted
+  `PostSendHookEmitter` contract
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `python3 .just/run_lint.py all`
-- `rg -n "AdvisorySessionPort|ActiveAdvisoryStream|Advisory(Register|Unregister|Fetch|Drain|Stream)" crates/atm-graft`
+- `rg -n "AdvisoryRuntime|dispatch_advisory_stream|RequestEnvelope::Advisory|ResponseEnvelope::Advisory|LocalIpcAdvisoryStreamSink" crates/atm-daemon`
 - `git diff --check`

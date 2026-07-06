@@ -27,6 +27,8 @@ model in several release-blocking ways:
 - bare ATM commands can also resolve or persist under the wrong team when
   caller team falls back from repo-local/default config instead of the
   invoking shell or explicit command-line context
+- historical Claude/compatibility UUID message-id support still remains in the
+  shared identity model even though the accepted runtime is now ULID-only
 - `.atm.toml` still configures `[[atm.post_send_hooks]]`, but the live daemon
   path can complete a send with no nudge and no warning
 - the current post-send path is obscured by generic delivery/notification
@@ -54,6 +56,9 @@ model in several release-blocking ways:
   `ATM_WARNING_IDENTITY_DRIFT`
 - current doctor output shows blank `tmux_pane_id` values in roster state for
   `team-lead` and `arch-ctm`
+- the current shared identity path still accepts or emits UUID-form message
+  ids in code/docs that should now be ULID-only after Claude backend
+  retirement
 
 ## Boundary Reset Entry Finding
 
@@ -73,8 +78,8 @@ daemon boundary. The new review artifact
   daemon-owned graft session model
 
 `Phase AD` therefore extends past `AD.11` with a corrective boundary-reset
-line. `AD.12` through `AD.16` are not optional cleanup; they are required to
-reach the accepted post-send and graft architecture.
+line. `AD.12` through `AD.17` are not optional cleanup; they are required to
+reach the accepted post-send, message-identity, and graft architecture.
 
 ## Design Rules
 
@@ -127,6 +132,9 @@ The governing rules are:
 - ATM owns post-send emission, emission logging, and sender warnings on
   emission failure
 - ATM does not own receiver-side consumption after successful emission
+- retained ATM message identity is ULID-only across CLI, daemon, storage,
+  schemas, and docs; historical UUID-wire compatibility is retired with the
+  Claude backend
 - graft and tmux remain receiver implementations behind the post-send boundary;
   daemon/core contracts must not model graft-specific session registration,
   fetch/drain, stream control, or queue semantics as shared infrastructure
@@ -149,6 +157,9 @@ The governing rules are:
 - directory and roster cleanup in this phase must prefer deletion and direct
   field ownership over adding new coordinator structs, planner structs, or
   compatibility-only state machines
+- UUID/ULID bridge code, UUID parsing fallback, and UUID-wire-only schema
+  variants are compatibility-only state and must be deleted rather than
+  carried forward into the accepted line
 - if a receiver implementation needs active/inactive runtime state, that state
   belongs behind the receiver-owned capability and must not leak back into the
   daemon dispatcher, shared protocol DTOs, or transport receive loop
@@ -181,6 +192,8 @@ Phase `AD` may:
 - remove graft-only session registration, fetch/drain, queue, and advisory
   stream concepts from shared `atm-core`, daemon request dispatch, and the
   accepted daemon packet registry
+- remove UUID message-id compatibility from shared `atm-core`, storage,
+  schema/tooling, and accepted documentation surfaces
 - remove `ReconcileRuntime` and the daemon watch/import subsystem
 - remove daemon notification queue/worker delivery and replace any retained
   notification logging with direct append logic if the log still has value
@@ -204,6 +217,8 @@ Phase `AD` must not:
   `DeliveryPlan`, `NotificationSink`, or advisory queue code
 - preserve graft-specific session/stream protocol families in shared daemon or
   transport contracts just because they already exist
+- preserve UUID message-id compatibility after Claude backend retirement just
+  because conversion code already exists
 - keep Claude inbox append as a hidden runtime fallback
 - collapse the architecture into a permanent SQLite-only contract
 - preserve dead daemon subsystems just because they already exist
@@ -290,6 +305,8 @@ No accepted `Phase AD` design should require:
   families as part of the shared ATM command/runtime contract
 - a `RequestDispatcher` method dedicated to one receiver implementation's
   long-lived stream protocol
+- `uuid`-based ATM message identity, UUID parsing fallback, or UUID-wire export
+  on retained ATM message paths
 
 ## Claude Harness Constraint
 
@@ -340,10 +357,11 @@ Phase `AD` orchestration rule:
 10. [AD.10 Directory Metadata And Doctor Contract Cleanup](./sprint-AD10.md)
 11. [AD.11 Smoke And Readiness Closeout](./sprint-AD11.md)
 12. [AD.12 Graft Boundary Reset Planning And Contract Tightening](./sprint-AD12.md)
-13. [AD.13 Shared Graft Boundary Surface Reset](./sprint-AD13.md)
-14. [AD.14 Daemon Advisory Runtime Deletion](./sprint-AD14.md)
-15. [AD.15 Thin Graft Receiver Reset](./sprint-AD15.md)
-16. [AD.16 Boundary Reset Verification Closeout](./sprint-AD16.md)
+13. [AD.13 ULID Message Identity Reset](./sprint-AD13.md)
+14. [AD.14 Shared Graft Boundary Surface Reset](./sprint-AD14.md)
+15. [AD.15 Daemon Advisory Runtime Deletion](./sprint-AD15.md)
+16. [AD.16 Thin Graft Receiver Reset](./sprint-AD16.md)
+17. [AD.17 Boundary Reset Verification Closeout](./sprint-AD17.md)
 
 ## Phase Exit Criteria
 
@@ -358,6 +376,8 @@ Phase `AD` closes only when:
 - `atm doctor` runs without caller identity and accepts optional team scoping
 - daemon-backed caller-owned request shapes carry caller identity and caller
   team as required data rather than relying on daemon ambient identity/team
+- retained ATM message-id parsing, persistence, API surfaces, and docs are
+  ULID-only with no UUID fallback or conversion bridge
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning

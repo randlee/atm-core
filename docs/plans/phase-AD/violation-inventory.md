@@ -1,20 +1,24 @@
 ---
-title: Phase AD Graft Boundary Violation Inventory
+title: Phase AD Boundary Reset Violation Inventory
 status: active
 branch: plan/daemon-graft-boundary-reset
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/daemon-graft-boundary-reset
 ---
 
-# Phase AD Graft Boundary Violation Inventory
+# Phase AD Boundary Reset Violation Inventory
 
 ## Purpose
 
-This document records the graft/session architectural drift that still blocks
-`Phase AD` release readiness after the original `AD.1` through `AD.11` line.
+This document records the boundary drift that still blocks `Phase AD` release
+readiness after the original `AD.1` through `AD.11` line.
 
 It is not a speculative cleanup list. Each item below identifies concrete code
-or doc surface that currently treats graft-specific session, queue, or stream
-behavior as shared daemon/core infrastructure.
+or doc surface that currently either:
+
+- treats graft-specific session, queue, or stream behavior as shared
+  daemon/core infrastructure
+- preserves UUID-based retained ATM message identity or UUID-specific
+  compatibility code even though the accepted line is now ULID-only
 
 ## Accepted Boundary Restatement
 
@@ -45,6 +49,7 @@ The intended boundary is:
 | `crates/atm-daemon/src/local_ipc_transport/request_worker.rs` | The local IPC worker special-cases `RequestEnvelope::AdvisoryStream` and owns a dedicated stream sink path. | Remove receiver-specific streaming logic from the transport worker so the receive loop returns to thin framed unary dispatch. |
 | `crates/atm-daemon/src/tests_advisory.rs` and advisory-specific test seams | Daemon tests currently normalize daemon-owned graft session registration, fetch/drain, and stream behavior as core runtime obligations. | Remove the advisory-runtime test lane and replace it with tests that cover the accepted post-send seam only. |
 | `crates/atm-graft/src/lib.rs`, `runtime.rs`, `transport.rs` | `atm-graft` is coupled to daemon-owned advisory registration, fetch/drain, and dedicated advisory-stream transport. | Reset `atm-graft` to a thin receiver implementation that owns any remaining receiver-side state internally and no longer depends on shared advisory session protocol families. |
+| `Cargo.toml`, `Cargo.lock`, `crates/atm-core/Cargo.toml`, `crates/atm-core/src/schema/inbox_message.rs`, `crates/atm-core/src/mailbox/mod.rs`, `crates/atm-core/src/read/mod.rs`, `crates/atm-core/src/persistence.rs`, `crates/atm-core/tests/mailbox_locking.rs`, `crates/atm-storage/Cargo.toml`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-storage-rusqlite/src/writer/ops.rs`, and `tools/schema_models/*` | Retained ATM code still depends on `uuid` and still accepts, emits, type-checks, or generates UUID values through `AtmMessageId::{from_uuid_wire, into_uuid_wire}`, UUID parse fallback, UUID-based serializers, UUID-backed test helpers, and UUID uniqueness helpers even though Claude JSON compatibility is retired and the accepted runtime is ULID-only. | Remove all retained UUID usage and make the accepted ATM line ULID-only across message identity, schema/tooling, tests, and supporting uniqueness helpers. |
 
 ## Architecture And Requirements Drift
 
@@ -60,6 +65,7 @@ part of the boundary-reset line:
 | `docs/atm-graft/requirements.md` | Carries the same daemon-owned persistent receive-loop and bounded queue assumptions into the published graft requirements surface. |
 | `docs/atm-graft/boundaries.md` | Defines the session runtime consumer around a persistent receive thread and dedicated advisory-stream connection. |
 | `docs/atm-core/requirements.md` | Reserves `AdvisorySessionId` and shared advisory packet kinds in `atm-core` requirements, boxing the shared boundary into the leaked session model. |
+| `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/architecture.md`, and `docs/adr/ADR-012-one-message-identity.md` | Still describe UUID-wire message ids or UUID-based retained uniqueness rules as accepted ATM behavior even though Claude backend compatibility is retired and retained ATM runtime should now be ULID-only. |
 | `docs/plans/phase-AD/sprint-AD8.md` | Still frames the accepted graft path as a daemon/graft advisory-session seam rather than a thin post-send receiver implementation. |
 
 ## Review Request
@@ -82,7 +88,8 @@ review must answer all of these points directly:
   a typed response
 
 Until that review says otherwise, the accepted working assumption for
-`Phase AD` is that every advisory/session surface above is removal scope.
+`Phase AD` is that every advisory/session surface above and every retained
+UUID surface above are removal scope.
 
 ## Follow-On Planning Artifacts
 
@@ -93,3 +100,4 @@ The corrective implementation line for this inventory is planned in:
 - [Sprint AD.14](./sprint-AD14.md)
 - [Sprint AD.15](./sprint-AD15.md)
 - [Sprint AD.16](./sprint-AD16.md)
+- [Sprint AD.17](./sprint-AD17.md)

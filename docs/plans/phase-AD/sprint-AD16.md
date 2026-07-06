@@ -1,85 +1,100 @@
 ---
 id: AD.16
-title: Boundary Reset Verification Closeout
+title: Thin Graft Receiver Reset
 status: planned
-branch: feature/pAD-s16-boundary-reset-verification-closeout
-worktree: ../atm-core-worktrees/feature/pAD-s16-boundary-reset-verification-closeout
+branch: feature/pAD-s16-thin-graft-receiver-reset
+worktree: ../atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset
 target: integrate/phase-AD
 ---
 
-# Sprint AD.16 — Boundary Reset Verification Closeout
+# Sprint AD.16 — Thin Graft Receiver Reset
 
 ## Goal
 
-- prove the graft boundary reset on the accepted line and close the added
-  `AD.12` through `AD.15` corrective scope
+- reset `atm-graft` to a thin receiver implementation that no longer depends
+  on daemon-owned advisory session protocol families
 
 ## Hard Dependencies
 
-- `AD.13` complete
-- `AD.14` complete
 - `AD.15` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 
 ## Exact Targets
 
-- `scripts/smoke/run.py`
-- `scripts/smoke/run_thorough.py`
-- `scripts/smoke/run_thorough_graft.py`
-- `reports/smoke/`
-- `docs/plans/phase-AD/`
-- readiness/project-plan docs touched by final verdict
+- `crates/atm-graft/src/lib.rs`
+- `crates/atm-graft/src/runtime.rs`
+- `crates/atm-graft/src/transport.rs`
+- `crates/atm-graft/examples/smoke_same_host.rs`
+- `docs/atm-graft/architecture.md`
+- `docs/atm-graft/boundaries.md`
+- `docs/atm-graft/requirements.md`
 
-## Interfaces To Verify
+## Interfaces To Add Or Modify
 
-The accepted verification target after this sprint is:
+The host injection seam remains receiver-owned:
 
-- daemon local IPC remains framed unary request/response for retained ATM
-  command paths
-- post-send emission still happens after persistence through the accepted
-  `PostSendHookEmitter` seam
-- graft-backed receiver behavior is verified without reintroducing shared
-  advisory session protocol families
+```rust
+pub trait HostNudgeInjector: Send + Sync {
+    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError>;
+}
+```
+
+The accepted implementation rule after this sprint is:
+
+- any receiver-side active/inactive state lives inside `atm-graft`
+- no `atm-graft` public API depends on shared daemon advisory registration,
+  fetch/drain, or stream DTOs
+- if `atm-graft` needs a graft-local projection of `PostSendHookEvent`, that
+  projection stays private to `atm-graft`
+- if `atm-graft` still uses a same-host listener or receive task, that detail
+  stays internal to `atm-graft` and must not reappear in `atm-core`,
+  `atm-daemon`, or `atm-daemon-client`
 
 ## Paths To Delete
 
-- any smoke or regression test that still expects daemon-owned graft advisory
-  register/unregister/fetch/drain/stream packet families
-- any smoke or readiness step that treats a dedicated advisory-stream daemon
-  socket as release-required architecture
+- `GraftSessionClient: AtmGraftClient + AdvisorySessionPort`
+- `ActiveAdvisoryStream`
+- registration/unregistration helpers that depend on daemon-owned advisory
+  session protocol
+- fetch/drain helpers that depend on daemon-owned advisory queue DTOs
+- dedicated advisory-stream transport helpers in `crates/atm-graft/src/transport.rs`
+- public `atm-graft` option/state fields that exist only to drive the deleted
+  shared advisory session model
+- dedicated advisory-stream and persistent-receive-thread requirements from
+  `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
+  `docs/atm-graft/boundaries.md`
 
 ## Deliverables
 
-- smoke evidence proving local tmux post-send still works after the boundary
-  reset
-- smoke evidence proving graft-backed post-send still works after the boundary
-  reset
-- regression evidence proving the local IPC receive loop no longer hangs on the
-  deleted graft stream path
-- final readiness verdict for the `AD.12` through `AD.15` corrective line
+- `atm-graft` no longer consumes shared advisory register/fetch/drain/stream
+  packet families
+- any remaining receiver-side runtime state is private to `atm-graft`
+- host-facing injection remains capability-based and independent from daemon
+  dispatcher/session ownership
+- graft-local docs no longer prescribe daemon-owned session registration,
+  daemon-owned queues, or a dedicated shared advisory-stream path
 
 ## This Sprint Does Not Close
 
-- unrelated cross-host feature work outside the reset scope
+- final smoke/readiness verification
+- unrelated cross-host feature expansion
 
 ## Acceptance Criteria
 
-- smoke artifacts prove the corrected post-send path still works for local
-  tmux-backed recipients
-- smoke artifacts prove the corrected graft-backed lane works without shared
-  advisory session packet families
-- targeted Windows/local-IPC regression coverage proves the removed stream path
-  no longer blocks command completion
-- readiness artifacts record `Phase AD` as closed only if the original
-  `AD.1` through `AD.11` gates and the added `AD.12` through `AD.15` reset
-  gates all pass on the accepted line
+- `atm-graft` builds and tests without depending on deleted shared advisory
+  session/stream DTOs
+- `atm-graft` public API exposes only the retained thin client and host
+  injection concepts
+- no daemon-facing graft code path requires session registration, fetch/drain,
+  or dedicated advisory-stream protocol families
+- `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
+  `docs/atm-graft/boundaries.md` describe only receiver-local runtime detail
+  plus the retained thin shared client contract
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `python3 .just/run_lint.py all`
-- `just smoke normal`
-- `just smoke thorough`
-- targeted Windows/local-IPC regression coverage for the former advisory-stream lane
+- `rg -n "AdvisorySessionPort|ActiveAdvisoryStream|Advisory(Register|Unregister|Fetch|Drain|Stream)" crates/atm-graft`
 - `git diff --check`

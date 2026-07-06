@@ -23,7 +23,11 @@ target: integrate/phase-AD
 ## Exact Targets
 
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/adr/ADR-012-one-message-identity.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
 - `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-graft/requirements.md`
@@ -36,6 +40,7 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD14.md`
 - `docs/plans/phase-AD/sprint-AD15.md`
 - `docs/plans/phase-AD/sprint-AD16.md`
+- `docs/plans/phase-AD/sprint-AD17.md`
 
 ## Interfaces To Ratify
 
@@ -62,22 +67,28 @@ pub trait AtmGraftClient: Send + Sync {
 - no implementation paths are deleted in this sprint
 - any still-open sprint doc wording that treats daemon-owned graft advisory
   register/unregister/fetch/drain/stream behavior as accepted end state must be
-  superseded by the new `AD.13` through `AD.16` line
+  superseded by the new `AD.14` through `AD.17` line
 
 ## Deliverables
 
 - the accepted requirements, architecture docs, and `ADR-019` no longer lock
   ATM into daemon-owned graft session/stream behavior
-- `violation-inventory.md` is the authoritative review artifact for the graft
-  boundary drift
-- `plan-phase-AD.md` extends the phase through `AD.16` and records the new
+- the accepted message-identity ADR and requirements docs no longer bless UUID
+  message ids on retained ATM paths
+- `violation-inventory.md` is the authoritative review artifact for the
+  boundary-reset drift
+- `plan-phase-AD.md` extends the phase through `AD.17` and records the new
   boundary-reset exit gates
-- `AD.13` through `AD.16` each define one production-ready closure with exact
-  deletion targets, explicit boundary contracts, and validation gates
+- `AD.13` defines the ULID-only message-identity closure with exact deletion
+  targets, explicit boundary contracts, and validation gates
+- `AD.14` through `AD.17` each define one production-ready graft-boundary
+  closure with exact deletion targets, explicit boundary contracts, and
+  validation gates
 
 ## This Sprint Does Not Close
 
 - shared protocol surface deletion
+- ULID-only message-identity implementation
 - daemon advisory runtime deletion
 - `atm-graft` runtime rewrite
 - final smoke/readiness verification
@@ -85,13 +96,18 @@ pub trait AtmGraftClient: Send + Sync {
 ## Acceptance Criteria
 
 - `ADR-019`, `docs/atm-core/requirements.md`,
-  `docs/atm-daemon/requirements.md`, `docs/atm-daemon/architecture.md`,
-  `docs/atm-graft/requirements.md`, `docs/atm-graft/architecture.md`, and
-  `docs/atm-graft/boundaries.md` all describe the thin receiver boundary
+  `ADR-012`, `docs/requirements.md`, `docs/architecture.md`,
+  `docs/atm-core/requirements.md`,
+  `docs/atm-core/architecture.md`, `docs/atm-daemon/requirements.md`,
+  `docs/atm-daemon/architecture.md`, `docs/atm-graft/requirements.md`,
+  `docs/atm-graft/architecture.md`, and `docs/atm-graft/boundaries.md` all
+  describe the thin receiver boundary
   rather than daemon-owned graft session/stream runtime
+- accepted docs state that retained ATM message identity is ULID-only and that
+  UUID compatibility was retired with the Claude backend
 - no remaining `Phase AD` planning doc claims that daemon-owned graft advisory
   session/register/fetch/drain/stream behavior is the accepted release design
-- the phase plan explicitly states that `AD.12` through `AD.16` are required
+- the phase plan explicitly states that `AD.12` through `AD.17` are required
   to close `Phase AD`
 - each new sprint doc names the exact files, deletion targets, and validation
   commands needed for its closure without relying on downstream prompt

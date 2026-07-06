@@ -1,18 +1,18 @@
 ---
 id: AD.13
-title: Shared Graft Boundary Surface Reset
+title: ULID Message Identity Reset
 status: planned
-branch: feature/pAD-s13-shared-graft-boundary-surface-reset
-worktree: ../atm-core-worktrees/feature/pAD-s13-shared-graft-boundary-surface-reset
+branch: feature/pAD-s13-ulid-message-identity-reset
+worktree: ../atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset
 target: integrate/phase-AD
 ---
 
-# Sprint AD.13 — Shared Graft Boundary Surface Reset
+# Sprint AD.13 — ULID Message Identity Reset
 
 ## Goal
 
-- remove graft-only session and stream protocol concepts from the shared
-  `atm-core` and `atm-daemon-client` boundary surface
+- remove all retained UUID usage from the accepted ATM code path so message
+  identity, schema/tooling, and supporting uniqueness helpers are ULID-only
 
 ## Hard Dependencies
 
@@ -22,94 +22,103 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
-- `crates/atm-core/src/boundary/mod.rs`
-- `crates/atm-core/src/graft.rs`
-- `crates/atm-core/src/lib.rs`
-- `crates/atm-daemon-client/src/wire.rs`
-- `docs/atm-core/requirements.md`
-- `docs/atm-core/boundaries.md`
-- `docs/atm-daemon/protocol-icd.md`
-- `docs/atm-daemon/requirements.md`
-- `docs/atm-daemon/architecture.md`
+- `Cargo.toml`
+- `Cargo.lock`
+- `crates/atm-core/Cargo.toml`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/persistence.rs`
+- `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/schema/inbox_message.rs`
+- `crates/atm-core/tests/mailbox_locking.rs`
+- `crates/atm-storage/Cargo.toml`
+- `crates/atm-storage/src/schema/inbox_message.rs`
+- `crates/atm-storage-rusqlite/src/writer/ops.rs`
+- `tools/schema_models/atm_message_schema.py`
+- `tools/schema_models/test_schema_models.py`
+- `docs/adr/ADR-012-one-message-identity.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/architecture.md`
 
 ## Interfaces To Add Or Modify
 
-The accepted shared dispatcher contract after this sprint is:
+The accepted ATM message-id boundary after this sprint is:
 
 ```rust
-pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+pub struct AtmMessageId(Ulid);
+
+impl FromStr for AtmMessageId {
+    type Err = AtmError;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        Ulid::from_str(raw)
+            .map(Self)
+            .map_err(|_| AtmError::invalid_message_id("expected ULID"))
+    }
 }
 ```
 
-The accepted shared graft contract after this sprint is:
+Retained serialized message-id fields are ULID text only:
 
 ```rust
-pub trait AtmGraftClient: Send + Sync {
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
+pub struct InboxMessage {
+    pub message_id: AtmMessageId,
+    pub parent_message_id: Option<AtmMessageId>,
 }
 ```
 
 ## Paths To Delete
 
-- `RequestDispatcher::dispatch_advisory_stream(...)`
-- `AdvisoryStreamSink`
-- `AdvisorySessionPort`
-- `AdvisorySessionId`
-- `AdvisorySession`
-- `AdvisorySessionState`
-- `AdvisorySessionRegistrationRequest`
-- `AdvisorySessionRegistrationResponse`
-- `AdvisorySessionUnregistrationRequest`
-- `AdvisorySessionUnregistrationResponse`
-- `AdvisoryFetchRequest`
-- `AdvisoryFetchResponse`
-- `AdvisoryDrainRequest`
-- `AdvisoryDrainResponse`
-- `AdvisoryStreamRequest`
-- `AdvisoryStreamResponse`
-- advisory register/unregister/fetch/drain/stream packet kinds from
-  `crates/atm-daemon-client/src/wire.rs`
-- advisory register/unregister/fetch/drain/stream rows from
-  `docs/atm-daemon/protocol-icd.md`
-- shared advisory packet-family claims from `docs/atm-core/requirements.md`
-- advisory packet-family and queue-ownership claims from
-  `docs/atm-daemon/architecture.md`
+- the `uuid` workspace dependency and all crate-local `uuid` dependencies
+- `AtmMessageId::from_uuid_wire(...)`
+- `AtmMessageId::into_uuid_wire(...)`
+- `impl From<Uuid> for AtmMessageId`
+- `impl From<AtmMessageId> for Uuid`
+- UUID parse fallback in retained `AtmMessageId::from_str` paths
+- UUID-wire serde helpers for retained inbox message schemas
+- UUID-typed message-id fields and tests in `tools/schema_models/*`
+- retained CLI/runtime error text that advertises UUID-form ATM message ids as
+  valid accepted input
+- UUID-backed mailbox/test helper construction where ULID generation is
+  sufficient
+- UUID temp-file suffix generation in `crates/atm-core/src/persistence.rs`
+- UUID-compatible service-addressing or boundary-encoding claims from
+  `docs/requirements.md`, `docs/architecture.md`,
+  `docs/atm-core/architecture.md`, and `ADR-012`
 
 ## Deliverables
 
-- the shared ATM boundary no longer models daemon-owned graft session lifecycle
-- the accepted daemon wire registry no longer carries graft-only advisory
-  packet families
-- shared boundary docs and daemon protocol docs no longer claim daemon-owned
-  graft advisory stream/session protocol as the accepted design
-- shared requirements docs no longer reserve graft session/stream concepts in
-  `atm-core` or `atm-daemon`
+- retained ATM message identity is ULID-only across code, tooling, and
+  accepted docs
+- the workspace no longer depends on `uuid`
+- retained tests and fixtures generate ULIDs instead of UUIDs
+- persistence helpers no longer use UUIDs for uniqueness
 
 ## This Sprint Does Not Close
 
-- daemon runtime deletion
-- `atm-graft` implementation rewrite
-- smoke/readiness closeout
+- graft boundary reset
+- daemon advisory runtime deletion
+- `atm-graft` receiver reset
+- final smoke/readiness closeout
 
 ## Acceptance Criteria
 
-- `atm-core` exports no shared graft advisory session/stream DTO surface
-- `atm-daemon-client` exports no graft-only advisory packet kinds
-- `docs/atm-daemon/protocol-icd.md`, `docs/atm-daemon/requirements.md`, and
-  `docs/atm-core/boundaries.md` describe the reset boundary rather than
-  daemon-owned graft session queues
-- `docs/atm-core/requirements.md` and `docs/atm-daemon/architecture.md` no
-  longer lock the shared boundary into graft session/stream packet families
-- no remaining accepted boundary doc tells implementers to add graft-specific
-  stream methods back to `RequestDispatcher`
+- no retained ATM code path parses, emits, serializes, stores, or documents
+  UUID-form message ids as accepted input/output
+- `Cargo.toml`, `Cargo.lock`, `crates/atm-core/Cargo.toml`, and
+  `crates/atm-storage/Cargo.toml` contain no `uuid` dependency
+- retained uniqueness helpers use ULID or another non-UUID mechanism, with no
+  remaining `uuid::` imports in the workspace
+- `ADR-012`, `docs/requirements.md`, `docs/architecture.md`, and
+  `docs/atm-core/architecture.md` describe ULID-only retained ATM message
+  identity
+- no accepted implementation or doc path tells developers to preserve
+  UUID/ULID bridge code
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `python3 .just/run_lint.py all`
-- `rg -n "dispatch_advisory_stream|AdvisoryStreamSink|AdvisorySessionPort|Advisory(Register|Unregister|Fetch|Drain|Stream)" crates/atm-core crates/atm-daemon-client`
+- `rg -n "from_uuid_wire|into_uuid_wire|uuid::|\\bUuid\\b|\\buuid\\b|ULID or UUID|UUID wire|UUID-formatted --message-id|UUID-based suffixes" crates tools Cargo.toml Cargo.lock docs/requirements.md docs/architecture.md docs/atm-core/architecture.md docs/adr/ADR-012-one-message-identity.md`
 - `git diff --check`

@@ -2371,8 +2371,8 @@ Phase O adds three architecture-level hardening decisions:
      eviction
 
 3. **Atomic writes must use collision-proof temp names**
-   - temp files for atomic replacement must use UUID-based suffixes instead of
-     timestamp-only suffixes
+   - temp files for atomic replacement must use ULID-based or equivalently
+     collision-proof non-UUID suffixes instead of timestamp-only suffixes
    - this keeps same-process rapid writes to the same target path from
      colliding on the temp-file name while preserving the target basename for
      operator debugging
