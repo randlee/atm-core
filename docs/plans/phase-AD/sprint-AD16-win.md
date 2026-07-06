@@ -76,3 +76,37 @@ target: integrate/phase-AD
 7. Re-run the failed validation plus the full original validation set.
 8. Push the branch and report the final commit hash, validation results, and
    any CI evidence.
+
+## Windows Execution Report
+
+- execution date: `2026-07-06`
+- host: native Windows
+- branch: `feature/pAD-s16-thin-graft-receiver-reset`
+
+### Windows-only fix applied
+
+- none required for runtime or test behavior
+- applied formatter-required module ordering in `crates/atm-daemon/src/lib.rs`
+  so Windows lint reached a clean pass state
+
+### Commands run
+
+- `python .just/run_lint.py all`
+- `just test`
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `rg -n "AdvisorySessionPort|ActiveAdvisoryStream|Advisory(Register|Unregister|Fetch|Drain|Stream)" crates/atm-graft`
+- `git diff --check`
+
+### Results
+
+- `python .just/run_lint.py all`: PASS
+- `just test`: PASS
+- `cargo test --workspace`: PASS
+- `cargo clippy --workspace -- -D warnings`: PASS
+- sprint grep: PASS
+- `git diff --check`: PASS
+
+### Remaining findings for mac follow-up
+
+- none from native Windows execution
