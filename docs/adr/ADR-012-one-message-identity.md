@@ -65,3 +65,8 @@ Implementation status:
 - No `legacy_message_id` code paths remain under `crates/atm-rusqlite/`; any
   surviving `legacy_*` references are historical planning or removal-ledger
   context only.
+- `AD.13` closes the retained UUID-compatibility consequence on
+  `feature/pAD-s13-ulid-message-identity-reset`.
+- The accepted ATM line no longer depends on the `uuid` crate, no retained
+  `AtmMessageId` path accepts or emits UUID-form message ids, and retained
+  schemas/tooling document ULID-only ATM message identity.

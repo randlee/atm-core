@@ -5,76 +5,75 @@
   a triage:Finding ;
   triage:findingId "AD-ADVISORY-RELOCATE-001" ;
   triage:title "Graft Boundary Surface Not Deleted Per AD.12" ;
-  triage:description "Sprint AD.14 was supposed to delete the graft-only advisory session/stream protocol surface (AdvisorySessionPort, AdvisorySession/SessionState, AdvisorySessionRegistration/Unregistration, AdvisoryFetch/Drain/Stream Request/Response, dispatch_advisory_stream) from the shared atm-core/atm-daemon-client boundary per AD.12's ratified unary-only RequestDispatcher/AtmGraftClient interfaces. Instead, the surface was relocated verbatim into crates/atm-daemon-client/src/graft_rpc.rs and crates/atm-daemon/src/advisory_runtime.rs + graft_dispatch.rs, with boundary documentation re-ratified as permanent architecture without ADR." ;
+  triage:description "Sprint AD.14 relocated the graft-only advisory session/stream protocol surface (AdvisorySessionPort, AdvisorySession/SessionState, AdvisorySessionRegistration/Unregistration, AdvisoryFetch/Drain/Stream Request/Response, dispatch_advisory_stream) into crates/atm-daemon-client/src/graft_rpc.rs and crates/atm-daemon/src/advisory_runtime.rs + graft_dispatch.rs. Per AD.12's ratified unary-only RequestDispatcher/AtmGraftClient interfaces, this surface must be deleted entirely from the boundary. Sprint AD.15 deleted advisory_runtime.rs and graft_dispatch.rs but left graft_rpc.rs, leaving the relocation incomplete." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATQ" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-07-05T00:00:00Z"^^xsd:dateTime ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/3> ;
-  triage:openOn <urn:atm:triage:worktree/AD14/2bc4667c> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD15/0ab5d105> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD14/2bc4667c> .
+  triage:openOn <urn:atm:triage:worktree/AD16/2dac4e8e> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD16/2dac4e8e> .
 
 <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-client/src/graft_rpc.rs" ;
   triage:line 1 ;
-  triage:snippet "use std::fmt; use std::io::{Read, Write}; use std::num::NonZeroUsize;" ;
+  triage:snippet "Advisory protocol surface for graft session management" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:headSha "2bc4667c" ;
-  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+  triage:headSha "349ffa430e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD14/349ffa430e> .
 
 <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
   triage:line 1 ;
   triage:snippet "advisory_runtime: module for graft protocol session management" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:headSha "2bc4667c" ;
-  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "b0285943fb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD15/b0285943fb> .
 
 <urn:atm:triage:occurrence/AD-ADVISORY-RELOCATE-001/AD14/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
   triage:line 1 ;
   triage:snippet "graft_dispatch: RequestEnvelope dispatch handler" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:headSha "2bc4667c" ;
-  triage:occursIn <urn:atm:triage:worktree/AD14/2bc4667c> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "b0285943fb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD15/b0285943fb> .
 
-<urn:atm:triage:worktree/AD14/2bc4667c>
+<urn:atm:triage:worktree/AD14/349ffa430e>
   a triage:WorktreeSnapshot ;
   triage:branch "pAD-s14-shared-graft-boundary-surface-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:headSha "2bc4667c" ;
+  triage:headSha "349ffa430e" ;
   triage:orderIndex 14 ;
   triage:branchState "open" .
 
-<urn:atm:triage:worktree/AD15/0ab5d105>
+<urn:atm:triage:worktree/AD15/b0285943fb>
   a triage:WorktreeSnapshot ;
   triage:branch "pAD-s15-daemon-advisory-runtime-deletion" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
-  triage:headSha "0ab5d105" ;
+  triage:headSha "b0285943fb" ;
   triage:orderIndex 15 ;
-  triage:branchState "fixed_partial" .
+  triage:branchState "open" .
 
-<urn:atm:triage:worktree/AD16/0ab5d105>
+<urn:atm:triage:worktree/AD16/2dac4e8e>
   a triage:WorktreeSnapshot ;
   triage:branch "pAD-s16-thin-graft-receiver-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
-  triage:headSha "0ab5d105" ;
+  triage:headSha "2dac4e8e" ;
   triage:orderIndex 16 ;
-  triage:branchState "fixed_partial" .
+  triage:branchState "open" .
