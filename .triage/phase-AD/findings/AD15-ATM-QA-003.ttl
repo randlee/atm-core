@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "AD15-ATM-QA-003" ;
+  triage:title "Stale test-module naming after advisory runtime deletion" ;
+  triage:description "crates/atm-daemon/src/tests_advisory.rs / mod tests_advisory in lib.rs now exclusively tests the direct post-send graft-warning path, not advisory-runtime behavior; name is misleading given advisory_runtime.rs was deleted this sprint." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:highestOpenBranch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:promoteToBranch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 1 ;
+  triage:snippet "Module tests_advisory contains graft-warning tests, not advisory_runtime tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 1 ;
+  triage:snippet "Module tests_advisory contains graft-warning tests, not advisory_runtime tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD15-ATM-QA-003/pAD-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 1 ;
+  triage:snippet "Module tests_advisory contains graft-warning tests, not advisory_runtime tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "docs/atm-core/requirements.md never updated to describe ULID-only identity" ;
+  triage:description "REQ-CORE-STORE-001 (lines 148-151) describes AtmMessageId/message_id with zero mention of ULID or UUID. Must clarify canonical ULID-only text format, consistent with ADR-012 and docs/requirements.md." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-05T22:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 148 ;
+  triage:snippet "REQ-CORE-STORE-001 `atm-core` owns the SQLite schema contract, canonical `message_key` row-key model, the one-logical-message-identity rule (`AtmMessageId`), and required lookup/dedupe constraints for the compatible `message_id` wire form." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:worktree/pAD-s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
+  triage:orderIndex 999 .

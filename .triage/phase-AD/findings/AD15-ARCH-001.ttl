@@ -1,0 +1,144 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "AD15-ARCH-001" ;
+  triage:title "Stale AdvisoryRuntime guidance in non-Exact-Target daemon doc" ;
+  triage:description "docs/atm-daemon/observability.md:112,200,231 -- still lists AdvisoryRuntime as a 'Recommended daemon subsystem enum member' without the historical/retired qualifier given to sibling retired subsystems (NotificationRuntime/WatchRuntime/ReconcileRuntime), and still lists the now-deleted advisory_runtime.rs/tests_advisory.rs as forward V.2 migration targets. Deduplicated finding from arch-qa ARCH-001 = req-qa ATM-QA-002 on AD15-QA-1 (PR #480)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ARCH-001/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ARCH-001/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-ARCH-001/s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 112 ;
+  triage:snippet "AdvisoryRuntime listed as Recommended without historical qualifier" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s15/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 200 ;
+  triage:snippet "advisory_runtime.rs listed as V.2 migration target (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s15/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 231 ;
+  triage:snippet "tests_advisory.rs listed in wiring/test surfaces (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s16/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 112 ;
+  triage:snippet "AdvisoryRuntime listed as Recommended without historical qualifier" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s16/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 200 ;
+  triage:snippet "advisory_runtime.rs listed as V.2 migration target (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s16/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 231 ;
+  triage:snippet "tests_advisory.rs listed in wiring/test surfaces (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s17/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 112 ;
+  triage:snippet "AdvisoryRuntime listed as Recommended without historical qualifier" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s17/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 200 ;
+  triage:snippet "advisory_runtime.rs listed as V.2 migration target (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD15-ARCH-001/s17/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/observability.md" ;
+  triage:line 231 ;
+  triage:snippet "tests_advisory.rs listed in wiring/test surfaces (file deleted)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 3 .

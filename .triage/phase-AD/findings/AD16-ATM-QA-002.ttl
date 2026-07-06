@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "AD16-ATM-QA-002" ;
+  triage:title "Self-contradictory phase-status frontmatter" ;
+  triage:description "docs/plans/phase-AD/plan-phase-AD.md:3 on feature/pAD-s16-thin-graft-receiver-reset declares status: complete in YAML frontmatter while its own body (Phase Exit Criteria section) still requires AD.17-20 completion, and develop's copy of the same file says status: active. Reported by req-qa in AD16-QA-1 (PR #481)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T10:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-ATM-QA-002/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-ATM-QA-002/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-ATM-QA-002/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-ATM-QA-002/s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/2bc4667c> ;
+  triage:openOn <urn:atm:triage:worktree/s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-ATM-QA-002/s14/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/plan-phase-AD.md" ;
+  triage:line 3 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD16-ATM-QA-002/s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/plan-phase-AD.md" ;
+  triage:line 3 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD16-ATM-QA-002/s16/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/plan-phase-AD.md" ;
+  triage:line 3 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-ATM-QA-002/s17/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/plan-phase-AD.md" ;
+  triage:line 3 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+<urn:atm:triage:worktree/s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .
