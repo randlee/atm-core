@@ -72,6 +72,7 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     match error.code {
         AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
@@ -94,6 +95,8 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::RuntimeRootInvalid
+        | AtmErrorCode::RuntimeBootstrapRefused
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected

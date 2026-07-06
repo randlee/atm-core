@@ -1,5 +1,4 @@
 use anyhow::Result;
-use atm_core::home;
 use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
 use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
@@ -8,7 +7,7 @@ use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
 use crate::commands::util::parse_timestamp;
-use crate::composition::CliComposition;
+use crate::composition::{CliComposition, resolve_command_runtime_context};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -78,11 +77,11 @@ pub struct ReadCommand {
 impl ReadCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
-        let query = self.build_query(home_dir, current_dir)?;
-        let composition = CliComposition::bootstrap("read", observability)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
+        let composition =
+            CliComposition::bootstrap("read", observability, &current_dir, &home_dir)?;
         let outcome = composition.receive(query)?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {

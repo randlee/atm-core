@@ -151,6 +151,16 @@ pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, Atm
 
 /// # Errors
 ///
+/// Returns [`AtmError`] when the canonical same-host daemon socket path for
+/// `home_dir` cannot be resolved into a local IPC endpoint.
+pub fn resolve_daemon_local_ipc_endpoint_from_home(
+    home_dir: &Path,
+) -> Result<DaemonLocalIpcEndpoint, AtmError> {
+    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path_from_home(home_dir))
+}
+
+/// # Errors
+///
 /// Returns [`AtmError`] when the current host executable path cannot be
 /// resolved into the sibling `atm-daemon` binary path.
 ///

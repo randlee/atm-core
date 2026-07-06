@@ -4,6 +4,7 @@
 )]
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -13,6 +14,7 @@ use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
+use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
@@ -26,7 +28,8 @@ use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
+    resolve_daemon_local_ipc_endpoint_from_home, try_connect as daemon_try_connect,
     unexpected_response,
 };
 #[cfg(test)]
@@ -76,6 +79,77 @@ impl ReceiveCommandEntryPoint {
     pub(crate) const fn new() -> Self {
         Self
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CliBootstrapError {
+    AtmHomeUnresolved {
+        command: &'static str,
+    },
+    RuntimeRootInvalid {
+        command: &'static str,
+        atm_home: PathBuf,
+        invocation_dir: PathBuf,
+    },
+    RuntimeBootstrapRefused {
+        command: &'static str,
+        atm_home: PathBuf,
+        daemon_endpoint: PathBuf,
+    },
+}
+
+impl CliBootstrapError {
+    fn into_atm_error(self) -> AtmError {
+        match self {
+            Self::AtmHomeUnresolved { command } => AtmError::atm_home_unresolved(format!(
+                "failed to resolve ATM_HOME before bootstrapping `atm {command}`"
+            )),
+            Self::RuntimeRootInvalid {
+                command,
+                atm_home,
+                invocation_dir,
+            } => AtmError::runtime_root_invalid(format!(
+                "invalid runtime root for `atm {command}`: atm_home={} invocation_dir={}",
+                atm_home.display(),
+                invocation_dir.display()
+            )),
+            Self::RuntimeBootstrapRefused {
+                command,
+                atm_home,
+                daemon_endpoint,
+            } => AtmError::runtime_bootstrap_refused(format!(
+                "refused bootstrap for `atm {command}` because daemon endpoint {} does not match the canonical ATM_HOME root {}",
+                daemon_endpoint.display(),
+                atm_home.display()
+            )),
+        }
+    }
+}
+
+pub(crate) fn resolve_command_runtime_context(
+    command: &'static str,
+) -> Result<(PathBuf, PathBuf), AtmError> {
+    let invocation_dir = home::command_invocation_dir().map_err(|error| {
+        log_runtime_root_failure(command, &error);
+        error
+    })?;
+    let atm_home = home::atm_home().map_err(|source| {
+        let error = CliBootstrapError::AtmHomeUnresolved { command }
+            .into_atm_error()
+            .with_source(source);
+        log_runtime_root_failure(command, &error);
+        error
+    })?;
+    Ok((atm_home, invocation_dir))
+}
+
+fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
+    tracing::error!(
+        command,
+        error_code = %error.code.as_str(),
+        error = %error,
+        "raw cli runtime-root failure"
+    );
 }
 
 #[derive(Debug)]
@@ -337,8 +411,48 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
+        invocation_dir: &Path,
+        atm_home: &Path,
     ) -> Result<Self, AtmError> {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
+        let canonical_endpoint =
+            resolve_daemon_local_ipc_endpoint_from_home(atm_home).map_err(|source| {
+                let error = CliBootstrapError::RuntimeRootInvalid {
+                    command,
+                    atm_home: atm_home.to_path_buf(),
+                    invocation_dir: invocation_dir.to_path_buf(),
+                }
+                .into_atm_error()
+                .with_source(source);
+                log_runtime_root_failure(command, &error);
+                error
+            })?;
+        let endpoint =
+            if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+                let overridden = resolve_daemon_local_ipc_endpoint().map_err(|source| {
+                    let error = CliBootstrapError::RuntimeRootInvalid {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        invocation_dir: invocation_dir.to_path_buf(),
+                    }
+                    .into_atm_error()
+                    .with_source(source);
+                    log_runtime_root_failure(command, &error);
+                    error
+                })?;
+                if overridden.as_ref() != canonical_endpoint.as_ref() {
+                    let error = CliBootstrapError::RuntimeBootstrapRefused {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        daemon_endpoint: overridden.as_ref().to_path_buf(),
+                    }
+                    .into_atm_error();
+                    log_runtime_root_failure(command, &error);
+                    return Err(error);
+                }
+                overridden
+            } else {
+                canonical_endpoint
+            };
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
@@ -1191,32 +1305,30 @@ mod tests {
     }
 
     #[test]
-    fn launch_gate_is_host_wide_across_different_atm_home_roots() {
+    fn launch_gate_isolation_tracks_the_explicit_atm_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
-        let user_home = tempdir.path().join("user-home");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
-        let first_atm_home = user_home.join("workspace-a");
-        let second_atm_home = user_home.join("workspace-b");
-        let first_socket = first_atm_home.join(".atm").join("daemon.sock");
-        let second_socket = second_atm_home.join(".atm").join("daemon.sock");
+        let first_atm_home = tempdir.path().join("workspace-a");
+        let second_atm_home = tempdir.path().join("workspace-b");
+        let first_runtime_dir = atm_core::home::host_runtime_dir_from_home(&first_atm_home);
+        let second_runtime_dir = atm_core::home::host_runtime_dir_from_home(&second_atm_home);
 
         let first =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(first_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("first acquire");
         assert!(first.is_some());
         let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(second_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("second acquire");
         assert!(
-            second.is_none(),
-            "different ATM_HOME roots must share one launch gate"
+            second.is_some(),
+            "different ATM_HOME roots must not share one launch gate"
         );
-        assert_ne!(first_socket, second_socket);
         drop(first);
+        drop(second);
     }
 
     #[test]
-    fn host_runtime_lock_path_ignores_atm_home() {
+    fn host_runtime_lock_path_follows_the_explicit_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = atm_core::home::host_runtime_lock_path_from_home(
             tempdir.path(),
@@ -1230,6 +1342,44 @@ mod tests {
                 .join(".atm")
                 .join("daemon")
                 .join("launch.lock")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn bootstrap_refuses_conflicting_daemon_socket_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let invocation_dir = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            (
+                "ATM_DAEMON_SOCKET",
+                Some(
+                    tempdir
+                        .path()
+                        .join("other.sock")
+                        .to_str()
+                        .expect("utf8 socket"),
+                ),
+            ),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let error = CliComposition::bootstrap(
+            "send",
+            &CliObservability::fallback(),
+            &invocation_dir,
+            &atm_home,
+        )
+        .expect_err("conflicting daemon socket override should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeBootstrapRefused
         );
     }
 

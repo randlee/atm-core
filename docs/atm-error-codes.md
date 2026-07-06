@@ -54,6 +54,7 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.1 Config And Identity
 
 - `ATM_CONFIG_HOME_UNAVAILABLE`
+- `ATM_HOME_UNRESOLVED`
 - `ATM_CONFIG_PARSE_FAILED`
 - `ATM_CONFIG_TEAM_PARSE_FAILED`
 - `ATM_CONFIG_TEAM_MISSING`
@@ -339,6 +340,8 @@ surface.
 - `ATM_DAEMON_SHUTDOWN_TIMEOUT`
 - `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
 - `ATM_DAEMON_UNAVAILABLE`
+- `ATM_RUNTIME_ROOT_INVALID`
+- `ATM_RUNTIME_BOOTSTRAP_REFUSED`
 - `ATM_DAEMON_CLIENT_TIMEOUT`
 - drop-time best-effort cleanup may log `ATM_DAEMON_CLIENT_TIMEOUT` as a
   warning because the mailbox command has already succeeded, but public
@@ -360,7 +363,7 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_HOME_UNRESOLVED`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
@@ -407,6 +410,7 @@ Classification rules:
 | `AtmErrorCode` | Classification |
 | --- | --- |
 | `ATM_CONFIG_HOME_UNAVAILABLE` | `operator_actionable` |
+| `ATM_HOME_UNRESOLVED` | `operator_actionable` |
 | `ATM_CONFIG_PARSE_FAILED` | `operator_actionable` |
 | `ATM_CONFIG_TEAM_PARSE_FAILED` | `operator_actionable` |
 | `ATM_CONFIG_TEAM_MISSING` | `operator_actionable` |
@@ -470,6 +474,8 @@ Classification rules:
 | `ATM_DAEMON_SHUTDOWN_TIMEOUT` | `operator_actionable` |
 | `ATM_DAEMON_SIGNAL_RELOAD_FAILED` | `operator_actionable` |
 | `ATM_DAEMON_UNAVAILABLE` | `operator_actionable` |
+| `ATM_RUNTIME_ROOT_INVALID` | `operator_actionable` |
+| `ATM_RUNTIME_BOOTSTRAP_REFUSED` | `fail_closed` |
 | `ATM_DAEMON_CLIENT_TIMEOUT` | `retryable` |
 | `ATM_DAEMON_LAUNCH_GATE_REJECTED` | `fail_closed` |
 | `ATM_DAEMON_SERVING_STATE_REJECTED` | `fail_closed` |

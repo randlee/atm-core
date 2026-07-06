@@ -91,6 +91,7 @@ impl ProtocolErrorEnvelope {
 const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
     match code {
         AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
@@ -103,6 +104,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
         AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::RuntimeRootInvalid
+        | AtmErrorCode::RuntimeBootstrapRefused
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
@@ -619,14 +622,19 @@ pub fn read_bounded_stream(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the host-scoped ATM runtime root cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM runtime root cannot be resolved.
 pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
     if let Some(path) = env::var_os("ATM_DAEMON_SOCKET").filter(|value| !value.is_empty()) {
         return Ok(platform_local_ipc_endpoint_path(PathBuf::from(path)));
     }
-    Ok(platform_local_ipc_endpoint_path(
-        home::host_runtime_dir()?.join("atm-daemon.sock"),
-    ))
+    Ok(daemon_socket_path_from_home(&home::atm_home()?))
+}
+
+/// Resolve the canonical daemon socket path for one accepted ATM home root.
+pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
+    platform_local_ipc_endpoint_path(
+        home::host_runtime_dir_from_home(home_dir).join("atm-daemon.sock"),
+    )
 }
 
 /// Resolve the active local IPC name for the ATM request transport.

@@ -32,70 +32,82 @@ pub fn user_home() -> Result<PathBuf, AtmError> {
     resolve_user_home()
 }
 
-/// Resolve the host-scoped ATM runtime directory independent of `ATM_HOME`.
+/// Resolve the invocation directory for the active ATM command process.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
-pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_dir_from_home(&resolve_user_home()?))
+/// Returns [`AtmError`] when the process working directory cannot be resolved.
+pub fn command_invocation_dir() -> Result<PathBuf, AtmError> {
+    env::current_dir().map_err(|source| {
+        AtmError::runtime_root_invalid("failed to resolve the ATM command invocation directory")
+            .with_recovery(
+                "Run the ATM command from a readable working directory or repair the workspace path before retrying.",
+            )
+            .with_source(source)
+    })
 }
 
-/// Resolve the host-scoped ATM runtime directory from an explicit user-home root.
+/// Resolve the host-scoped ATM runtime directory from the accepted ATM home.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
+pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_dir_from_home(&atm_home()?))
+}
+
+/// Resolve the host-scoped ATM runtime directory from an explicit ATM home root.
 pub fn host_runtime_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("daemon")
 }
 
-/// Resolve the host-scoped ATM runtime lock-file path independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM runtime lock-file path from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(
-        &resolve_user_home()?,
-        file_name,
-    ))
+    Ok(host_runtime_lock_path_from_home(&atm_home()?, file_name))
 }
 
-/// Resolve the host-scoped ATM runtime lock-file path from an explicit user-home root.
+/// Resolve the host-scoped ATM runtime lock-file path from an explicit ATM home root.
 pub fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
     host_runtime_dir_from_home(home_dir).join(file_name)
 }
 
-/// Resolve the host-scoped ATM durable-state directory independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM durable-state directory from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_db_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_db_dir_from_home(&resolve_user_home()?))
+    Ok(host_db_dir_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM durable-state directory from an explicit user-home root.
+/// Resolve the host-scoped ATM durable-state directory from an explicit ATM home root.
 pub fn host_db_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("db")
 }
 
-/// Resolve the host-scoped ATM durable mailbox database path independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM durable mailbox database path from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_mail_db_path() -> Result<PathBuf, AtmError> {
-    Ok(host_mail_db_path_from_home(&resolve_user_home()?))
+    Ok(host_mail_db_path_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM durable mailbox database path from an explicit user-home root.
+/// Resolve the host-scoped ATM durable mailbox database path from an explicit ATM home root.
 pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
     host_db_dir_from_home(home_dir).join("mail.db")
 }
 
-/// Resolve the host-scoped ATM retained log directory independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM retained log directory from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_log_dir() -> Result<PathBuf, AtmError> {
     if let Some(raw_path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
         let raw_path = raw_path.to_str().ok_or_else(|| {
@@ -128,10 +140,10 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
         return Ok(path);
     }
 
-    Ok(host_log_dir_from_home(&resolve_user_home()?))
+    Ok(host_log_dir_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM retained log directory from an explicit user-home root.
+/// Resolve the host-scoped ATM retained log directory from an explicit ATM home root.
 pub fn host_log_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("logs")
 }
@@ -232,10 +244,10 @@ mod tests {
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        atm_home, host_db_dir_from_home, host_log_dir, host_log_dir_from_home,
-        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
-        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
+        host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
+        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
+        team_dir_from_home, workflow_state_path_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -400,7 +412,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_runtime_dir_uses_os_home_not_atm_home() {
+    fn host_runtime_dir_uses_atm_home_when_present() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home_dir = TempDir::new().expect("atm home tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -412,7 +424,7 @@ mod tests {
         ]);
 
         let resolved = host_runtime_dir().expect("host runtime dir");
-        assert_eq!(resolved, tempdir.path().join(".atm").join("daemon"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("daemon"));
     }
 
     #[test]
@@ -427,7 +439,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_db_dir_uses_os_home_not_atm_home() {
+    fn host_db_dir_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -442,7 +454,7 @@ mod tests {
         ]);
 
         let resolved = host_db_dir().expect("host db dir");
-        assert_eq!(resolved, os_home_dir.path().join(".atm").join("db"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("db"));
     }
 
     #[test]
@@ -457,7 +469,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_mail_db_path_uses_os_home_not_atm_home() {
+    fn host_mail_db_path_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -474,7 +486,7 @@ mod tests {
         let resolved = host_mail_db_path().expect("host mail db path");
         assert_eq!(
             resolved,
-            os_home_dir.path().join(".atm").join("db").join("mail.db")
+            atm_home_dir.path().join(".atm").join("db").join("mail.db")
         );
     }
 
@@ -528,7 +540,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_log_dir_uses_os_home_not_atm_home() {
+    fn host_log_dir_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -544,7 +556,15 @@ mod tests {
         ]);
 
         let resolved = host_log_dir().expect("host log dir");
-        assert_eq!(resolved, os_home_dir.path().join(".atm").join("logs"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("logs"));
+    }
+
+    #[test]
+    fn command_invocation_dir_matches_process_working_directory() {
+        let expected = std::env::current_dir().expect("current dir");
+        let resolved = command_invocation_dir().expect("command invocation dir");
+
+        assert_eq!(resolved, expected);
     }
 
     #[test]
