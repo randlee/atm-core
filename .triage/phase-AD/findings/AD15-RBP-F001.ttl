@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AD15-RBP-F001" ;
+  triage:title "atm-graft client's advisory session/stream surface still fully wired to a daemon protocol that no longer exists" ;
+  triage:description "crates/atm-graft/src/{lib.rs,transport.rs,runtime.rs} -- AdvisorySessionPort's register/unregister/fetch/drain/open_advisory_stream methods connect to resolve_daemon_local_ipc_endpoint() (the same socket as ordinary CLI traffic) and encode graft-specific message kinds (0x0008-0x100c, defined in atm-daemon-client/src/graft_rpc.rs) that atm-core/src/protocol.rs::MessageKind::try_from does not recognize -- any real invocation surfaces a generic, misleadingly-worded protocol-version-skew validation error instead of a clean typed failure." ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:highestOpenBranch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:highestFixedBranch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:promoteToBranch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-RBP-F001/pAD-s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AD15-RBP-F001/pAD-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 73 ;
+  triage:snippet "pub trait AdvisorySessionPort: Send + Sync { fn register_session(...) fn unregister_session(...) fn fetch_nudges(...) fn drain_nudges(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-RBP-F001/pAD-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 106 ;
+  triage:snippet "fn round_trip_graft(&self, request: graft_rpc::RequestEnvelope) -> Result<graft_rpc::ResponseEnvelope, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD15-RBP-F001/pAD-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 217 ;
+  triage:snippet "pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> { ... ctx.client.drain_nudges(ctx.drain_request.clone()) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 2 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 3 ;
+  triage:status "fixed" .
