@@ -1,9 +1,9 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use ulid::Ulid;
 
 use crate::error::{AtmError, AtmErrorKind};
-use uuid::Uuid;
 
 /// Atomically replace one shared mutable ATM-owned state file.
 ///
@@ -92,7 +92,7 @@ fn temp_path_for_atomic_write(path: &Path, label: &str) -> PathBuf {
             .and_then(|name| name.to_str())
             .unwrap_or(label),
         std::process::id(),
-        Uuid::new_v4()
+        Ulid::new()
     ))
 }
 

@@ -28,11 +28,11 @@ interprocess = "2.4.2"
 libc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
-uuid.workspace = true
 fs2 = "0.4"
 same-file = "1"
 sc-observability-types.workspace = true
 parking_lot = "0.12"
+ulid.workspace = true
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }

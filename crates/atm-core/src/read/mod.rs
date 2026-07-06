@@ -83,7 +83,7 @@ impl ReadQuery {
                     value.parse::<AtmMessageId>().map_err(|source| {
                         AtmError::validation(format!("invalid message id: {value}"))
                             .with_recovery(
-                                "Provide a valid UUID-formatted --message-id before retrying `atm read`.",
+                                "Provide a valid ULID-formatted --message-id before retrying `atm read`.",
                             )
                             .with_source(source)
                     })

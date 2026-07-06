@@ -261,30 +261,10 @@ mod tests {
     }
 
     #[test]
-    fn atm_message_id_parses_from_uuid_wire_string() {
-        let parsed: AtmMessageId = "11111111-1111-4111-8111-111111111111"
-            .parse()
-            .expect("parse uuid wire id");
-        assert_eq!(
-            parsed.into_uuid_wire().to_string(),
-            "11111111-1111-4111-8111-111111111111"
-        );
-    }
-
-    #[test]
     fn atm_message_id_parses_from_ulid_string() {
         let (message_id, _) = AtmMessageId::new_with_timestamp();
         let parsed: AtmMessageId = message_id.to_string().parse().expect("parse atm id");
         assert_eq!(parsed, message_id);
-    }
-
-    #[test]
-    fn atm_message_id_uuid_wire_round_trip_preserves_identity() {
-        let message_id: AtmMessageId = "01KRFK5QTF2R6NRS3Q0F8Z9K0S".parse().expect("parse atm id");
-
-        let round_trip = AtmMessageId::from_uuid_wire(message_id.into_uuid_wire());
-
-        assert_eq!(round_trip, message_id);
     }
 
     #[test]
@@ -479,10 +459,7 @@ mod tests {
             json!(format!("atm read --message-id {message_id}"))
         );
         assert_eq!(encoded["summary"], json!("oversized"));
-        assert_eq!(
-            encoded["message_id"],
-            json!(message_id.into_uuid_wire().to_string())
-        );
+        assert_eq!(encoded["message_id"], json!(message_id.to_string()));
     }
 
     #[test]
