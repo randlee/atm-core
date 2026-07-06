@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD14-RBP-F004>
+  a triage:Finding ;
+  triage:findingId "AD14-RBP-F004" ;
+  triage:title "New fallible trait methods undocumented" ;
+  triage:description "GraftRequestDispatcher/GraftStreamSink (graft_dispatch.rs:4-20) lack # Errors doc sections, unlike sibling boundary traits. Reported on AD14-QA-1 (PR #478)." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-RBP-F004/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-RBP-F004/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-RBP-F004/s14/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-RBP-F004/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 5 ;
+  triage:snippet "fn dispatch_graft(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-RBP-F004/s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 7 ;
+  triage:snippet "fn dispatch_graft_stream(&self, request: AdvisoryStreamRequest, sink: &mut dyn GraftStreamSink) -> Result<(), AtmError>;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-RBP-F004/s14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 15 ;
+  triage:snippet "fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError>;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
