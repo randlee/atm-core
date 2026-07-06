@@ -601,9 +601,27 @@ mod tests {
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
         LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
-        open_sqlite_boundary,
+        open_sqlite_boundary, resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
+
+    struct CwdGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = atm_core::home::command_invocation_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).expect("restore current dir");
+        }
+    }
 
     struct LoopbackFixture {
         _env_guard: EnvGuard,
@@ -1341,6 +1359,47 @@ mod tests {
                 .join(".atm")
                 .join("daemon")
                 .join("launch.lock")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let workspace_a = tempdir.path().join("workspace-a");
+        let workspace_b = tempdir.path().join("workspace-b");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&workspace_a).expect("workspace a");
+        std::fs::create_dir_all(&workspace_b).expect("workspace b");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+        ]);
+
+        let (home_a, invocation_a) = {
+            let _cwd = CwdGuard::change_to(&workspace_a);
+            resolve_command_runtime_context("send").expect("workspace a context")
+        };
+        let (home_b, invocation_b) = {
+            let _cwd = CwdGuard::change_to(&workspace_b);
+            resolve_command_runtime_context("send").expect("workspace b context")
+        };
+        let canonical_workspace_a = std::fs::canonicalize(&workspace_a).expect("canonical a");
+        let canonical_workspace_b = std::fs::canonicalize(&workspace_b).expect("canonical b");
+
+        assert_eq!(home_a, atm_home);
+        assert_eq!(home_b, atm_home);
+        assert_eq!(invocation_a, canonical_workspace_a);
+        assert_eq!(invocation_b, canonical_workspace_b);
+        assert_eq!(
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_a)
+                .expect("workspace a daemon endpoint")
+                .as_ref(),
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_b)
+                .expect("workspace b daemon endpoint")
+                .as_ref()
         );
     }
 

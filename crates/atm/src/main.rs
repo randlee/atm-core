@@ -180,7 +180,7 @@ fn run() -> Result<(), AtmError> {
         }
     };
 
-    if let Ok(launch_cwd) = std::env::current_dir() {
+    if let Ok(launch_cwd) = home::command_invocation_dir() {
         tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
     }
 
