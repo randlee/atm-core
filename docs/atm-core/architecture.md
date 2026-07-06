@@ -52,9 +52,9 @@ Consequences:
 - Client and server transports share one contract family.
 - The `atm-graft` crate is allowed only as a thin consumer of that shared
   contract family; it must not introduce a second daemon-specific client API.
-- Thin plugin crates must stay on the shared contract family; if advisory
-  registration or notification streaming is added later, it must extend this
-  shared line rather than introducing a graft-private daemon API.
+- Thin plugin crates must stay on the shared contract family for unary
+  command/request behavior and must not introduce receiver-private stream or
+  session APIs into the shared daemon contract.
 
 Alternatives considered:
 - Keep the protocol modeled as daemon API types.
@@ -102,8 +102,8 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
-- Shared core request and query surfaces must resolve both ULID text and UUID
-  wire text to the same `AtmMessageId`.
+- Shared core request and query surfaces must resolve ULID text only to
+  `AtmMessageId`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
@@ -275,11 +275,6 @@ Phase AC supersession note:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level

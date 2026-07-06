@@ -147,8 +147,8 @@ Initial crate requirement IDs:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` row-key model, the one-logical-message-identity rule
-  (`AtmMessageId`), and required lookup/dedupe constraints for the compatible
-  `message_id` wire form.
+  (`AtmMessageId`), and required lookup/dedupe constraints for the retained
+  ULID `message_id` wire form.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
@@ -159,8 +159,8 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, protocol, transport, config ingress, direct post-send emission,
-  advisory transport, and status-source calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, config ingress, direct post-send emission, and
+  status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
   Phase-Z follow-on note: repository-local lint must also be able to reject
   direct command-entry retained-runtime acquisition in `atm teams`,
@@ -192,9 +192,9 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
   `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
   requirement.
-  The generic session identifier name reserved for the thin-client line is
-  `AdvisorySessionId`; later advisory/session work must build on that
-  generic core-owned name rather than reviving `GraftSessionId`.
+  No graft-private lifecycle, session, queue, or stream identifier is reserved
+  in shared `atm-core`; receiver-private runtime state belongs in the receiver
+  implementation unless it is proven to be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
@@ -332,11 +332,6 @@ Required `atm-core` crate rules:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - `atm-core` framed transport helpers must delimit packets explicitly rather
   than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary
