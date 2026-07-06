@@ -109,7 +109,6 @@ Recommended daemon subsystem enum members:
 - `Bootstrap`
 - `Composition`
 - `LocalIpcTransport`
-- `AdvisoryRuntime`
 - `NotificationRuntime`
 - `PeerTransport`
 - `WatchRuntime`
@@ -121,9 +120,9 @@ Recommended daemon subsystem enum members:
 - `ObservabilitySink`
 
 Historical-runtime note:
-- `NotificationRuntime`, `WatchRuntime`, and `ReconcileRuntime` are retained in
-  this Phase V.1 observability record as historical subsystem names from the
-  earlier compatibility line
+- `AdvisoryRuntime`, `NotificationRuntime`, `WatchRuntime`, and
+  `ReconcileRuntime` are retained in this Phase V.1 observability record as
+  historical subsystem names from the earlier compatibility line
 - they are not accepted live runtime lanes after `ADR-019`
 
 ## Per-Event Context Fields
@@ -197,7 +196,6 @@ It must not own:
 
 `V.2` must migrate event ownership into these daemon subsystems:
 - `crates/atm-daemon/src/local_ipc_transport.rs`
-- `crates/atm-daemon/src/advisory_runtime.rs`
 - `crates/atm-daemon/src/notification_runtime.rs`
 - `crates/atm-daemon/src/peer_transport.rs`
 - `crates/atm-daemon/src/watch_runtime.rs`
@@ -208,9 +206,10 @@ It must not own:
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 
 Historical migration note:
-- the `notification_runtime.rs`, `watch_runtime.rs`, and
-  `reconcile_runtime.rs` entries above are historical Phase V migration targets
-  from the pre-`ADR-019` line only
+- the retired `advisory_runtime.rs`, `notification_runtime.rs`,
+  `watch_runtime.rs`, and `reconcile_runtime.rs` subsystem files remain listed
+  in this document only as historical Phase V migration targets from the
+  pre-`ADR-019` line
 
 Shared wiring and test/support surfaces that must follow the final boundary are
 all `V.2` refactor targets, with `V.3` shim cleanup where compatibility-only
@@ -228,7 +227,7 @@ paths remain:
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/test_support.rs`
 - `crates/atm-daemon/src/tests.rs`
-- `crates/atm-daemon/src/tests_advisory.rs`
+- `crates/atm-daemon/src/tests_post_send_graft_warning.rs`
 - `crates/atm-daemon/src/tests_lifecycle.rs`
 
 First CI-checkable enforcement target for `V.2`:
