@@ -1,0 +1,111 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD18-ARCH-005>
+  a triage:Finding ;
+  triage:findingId "AD18-ARCH-005" ;
+  triage:title "Sprint doc + all reference_docs entirely absent from both feature and integrate worktrees" ;
+  triage:description "The docs/phase-AD/ directory (containing sprint-AD18.md and all phase-AD reference documentation) is systemic missing from all feature branches (s13-s20) and the integrate/phase-AD branch. Root-cause: phase-AD sprint documentation structure not created or merged across any AD branch." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "docs/phase-AD/ directory presence" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-06T11:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/s13/222c57da> ;
+  triage:openOn <urn:atm:triage:worktree/s14/3af451b0> ;
+  triage:openOn <urn:atm:triage:worktree/s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:openOn <urn:atm:triage:worktree/s18/0c8b7d5b> ;
+  triage:openOn <urn:atm:triage:worktree/s19/f5e8732f> ;
+  triage:openOn <urn:atm:triage:worktree/s20/5ac7f11b> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/876241aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/5ac7f11b> ;
+  triage:highestOpenBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:lowestOpenBranch "feature/pAD-s13-ulid-message-identity-reset" .
+
+<urn:atm:triage:worktree/s13/222c57da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "222c57da" ;
+  triage:orderIndex 13 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s14/3af451b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "3af451b0" ;
+  triage:orderIndex 14 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 15 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 16 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 17 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s19/f5e8732f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/s20/5ac7f11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
+
+<urn:atm:triage:worktree/integrate/876241aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "876241aa" ;
+  triage:orderIndex 100 ;
+  triage:status "open" ;
+  triage:docPhaseStatus "absent" .
