@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-DAEMONRUNTIME-001>
+  a triage:Finding ;
+  triage:findingId "AD15-DAEMONRUNTIME-001" ;
+  triage:title "advisory_runtime.rs daemon-side session runtime never deleted" ;
+  triage:description "crates/atm-daemon/src/advisory_runtime.rs is still a fully wired, live 941-line session-lifecycle runtime (register/unregister/fetch/drain/stream, TTL sweep worker, 8 passing tests), implementing GraftPostSendPort and consumed from the live post-send path. AD.14's own fix batch (826b9804) added MAX_ADVISORY_SESSIONS capacity logic ON TOP of this runtime rather than deleting it, entrenching the forbidden concept further. Originally reported during AD14-QA-3 review of PR #478 as ARCH-003, but sprint-AD14.md's scope explicitly excludes crates/atm-daemon/* and defers daemon runtime deletion. sprint-AD15.md's own stated Goal is 'delete daemon-owned graft advisory runtime,' with Exact Targets covering crates/atm-daemon/* and Paths-To-Delete explicitly naming advisory_runtime.rs and its routing in runtime_health.rs/local_ipc_transport*.rs. AD15-FIX-1 (cf3b1e71, verified in AD15-QA-2) only touched atm-graft's CLIENT side crates/atm-graft/src/{lib,transport,runtime}.rs -- the daemon-side deletion that was AD.15's own explicit target was apparently never done, and AD15-QA-2's review-targets never covered it. Team-lead has ruled (user-confirmed 2026-07-06) that this finding is properly AD.15-owned undone work, not an AD.14 violation -- reclassify accordingly rather than treating it as newly discovered on AD.14's branch, and reopen AD.15 for this specific gap." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-DAEMONRUNTIME-001/s14/1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/826b980> ;
+  triage:fixedOn <urn:atm:triage:worktree/s15/cf3b1e7> ;
+  triage:promoteTo <urn:atm:triage:worktree/s15/cf3b1e7> .
+
+<urn:atm:triage:occurrence/AD15-DAEMONRUNTIME-001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "module advisory_runtime: session-lifecycle runtime with GraftPostSendPort impl, TTL sweep worker, register/unregister/fetch/drain/stream operations" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b980" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/826b980> .
+
+<urn:atm:triage:worktree/s14/826b980>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b980" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/cf3b1e7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "cf3b1e7" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/ab66113>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "ab66113" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/fa4e305>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "fa4e305" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/85a1269>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "85a1269" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/c7a3d6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "c7a3d6a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/4fd0ec0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "4fd0ec0" ;
+  triage:orderIndex 20 .
