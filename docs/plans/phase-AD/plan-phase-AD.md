@@ -42,6 +42,11 @@ model in several release-blocking ways:
   whose practical job is appending JSONL events to disk
 - obsolete `[atm].identity` config still trips `ATM_WARNING_IDENTITY_DRIFT`
 - roster and pane truth still drift away from the accepted SQLite-owned model
+- raw `atm` commands can still diverge by worktree/invocation directory,
+  producing unreadable compatibility-only sends unless a wrapper forces the
+  command to run from the primary repo root
+- `atm read --unread` can persist the read mutation but still report the wrong
+  message payload and stale unread counts in the returned result
 
 ## Validated Breakage On Entry
 
@@ -77,9 +82,10 @@ daemon boundary. The new review artifact
 - current daemon, graft, and protocol docs now bless the leaked
   daemon-owned graft session model
 
-`Phase AD` therefore extends past `AD.11` with a corrective boundary-reset
-line. `AD.12` through `AD.17` are not optional cleanup; they are required to
-reach the accepted post-send, message-identity, and graft architecture.
+`Phase AD` therefore extends past `AD.11` with a corrective line. `AD.12`
+through `AD.19` are not optional cleanup; they are required to reach the
+accepted post-send, message-identity, graft, raw CLI runtime-root, and
+read-output consistency architecture.
 
 ## Design Rules
 
@@ -117,6 +123,12 @@ The governing rules are:
 - repo-local `[atm].default_team`, obsolete `[atm].identity`, hook files, and
   daemon ambient environment must never be used to guess missing caller
   context
+- invocation directory and discovered workspace root are not daemon/socket/db
+  selectors; they are only inputs to config ingress, repo/file checks, and
+  hook-relative path resolution
+- `atm read` output after a durable read-state mutation must remain
+  self-consistent: the returned payload and returned counts must describe the
+  post-mutation state of the same selected durable message
 - if caller identity or caller team is unresolved for a command that requires
   caller context, the CLI must fail the command and must not contact the daemon
 - every downstream request DTO for caller-owned daemon-backed commands must
@@ -344,7 +356,7 @@ Phase `AD` orchestration rule:
   sprint, merge the full predecessor chain before starting new work on the
   current sprint
 - sprint branches must merge forward numerically:
-  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11`
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19`
 - do not stop downstream development waiting for prior sprint QA to pass
 - do not run pairwise cross-merges between unrelated `AD` sprint branches
 
@@ -365,6 +377,8 @@ Phase `AD` orchestration rule:
 15. [AD.15 Daemon Advisory Runtime Deletion](./sprint-AD15.md)
 16. [AD.16 Thin Graft Receiver Reset](./sprint-AD16.md)
 17. [AD.17 Boundary Reset Verification Closeout](./sprint-AD17.md)
+18. [AD.18 Raw CLI Runtime Root Unification](./sprint-AD18.md)
+19. [AD.19 Read Mutation Output Consistency Repair](./sprint-AD19.md)
 
 ## Phase Exit Criteria
 
@@ -381,6 +395,11 @@ Phase `AD` closes only when:
   team as required data rather than relying on daemon ambient identity/team
 - retained ATM message-id parsing, persistence, API surfaces, and docs are
   ULID-only with no UUID fallback or conversion bridge
+- raw retained ATM commands behave identically from the primary repo and from
+  sibling worktrees for one `ATM_HOME` / host-home installation, with no
+  wrapper-only `cwd` forcing required for correctness
+- `atm read` no longer mixes original selection ids with next-unread payloads
+  or stale pre-mutation bucket counts after marking a message read
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning

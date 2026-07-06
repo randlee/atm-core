@@ -19,6 +19,12 @@ or doc surface that currently either:
   daemon/core infrastructure
 - preserves UUID-based retained ATM message identity or UUID-specific
   compatibility code even though the accepted line is now ULID-only
+- allows raw CLI command behavior to diverge by worktree/invocation directory
+  so one `ATM_HOME` install can silently bypass the canonical daemon/SQLite
+  path
+- returns internally inconsistent `atm read` mutation output by mixing the
+  original selected message id with the next unread payload and stale
+  pre-mutation bucket counts
 
 ## Accepted Boundary Restatement
 
@@ -50,6 +56,8 @@ The intended boundary is:
 | `crates/atm-daemon/src/tests_advisory.rs` and advisory-specific test seams | Daemon tests currently normalize daemon-owned graft session registration, fetch/drain, and stream behavior as core runtime obligations. | Remove the advisory-runtime test lane and replace it with tests that cover the accepted post-send seam only. |
 | `crates/atm-graft/src/lib.rs`, `runtime.rs`, `transport.rs` | `atm-graft` is coupled to daemon-owned advisory registration, fetch/drain, and dedicated advisory-stream transport. | Reset `atm-graft` to a thin receiver implementation that owns any remaining receiver-side state internally and no longer depends on shared advisory session protocol families. |
 | `Cargo.toml`, `Cargo.lock`, `crates/atm-core/Cargo.toml`, `crates/atm-core/src/schema/inbox_message.rs`, `crates/atm-core/src/mailbox/mod.rs`, `crates/atm-core/src/read/mod.rs`, `crates/atm-core/src/persistence.rs`, `crates/atm-core/tests/mailbox_locking.rs`, `crates/atm-storage/Cargo.toml`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-storage-rusqlite/src/writer/ops.rs`, and `tools/schema_models/*` | Retained ATM code still depends on `uuid` and still accepts, emits, type-checks, or generates UUID values through `AtmMessageId::{from_uuid_wire, into_uuid_wire}`, UUID parse fallback, UUID-based serializers, UUID-backed test helpers, and UUID uniqueness helpers even though Claude JSON compatibility is retired and the accepted runtime is ULID-only. | Remove all retained UUID usage and make the accepted ATM line ULID-only across message identity, schema/tooling, tests, and supporting uniqueness helpers. |
+| `crates/atm/src/composition.rs`, `crates/atm/src/commands/{send,read,ack,list,clear,members,teams,doctor}.rs`, `crates/atm-core/src/home.rs`, `crates/atm-core/src/protocol.rs`, and the raw CLI smoke coverage | Raw CLI behavior can diverge by invocation directory/worktree: the same installed `atm` binary can emit unreadable compatibility-only sends from one worktree while persisting ULID/SQLite-backed sends from another, making wrapper-forced `cwd` normalization a correctness crutch. | Make retained raw CLI commands derive daemon socket, launch gate, and durable store roots from accepted ATM home resolution only; constrain invocation-directory use to config ingress, hook relative paths, and file-policy checks; add raw multi-worktree smoke coverage so wrapper-free CLI behavior is release-gated. |
+| `crates/atm-core/src/read/mod.rs`, `crates/atm-core/src/read/metadata_selection.rs`, and read-mutation smoke/test coverage | After `atm read --unread` marks a message read, the response can still report the original `selected_message_id` while returning the next unread message payload and the pre-mutation unread counts. The durable write occurs, but the reported read result is not self-consistent. | Preserve the mutated message as the returned payload (or return no payload if that is the deliberate contract), and always return post-mutation bucket counts that correspond to the returned state. |
 
 ## Architecture And Requirements Drift
 
@@ -66,6 +74,8 @@ part of the boundary-reset line:
 | `docs/atm-graft/boundaries.md` | Defines the session runtime consumer around a persistent receive thread and dedicated advisory-stream connection. |
 | `docs/atm-core/requirements.md` | Reserves `AdvisorySessionId` and shared advisory packet kinds in `atm-core` requirements, boxing the shared boundary into the leaked session model. |
 | `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/architecture.md`, and `docs/adr/ADR-012-one-message-identity.md` | Still describe UUID-wire message ids or UUID-based retained uniqueness rules as accepted ATM behavior even though Claude backend compatibility is retired and retained ATM runtime should now be ULID-only. |
+| `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, `docs/atm-core/architecture.md`, `docs/atm-daemon/requirements.md`, and `docs/atm-daemon/architecture.md` | Do not state strongly enough that invocation directory and worktree root are never selectors for daemon socket, launch-gate, or durable SQLite root selection, leaving wrapper-only `cwd` forcing as an accidental operational requirement. |
+| `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md` | Do not currently state the output consistency rule for read-side state mutation, leaving it ambiguous whether `atm read --unread` should return the mutated message or the next unread message after mutation. |
 | `docs/plans/phase-AD/sprint-AD8.md` | Still frames the accepted graft path as a daemon/graft advisory-session seam rather than a thin post-send receiver implementation. |
 
 ## Review Request
@@ -101,3 +111,5 @@ The corrective implementation line for this inventory is planned in:
 - [Sprint AD.15](./sprint-AD15.md)
 - [Sprint AD.16](./sprint-AD16.md)
 - [Sprint AD.17](./sprint-AD17.md)
+- [Sprint AD.18](./sprint-AD18.md)
+- [Sprint AD.19](./sprint-AD19.md)

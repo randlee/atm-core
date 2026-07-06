@@ -44,6 +44,7 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD15.md`
 - `docs/plans/phase-AD/sprint-AD16.md`
 - `docs/plans/phase-AD/sprint-AD17.md`
+- `docs/plans/phase-AD/sprint-AD18.md`
 
 ## Interfaces To Ratify
 
@@ -70,7 +71,7 @@ pub trait AtmGraftClient: Send + Sync {
 - no implementation paths are deleted in this sprint
 - any still-open sprint doc wording that treats daemon-owned graft advisory
   register/unregister/fetch/drain/stream behavior as accepted end state must be
-  superseded by the new `AD.14` through `AD.17` line
+  superseded by the new `AD.14` through `AD.19` line
 
 ## Deliverables
 
@@ -80,13 +81,17 @@ pub trait AtmGraftClient: Send + Sync {
   message ids on retained ATM paths
 - `violation-inventory.md` is the authoritative review artifact for the
   boundary-reset drift
-- `plan-phase-AD.md` extends the phase through `AD.17` and records the new
+- `plan-phase-AD.md` extends the phase through `AD.19` and records the new
   boundary-reset exit gates
 - `AD.13` defines the ULID-only message-identity closure with exact deletion
   targets, explicit boundary contracts, and validation gates
 - `AD.14` through `AD.17` each define one production-ready graft-boundary
   closure with exact deletion targets, explicit boundary contracts, and
   validation gates
+- `AD.18` defines the raw CLI runtime-root closure with exact deletion
+  targets, explicit runtime-root contracts, and validation gates
+- `AD.19` defines the read-mutation output consistency closure with exact
+  deletion targets, explicit output invariants, and validation gates
 
 ## This Sprint Does Not Close
 
@@ -110,7 +115,7 @@ pub trait AtmGraftClient: Send + Sync {
   UUID compatibility was retired with the Claude backend
 - no remaining `Phase AD` planning doc claims that daemon-owned graft advisory
   session/register/fetch/drain/stream behavior is the accepted release design
-- the phase plan explicitly states that `AD.12` through `AD.17` are required
+- the phase plan explicitly states that `AD.12` through `AD.19` are required
   to close `Phase AD`
 - each new sprint doc names the exact files, deletion targets, and validation
   commands needed for its closure without relying on downstream prompt
