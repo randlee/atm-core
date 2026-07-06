@@ -24,10 +24,19 @@ target: integrate/phase-AD
 - `AD.19` complete
 - `AD.20` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
+- `.triage/phase-T/findings/FTQ-001.ttl`
+- `.triage/phase-T/findings/FTQ-003.ttl`
+- `.triage/phase-T/findings/FTQ-T7-002.ttl`
 
 ## Exact Targets
 
+- `.github/workflows/ci.yml`
 - `README.md`
+- `crates/atm-daemon/src/tests.rs`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+- `crates/atm-daemon/src/local_ipc_transport.rs`
+- `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
 - `scripts/smoke/run.py`
 - `scripts/smoke/run_thorough.py`
 - `scripts/smoke/run_thorough_graft.py`
@@ -42,6 +51,10 @@ The accepted verification target after this sprint is:
 - retained ATM message identity is ULID-only on the accepted line
 - daemon local IPC remains framed unary request/response for retained ATM
   command paths
+- the GitHub Actions `CI` workflow restores Windows `atm-daemon` coverage in
+  the `Test (windows-latest)` job by running the `Run atm-daemon tests` step
+  on Windows rather than leaving that step disabled behind
+  `if: runner.os != 'Windows'`
 - post-send emission still happens after persistence through the accepted
   `PostSendHookEmitter` seam
 - raw CLI runtime-root selection stays host-home-based rather than
@@ -71,8 +84,9 @@ The accepted verification target after this sprint is:
 - regression evidence proving the local IPC receive loop no longer hangs on the
   deleted graft stream path
 - restored Windows `atm-daemon` CI coverage on the accepted line, with the
-  Windows daemon lane exercising the repaired local-IPC path instead of
-  leaving Windows daemon validation disabled
+  `CI` workflow's `Test (windows-latest)` job executing the `Run atm-daemon
+  tests` step against the repaired local-IPC path instead of leaving Windows
+  daemon validation disabled
 - regression evidence proving raw CLI sibling-worktree invocation does not
   switch stores or message-id formats
 - regression evidence proving read-state mutation returns the mutated message
@@ -97,8 +111,11 @@ The accepted verification target after this sprint is:
   advisory session packet families
 - targeted Windows/local-IPC regression coverage proves the removed stream path
   no longer blocks command completion
-- Windows `atm-daemon` CI coverage is restored and green on the accepted line;
-  `AD.17` does not close while that lane remains disabled, cancelled, or red
+- `.github/workflows/ci.yml` restores Windows `atm-daemon` coverage in the
+  `CI` workflow's `Test (windows-latest)` job, and the `Run atm-daemon tests`
+  step is green on the accepted line
+- `AD.17` does not close while the restored Windows `atm-daemon` lane remains
+  disabled, cancelled, or red
 - targeted raw multi-worktree CLI regression coverage proves wrappers are not
   a release requirement
 - targeted read-mutation regression coverage proves returned payload/counts
@@ -118,5 +135,7 @@ The accepted verification target after this sprint is:
 - `just smoke normal`
 - `just smoke thorough`
 - targeted Windows/local-IPC regression coverage for the former advisory-stream lane
-- GitHub CI with the Windows `atm-daemon` lane restored and green
+- GitHub CI with `.github/workflows/ci.yml` restored so the `CI` workflow's
+  `Test (windows-latest)` job runs the `Run atm-daemon tests` step and that
+  step finishes green
 - `git diff --check`

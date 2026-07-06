@@ -140,9 +140,6 @@ The governing rules are:
 - the daemon must execute caller-owned commands against declared request
   identity and team only and must never consult daemon ambient
   `ATM_IDENTITY` or `ATM_TEAM` to fill missing caller context
-- Windows daemon support remains a required release surface for this phase;
-  Phase `AD` does not close while Windows `atm-daemon` CI coverage is
-  disabled or red
 - message persistence is the send success boundary
 - post-send behavior is a post-commit side effect only
 - post-send behavior is event-driven; it is not planned through a generic
