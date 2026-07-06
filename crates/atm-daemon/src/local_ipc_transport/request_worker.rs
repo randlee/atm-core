@@ -68,13 +68,7 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    let read_deadline_support = configure_request_deadlines(&stream)?;
-
-    let frame = match read_request_frame_with_deadline(
-        stream,
-        force_shutdown,
-        read_deadline_support,
-    )? {
+    let frame = match read_connection_frame(stream, force_shutdown)? {
         ReadRequestFrameResult::EndOfStream => return Ok(()),
         ReadRequestFrameResult::Frame {
             stream: resumed_stream,
@@ -84,6 +78,35 @@ pub(super) fn handle_connection(
             frame
         }
         #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut => return Ok(()),
+    };
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
+    if graft_rpc::is_graft_message_kind_code(frame.message_kind_code) {
+        return handle_graft_connection(
+            &mut stream,
+            frame,
+            graft_dispatcher,
+            force_shutdown,
+            registry,
+        );
+    }
+    handle_atm_connection(&mut stream, frame, dispatcher, registry, codec)
+}
+
+fn read_connection_frame(
+    stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    let read_deadline_support = configure_request_deadlines(&stream)?;
+    match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)? {
+        ReadRequestFrameResult::EndOfStream => Ok(ReadRequestFrameResult::EndOfStream),
+        ReadRequestFrameResult::Frame { stream, frame } => {
+            Ok(ReadRequestFrameResult::Frame { stream, frame })
+        }
+        #[cfg(windows)]
         ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
             tracing::info!(
                 subsystem = "local_ipc",
@@ -91,7 +114,7 @@ pub(super) fn handle_connection(
                 outcome = "forced_shutdown",
                 "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
             );
-            return Ok(());
+            Ok(ReadRequestFrameResult::TimedOut)
         }
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
@@ -102,43 +125,55 @@ pub(super) fn handle_connection(
                 deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
                 "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
             );
-            return Ok(());
+            Ok(ReadRequestFrameResult::TimedOut)
         }
-    };
-    tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
-    );
-    if graft_rpc::is_graft_message_kind_code(frame.message_kind_code) {
-        let graft_dispatcher = graft_dispatcher.ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "graft local IPC request reached a daemon transport without a graft dispatcher",
-            )
-            .with_recovery(
-                "Restart atm-daemon through RuntimeComposition::start() so graft-only IPC routes through the daemon-private graft dispatcher.",
-            )
-        })?;
-        let request_id = DaemonRequestId::new(frame.request_id)?;
-        let (_, request) = graft_rpc::request_from_raw_parts(
-            request_id,
-            frame.message_kind_code,
-            frame.flags,
-            frame.bytes,
-        )?;
-        if let graft_rpc::RequestEnvelope::AdvisoryStream(request) = request {
-            return dispatch_advisory_stream(
-                &mut stream,
-                graft_dispatcher.as_ref(),
-                force_shutdown,
-                request_id,
-                request,
-            );
-        }
-        let response = dispatch_graft_request(request_id, request, graft_dispatcher, &registry)?;
-        write_graft_response(&mut stream, request_id, response)?;
-        registry.reap_finished_dispatches()?;
-        return Ok(());
     }
+}
+
+fn handle_graft_connection(
+    stream: &mut LocalSocketStream,
+    frame: RawRequestFrame,
+    graft_dispatcher: Option<Arc<dyn GraftRequestDispatcher + Send + Sync>>,
+    force_shutdown: &AtomicBool,
+    registry: Arc<ActiveConnectionRegistry>,
+) -> Result<(), AtmError> {
+    let graft_dispatcher = graft_dispatcher.ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "graft local IPC request reached a daemon transport without a graft dispatcher",
+        )
+        .with_recovery(
+            "Restart atm-daemon through RuntimeComposition::start() so graft-only IPC routes through the daemon-private graft dispatcher.",
+        )
+    })?;
+    let request_id = DaemonRequestId::new(frame.request_id)?;
+    let (_, request) = graft_rpc::request_from_raw_parts(
+        request_id,
+        frame.message_kind_code,
+        frame.flags,
+        frame.bytes,
+    )?;
+    if let graft_rpc::RequestEnvelope::AdvisoryStream(request) = request {
+        return dispatch_advisory_stream(
+            stream,
+            graft_dispatcher.as_ref(),
+            force_shutdown,
+            request_id,
+            request,
+        );
+    }
+    let response = dispatch_graft_request(request_id, request, graft_dispatcher, &registry)?;
+    write_graft_response(stream, request_id, response)?;
+    registry.reap_finished_dispatches()?;
+    Ok(())
+}
+
+fn handle_atm_connection(
+    stream: &mut LocalSocketStream,
+    frame: RawRequestFrame,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    registry: Arc<ActiveConnectionRegistry>,
+    codec: JsonAtmProtocolCodec,
+) -> Result<(), AtmError> {
     let frame = atm_core::protocol::FramePayload {
         request_id: RequestId::new(frame.request_id)?,
         message_kind: atm_core::protocol::MessageKind::try_from(frame.message_kind_code)?,
@@ -146,9 +181,8 @@ pub(super) fn handle_connection(
         bytes: frame.bytes,
     };
     let (request_id, request) = codec.request_from_frame(frame)?;
-
     let response = dispatch_request(request_id, request, dispatcher, &registry)?;
-    write_response(&mut stream, &codec, request_id, response)?;
+    write_response(stream, &codec, request_id, response)?;
     registry.reap_finished_dispatches()?;
     Ok(())
 }
