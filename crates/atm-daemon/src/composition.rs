@@ -763,6 +763,9 @@ mod tests {
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
+    use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    use crate::test_support::LifecycleFlagResetGuard;
+
     use super::RuntimeComposition;
     use super::{RuntimeLifecycle, RuntimeLifecycleState, shutdown_lane_with_deadline};
 
@@ -866,6 +869,8 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        let _reset = LifecycleFlagResetGuard::install(lifecycle);
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&parent_file, "x").expect("parent file");

@@ -973,6 +973,8 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
+    #[cfg(windows)]
+    use tempfile::TempDir;
     #[cfg(unix)]
     use tempfile::TempDir;
 
@@ -1018,6 +1020,24 @@ mod tests {
         assert_eq!(
             result,
             LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prepare_local_ipc_endpoint_rejects_logical_parent_that_is_a_file() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&parent_file, "x").expect("parent file");
+        let endpoint = parent_file.join("daemon.sock");
+
+        let error = prepare_local_ipc_endpoint(&endpoint).expect_err("prepare endpoint");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            error
+                .to_string()
+                .contains("failed to create daemon local IPC directory")
         );
     }
 

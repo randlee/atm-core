@@ -1,7 +1,7 @@
 ---
 id: AD.17-win
 title: Native Windows Execution For AD.17
-status: planned
+status: completed
 branch: feature/pAD-s17-boundary-reset-verification-closeout
 worktree: ../atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout
 target: integrate/phase-AD
@@ -146,3 +146,55 @@ restored daemon lane.
    original `AD.17` validation set that is practical on the Windows host.
 10. Push the branch and report the final commit hash, validation results, and
     CI evidence showing the Windows daemon lane green.
+
+## Windows Execution Report
+
+- Date: 2026-07-06
+- Host: native Windows (`x86_64-pc-windows-msvc`)
+- Branch: `feature/pAD-s17-boundary-reset-verification-closeout`
+- Merge-forward source: `origin/feature/pAD-s16-thin-graft-receiver-reset`
+
+### Root Cause
+
+- The initial Windows repro was
+  `composition::tests::runtime_composition_failed_startup_returns_to_stopped`
+  hanging indefinitely.
+- The hang was not a lifecycle-boundary contract regression. On Windows,
+  `daemon_local_ipc_name_from_path()` hashes arbitrary logical socket paths
+  into `\\.\pipe\...` names, so the test input rooted under
+  `not-a-dir/atm.sock` did not fail during endpoint preparation.
+- Because startup succeeded instead of failing closed, the test entered the
+  serve loop and waited forever for shutdown instead of returning the expected
+  startup error.
+
+### Windows Fix
+
+- Preserved all existing boundary contracts; no sealed-trait or cross-crate
+  boundary changes were made.
+- Added Windows-side logical parent validation in
+  `crates/atm-daemon/src/local_ipc_transport/shutdown.rs` for non-pipe endpoint
+  inputs before they are converted into named-pipe addresses.
+- Added lifecycle reset coverage to
+  `composition::tests::runtime_composition_failed_startup_returns_to_stopped`
+  so the shared Windows lifecycle worker is drained between serial tests.
+- Added a Windows regression test proving
+  `prepare_local_ipc_endpoint()` rejects a logical parent that is a file.
+
+### Commands Run
+
+- `cargo test -p atm-daemon lifecycle_control::windows_tests::windows_install_reuses_one_lifecycle_worker_until_shutdown -- --exact --nocapture`
+- `cargo test -p atm-daemon composition::tests::runtime_composition_failed_startup_returns_to_stopped -- --exact --nocapture`
+- `cargo test -p atm-daemon composition::tests::runtime_composition_fails_closed_when_replay_store_cannot_open -- --exact --nocapture`
+- `cargo test -p atm-daemon composition::tests::server_transport_cannot_bootstrap_outside_runtime_composition_start -- --exact --nocapture`
+- `just test`
+- `just lint`
+
+### Results
+
+- All targeted Windows lifecycle and composition tests passed after the fix.
+- `just test` passed on Windows.
+- `just lint` passed on Windows, including `fmt`, `clippy`, `boundaries`, and
+  the Windows portability checks.
+- `FTQ-001`: closed for the AD.17 Windows lane.
+- `FTQ-002`: closed for the AD.17 Windows lane.
+- `FTQ-003`: closed for the AD.17 Windows lane.
