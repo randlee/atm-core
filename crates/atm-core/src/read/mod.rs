@@ -553,7 +553,7 @@ fn message_key_for_classified(
             "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
         )
     })?;
-    boundary::MessageKey::new(format!("atm:{message_id}"))
+    Ok(boundary::MessageKey::from(message_id))
 }
 
 fn load_checked_read_metadata(
