@@ -33,8 +33,8 @@ The canonical daemon/client recovery text rule set lives in:
 - daemon-private orchestration around injected `atm-core` service boundaries
 - live agent status cache
 - daemon-side `sc-observability` emission
-- daemon-side direct post-send emission routing for local and graft-backed
-  recipients
+- daemon-side direct post-send emission routing for local recipients plus
+  receiver-owned graft recipients through the shared post-send seam
 
 `atm-daemon` does not own:
 
@@ -67,15 +67,16 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
-  - production requirement: one live advisory stream per active embedded
-    client session
-  - the live advisory stream is the production nudge-delivery path whenever the
-    selected same-host transport supports streaming
+
+Forbidden daemon-owned request/response packet families:
+- graft advisory register
+- graft advisory unregister
+- graft advisory fetch
+- graft advisory drain
+- graft advisory stream
+  - graft receiver registration, queue ownership, inspection, and any
+    long-lived receive loop belong to the graft-side implementation, not to
+    `atm-daemon`
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`
@@ -544,8 +545,8 @@ Required runtime rules:
   concrete socket/runtime adapter types
 - daemon boundary traits are sealed by default; opening a runtime/transport
   extension point requires explicit architecture review
-- any direct post-send/advisory implementation must remain isolated from
-  transport and store implementations behind its owned boundary
+- any direct post-send implementation must remain isolated from transport and
+  store implementations behind its owned boundary
 - daemon post-send notification logging, if retained, must append directly at
   the event site; a daemon-owned notification worker/runtime is not an accepted
   production subsystem

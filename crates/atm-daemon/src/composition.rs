@@ -367,8 +367,6 @@ impl RuntimeComposition {
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
-            Some(Arc::clone(&self.request_dispatcher)
-                as Arc<dyn crate::GraftRequestDispatcher + Send + Sync>),
             RuntimeServeHooks {
                 endpoint_guard,
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,

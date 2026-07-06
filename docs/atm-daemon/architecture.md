@@ -86,7 +86,8 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- direct post-send emission routing for local and graft-backed recipients
+- direct post-send emission routing for local recipients plus receiver-owned
+  graft recipients through the shared post-send seam
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -125,20 +126,13 @@ Current packet-supported daemon surface:
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
 
-Advisory-surface rule:
-- the daemon-owned advisory surface is generic, not graft-specific
-- the daemon may own:
-  - registration / unregistration
-  - one bounded pending advisory queue per active session
-  - optional fetch/drain inspection over the shared ICD
-  - one live advisory stream per active session
-- `atm-graft` is one consumer of that surface, not a daemon-owned subsystem
+Post-send ownership rule:
+- the daemon owns post-persist event emission only
+- the daemon does not own graft session registration, pending nudge queues,
+  fetch/drain inspection, or live advisory streams
+- `atm-graft` is one receiver-owned consumer implementation behind the shared
+  post-send seam, not a daemon-owned subsystem
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
@@ -199,8 +193,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   Windows lifecycle adapter, but Phase S parity does not depend on a separate
   SCM-only host model
 - client-specific runtime logic is owned by the client crate; `atm-daemon`
-  may serve the advisory transport but must not own embedded client receive
-  behavior
+  must not own embedded client receive behavior, session maps, or client-side
+  notification loops
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
@@ -270,7 +264,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   - every daemon/runtime/transport `error!` event
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
-  - post-send emission belongs only to the post-send/advisory boundary
+  - post-send emission belongs only to the post-send boundary
   - local-IPC and network I/O belong only to the transport boundary
 - UDP is not an approved daemon control-plane transport for same-host CLI
   request/response traffic; same-host and remote request families require the
@@ -435,8 +429,8 @@ Privacy boundary:
   crate-private
 - status-cache submodules expose only the boundary needed for daemon health and
   routing decisions; cache internals and mutation helpers remain crate-private
-- post-send/advisory submodules expose only the owned post-send/advisory
-  boundary traits or façades required by runtime composition; delivery
+- post-send submodules expose only the owned post-send boundary traits or
+  façades required by runtime composition; delivery
   internals remain
   crate-private
 - observability submodules expose only the daemon-owned event sink façade used
@@ -468,7 +462,6 @@ V.2 migration targets:
 - `daemon_observability.rs`
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
-- `advisory_runtime.rs`
 - `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
@@ -822,4 +815,4 @@ Initial use cases:
 - singleton runtime enforcement
 - local transport adapter structure
 - remote daemon-to-daemon protocol structure
-- direct post-send/advisory routing structure
+- direct post-send routing structure

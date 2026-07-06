@@ -100,7 +100,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            None,
             RuntimeServeHooks {
                 endpoint_guard,
                 graceful_drain_deadline: Duration::from_millis(500),
