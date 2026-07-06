@@ -474,6 +474,40 @@ NORMAL_ROWS = FAST_ROWS + [
         ],
         pass_note="the explicit atm-daemon CI lane remains present and the Windows skip guard is absent",
     ),
+    SuiteRowSpec(
+        id="AD18-RUNTIME-ROOT-001",
+        flow="raw CLI runtime ownership stays anchored to the accepted ATM_HOME root",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "protocol::tests::daemon_socket_path_uses_atm_home_when_present",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "composition::tests::bootstrap_refuses_conflicting_daemon_socket_override",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_host_ownership::daemon_host_runtime_lock_path_follows_the_explicit_home_root",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="raw CLI bootstrap, socket ownership, and daemon lock state all stay rooted under the accepted ATM_HOME runtime subtree",
+    ),
 ]
 
 
