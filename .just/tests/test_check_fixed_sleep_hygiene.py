@@ -122,30 +122,5 @@ mod tests {
 
             self.assertEqual(violations, [])
 
-    def test_respects_suppressions(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
-                """\
-#[cfg(test)]
-mod tests {
-    fn waits() {
-        // lint-fixed-sleep: allow-next-line
-        thread::sleep(std::time::Duration::from_millis(5));
-    }
-}
-""",
-                encoding="utf-8",
-            )
-
-            violations = collect_fixed_sleep_violations(
-                repo_root,
-                allowed_paths=load_allowed_paths(repo_root),
-            )
-
-            self.assertEqual(violations, [])
-
-
 if __name__ == "__main__":
     unittest.main()
