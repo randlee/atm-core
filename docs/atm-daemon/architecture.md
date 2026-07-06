@@ -127,20 +127,16 @@ Current packet-supported daemon surface:
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
 
-Advisory-surface rule:
-- the daemon-owned advisory surface is generic, not graft-specific
-- the daemon may own:
-  - registration / unregistration
-  - one bounded pending advisory queue per active session
-  - optional fetch/drain inspection over the shared ICD
-  - one live advisory stream per active session
-- `atm-graft` is one consumer of that surface, not a daemon-owned subsystem
+Receiver-handoff rule:
+- the daemon may emit one post-send event after durable message commit
+- receiver-specific delivery details stay behind receiver implementations such
+  as local tmux and `atm-graft`
+- the accepted daemon architecture must not require daemon-owned graft session
+  registration, per-session nudge queues, fetch/drain inspection, or a
+  dedicated advisory-stream request family
+- transport receive loops remain thin request dispatch paths rather than
+  homes for receiver-specific session behavior
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`

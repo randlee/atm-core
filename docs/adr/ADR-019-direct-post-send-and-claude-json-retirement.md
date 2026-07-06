@@ -95,7 +95,14 @@ pub trait PostSendHookEmitter: sealed::Sealed {
 ### 6. Receiver-side handoff stays capability-specific
 
 - local tmux-backed recipients use a local post-send emitter
-- graft-backed recipients use the graft advisory/session handoff
+- graft-backed recipients use a graft receiver implementation behind the same
+  post-send capability seam
+- graft receiver details such as host wakeup, temporary buffering, or
+  active/inactive runtime state stay private to `atm-graft` and must not leak
+  into shared daemon request/response families
+- the accepted architecture does not require daemon-owned graft session
+  registration, daemon-owned per-session nudge queues, or a dedicated shared
+  advisory-stream packet family
 - ATM owns emission, logging, and sender warning behavior
 - ATM does not own receiver-side consumption after successful emission
 

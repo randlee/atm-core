@@ -54,9 +54,12 @@ part of the boundary-reset line:
 | Document | Current drift |
 |---|---|
 | `docs/atm-daemon/requirements.md` | Declares `advisory register`, `advisory unregister`, `advisory fetch`, `advisory drain`, and `advisory stream` as daemon packet families and states that one live advisory stream per active embedded client session is a production requirement. |
+| `docs/atm-daemon/architecture.md` | States that the accepted daemon surface includes advisory register/unregister/fetch/drain/stream and that the daemon may own one bounded pending advisory queue plus one live stream per active session. |
 | `docs/atm-daemon/protocol-icd.md` | Documents advisory register/unregister/fetch/drain/stream as first-class public packet kinds and envelope mappings. |
 | `docs/atm-graft/architecture.md` | Requires a dedicated daemon advisory-stream connection, daemon-owned bounded pending-nudge state, and explicit graft session lifecycle states owned around that daemon session model. |
 | `docs/atm-graft/requirements.md` | Carries the same daemon-owned persistent receive-loop and bounded queue assumptions into the published graft requirements surface. |
+| `docs/atm-graft/boundaries.md` | Defines the session runtime consumer around a persistent receive thread and dedicated advisory-stream connection. |
+| `docs/atm-core/requirements.md` | Reserves `AdvisorySessionId` and shared advisory packet kinds in `atm-core` requirements, boxing the shared boundary into the leaked session model. |
 | `docs/plans/phase-AD/sprint-AD8.md` | Still frames the accepted graft path as a daemon/graft advisory-session seam rather than a thin post-send receiver implementation. |
 
 ## Review Request

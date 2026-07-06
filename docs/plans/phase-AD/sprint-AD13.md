@@ -26,9 +26,11 @@ target: integrate/phase-AD
 - `crates/atm-core/src/graft.rs`
 - `crates/atm-core/src/lib.rs`
 - `crates/atm-daemon-client/src/wire.rs`
+- `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
 
 ## Interfaces To Add Or Modify
 
@@ -72,6 +74,9 @@ pub trait AtmGraftClient: Send + Sync {
   `crates/atm-daemon-client/src/wire.rs`
 - advisory register/unregister/fetch/drain/stream rows from
   `docs/atm-daemon/protocol-icd.md`
+- shared advisory packet-family claims from `docs/atm-core/requirements.md`
+- advisory packet-family and queue-ownership claims from
+  `docs/atm-daemon/architecture.md`
 
 ## Deliverables
 
@@ -80,6 +85,8 @@ pub trait AtmGraftClient: Send + Sync {
   packet families
 - shared boundary docs and daemon protocol docs no longer claim daemon-owned
   graft advisory stream/session protocol as the accepted design
+- shared requirements docs no longer reserve graft session/stream concepts in
+  `atm-core` or `atm-daemon`
 
 ## This Sprint Does Not Close
 
@@ -94,6 +101,8 @@ pub trait AtmGraftClient: Send + Sync {
 - `docs/atm-daemon/protocol-icd.md`, `docs/atm-daemon/requirements.md`, and
   `docs/atm-core/boundaries.md` describe the reset boundary rather than
   daemon-owned graft session queues
+- `docs/atm-core/requirements.md` and `docs/atm-daemon/architecture.md` no
+  longer lock the shared boundary into graft session/stream packet families
 - no remaining accepted boundary doc tells implementers to add graft-specific
   stream methods back to `RequestDispatcher`
 

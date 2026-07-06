@@ -26,6 +26,7 @@ target: integrate/phase-AD
 - `crates/atm-graft/src/transport.rs`
 - `crates/atm-graft/examples/smoke_same_host.rs`
 - `docs/atm-graft/architecture.md`
+- `docs/atm-graft/boundaries.md`
 - `docs/atm-graft/requirements.md`
 
 ## Interfaces To Add Or Modify
@@ -59,6 +60,9 @@ The accepted implementation rule after this sprint is:
 - dedicated advisory-stream transport helpers in `crates/atm-graft/src/transport.rs`
 - public `atm-graft` option/state fields that exist only to drive the deleted
   shared advisory session model
+- dedicated advisory-stream and persistent-receive-thread requirements from
+  `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
+  `docs/atm-graft/boundaries.md`
 
 ## Deliverables
 
@@ -67,6 +71,8 @@ The accepted implementation rule after this sprint is:
 - any remaining receiver-side runtime state is private to `atm-graft`
 - host-facing injection remains capability-based and independent from daemon
   dispatcher/session ownership
+- graft-local docs no longer prescribe daemon-owned session registration,
+  daemon-owned queues, or a dedicated shared advisory-stream path
 
 ## This Sprint Does Not Close
 
@@ -81,6 +87,9 @@ The accepted implementation rule after this sprint is:
   injection concepts
 - no daemon-facing graft code path requires session registration, fetch/drain,
   or dedicated advisory-stream protocol families
+- `docs/atm-graft/architecture.md`, `docs/atm-graft/requirements.md`, and
+  `docs/atm-graft/boundaries.md` describe only receiver-local runtime detail
+  plus the retained thin shared client contract
 
 ## Required Validation
 

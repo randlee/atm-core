@@ -22,6 +22,13 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-graft/requirements.md`
+- `docs/atm-graft/architecture.md`
+- `docs/atm-graft/boundaries.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/violation-inventory.md`
 - `docs/plans/phase-AD/sprint-AD12.md`
@@ -59,6 +66,8 @@ pub trait AtmGraftClient: Send + Sync {
 
 ## Deliverables
 
+- the accepted requirements, architecture docs, and `ADR-019` no longer lock
+  ATM into daemon-owned graft session/stream behavior
 - `violation-inventory.md` is the authoritative review artifact for the graft
   boundary drift
 - `plan-phase-AD.md` extends the phase through `AD.16` and records the new
@@ -75,6 +84,11 @@ pub trait AtmGraftClient: Send + Sync {
 
 ## Acceptance Criteria
 
+- `ADR-019`, `docs/atm-core/requirements.md`,
+  `docs/atm-daemon/requirements.md`, `docs/atm-daemon/architecture.md`,
+  `docs/atm-graft/requirements.md`, `docs/atm-graft/architecture.md`, and
+  `docs/atm-graft/boundaries.md` all describe the thin receiver boundary
+  rather than daemon-owned graft session/stream runtime
 - no remaining `Phase AD` planning doc claims that daemon-owned graft advisory
   session/register/fetch/drain/stream behavior is the accepted release design
 - the phase plan explicitly states that `AD.12` through `AD.16` are required
