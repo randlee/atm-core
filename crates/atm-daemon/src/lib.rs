@@ -32,7 +32,7 @@ mod test_observability;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
-mod tests_advisory;
+mod tests_post_send_graft_warning;
 #[cfg(test)]
 mod tests_host_ownership;
 #[cfg(test)]

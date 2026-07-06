@@ -14,7 +14,6 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
-pub mod graft_rpc;
 mod rpc;
 mod wire;
 
