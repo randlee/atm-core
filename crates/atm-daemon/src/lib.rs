@@ -38,6 +38,8 @@ mod tests_host_ownership;
 #[cfg(test)]
 mod tests_lifecycle;
 #[cfg(test)]
+mod tests_runtime_root;
+#[cfg(test)]
 mod worker_support;
 
 use std::path::PathBuf;
