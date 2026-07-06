@@ -443,3 +443,6 @@ Phase `AD` closes only when:
 - smoke and doctor coverage prove the repaired behavior on the accepted line
 - command-matrix coverage proves the repaired caller-context behavior on the
   full retained ATM command surface
+- Windows `atm-daemon` CI coverage is restored on the accepted line and the
+  Windows daemon lane is green; targeted manual regression evidence alone is
+  not sufficient for Phase `AD` closure while that lane stays disabled
