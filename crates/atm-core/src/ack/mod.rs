@@ -1485,7 +1485,7 @@ mod tests {
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         std::fs::create_dir_all(team_dir.join("inboxes")).expect("team inbox dir");
         let source_message_id = AtmMessageId::new();
-        let source_key = MessageKey::new(format!("atm:{source_message_id}")).expect("message key");
+        let source_key = MessageKey::from(source_message_id);
         let runtime = AckRosterRuntime {
             team_dir,
             roster_members: vec![(team.clone(), actor.clone())],

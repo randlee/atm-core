@@ -38,11 +38,18 @@ impl MessageKey {
         raw.parse::<AtmMessageId>()
             .map_err(|error| AtmError::validation(format!("message key parse failed: {error}")))
     }
+
+    fn from_atm_message_id(value: AtmMessageId) -> Self {
+        let mut key = String::with_capacity(4 + value.to_string().len());
+        key.push_str("atm:");
+        key.push_str(&value.to_string());
+        Self(key)
+    }
 }
 
 impl From<AtmMessageId> for MessageKey {
     fn from(value: AtmMessageId) -> Self {
-        Self(format!("atm:{value}"))
+        Self::from_atm_message_id(value)
     }
 }
 
