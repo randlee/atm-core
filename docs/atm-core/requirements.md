@@ -123,6 +123,10 @@ Initial crate requirement IDs:
   the durable post-mutation mailbox state, while ack-only fields remain owned
   by the ack path. Satisfies:
   `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-RUNTIME-ROOT-001` `atm-core` must treat the invocation directory as
+  command-local context only, never as a selector for socket, lock, database,
+  or retained-log runtime roots. Those paths derive from the accepted
+  `ATM_HOME` root.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and direct post-send-emission behavior above the owned
   boundaries. Satisfies the send-path service aspects of:

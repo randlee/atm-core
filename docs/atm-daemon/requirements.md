@@ -388,6 +388,9 @@ Required runtime rules:
 - supported singleton deployment assumes `{ATM_HOME}/.atm/daemon/` is on a
   local filesystem with working host-local advisory lock semantics; NFS or
   other network-mounted roots are not supported singleton configurations
+- the invocation directory is not a daemon runtime-root selector; accepted
+  socket and lock paths derive from the accepted `ATM_HOME` root even when ATM
+  commands run from sibling worktrees or other working directories
 - daemon startup is blocked by at least two runtime guard layers:
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is

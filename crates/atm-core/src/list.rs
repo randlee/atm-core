@@ -139,6 +139,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     _observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ListOutcome, AtmError> {
+    let contains_needle = query.contains_filter.as_deref();
     let config = runtime.load_config(&query.current_dir)?;
     let actor = query.caller_identity.clone();
     let target = resolve_target(
@@ -181,7 +182,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &target.agent,
         &metadata_rows,
         selected,
-        query.contains_filter.as_deref(),
+        contains_needle,
     )?;
     sort_and_limit_selected(&mut selected, query.limit);
 

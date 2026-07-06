@@ -150,7 +150,7 @@ pub(crate) fn normalize_contains_filter(
                 "Shorten the `--contains` filter before retrying so ATM can keep daemon-side substring scans bounded.",
             ),
         ),
-        Some(value) => Ok(Some(value.to_string())),
+        Some(value) => Ok(Some(value.to_ascii_lowercase())),
         None => Ok(None),
     }
 }
@@ -333,6 +333,7 @@ fn load_read_selection<R: RetainedMailboxRuntime>(
     target: &crate::mailbox::source::ResolvedTarget,
     seen_watermark: Option<IsoTimestamp>,
 ) -> Result<ReadSelectionState, AtmError> {
+    let contains_needle = query.contains_filter.as_deref();
     let mut metadata_rows =
         load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
     let (mut bucket_counts, metadata_selected) =
@@ -344,7 +345,7 @@ fn load_read_selection<R: RetainedMailboxRuntime>(
         &target.agent,
         &metadata_rows,
         metadata_selected,
-        query.contains_filter.as_deref(),
+        contains_needle,
     )?;
     let mut timed_out = false;
 
@@ -364,10 +365,9 @@ fn load_read_selection<R: RetainedMailboxRuntime>(
                     &target.agent,
                     rows,
                     selected,
-                    query.contains_filter.as_deref(),
+                    contains_needle,
                 )
                 .map(|filtered| !filtered.is_empty())
-                .unwrap_or(false)
             },
         )?;
 
@@ -384,7 +384,7 @@ fn load_read_selection<R: RetainedMailboxRuntime>(
                 &target.agent,
                 &metadata_rows,
                 metadata_selected,
-                query.contains_filter.as_deref(),
+                contains_needle,
             )?;
         } else {
             timed_out = true;
@@ -697,6 +697,7 @@ mod tests {
         read_mail_with_runtime_impl, state,
     };
     use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
+    use crate::error::AtmError;
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
@@ -996,8 +997,11 @@ mod tests {
         team_dir: PathBuf,
         roster_present: bool,
         metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+        metadata_row_batches: Option<Vec<Vec<boundary::MailStoreMailboxMetadataRow>>>,
         message_records: HashMap<MessageKey, boundary::Message>,
+        query_mailbox_metadata_rows_count: Arc<AtomicUsize>,
         load_message_record_count: Arc<AtomicUsize>,
+        fail_load_message_record: bool,
     }
 
     impl crate::boundary::sealed::Sealed for ReadRuntime {}
@@ -1125,6 +1129,15 @@ mod tests {
             _agent: &AgentName,
             _limit: Option<usize>,
         ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            if let Some(batches) = &self.metadata_row_batches {
+                let index = self
+                    .query_mailbox_metadata_rows_count
+                    .fetch_add(1, Ordering::SeqCst);
+                return Ok(batches
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| batches.last().cloned().unwrap_or_default()));
+            }
             Ok(self.metadata_rows.clone())
         }
 
@@ -1137,6 +1150,11 @@ mod tests {
         ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
             self.load_message_record_count
                 .fetch_add(1, Ordering::SeqCst);
+            if self.fail_load_message_record {
+                return Err(AtmError::mailbox_read(
+                    "simulated durable reload failure during contains filtering",
+                ));
+            }
             Ok(self.message_records.get(message_key).cloned())
         }
 
@@ -1753,8 +1771,11 @@ mod tests {
             team_dir,
             roster_present: true,
             metadata_rows: vec![metadata_row],
+            metadata_row_batches: None,
             message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: load_count.clone(),
+            fail_load_message_record: false,
         };
         let query = ReadQuery::new(
             tempdir.path().to_path_buf(),
@@ -1798,8 +1819,11 @@ mod tests {
             team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
+            metadata_row_batches: None,
             message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
         };
 
         let outcome = read_mail_with_runtime_impl(
@@ -1823,8 +1847,11 @@ mod tests {
             team_dir,
             roster_present: false,
             metadata_rows: Vec::new(),
+            metadata_row_batches: None,
             message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
         };
 
         let error = read_mail_with_runtime_impl(
@@ -1835,5 +1862,51 @@ mod tests {
         .expect_err("missing ATM roster member should fail");
 
         assert!(error.is_agent_not_found(), "{error:?}");
+    }
+
+    #[test]
+    fn read_wait_propagates_contains_reload_errors_instead_of_timeout() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (metadata_row, message_record) = metadata_row(
+            "durable body with needle",
+            Some("summary miss"),
+            TEST_SENDER,
+        );
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+            metadata_rows: Vec::new(),
+            metadata_row_batches: Some(vec![Vec::new(), vec![metadata_row]]),
+            message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: true,
+        };
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            TEST_SENDER.parse().expect("caller"),
+            Some(&format!("recipient@{TEST_TEAM}")),
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+            Some("needle"),
+            Some(1),
+        )
+        .expect("read query");
+
+        let error = read_mail_with_runtime_impl(query, &NullObservability, &runtime)
+            .expect_err("durable reload failure should surface");
+
+        assert!(error.is_mailbox_read(), "{error:?}");
+        assert!(error.message.contains("simulated durable reload failure"));
     }
 }

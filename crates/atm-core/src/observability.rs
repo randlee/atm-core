@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use sc_observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -12,6 +11,12 @@ use tracing::warn;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+
+type ActionName = sc_observability_types::ActionName;
+type ErrorCode = sc_observability_types::ErrorCode;
+type Level = sc_observability_types::Level;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
+type ServiceName = sc_observability_types::ServiceName;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
@@ -422,6 +427,22 @@ pub struct AtmObservabilityDiagnostic {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AtmMaintenanceWorkerState {
+    Running,
+    Degraded,
+    Stopped,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmMaintenanceHealthReport {
+    pub state: AtmMaintenanceWorkerState,
+    pub rotated_files_total: u64,
+    pub pruned_files_total: u64,
+    pub last_pass_at: Option<IsoTimestamp>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetainedSinkFaultMode {
     Degraded,
@@ -433,7 +454,7 @@ pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,
     pub query_state: Option<AtmObservabilityHealthState>,
-    pub maintenance: Option<sc_observability_types::MaintenanceHealthReport>,
+    pub maintenance: Option<AtmMaintenanceHealthReport>,
     pub diagnostic: Option<AtmObservabilityDiagnostic>,
     pub detail: Option<String>,
 }

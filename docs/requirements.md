@@ -432,6 +432,11 @@ Path resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
+Runtime-root rule:
+- the invocation directory is not a selector for the retained ATM runtime root;
+  socket, lock, database, and retained-log paths derive from the accepted
+  `ATM_HOME` root, not from the shell working directory
+
 Required canonical paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`

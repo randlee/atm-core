@@ -1047,12 +1047,20 @@ mod tests {
         assert!(round_trip.is_agent_not_found());
     }
 
+    fn test_atm_home_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-protocol-test-home")
+    }
+
+    fn test_workspace_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-protocol-test-workspace")
+    }
+
     #[test]
     fn request_from_frame_payload_accepts_nested_send_caller_context() {
         let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
             SendRequest::new(
-                PathBuf::from("/tmp/atm-home"),
-                PathBuf::from("/tmp/workspace"),
+                test_atm_home_dir(),
+                test_workspace_dir(),
                 AgentName::from_validated(TEST_SENDER),
                 "recipient@test-team",
                 TeamName::from_validated(TEST_TEAM),
@@ -1082,8 +1090,8 @@ mod tests {
     fn request_from_frame_payload_accepts_nested_list_caller_context() {
         let request = RequestEnvelope::List(
             ListQuery::new(
-                PathBuf::from("/tmp/atm-home"),
-                PathBuf::from("/tmp/workspace"),
+                test_atm_home_dir(),
+                test_workspace_dir(),
                 AgentName::from_validated(TEST_SENDER),
                 Some("recipient@test-team"),
                 TeamName::from_validated(TEST_TEAM),

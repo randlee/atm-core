@@ -15,7 +15,8 @@ use atm_core::home;
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmMaintenanceHealthReport,
+    AtmMaintenanceWorkerState, AtmObservabilityDiagnostic, AtmObservabilityHealth,
     AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
     LogOrder, LogTailSession, ObservabilityPort, standard_level_for_outcome,
 };
@@ -497,7 +498,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            maintenance: report.maintenance,
+            maintenance: report.maintenance.map(map_maintenance_report).transpose()?,
             diagnostic,
             detail,
         })
@@ -570,6 +571,33 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
         sc_observability_types::MaintenanceWorkerState::Running => "running",
         sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
         sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+    }
+}
+
+fn map_maintenance_report(
+    report: sc_observability_types::MaintenanceHealthReport,
+) -> Result<AtmMaintenanceHealthReport, AtmError> {
+    Ok(AtmMaintenanceHealthReport {
+        state: map_maintenance_state(report.state),
+        rotated_files_total: report.rotated_files_total.as_usize() as u64,
+        pruned_files_total: report.pruned_files_total.as_usize() as u64,
+        last_pass_at: report.last_pass_at.map(map_timestamp_back).transpose()?,
+    })
+}
+
+fn map_maintenance_state(
+    state: sc_observability_types::MaintenanceWorkerState,
+) -> AtmMaintenanceWorkerState {
+    match state {
+        sc_observability_types::MaintenanceWorkerState::Running => {
+            AtmMaintenanceWorkerState::Running
+        }
+        sc_observability_types::MaintenanceWorkerState::Degraded => {
+            AtmMaintenanceWorkerState::Degraded
+        }
+        sc_observability_types::MaintenanceWorkerState::Stopped => {
+            AtmMaintenanceWorkerState::Stopped
+        }
     }
 }
 

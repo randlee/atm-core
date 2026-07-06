@@ -1,6 +1,7 @@
 use crate::read::ClassifiedMessage;
 use crate::types::{AgentName, DisplayBucket, IsoTimestamp, ReadSelection, TaskId};
 
+#[cfg(test)]
 pub(crate) fn normalized_contains_needle(contains: Option<&str>) -> Option<String> {
     contains
         .map(str::trim)
@@ -9,7 +10,16 @@ pub(crate) fn normalized_contains_needle(contains: Option<&str>) -> Option<Strin
 }
 
 pub(crate) fn text_contains_needle(text: Option<&str>, needle: &str) -> bool {
-    text.is_some_and(|value| value.to_ascii_lowercase().contains(needle))
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    text.is_some_and(|value| {
+        value
+            .as_bytes()
+            .windows(needle.len())
+            .any(|window| window.eq_ignore_ascii_case(needle))
+    })
 }
 
 pub fn apply_sender_filter(

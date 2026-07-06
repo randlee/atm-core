@@ -264,6 +264,9 @@ Phase AC supersession note:
   reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
+- the invocation directory is command-local caller context, not a retained
+  runtime-root selector; ATM-owned socket, lock, database, and retained-log
+  paths derive from the accepted `ATM_HOME` root
 - the metadata-backed queue-query path must not reconstruct fake body text from
   summary-only rows; when `--contains` is present, `atm-core` may reload
   durable body text only for surviving summary-miss candidates after the

@@ -6,7 +6,9 @@ use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
 use crate::commands::util::parse_timestamp;
-use crate::composition::{CliComposition, resolve_command_runtime_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -54,8 +56,12 @@ impl ListCommand {
         let (home_dir, current_dir) = resolve_command_runtime_context("list")?;
         let json = self.json;
         let query = self.build_query(home_dir.clone(), current_dir.clone())?;
-        let composition =
-            CliComposition::bootstrap("list", observability, &current_dir, &home_dir)?;
+        let composition = CliComposition::bootstrap(
+            "list",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.list(query)?;
         output::print_list_result(&outcome, json)
     }

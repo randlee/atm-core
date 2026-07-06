@@ -626,9 +626,17 @@ mod tests {
         }
     }
 
+    fn test_home_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-graft-test-home")
+    }
+
+    fn test_workspace_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-graft-test-workspace")
+    }
+
     fn session_options() -> GraftSessionOptions {
         GraftSessionOptions::for_current_process(
-            PathBuf::from("/tmp/workspace"),
+            test_workspace_dir(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
         )
@@ -696,8 +704,8 @@ mod tests {
         let client = GraftClient::from_transport(transport);
 
         let send_request = SendRequest::new(
-            PathBuf::from("/tmp/home"),
-            PathBuf::from("/tmp/workspace"),
+            test_home_dir(),
+            test_workspace_dir(),
             AgentName::from_validated(TEST_LEAD),
             "qa-a@test-team",
             TeamName::from_validated(TEST_TEAM),
@@ -711,8 +719,8 @@ mod tests {
         client.send_message(send_request).expect("send");
 
         let read_query = ReadQuery::new(
-            PathBuf::from("/tmp/home"),
-            PathBuf::from("/tmp/workspace"),
+            test_home_dir(),
+            test_workspace_dir(),
             AgentName::from_validated(TEST_LEAD),
             None,
             TeamName::from_validated(TEST_TEAM),
@@ -731,8 +739,8 @@ mod tests {
         client.read_message(read_query).expect("read");
 
         let ack_request = AckRequest {
-            home_dir: PathBuf::from("/tmp/home"),
-            current_dir: PathBuf::from("/tmp/workspace"),
+            home_dir: test_home_dir(),
+            current_dir: test_workspace_dir(),
             caller_identity: AgentName::from_validated(TEST_LEAD),
             caller_team: TeamName::from_validated(TEST_TEAM),
             message_id: atm_core::schema::AtmMessageId::new(),

@@ -123,9 +123,9 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
     agent: &crate::types::AgentName,
     metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
     messages: Vec<ClassifiedMessage>,
-    contains_filter: Option<&str>,
+    contains_needle: Option<&str>,
 ) -> Result<Vec<ClassifiedMessage>, AtmError> {
-    let Some(needle) = filters::normalized_contains_needle(contains_filter) else {
+    let Some(needle) = contains_needle else {
         return Ok(messages);
     };
     let row_by_id = metadata_rows
@@ -149,7 +149,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
                 summary_text: row.summary.clone(),
                 message_text: None,
             };
-            if filters::text_contains_needle(selection.summary_text.as_deref(), &needle) {
+            if filters::text_contains_needle(selection.summary_text.as_deref(), needle) {
                 return Ok(Some(message));
             }
             selection.message_text = Some(load_durable_message_text(
@@ -163,7 +163,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
             )?);
             Ok(filters::text_contains_needle(
                 selection.message_text.as_deref(),
-                &needle,
+                needle,
             )
             .then_some(message))
         })

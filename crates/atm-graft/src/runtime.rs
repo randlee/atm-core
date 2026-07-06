@@ -414,9 +414,17 @@ mod tests {
 
     impl GraftObservability for NoopObservability {}
 
+    fn test_home_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-graft-runtime-test-home")
+    }
+
+    fn test_workspace_dir() -> PathBuf {
+        std::env::temp_dir().join("atm-graft-runtime-test-workspace")
+    }
+
     fn session_options() -> GraftSessionOptions {
         GraftSessionOptions::for_current_process(
-            PathBuf::from("/tmp/workspace"),
+            test_workspace_dir(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated(TEST_QA),
         )
@@ -478,7 +486,7 @@ mod tests {
         let ctx = ReceiveLoopContext {
             client,
             options: session_options(),
-            home_dir: PathBuf::from("/tmp/home"),
+            home_dir: test_home_dir(),
             snapshot: Arc::new(RwLock::new(SessionSnapshot {
                 team: TeamName::from_validated(TEST_TEAM),
                 agent: AgentName::from_validated(TEST_QA),
@@ -523,7 +531,7 @@ mod tests {
         let ctx = ReceiveLoopContext {
             client,
             options: session_options(),
-            home_dir: PathBuf::from("/tmp/home"),
+            home_dir: test_home_dir(),
             snapshot: Arc::clone(&snapshot),
             injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
@@ -595,7 +603,7 @@ mod tests {
         let ctx = ReceiveLoopContext {
             client: Arc::new(FailingClient),
             options: session_options(),
-            home_dir: PathBuf::from("/tmp/home"),
+            home_dir: test_home_dir(),
             snapshot: Arc::clone(&snapshot),
             injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
