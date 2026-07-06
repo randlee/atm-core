@@ -129,9 +129,8 @@ impl CliBootstrapError {
 pub(crate) fn resolve_command_runtime_context(
     command: &'static str,
 ) -> Result<(PathBuf, PathBuf), AtmError> {
-    let invocation_dir = home::command_invocation_dir().map_err(|error| {
-        log_runtime_root_failure(command, &error);
-        error
+    let invocation_dir = home::command_invocation_dir().inspect_err(|error| {
+        log_runtime_root_failure(command, error);
     })?;
     let atm_home = home::atm_home().map_err(|source| {
         let error = CliBootstrapError::AtmHomeUnresolved { command }

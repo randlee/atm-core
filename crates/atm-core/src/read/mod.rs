@@ -418,24 +418,30 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
     )?;
     let metadata_rows =
         load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
-    let (_updated_counts, updated_selected) =
+    let (updated_counts, _updated_selected) =
         selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
-    let updated_selected = updated_selected.into_iter().take(1).collect::<Vec<_>>();
-    let output_message = output_messages_from_metadata_selection(
-        runtime,
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-        &metadata_rows,
-        &updated_selected,
-        query.message_id_filter,
-    )?
-    .into_iter()
-    .next();
+    let output_message = selection
+        .selected
+        .first()
+        .cloned()
+        .map(|selected_message| {
+            output_messages_from_metadata_selection(
+                runtime,
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                &metadata_rows,
+                &[selected_message],
+                selected_message_id,
+            )
+            .map(|mut messages| messages.pop())
+        })
+        .transpose()?
+        .flatten();
     Ok(ReadDisplayState {
         mutation_applied,
         output_message,
-        bucket_counts: selection.bucket_counts,
+        bucket_counts: updated_counts,
         selected_message_id,
         match_count,
         timed_out: selection.timed_out,

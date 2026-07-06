@@ -23,6 +23,8 @@ use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
+
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendRequestEnvelope {
@@ -388,10 +390,10 @@ fn validate_required_caller_context_fields(
     Ok(())
 }
 
-fn caller_context_payload_object<'a>(
+fn caller_context_payload_object(
     message_kind: MessageKind,
-    envelope: &'a serde_json::Map<String, serde_json::Value>,
-) -> Result<&'a serde_json::Map<String, serde_json::Value>, AtmError> {
+    envelope: &serde_json::Map<String, serde_json::Value>,
+) -> Result<&serde_json::Map<String, serde_json::Value>, AtmError> {
     match message_kind {
         MessageKind::SendComposeRequest => nested_payload_object(envelope, &["Send", "Compose"]),
         MessageKind::SendAcknowledgeRequest => {
@@ -673,7 +675,7 @@ pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
 /// Resolve the canonical daemon socket path for one accepted ATM home root.
 pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
     platform_local_ipc_endpoint_path(
-        home::host_runtime_dir_from_home(home_dir).join("atm-daemon.sock"),
+        home::host_runtime_dir_from_home(home_dir).join(DAEMON_SOCKET_FILENAME),
     )
 }
 
@@ -902,10 +904,10 @@ mod tests {
         daemon_socket_path, daemon_socket_path_from_home, next_request_id,
         request_from_frame_payload, request_to_frame_payload,
     };
-    use crate::list::ListQuery;
-    use crate::send::{SendMessageSource, SendRequest};
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
+    use crate::list::ListQuery;
+    use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
     use serial_test::serial;
@@ -996,7 +998,11 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path_from_home(tempdir.path()),
-            tempdir.path().join(".atm").join("daemon").join("atm-daemon.sock")
+            tempdir
+                .path()
+                .join(".atm")
+                .join("daemon")
+                .join(super::DAEMON_SOCKET_FILENAME)
         );
     }
 
@@ -1015,7 +1021,7 @@ mod tests {
             PathBuf::from(&atm_home)
                 .join(".atm")
                 .join("daemon")
-                .join("atm-daemon.sock")
+                .join(super::DAEMON_SOCKET_FILENAME)
         );
     }
 

@@ -508,6 +508,35 @@ NORMAL_ROWS = FAST_ROWS + [
         ],
         pass_note="raw CLI bootstrap, socket ownership, and daemon lock state all stay rooted under the accepted ATM_HOME runtime subtree",
     ),
+    SuiteRowSpec(
+        id="AD19-READ-OUTPUT-001",
+        flow="read mutation returns the message it actually mutated together with post-mutation bucket counts",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "read_unread_output_stays_consistent_with_the_mutated_message",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "ack_persists_read_state_and_acknowledged_timestamp",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact",
+    ),
 ]
 
 

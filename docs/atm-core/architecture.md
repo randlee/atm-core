@@ -264,6 +264,15 @@ Phase AC supersession note:
   reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
+- `atm-core` owns the read-mutation output invariant that the selected
+  full-body payload, `selected_message_id`, and returned bucket counts remain
+  aligned with the same durable post-mutation message/state after a successful
+  `atm read`
+- `atm-core` must not mark one message read and then substitute a different
+  unread message into the returned payload
+- ack-only mailbox state transitions such as clearing `pending_ack_at` and
+  setting `acknowledged_at` remain owned by the ack path rather than by
+  read-side mutation
 - selector-driven queue inspection operates on logical terminal-node messages,
   not raw superseded predecessors
 - the canonical ICD owns the exact frame constants, packet-kind assignments,

@@ -1014,6 +1014,17 @@ Each list row contains:
 - `mutation_applied`
 - bucket_counts
 
+Read-mutation output invariants:
+- when `mutation_applied = true` and a selected message is present, that
+  message and `selected_message_id` must identify the same durable message
+- read-side mutation may mark the selected message `read = true`, but it must
+  still return that same message in the payload instead of re-running unread
+  selection and swapping in a different unread message
+- `bucket_counts` must describe the post-mutation mailbox state produced by
+  that command execution
+- ack-side mutation remains separate; only `atm ack` clears
+  `pending_ack_at` and sets `acknowledged_at`
+
 Queue-inspection architectural rules:
 - default `atm list` must stay bounded by query behavior rather than
   materializing full mailbox history and truncating it at render time
