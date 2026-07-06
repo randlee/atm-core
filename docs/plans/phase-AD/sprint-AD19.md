@@ -86,6 +86,8 @@ with these invariants:
 - caller-context ownership
 - raw CLI runtime-root unification beyond consuming the `AD.18` contract
 - graft boundary reset
+- metadata-path `--contains` / full-body search correctness; that closes in
+  `AD.20`
 
 ## Acceptance Criteria
 

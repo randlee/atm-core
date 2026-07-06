@@ -48,6 +48,7 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD17.md`
 - `docs/plans/phase-AD/sprint-AD18.md`
 - `docs/plans/phase-AD/sprint-AD19.md`
+- `docs/plans/phase-AD/sprint-AD20.md`
 
 ## Interfaces To Ratify
 
@@ -74,7 +75,7 @@ pub trait AtmGraftClient: Send + Sync {
 - no implementation paths are deleted in this sprint
 - any still-open sprint doc wording that treats daemon-owned graft advisory
   register/unregister/fetch/drain/stream behavior as accepted end state must be
-  superseded by the new `AD.14` through `AD.19` line
+  superseded by the new `AD.14` through `AD.20` line
 
 ## Deliverables
 
@@ -84,9 +85,9 @@ pub trait AtmGraftClient: Send + Sync {
   message ids on retained ATM paths
 - `violation-inventory.md` is the authoritative review artifact for the
   boundary-reset drift
-- `plan-phase-AD.md` extends the phase through `AD.19` and records the new
+- `plan-phase-AD.md` extends the phase through `AD.20` and records the new
   boundary-reset exit gates
-- `docs/project-plan.md` records the same `AD.12` through `AD.19` corrective
+- `docs/project-plan.md` records the same `AD.12` through `AD.20` corrective
   line so the global project index does not stop Phase AD at `AD.11`
 - `AD.13` defines the ULID-only message-identity closure with exact deletion
   targets, explicit boundary contracts, and validation gates
@@ -97,6 +98,8 @@ pub trait AtmGraftClient: Send + Sync {
   targets, explicit runtime-root contracts, and validation gates
 - `AD.19` defines the read-mutation output consistency closure with exact
   deletion targets, explicit output invariants, and validation gates
+- `AD.20` defines the metadata-backed body-search consistency closure with
+  exact deletion targets, explicit selector invariants, and validation gates
 
 ## This Sprint Does Not Close
 
@@ -123,7 +126,7 @@ pub trait AtmGraftClient: Send + Sync {
 - `AD.16` owns `atm-graft` runtime deletion plus final closure of
   `docs/atm-graft/{requirements,architecture,boundaries}.md`
 - `AD.17` owns only final verification, readiness evidence, and phase-close
-  documentation updates after `AD.13` through `AD.19` land
+  documentation updates after `AD.13` through `AD.20` land
 
 ## Acceptance Criteria
 
@@ -139,7 +142,7 @@ pub trait AtmGraftClient: Send + Sync {
   UUID compatibility was retired with the Claude backend
 - no remaining `Phase AD` planning doc claims that daemon-owned graft advisory
   session/register/fetch/drain/stream behavior is the accepted release design
-- the phase plan explicitly states that `AD.12` through `AD.19` are required
+- the phase plan explicitly states that `AD.12` through `AD.20` are required
   to close `Phase AD`
 - the ownership split above leaves no shared deletion target or accepted
   requirements/ADR/boundary/protocol doc without one final closing sprint

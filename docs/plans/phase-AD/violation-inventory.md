@@ -25,6 +25,9 @@ or doc surface that currently either:
 - returns internally inconsistent `atm read` mutation output by mixing the
   original selected message id with the next unread payload and stale
   pre-mutation bucket counts
+- can miss full-body `atm read --contains` matches because metadata-path read
+  filtering reconstructs summary-only text instead of querying full durable
+  message body text
 
 ## Accepted Boundary Restatement
 
@@ -60,6 +63,7 @@ The intended boundary is:
 | `Cargo.toml`, `Cargo.lock`, `crates/atm-core/Cargo.toml`, `crates/atm-core/src/schema/inbox_message.rs`, `crates/atm-core/src/mailbox/mod.rs`, `crates/atm-core/src/read/mod.rs`, `crates/atm-core/src/persistence.rs`, `crates/atm-core/tests/mailbox_locking.rs`, `crates/atm-storage/Cargo.toml`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-storage-rusqlite/src/writer/ops.rs`, and `tools/schema_models/*` | Retained ATM code still depends on `uuid` and still accepts, emits, type-checks, or generates UUID values through `AtmMessageId::{from_uuid_wire, into_uuid_wire}`, UUID parse fallback, UUID-based serializers, UUID-backed test helpers, and UUID uniqueness helpers even though Claude JSON compatibility is retired and the accepted runtime is ULID-only. | Remove all retained UUID usage and make the accepted ATM line ULID-only across message identity, schema/tooling, tests, and supporting uniqueness helpers. |
 | `crates/atm/src/composition.rs`, `crates/atm/src/commands/{send,read,ack,list,clear,members,teams,doctor}.rs`, `crates/atm-core/src/home.rs`, and the raw CLI smoke coverage | Raw CLI behavior can diverge by invocation directory/worktree: the same installed `atm` binary can emit unreadable compatibility-only sends from one worktree while persisting ULID/SQLite-backed sends from another, making wrapper-forced `cwd` normalization a correctness crutch. | Make retained raw CLI commands derive daemon socket, launch gate, and durable store roots from accepted ATM home resolution only; constrain invocation-directory use to config ingress, hook relative paths, and file-policy checks; add raw multi-worktree smoke coverage so wrapper-free CLI behavior is release-gated. |
 | `crates/atm-core/src/read/mod.rs`, `crates/atm-core/src/read/metadata_selection.rs`, and read-mutation smoke/test coverage | After `atm read --unread` marks a message read, the response can still report the original `selected_message_id` while returning the next unread message payload and the pre-mutation unread counts. The durable write occurs, but the reported read result is not self-consistent. | Preserve the mutated message as the returned payload (or return no payload if that is the deliberate contract), and always return post-mutation bucket counts that correspond to the returned state. |
+| `crates/atm-core/src/read/filters.rs`, `crates/atm-core/src/read/metadata_selection.rs`, `crates/atm-storage-rusqlite/src/mailbox_metadata.rs`, and selector/read smoke coverage | `atm read --contains` is supposed to match both summary text and full durable message body text, but the metadata path can reconstruct summary-only `text` content and miss a durable-body-only match. The command can therefore fail to surface messages that exist in SQLite and do contain the needle. | Make metadata-backed read/list filtering preserve or fetch enough durable body text to satisfy the documented `--contains` contract, and add regression coverage for summary-only vs body-only matches. |
 
 ## Architecture And Requirements Drift
 
@@ -72,6 +76,7 @@ correct:
 | `docs/atm-graft/architecture.md` | Most of the graft architecture already states the corrected thin-receiver model, but Section 2.9 still says the daemon is the sole owner of pending-nudge queue state and still requires one persistent daemon connection for embedded nudges, which conflicts with the boundary-reset goal of keeping receiver-private buffering and receive mechanics inside `atm-graft`. |
 | `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, `docs/atm-core/architecture.md`, `docs/atm-daemon/requirements.md`, and `docs/atm-daemon/architecture.md` | Do not state strongly enough that invocation directory and worktree root are never selectors for daemon socket, launch-gate, or durable SQLite root selection, leaving wrapper-only `cwd` forcing as an accidental operational requirement. |
 | `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md` | Do not currently state the output consistency rule for read-side state mutation, leaving it ambiguous whether `atm read --unread` should return the mutated message or the next unread message after mutation. |
+| `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md` | Do not currently call out strongly enough that metadata-backed `--contains` selection must still honor full durable message body matches instead of silently degrading to summary-only text on bounded metadata paths. |
 | `docs/plans/phase-AD/sprint-AD8.md` | Still frames the accepted graft path as a daemon/graft advisory-session seam rather than a thin post-send receiver implementation. |
 
 ## Review Request
@@ -109,6 +114,7 @@ The corrective implementation line for this inventory is planned in:
 - [Sprint AD.17](./sprint-AD17.md)
 - [Sprint AD.18](./sprint-AD18.md)
 - [Sprint AD.19](./sprint-AD19.md)
+- [Sprint AD.20](./sprint-AD20.md)
 
 Final closure ownership is:
 

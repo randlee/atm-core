@@ -47,6 +47,9 @@ model in several release-blocking ways:
   command to run from the primary repo root
 - `atm read --unread` can persist the read mutation but still report the wrong
   message payload and stale unread counts in the returned result
+- `atm read --contains` can still miss messages whose full durable body text
+  contains the needle when the metadata path only reconstructs summary-level
+  text
 
 ## Validated Breakage On Entry
 
@@ -83,7 +86,7 @@ daemon boundary. The new review artifact
   daemon-owned graft session model
 
 `Phase AD` therefore extends past `AD.11` with a corrective line. `AD.12`
-through `AD.19` are not optional cleanup; they are required to reach the
+through `AD.20` are not optional cleanup; they are required to reach the
 accepted post-send, message-identity, graft, raw CLI runtime-root, and
 read-output consistency architecture.
 
@@ -356,7 +359,7 @@ Phase `AD` orchestration rule:
   sprint, merge the full predecessor chain before starting new work on the
   current sprint
 - sprint branches must merge forward numerically:
-  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19`
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20`
 - do not stop downstream development waiting for prior sprint QA to pass
 - do not run pairwise cross-merges between unrelated `AD` sprint branches
 
@@ -379,6 +382,7 @@ Phase `AD` orchestration rule:
 17. [AD.17 Boundary Reset Verification Closeout](./sprint-AD17.md)
 18. [AD.18 Raw CLI Runtime Root Unification](./sprint-AD18.md)
 19. [AD.19 Read Mutation Output Consistency Repair](./sprint-AD19.md)
+20. [AD.20 Read Body-Search Metadata Consistency Repair](./sprint-AD20.md)
 
 ## Phase Exit Criteria
 
@@ -400,6 +404,9 @@ Phase `AD` closes only when:
   wrapper-only `cwd` forcing required for correctness
 - `atm read` no longer mixes original selection ids with next-unread payloads
   or stale pre-mutation bucket counts after marking a message read
+- `atm read --contains` matches both summary text and full durable message
+  body text on the accepted metadata path, with no false negative when the
+  match appears only in stored body text
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning

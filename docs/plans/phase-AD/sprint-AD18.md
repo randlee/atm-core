@@ -30,6 +30,7 @@ target: integrate/phase-AD
 
 - `crates/atm-core/src/home.rs`
 - `crates/atm/src/composition.rs`
+- `crates/atm/src/observability.rs`
 - `crates/atm/src/commands/send.rs`
 - `crates/atm/src/commands/read.rs`
 - `crates/atm/src/commands/ack.rs`
@@ -42,6 +43,7 @@ target: integrate/phase-AD
 - `scripts/smoke/fixtures.py`
 - `scripts/smoke/run.py`
 - `scripts/smoke/run_thorough.py`
+- `docs/atm-error-codes.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
@@ -56,6 +58,22 @@ after the command entrypoint resolves them once:
 
 ```rust
 pub fn command_invocation_dir() -> Result<PathBuf, AtmError>;
+
+pub enum CliBootstrapError {
+    AtmHomeUnresolved {
+        command: &'static str,
+    },
+    RuntimeRootInvalid {
+        command: &'static str,
+        atm_home: PathBuf,
+        invocation_dir: PathBuf,
+    },
+    RuntimeBootstrapRefused {
+        command: &'static str,
+        atm_home: PathBuf,
+        daemon_endpoint: PathBuf,
+    },
+}
 
 pub fn bootstrap(
     command: &'static str,
@@ -76,6 +94,19 @@ The accepted runtime-root rule after this sprint is:
 - no retained raw CLI command may switch to a JSON-only compatibility path,
   UUID-style message-id output, or an alternate mailbox store because the user
   invoked the command from a sibling worktree or another repo checkout
+- runtime-root failures are explicit discriminated-union failures, not string
+  errors or silent fallback:
+  - `AtmHomeUnresolved`: CLI could not derive `ATM_HOME` or a valid user-home
+    fallback before bootstrap
+  - `RuntimeRootInvalid`: the resolved host-runtime root cannot produce a valid
+    daemon endpoint / SQLite root / launch-gate path set
+  - `RuntimeBootstrapRefused`: the raw CLI refused to talk to a runtime whose
+    derived socket / lock / store roots do not match the accepted
+    host-home-based contract
+- source-site logging is required before each runtime-root failure is returned;
+  command entry, bootstrap, or root-derivation code must emit the structured
+  failure event at the place that detects it instead of relying on a later
+  catch-all wrapper to reconstruct cause
 - any advisory-session deletion work inside `crates/atm/src/composition.rs`
   remains owned by `AD.14`; this sprint may touch that file only for
   runtime-root/bootstrap selection logic
@@ -100,6 +131,9 @@ The accepted runtime-root rule after this sprint is:
   the command is `send`, `read`, `ack`, `log`, `list`, `clear`, `members`,
   `teams`, `teams add-member`, `teams update-member`, `teams backup`, or
   `teams restore`
+- runtime-root failures are machine-distinguishable and logged at the source,
+  so operators can tell the difference between missing `ATM_HOME`, invalid
+  root derivation, and bootstrap refusal without wrapper-specific debugging
 - command/root-resolution docs explicitly distinguish:
   - accepted ATM home / host-runtime root
   - invocation directory
@@ -113,6 +147,36 @@ The accepted runtime-root rule after this sprint is:
 - post-send emitter changes
 - caller-context identity/team policy changes
 - new wrapper features
+
+## Error Contract
+
+- `AtmHomeUnresolved` / `ATM_HOME_UNRESOLVED`
+  - cause: raw CLI command entry could not derive a valid `ATM_HOME` or OS
+    user-home fallback before runtime bootstrap
+  - emitted by: command entry / ATM-home resolution before daemon bootstrap
+  - caller surface: command failure before daemon contact
+  - recovery: set `ATM_HOME` explicitly or repair the host-home environment so
+    ATM can derive the accepted host runtime root
+  - source logging: required at the site that fails home resolution
+- `RuntimeRootInvalid` / `ATM_RUNTIME_ROOT_INVALID`
+  - cause: the accepted `ATM_HOME` resolved, but the derived daemon socket,
+    launch-gate lock, log root, or SQLite root is malformed, missing, or
+    inconsistent with the accepted runtime-root contract
+  - emitted by: bootstrap/runtime-root derivation before daemon contact
+  - caller surface: command failure before daemon contact
+  - recovery: repair the derived runtime-root inputs or the invalid persisted
+    runtime-root state, then retry the raw CLI command
+  - source logging: required at the exact root-derivation failure site
+- `RuntimeBootstrapRefused` / `ATM_RUNTIME_BOOTSTRAP_REFUSED`
+  - cause: raw CLI bootstrap detected a runtime/store selection mismatch and
+    refused to continue rather than silently falling back to a different store
+    or compatibility path
+  - emitted by: bootstrap/runtime-selection guard before daemon contact
+  - caller surface: command failure before daemon contact
+  - recovery: repair the runtime-root mismatch so raw `atm` resolves one
+    canonical host runtime for the accepted `ATM_HOME`
+  - source logging: required at the exact guard that rejects the mismatched
+    runtime selection
 
 ## Acceptance Criteria
 
@@ -141,6 +205,11 @@ The accepted runtime-root rule after this sprint is:
   `docs/atm-core/requirements.md`, `docs/atm-core/architecture.md`,
   `docs/atm-daemon/requirements.md`, and `docs/atm-daemon/architecture.md`
   state that invocation directory is not a daemon/socket/database selector
+- `docs/atm-error-codes.md` and the accepted runtime-root docs describe the
+  discriminated runtime-root failure contract rather than leaving raw CLI
+  bootstrap errors as opaque strings
+- command entry / bootstrap code logs each runtime-root failure at the source
+  before returning the discriminated error variant
 - wrappers remain optional convenience only; release readiness no longer
   depends on wrapper-enforced `cwd` forcing
 
@@ -153,5 +222,10 @@ The accepted runtime-root rule after this sprint is:
 - `just smoke thorough`
 - targeted raw multi-worktree CLI regression coverage for send/read/ack and the
   retained caller-context command matrix
+- targeted runtime-root failure-path coverage proving:
+  - missing/invalid `ATM_HOME` returns `ATM_HOME_UNRESOLVED`
+  - invalid root derivation returns `ATM_RUNTIME_ROOT_INVALID`
+  - runtime-selection mismatch returns `ATM_RUNTIME_BOOTSTRAP_REFUSED`
+  - each failure path emits one structured source-site log event
 - `rg -n "std::env::current_dir\\(\\).*bootstrap|current_dir.*daemon_socket_path|current_dir.*mail\\.db|current_dir.*\\.claude/.*/inboxes" crates/atm crates/atm-core`
 - `git diff --check`
