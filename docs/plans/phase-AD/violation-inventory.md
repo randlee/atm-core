@@ -63,19 +63,13 @@ The intended boundary is:
 
 ## Architecture And Requirements Drift
 
-These docs currently bless the same leak and therefore must be corrected as
-part of the boundary-reset line:
+These docs still contain remaining drift that the boundary-reset line must
+correct:
 
 | Document | Current drift |
 |---|---|
-| `docs/atm-daemon/requirements.md` | Declares `advisory register`, `advisory unregister`, `advisory fetch`, `advisory drain`, and `advisory stream` as daemon packet families and states that one live advisory stream per active embedded client session is a production requirement. |
-| `docs/atm-daemon/architecture.md` | States that the accepted daemon surface includes advisory register/unregister/fetch/drain/stream and that the daemon may own one bounded pending advisory queue plus one live stream per active session. |
 | `docs/atm-daemon/protocol-icd.md` | Documents advisory register/unregister/fetch/drain/stream as first-class public packet kinds and envelope mappings. |
-| `docs/atm-graft/architecture.md` | Requires a dedicated daemon advisory-stream connection, daemon-owned bounded pending-nudge state, and explicit graft session lifecycle states owned around that daemon session model. |
-| `docs/atm-graft/requirements.md` | Carries the same daemon-owned persistent receive-loop and bounded queue assumptions into the published graft requirements surface. |
-| `docs/atm-graft/boundaries.md` | Defines the session runtime consumer around a persistent receive thread and dedicated advisory-stream connection. |
-| `docs/atm-core/requirements.md` | Reserves `AdvisorySessionId` and shared advisory packet kinds in `atm-core` requirements, boxing the shared boundary into the leaked session model. |
-| `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/architecture.md`, and `docs/adr/ADR-012-one-message-identity.md` | Still describe UUID-wire message ids or UUID-based retained uniqueness rules as accepted ATM behavior even though Claude backend compatibility is retired and retained ATM runtime should now be ULID-only. |
+| `docs/atm-graft/architecture.md` | Most of the graft architecture already states the corrected thin-receiver model, but Section 2.9 still says the daemon is the sole owner of pending-nudge queue state and still requires one persistent daemon connection for embedded nudges, which conflicts with the boundary-reset goal of keeping receiver-private buffering and receive mechanics inside `atm-graft`. |
 | `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, `docs/atm-core/architecture.md`, `docs/atm-daemon/requirements.md`, and `docs/atm-daemon/architecture.md` | Do not state strongly enough that invocation directory and worktree root are never selectors for daemon socket, launch-gate, or durable SQLite root selection, leaving wrapper-only `cwd` forcing as an accidental operational requirement. |
 | `docs/requirements.md`, `docs/architecture.md`, `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md` | Do not currently state the output consistency rule for read-side state mutation, leaving it ambiguous whether `atm read --unread` should return the mutated message or the next unread message after mutation. |
 | `docs/plans/phase-AD/sprint-AD8.md` | Still frames the accepted graft path as a daemon/graft advisory-session seam rather than a thin post-send receiver implementation. |

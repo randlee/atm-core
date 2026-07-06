@@ -679,7 +679,7 @@ Sprint line:
 - `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
 - `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
 - `AD.12` `feature/pAD-s12-graft-boundary-reset-planning`
-- `AD.13` `feature/pAD-s13-ulid-only-message-identity-closeout`
+- `AD.13` `feature/pAD-s13-ulid-message-identity-reset`
 - `AD.14` `feature/pAD-s14-shared-graft-boundary-surface-reset`
 - `AD.15` `feature/pAD-s15-daemon-advisory-runtime-deletion`
 - `AD.16` `feature/pAD-s16-thin-graft-receiver-reset`
