@@ -9,17 +9,12 @@ use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmMaintenanceHealthReport, AtmMaintenanceWorkerState,
     AtmObservabilityDiagnostic, AtmObservabilityHealth, AtmObservabilityHealthState,
-<<<<<<< HEAD
-    CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
-=======
     CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode, diagnostic_code,
->>>>>>> feature/pAD-s19-read-mutation-output-consistency-repair
 };
 use serde_json::Map;
 
 use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
-use chrono::{DateTime, Utc};
 #[cfg(test)]
 use sc_observability::{
     JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration,
@@ -470,7 +465,6 @@ impl ObservabilityPort for DaemonObservability {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state: None,
-<<<<<<< HEAD
             maintenance: report.maintenance.clone().map(map_maintenance_report),
             diagnostic,
             detail,
@@ -768,45 +762,6 @@ fn maintenance_state_label(state: sc_observability_types::MaintenanceWorkerState
         sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
         sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
     }
-}
-
-fn map_maintenance_report(
-    report: sc_observability_types::MaintenanceHealthReport,
-) -> Result<AtmMaintenanceHealthReport, AtmError> {
-    Ok(AtmMaintenanceHealthReport {
-        state: map_maintenance_state(report.state),
-        rotated_files_total: report.rotated_files_total.as_usize() as u64,
-        pruned_files_total: report.pruned_files_total.as_usize() as u64,
-        last_pass_at: report.last_pass_at.map(map_timestamp_back).transpose()?,
-    })
-}
-
-fn map_maintenance_state(
-    state: sc_observability_types::MaintenanceWorkerState,
-) -> AtmMaintenanceWorkerState {
-    match state {
-        sc_observability_types::MaintenanceWorkerState::Running => {
-            AtmMaintenanceWorkerState::Running
-        }
-        sc_observability_types::MaintenanceWorkerState::Degraded => {
-            AtmMaintenanceWorkerState::Degraded
-        }
-        sc_observability_types::MaintenanceWorkerState::Stopped => {
-            AtmMaintenanceWorkerState::Stopped
-        }
-    }
-}
-
-fn map_timestamp_back(timestamp: Timestamp) -> Result<atm_core::types::IsoTimestamp, AtmError> {
-    let datetime = DateTime::parse_from_rfc3339(&timestamp.to_string())
-        .map_err(|source| {
-            AtmError::observability_query(
-                "shared daemon observability timestamp could not be parsed as RFC 3339",
-            )
-            .with_source(source)
-        })?
-        .with_timezone(&Utc);
-    Ok(datetime.into())
 }
 
 #[cfg(test)]

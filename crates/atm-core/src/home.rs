@@ -704,24 +704,6 @@ mod tests {
         assert!(error.message.contains("absolute path"));
     }
 
-    #[cfg(unix)]
-    #[test]
-    #[serial_test::serial(env)]
-    fn atm_home_rejects_non_utf8_override() {
-        use std::os::unix::ffi::OsStringExt;
-
-        let _env = LocalEnvGuard::set_many_os([
-            ("HOME", None),
-            ("USERPROFILE", None),
-            ("ATM_HOME", Some(OsString::from_vec(vec![0xff, 0xfe, b'a']))),
-        ]);
-
-        let error = atm_home().expect_err("non-utf8 ATM_HOME should fail");
-
-        assert!(error.is_config());
-        assert!(error.message.contains("valid UTF-8"));
-    }
-
     /// Windows ATM_LOG_DIR path-shape validation is covered by cross-compile CI
     /// (`cargo xwin check`) rather than native test execution.
     #[cfg(unix)]

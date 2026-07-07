@@ -12,12 +12,6 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-type ActionName = sc_observability_types::ActionName;
-type ErrorCode = sc_observability_types::ErrorCode;
-type Level = sc_observability_types::Level;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
-type ServiceName = sc_observability_types::ServiceName;
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
@@ -473,22 +467,6 @@ pub struct AtmMaintenanceHealthReport {
 pub enum RetainedSinkFaultMode {
     Degraded,
     Unavailable,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum AtmMaintenanceWorkerState {
-    Running,
-    Degraded,
-    Stopped,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AtmMaintenanceHealthReport {
-    pub state: AtmMaintenanceWorkerState,
-    pub rotated_files_total: u64,
-    pub pruned_files_total: u64,
-    pub last_pass_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

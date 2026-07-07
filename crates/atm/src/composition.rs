@@ -1516,7 +1516,12 @@ mod tests {
         let observability = CliObservability::fallback();
 
         let (result, logs) = capture_runtime_root_logs(|| {
-            CliComposition::bootstrap("send", &observability, &invocation_dir, &invalid_atm_home)
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&invalid_atm_home),
+            )
         });
         let error = result.expect_err("non-utf8 ATM_HOME should fail bootstrap");
 
@@ -1554,7 +1559,12 @@ mod tests {
         let observability = CliObservability::fallback();
 
         let (result, logs) = capture_runtime_root_logs(|| {
-            CliComposition::bootstrap("send", &observability, &invocation_dir, &atm_home)
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&atm_home),
+            )
         });
         let error = result.expect_err("conflicting daemon socket override should fail");
 

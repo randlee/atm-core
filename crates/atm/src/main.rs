@@ -500,7 +500,6 @@ impl ObservabilityPort for ScObservabilityAdapter {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-<<<<<<< HEAD
             maintenance: report.maintenance.map(map_maintenance_report),
             diagnostic,
             detail,
