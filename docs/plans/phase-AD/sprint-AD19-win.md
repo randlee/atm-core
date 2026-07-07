@@ -1,7 +1,7 @@
 ---
 id: AD.19-win
 title: Native Windows Execution For AD.19
-status: planned
+status: completed
 branch: feature/pAD-s19-read-mutation-output-consistency-repair
 worktree: ../atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair
 target: integrate/phase-AD
@@ -76,3 +76,53 @@ target: integrate/phase-AD
 7. Re-run the failed validation plus the full original validation set.
 8. Push the branch and report the final commit hash, validation results, and
    any CI evidence.
+
+## Windows Execution Report
+
+- Date: 2026-07-07
+- Host: native Windows
+- Branch: `feature/pAD-s19-read-mutation-output-consistency-repair`
+- Worktree:
+  `F:\github\atm-core-worktrees\feature\pAD-s19-read-mutation-output-consistency-repair`
+- Merge-forward: pulled AD.19 remote tip, merged
+  `origin/feature/pAD-s18-raw-cli-runtime-root-unification` into AD.19, and
+  confirmed `origin/integrate/phase-AD` was already included.
+- Windows fix commit: `173a52ef59466fdec256ebf73457516dd830da09`
+- CI evidence: pending remote CI after push.
+
+### Findings And Fixes
+
+- Fixed AD.18-to-AD.19 merge fallout in `crates/atm-core/src/protocol.rs`:
+  tests still referenced removed `daemon_socket_file_name`; updated tests to
+  use the current `DAEMON_SOCKET_FILENAME` constant while preserving Windows
+  named-pipe endpoint normalization.
+- Fixed AD.18-to-AD.19 merge fallout in `crates/atm-daemon/src/lib.rs`:
+  removed stale flat `tests_runtime_root` module declaration because
+  runtime-root tests now live under `tests::runtime_root`.
+- Fixed AD.19 read output reload on Windows validation path:
+  `output_messages_from_metadata_selection` now reloads the selected durable
+  message through the metadata row `message_key` when available, instead of
+  assuming every durable key is derivable as `atm:<message_id>`. This preserves
+  the AD.19 invariant that the output message is the mutated message and fixes
+  compatibility rows whose durable store key differs from the logical message
+  id.
+
+### Validation Results
+
+- `cargo test -p agent-team-mail-core
+  read_unread_output_stays_consistent_with_the_mutated_message -- --exact`
+  passed.
+- `cargo test -p agent-team-mail-core
+  ack_persists_read_state_and_acknowledged_timestamp -- --exact` passed.
+- `cargo test -p agent-team-mail-core --test mailbox_locking
+  multi_source_read_and_clear_complete_without_deadlock -- --exact` passed
+  after the durable-key reload fix.
+- `cargo test --workspace` passed.
+- `cargo clippy --workspace -- -D warnings` passed.
+- `python .just/run_lint.py all` passed. `python` was used for native Windows
+  execution because the Windows `python3` launcher resolves to a different
+  interpreter on this host.
+- `just test` passed.
+- `just smoke normal` passed and updated `reports/smoke/smoke.md` with
+  `AD19-READ-OUTPUT-001`.
+- `git diff --check` passed.
