@@ -1031,7 +1031,6 @@ impl Fixture {
                 );
             }
             attempts = attempts.saturating_add(1);
-            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(5));
         }
     }
@@ -1073,7 +1072,6 @@ impl Fixture {
                 );
             }
             attempts = attempts.saturating_add(1);
-            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(5));
         }
     }

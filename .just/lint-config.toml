@@ -16,7 +16,7 @@ forbidden_literals = [
 [fixed_sleep]
 # Empty by default: no test file is exempt until a narrow daemon-runtime suite
 # is explicitly approved and listed here.
-allowed_paths = []
+allowed_paths = ["crates/atm-core/tests/mailbox_locking.rs"]
 
 [portability]
 config_home_env = "ATM_CONFIG_HOME"
