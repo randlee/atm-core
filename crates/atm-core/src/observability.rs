@@ -6,6 +6,7 @@ use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
+use sc_observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
