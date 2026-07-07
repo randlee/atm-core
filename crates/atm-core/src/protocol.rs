@@ -898,11 +898,12 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home, next_request_id,
-        request_from_frame_payload, request_to_frame_payload,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope,
+        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
+        next_request_id, platform_local_ipc_endpoint_path, request_from_frame_payload,
+        request_to_frame_payload,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -995,11 +996,12 @@ mod tests {
     #[test]
     fn daemon_socket_path_from_home_uses_atm_home_runtime_subtree() {
         let tempdir = TempDir::new().expect("tempdir");
+        let logical_endpoint =
+            crate::home::host_runtime_dir_from_home(tempdir.path()).join(DAEMON_SOCKET_FILENAME);
 
         assert_eq!(
             daemon_socket_path_from_home(tempdir.path()),
-            crate::home::host_runtime_dir_from_home(tempdir.path())
-                .join(super::DAEMON_SOCKET_FILENAME)
+            platform_local_ipc_endpoint_path(logical_endpoint)
         );
     }
 
@@ -1015,7 +1017,7 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path().expect("daemon socket path"),
-            crate::home::host_runtime_dir_from_home(&atm_home).join(super::DAEMON_SOCKET_FILENAME)
+            daemon_socket_path_from_home(&atm_home)
         );
     }
 
