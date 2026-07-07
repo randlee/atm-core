@@ -230,7 +230,7 @@ def main(argv: list[str]) -> int:
             for line in downgraded:
                 print(line)
         if stdout:
-            print(stdout, end="")
+            emit_console_text(stdout)
         return 1
 
     if downgraded:
