@@ -66,5 +66,5 @@ state = "active"
 notes = [
   "AC.5 makes atm-daemon-client the owner of the generic transport envelope while canonical message and roster bodies come from atm-storage",
   "the current wire format still encodes only the shared unary RequestEnvelope and ResponseEnvelope bodies inside RpcEnvelope for protocol v1",
-  "graft-only advisory/session local IPC is intentionally outside RpcEnvelope and is owned separately by atm_daemon_client::graft_rpc",
+  "graft-only advisory/session traffic is outside RpcEnvelope and is not part of any accepted atm-daemon-client boundary surface",
 ]

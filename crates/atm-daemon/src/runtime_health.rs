@@ -725,6 +725,9 @@ impl DaemonRequestDispatcher {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
                     %error,
                     "failed to hydrate test runtime status cache from runtime-bound roster state"
                 );
