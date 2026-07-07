@@ -7,12 +7,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from lint_common import LintDirectivePolicy
 from lint_common import build_report
 from lint_common import discover_repo_root
 from lint_common import is_code_line
 from lint_common import iter_workspace_rust_files
-from lint_common import line_is_suppressed
 from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
@@ -22,7 +20,6 @@ from datetime import datetime, timezone
 
 
 LINT_NAME = "fixed-sleep"
-DIRECTIVE_POLICY = LintDirectivePolicy(tool_key=LINT_NAME)
 SLEEP_RE = re.compile(r"\b(?:std::)?thread::sleep\s*\(")
 
 
@@ -69,8 +66,6 @@ def collect_fixed_sleep_violations(
             if not is_code_line(line):
                 continue
             if not SLEEP_RE.search(line):
-                continue
-            if line_is_suppressed(line_number, lines, DIRECTIVE_POLICY):
                 continue
             violations.append(
                 FixedSleepViolation(

@@ -369,6 +369,9 @@ Required runtime rules:
 - singleton enforcement is installation-wide rather than socket-path-local;
   changing the socket path or test working directory must not create a legal
   second daemon inside one accepted `ATM_HOME`
+- invocation directory is not a daemon/socket/database selector; daemon
+  singleton, socket, and durable-store roots are derived from the accepted
+  `ATM_HOME` runtime root only
 - the ownership mechanism uses stable permanent lock-file paths under
   `{ATM_HOME}/.atm/daemon/` rather than lock-file creation/deletion as the
   ownership signal:
