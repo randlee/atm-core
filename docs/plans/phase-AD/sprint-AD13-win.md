@@ -1,9 +1,9 @@
 ---
 id: AD.13-win
 title: Native Windows Execution For AD.13
-status: planned
-branch: feature/pAD-s13-ulid-message-identity-reset
-worktree: ../atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset
+status: complete
+branch: fix/pAD-s13-win-lint-followup
+worktree: ../atm-core-worktrees/fix/pAD-s13-win-lint-followup
 target: integrate/phase-AD
 ---
 
@@ -61,6 +61,16 @@ target: integrate/phase-AD
 - all validation from `docs/plans/phase-AD/sprint-AD13.md`
 - native Windows execution only; non-Windows cross-compile is not a substitute
 - `git diff --check`
+
+## Actual Execution
+
+- the original `AD.13` branch/PR (`feature/pAD-s13-ulid-message-identity-reset`,
+  PR #477) merged to `integrate/phase-AD` before native Windows execution
+  started, so this Windows follow-up could not land on that branch
+- native Windows execution and fix-forward instead landed on
+  `fix/pAD-s13-win-lint-followup` (PR #486), targeting `integrate/phase-AD`
+- see PR #486's description for the execution report (commands run, pass/fail
+  results, commit hash, CI evidence)
 
 ## Windows Agent Instructions
 
