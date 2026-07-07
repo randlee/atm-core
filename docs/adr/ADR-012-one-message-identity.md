@@ -67,6 +67,6 @@ Implementation status:
   context only.
 - `AD.13` closes the retained UUID-compatibility consequence on
   `feature/pAD-s13-ulid-message-identity-reset`.
-- The accepted ATM line no longer depends on the retired UUID support crate, no retained
+- The accepted ATM line no longer depends on the `uuid` crate, no retained
   `AtmMessageId` path accepts or emits UUID-form message ids, and retained
   schemas/tooling document ULID-only ATM message identity.

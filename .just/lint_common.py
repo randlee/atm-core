@@ -17,7 +17,6 @@ LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 STRING_LITERAL_RE = re.compile(
     r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
 )
-DIRECTIVE_ACTIONS = ("allow-next-line", "allow-start", "allow-end")
 
 
 @dataclass(frozen=True)
@@ -29,23 +28,6 @@ class LintReport:
     transcript: list[str]
     duration_seconds: float
     log_path: Path
-
-
-@dataclass(frozen=True)
-class LintDirectivePolicy:
-    tool_key: str
-    aliases: tuple[str, ...] = ()
-
-    @property
-    def labels(self) -> tuple[str, ...]:
-        ordered_labels = ["lint-all", f"lint-{self.tool_key.lower()}"]
-        for alias_value in self.aliases:
-            ordered_labels.append(str(alias_value).lower())
-
-        unique_labels: dict[str, None] = {}
-        for label in ordered_labels:
-            unique_labels.setdefault(label, None)
-        return tuple(unique_labels.keys())
 
 
 @dataclass(frozen=True)
@@ -349,94 +331,6 @@ def is_comment_or_empty(line: str) -> bool:
 
 def is_code_line(line: str) -> bool:
     return not is_comment_or_empty(line)
-
-
-def _is_directive_label_boundary(text: str, start: int, end: int) -> bool:
-    if start > 0:
-        previous = text[start - 1]
-        if previous.isalnum() or previous == "_":
-            return False
-    if end < len(text):
-        following = text[end]
-        if following.isalnum() or following in {"_", "-"}:
-            return False
-    return True
-
-
-def matching_directive_actions(line: str, policy: LintDirectivePolicy) -> list[str]:
-    actions: list[str] = []
-    lowered = line.lower()
-    for label in sorted(policy.labels, key=len, reverse=True):
-        search_start = 0
-        while True:
-            match_start = lowered.find(label, search_start)
-            if match_start == -1:
-                break
-            match_end = match_start + len(label)
-            search_start = match_end
-            if not _is_directive_label_boundary(lowered, match_start, match_end):
-                continue
-
-            remainder = lowered[match_end:].lstrip()
-            if not remainder.startswith(":"):
-                continue
-            remainder = remainder[1:].lstrip()
-
-            for action in DIRECTIVE_ACTIONS:
-                if not remainder.startswith(action):
-                    continue
-                action_end = len(action)
-                if not _is_directive_label_boundary(remainder, 0, action_end):
-                    continue
-                actions.append(action)
-                break
-    return actions
-
-
-def line_has_allow_next_line(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    if line_number <= 1:
-        return False
-    index = line_number - 2
-    while index >= 0:
-        line = lines[index]
-        actions = matching_directive_actions(line, policy)
-        if "allow-next-line" in actions:
-            return True
-        if not is_comment_line(line):
-            return False
-        index -= 1
-    return False
-
-
-def line_is_inside_allow_block(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    allow_depth = 0
-    for line in lines[: line_number - 1]:
-        for action in matching_directive_actions(line, policy):
-            if action == "allow-start":
-                allow_depth += 1
-            elif action == "allow-end":
-                allow_depth = max(0, allow_depth - 1)
-    return allow_depth > 0
-
-
-def line_is_suppressed(
-    line_number: int,
-    lines: list[str],
-    policy: LintDirectivePolicy,
-) -> bool:
-    return line_has_allow_next_line(line_number, lines, policy) or line_is_inside_allow_block(
-        line_number,
-        lines,
-        policy,
-    )
 
 
 def classify_rust_test_scope(

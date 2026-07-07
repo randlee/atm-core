@@ -17,6 +17,12 @@ use crate::{
     GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
 };
 
+type ReceiveLoopJoinHelper = (
+    Receiver<Result<(), AtmError>>,
+    JoinHandle<()>,
+    std::thread::ThreadId,
+);
+
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
     let config = atm_core::load_atm_config(workspace_root)?;
     Ok(config.map(|config| config.graft))
@@ -61,70 +67,85 @@ pub(crate) fn set_session_state(
 pub(crate) fn join_receive_loop_with_deadline(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
+    let (result_rx, join_helper, join_helper_thread_id) =
+        spawn_receive_loop_join_helper(join_handle)?;
+    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
+        Ok(result) => finish_join_receive_loop(join_helper, result),
+        Err(RecvTimeoutError::Timeout) => {
+            Err(join_receive_loop_timeout_error(join_helper_thread_id))
+        }
+        Err(RecvTimeoutError::Disconnected) => handle_join_helper_disconnect(join_helper),
+    }
+}
+
+fn spawn_receive_loop_join_helper(
+    join_handle: JoinHandle<Result<(), AtmError>>,
+) -> Result<ReceiveLoopJoinHelper, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     let join_helper = thread::Builder::new()
         .name("atm-graft-receive-loop-join".to_string())
         .spawn(move || {
-            let result = match join_handle.join() {
-                Ok(result) => result,
-                Err(_) => Err(AtmError::daemon_unavailable("graft receive loop panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )),
-            };
+            let result = join_handle
+                .join()
+                .unwrap_or_else(|_| Err(receive_loop_panic_error()));
             let _ = result_tx.send(result);
         })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
-                .with_source(source)
-                .with_recovery(
-                    "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
-                )
-        })?;
+        .map_err(join_helper_spawn_error)?;
     let join_helper_thread_id = join_helper.thread().id();
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
-        Ok(result) => {
-            join_helper.join().map_err(|_| {
-                AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )
-            })?;
-            result
-        }
-        Err(RecvTimeoutError::Timeout) => {
-            tracing::debug!(
-                timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
-                thread_id = ?join_helper_thread_id,
-                "graft receive-loop join timed out; helper left detached after deadline"
-            );
-            Err(AtmError::daemon_unavailable(format!(
-                "graft receive loop shutdown exceeded the {:?} join deadline",
-                RECEIVE_LOOP_JOIN_DEADLINE
-            ))
-            .with_recovery(
-                "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
-            ))
-        }
-        Err(RecvTimeoutError::Disconnected) => join_helper.join().map_or_else(
-            |_| {
-                Err(
-                    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                        .with_recovery(
-                            "Restart the embedding host and atm-daemon before retrying graft mode.",
-                        ),
-                )
-            },
-            |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Restart the embedding host and atm-daemon before retrying graft mode.",
-                ))
-            },
-        ),
-    }
+    Ok((result_rx, join_helper, join_helper_thread_id))
+}
+
+fn finish_join_receive_loop(
+    join_helper: JoinHandle<()>,
+    result: Result<(), AtmError>,
+) -> Result<(), AtmError> {
+    join_helper.join().map_err(|_| join_helper_panic_error())?;
+    result
+}
+
+fn handle_join_helper_disconnect(join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+    join_helper.join().map_or_else(
+        |_| Err(join_helper_panic_error()),
+        |_| Err(join_helper_disconnect_error()),
+    )
+}
+
+fn receive_loop_panic_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive loop panicked")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_spawn_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
+        .with_source(source)
+        .with_recovery(
+            "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
+        )
+}
+
+fn join_helper_panic_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_disconnect_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive-loop join helper disconnected unexpectedly")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId) -> AtmError {
+    tracing::debug!(
+        timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
+        thread_id = ?join_helper_thread_id,
+        "graft receive-loop join timed out; helper left detached after deadline"
+    );
+    AtmError::daemon_unavailable(format!(
+        "graft receive loop shutdown exceeded the {:?} join deadline",
+        RECEIVE_LOOP_JOIN_DEADLINE
+    ))
+    .with_recovery(
+        "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
+    )
 }
 
 pub(crate) struct ReceiveLoopContext {
