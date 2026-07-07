@@ -1386,13 +1386,10 @@ mod tests {
             let _cwd = CwdGuard::change_to(&workspace_b);
             resolve_command_runtime_context("send").expect("workspace b context")
         };
-        let canonical_workspace_a = std::fs::canonicalize(&workspace_a).expect("canonical a");
-        let canonical_workspace_b = std::fs::canonicalize(&workspace_b).expect("canonical b");
-
         assert_eq!(home_a, atm_home);
         assert_eq!(home_b, atm_home);
-        assert_eq!(invocation_a, canonical_workspace_a);
-        assert_eq!(invocation_b, canonical_workspace_b);
+        assert_eq!(invocation_a, workspace_a);
+        assert_eq!(invocation_b, workspace_b);
         assert_eq!(
             atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_a)
                 .expect("workspace a daemon endpoint")
