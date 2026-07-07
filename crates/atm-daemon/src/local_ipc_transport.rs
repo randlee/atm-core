@@ -146,7 +146,13 @@ impl SocketEndpointGuard {
 impl Drop for SocketEndpointGuard {
     fn drop(&mut self) {
         if let Err(error) = self.unpublish() {
-            tracing::warn!(%error, "daemon local IPC endpoint cleanup failed during drop");
+            tracing::warn!(
+                subsystem = "local_ipc_transport",
+                action = "endpoint_drop_cleanup",
+                outcome = "failed",
+                %error,
+                "daemon local IPC endpoint cleanup failed during drop"
+            );
         }
     }
 }
@@ -510,7 +516,7 @@ where
         #[cfg(test)]
         accept_error_inject,
     };
-    let serve_error = run_accept_loop(scope, &mut accept_context, &reload_runtime_view)?;
+    let serve_error = capture_serve_error(scope, &mut accept_context, &reload_runtime_view);
     let shutdown_error = finalize_serve_loop(
         &begin_shutdown,
         &finalize_shutdown,
@@ -525,6 +531,20 @@ where
         lifecycle_waiter,
     );
     finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+fn capture_serve_error<'scope, ReloadRuntimeView>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    accept_context: &mut AcceptLoopContext<'_>,
+    reload_runtime_view: &ReloadRuntimeView,
+) -> Option<AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    match run_accept_loop(scope, accept_context, reload_runtime_view) {
+        Ok(serve_error) => serve_error,
+        Err(error) => Some(error),
+    }
 }
 
 fn spawn_lifecycle_waiter<'scope, 'env>(
@@ -753,6 +773,9 @@ where
             tracing::info!("bounded lifecycle-control-triggered config/roster reload applied");
         }
         Err(error) => tracing::warn!(
+            subsystem = "local_ipc_transport",
+            action = "reload_runtime_view",
+            outcome = "rejected",
             error_code = %error.code,
             error_message = %error.message,
             "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
@@ -782,11 +805,12 @@ fn handle_shutdown_probe(
                 TERMINATE_REJECTION_GRACE_DEADLINE,
             ) {
                 tracing::warn!(
-                    %error,
                     subsystem = "local_ipc_transport",
                     action = "shutdown_probe_wake",
+                    outcome = "failed",
                     deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
                     path = %endpoint_path.display(),
+                    %error,
                     "failed to schedule delayed listener wake during shutdown probe"
                 );
                 let _ = wake_listener(endpoint_path);
@@ -854,10 +878,19 @@ fn spawn_connection_worker<'scope>(
             match result {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => {
-                    tracing::warn!(%error, "daemon local IPC connection handling failed");
+                    tracing::warn!(
+                        subsystem = "local_ipc_transport",
+                        action = "connection_worker",
+                        outcome = "failed",
+                        %error,
+                        "daemon local IPC connection handling failed"
+                    );
                 }
                 Err(_) => {
                     tracing::warn!(
+                        subsystem = "local_ipc_transport",
+                        action = "connection_worker",
+                        outcome = "panic",
                         "daemon local IPC connection worker panicked; the transport thread recovered and continued shutdown accounting"
                     );
                 }
