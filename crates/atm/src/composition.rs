@@ -590,8 +590,14 @@ impl AtmGraftClient for CliComposition<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
     use std::fs;
+    use std::io;
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt;
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
@@ -624,6 +630,7 @@ mod tests {
     use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
+    use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
         AtmHomePath, CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor,
@@ -649,6 +656,51 @@ mod tests {
         fn drop(&mut self) {
             std::env::set_current_dir(&self.original).expect("restore current dir");
         }
+    }
+
+    #[derive(Clone, Default)]
+    struct SharedLogBuffer(Arc<Mutex<Vec<u8>>>);
+
+    struct SharedLogWriter(SharedLogBuffer);
+
+    impl<'a> MakeWriter<'a> for SharedLogBuffer {
+        type Writer = SharedLogWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            SharedLogWriter(self.clone())
+        }
+    }
+
+    impl Write for SharedLogWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0
+                .0
+                .lock()
+                .expect("log buffer lock")
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl SharedLogBuffer {
+        fn contents(&self) -> String {
+            String::from_utf8(self.0.lock().expect("log buffer lock").clone()).expect("utf8 logs")
+        }
+    }
+
+    fn capture_runtime_root_logs<T>(f: impl FnOnce() -> T) -> (T, String) {
+        let buffer = SharedLogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(buffer.clone())
+            .finish();
+        let result = tracing::subscriber::with_default(subscriber, f);
+        (result, buffer.contents())
     }
 
     struct LoopbackFixture {
@@ -1433,6 +1485,51 @@ mod tests {
 
     #[test]
     #[serial(env)]
+    fn resolve_command_runtime_context_reports_atm_home_unresolved_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
+        let (result, logs) = {
+            let _cwd = CwdGuard::change_to(&workspace);
+            capture_runtime_root_logs(|| resolve_command_runtime_context("send"))
+        };
+
+        let error = result.expect_err("missing ATM_HOME/home should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_HOME_UNRESOLVED"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(env)]
+    fn bootstrap_reports_runtime_root_invalid_for_non_utf8_socket_override_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let invocation_dir = tempdir.path().join("workspace");
+        let invalid_atm_home = std::path::PathBuf::from(OsString::from_vec(vec![0xff, 0xfe, b'a']));
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let observability = CliObservability::fallback();
+
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap("send", &observability, &invocation_dir, &invalid_atm_home)
+        });
+        let error = result.expect_err("non-utf8 ATM_HOME should fail bootstrap");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeRootInvalid
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_ROOT_INVALID"));
+    }
+
+    #[test]
+    #[serial(env)]
     fn bootstrap_refuses_conflicting_daemon_socket_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
@@ -1454,19 +1551,19 @@ mod tests {
             ("ATM_IDENTITY", Some(TEST_SENDER)),
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
+        let observability = CliObservability::fallback();
 
-        let error = CliComposition::bootstrap(
-            "send",
-            &CliObservability::fallback(),
-            InvocationDir::new(&invocation_dir),
-            AtmHomePath::new(&atm_home),
-        )
-        .expect_err("conflicting daemon socket override should fail");
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap("send", &observability, &invocation_dir, &atm_home)
+        });
+        let error = result.expect_err("conflicting daemon socket override should fail");
 
         assert_eq!(
             error.code,
             atm_core::error_codes::AtmErrorCode::RuntimeBootstrapRefused
         );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_BOOTSTRAP_REFUSED"));
     }
 
     #[test]

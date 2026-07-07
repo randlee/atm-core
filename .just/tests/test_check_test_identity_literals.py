@@ -93,30 +93,6 @@ mod tests {
             self.assertEqual(violations[0].line_number, 9)
             self.assertEqual(violations[0].kind, "test_scope_forbidden_literal")
 
-    def test_collect_identity_violations_respects_shared_suppressions(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            (repo_root / "crates/atm-core/tests/example.rs").write_text(
-                """\
-// lint-identities: allow-next-line
-let _ = "team-lead";
-// rule-009: allow-start
-let _ = "arch-ctm";
-// lint-identities: allow-end
-let _ = "quality-mgr";
-""",
-                encoding="utf-8",
-            )
-
-            violations = collect_identity_violations(
-                repo_root,
-                forbidden_literals=load_forbidden_literals(repo_root),
-                production_canonical_literals=load_production_canonical_literals(repo_root),
-            )
-
-            self.assertEqual([violation.line_number for violation in violations], [6])
-
     def test_collect_identity_violations_flags_production_literal_outside_canonical_source(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

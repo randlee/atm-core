@@ -1626,9 +1626,11 @@ Implementation rules:
 - `ATM_LOG_DIR` overrides the exact retained log directory
 - without `ATM_LOG_DIR`, the retained log path is derived from the accepted
   `ATM_HOME` root for the active installation
-- the invocation directory is not a selector for the retained runtime root;
-  daemon socket, lock, database, and retained-log paths remain anchored to the
+- the invocation directory is not a daemon/socket/database selector; daemon
+  socket, lock, database, and retained-log paths remain anchored to the
   accepted `ATM_HOME` root
+- after `ATM_HOME` resolves the canonical host runtime root, the invocation
+  directory is used only for workspace config discovery
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version
