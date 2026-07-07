@@ -896,49 +896,11 @@ fn map_logging_state(
     }
 }
 
-fn map_maintenance_report(
-    report: sc_observability_types::MaintenanceHealthReport,
-) -> AtmMaintenanceHealthReport {
-    AtmMaintenanceHealthReport {
-        state: match report.state {
-            sc_observability_types::MaintenanceWorkerState::Running => {
-                AtmMaintenanceWorkerState::Running
-            }
-            sc_observability_types::MaintenanceWorkerState::Degraded => {
-                AtmMaintenanceWorkerState::Degraded
-            }
-            sc_observability_types::MaintenanceWorkerState::Stopped => {
-                AtmMaintenanceWorkerState::Stopped
-            }
-        },
-        rotated_files_total: report.rotated_files_total.as_usize() as u64,
-        pruned_files_total: report.pruned_files_total.as_usize() as u64,
-        last_pass_at: report
-            .last_pass_at
-            .map(|timestamp| {
-                chrono::DateTime::parse_from_rfc3339(&timestamp.to_string())
-                    .map(|datetime| datetime.with_timezone(&chrono::Utc).into())
-                    .map_err(|source| {
-                        AtmError::observability_query(
-                            "shared maintenance timestamp could not be converted to chrono",
-                        )
-                        .with_source(source)
-                    })
-            })
-            .transpose()
-            .expect("shared maintenance timestamps must project into ATM timestamps"),
-    }
-}
-
 fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary
-            .code
-            .map(|code| diagnostic_code(code.as_str().to_string()))
-            .transpose()
-            .expect("shared diagnostic codes must project into ATM diagnostics"),
+        code: summary.code,
         message: summary.message,
     }
 }
@@ -1029,9 +991,7 @@ impl sc_observability::LogSink for RetainedSinkHealthOverride {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use atm_core::observability::{
-        AtmMaintenanceWorkerState, AtmObservabilityHealthState, ObservabilityPort,
-    };
+    use atm_core::observability::{AtmObservabilityHealthState, ObservabilityPort};
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;

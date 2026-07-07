@@ -38,6 +38,7 @@ dependencies = [
  "libc",
  "parking_lot",
  "same-file",
+ "sc-observability-types",
  "serde",
  "serde_json",
  "serial_test",

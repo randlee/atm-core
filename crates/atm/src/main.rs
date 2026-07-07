@@ -598,8 +598,8 @@ fn map_maintenance_report(
             .map(map_timestamp_back)
             .transpose()
             .expect("shared maintenance timestamps must project into ATM timestamps"),
-    }
-}
+     }
+ }
 
 fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
     let mut fields = Map::new();
@@ -889,7 +889,7 @@ fn level_for_outcome(outcome: &str) -> Level {
     ) {
         return Level::Debug;
     }
-    map_level(standard_level_for_outcome(outcome))
+    standard_level_for_outcome(outcome)
 }
 
 fn map_query_error(source: QueryError) -> AtmError {

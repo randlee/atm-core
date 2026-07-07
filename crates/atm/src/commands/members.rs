@@ -211,12 +211,8 @@ mod tests {
 
         fixture.with_env_and_cwd(|| {
             let query = command.build_query().expect("query");
-            let canonical_current_dir =
-                std::fs::canonicalize(&fixture.current_dir).expect("canonical current dir");
-            assert_eq!(
-                query.live_cwd.as_deref(),
-                Some(canonical_current_dir.as_path())
-            );
+            let current_dir = home::command_invocation_dir().expect("current dir");
+            assert_eq!(query.live_cwd.as_deref(), Some(current_dir.as_path()));
         });
     }
 

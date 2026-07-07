@@ -461,9 +461,8 @@ mod tests {
 
         fixture.with_env_and_cwd(|| {
             let member_home_dir = command.resolve_member_home_dir().expect("member home dir");
-            let canonical_current_dir =
-                std::fs::canonicalize(&fixture.current_dir).expect("canonical current dir");
-            assert_eq!(member_home_dir, canonical_current_dir);
+            let current_dir = home::command_invocation_dir().expect("current dir");
+            assert_eq!(member_home_dir, current_dir);
         });
     }
 

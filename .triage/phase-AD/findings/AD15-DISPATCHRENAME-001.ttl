@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD15-DISPATCHRENAME-001>
+  a triage:Finding ;
+  triage:findingId "AD15-DISPATCHRENAME-001" ;
+  triage:title "graft_dispatch.rs advisory dispatch renamed, not deleted" ;
+  triage:description "crates/atm-daemon/src/graft_dispatch.rs:15-19 -- dispatch_advisory_stream was renamed to dispatch_graft_stream but still takes AdvisoryStreamRequest and streams through GraftStreamSink -- same forbidden advisory-streaming concept under a new name, not actually deleted. Live call site confirmed at crates/atm-daemon/src/local_ipc_transport/request_worker.rs:320-336. Originally reported during AD14-QA-3 review of PR #478 (feature/pAD-s14-shared-graft-boundary-surface-reset) as ARCH-002, but sprint-AD14.md's own scope explicitly excludes crates/atm-daemon/* and defers daemon runtime deletion to a later sprint. sprint-AD15.md's own stated Goal is 'delete daemon-owned graft advisory runtime' and its Exact Targets explicitly cover crates/atm-daemon/*. Team-lead has ruled (user-confirmed 2026-07-06) that this finding is properly AD.15-owned undone work, not an AD.14 violation -- reclassify accordingly rather than treating it as newly discovered on AD.14's branch." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/4> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/826b9804> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s15/cf3b1e71> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s15/cf3b1e71> ;
+  triage:dispatchReadyJustification "Finding already fixed on promote_to_branch (s15); AD.17 completion gate (#161) still blocks dispatch of any fixes. Waiting for user approval and AD.17 closure." .
+
+<urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 2 ;
+  triage:snippet "use atm_daemon_client::graft_rpc::{AdvisoryStreamRequest, RequestEnvelope, ResponseEnvelope};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b9804" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/826b9804> .
+
+<urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 15 ;
+  triage:snippet "fn dispatch_graft_stream(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b9804" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/826b9804> .
+
+<urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 17 ;
+  triage:snippet "request: AdvisoryStreamRequest," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b9804" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/826b9804> .
+
+<urn:atm:triage:occurrence/AD15-DISPATCHRENAME-001/pAD-s14/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_dispatch.rs" ;
+  triage:line 22 ;
+  triage:snippet "pub(crate) trait GraftStreamSink {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b9804" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/826b9804> .
+
+<urn:atm:triage:worktree/pAD-s14/826b9804>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "826b9804" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/pAD-s15/cf3b1e71>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "cf3b1e71" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/pAD-s16/ab66113f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "ab66113f" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/pAD-s17/fa4e3058>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "fa4e3058" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/pAD-s18/85a12692>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "85a12692" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAD-s19/c7a3d6a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "c7a3d6a9" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAD-s20/4fd0ec0b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "4fd0ec0b" ;
+  triage:orderIndex 20 .
