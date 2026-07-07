@@ -70,8 +70,8 @@ They must not differ in:
 Thin-client extension rule:
 - the shared ATM protocol ends at the retained unary ATM command family
 - embedded same-host graft session traffic may reuse the same frame shape, but
-  its request/response DTO family is intentionally private to
-  `atm_daemon_client::graft_rpc`
+  its request/response DTO family is intentionally private implementation
+  detail inside `atm-daemon` / `atm-graft`
 - `atm-graft` therefore uses the shared unary packet family for send/read/ack
   and a separate graft-local same-host contract for advisory/session traffic
 
@@ -113,7 +113,8 @@ protocol.
 This document defines two related contracts:
 - the shared ATM unary protocol
 - the graft-local same-host advisory/session extension that reuses the same
-  frame shape with a daemon-client-owned DTO family
+  frame shape with receiver-private implementation DTOs that are not part of
+  the accepted shared boundary surface
 
 Phase S baseline transport shape:
 - one logical request
@@ -412,8 +413,9 @@ not part of the shared `atm-core::protocol::{RequestEnvelope, ResponseEnvelope}`
 family.
 
 Ownership:
-- packet kinds, DTOs, and frame helpers live in
-  `crates/atm-daemon-client/src/graft_rpc.rs`
+- any surviving packet kinds, DTOs, and frame helpers are private
+  implementation detail compiled into `atm-daemon` / `atm-graft`, not an
+  accepted shared crate boundary
 - daemon dispatch lives behind the daemon-owned `GraftRequestDispatcher` seam
 - `atm-graft` consumes this extension through its private advisory transport,
   not through shared `ClientTransport`
@@ -517,7 +519,7 @@ Same-host local IPC must:
 - use the same shared unary request/response packet kinds as remote transport
 - return typed ATM error responses through the shared unary packet family
 - keep any graft-local extension traffic on the separate
-  `atm_daemon_client::graft_rpc` contract
+  private `atm-daemon` / `atm-graft` implementation path
 
 Same-host local IPC must not:
 - invent a local-only header

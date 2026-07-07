@@ -201,12 +201,12 @@ Initial crate requirement IDs:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
   Any earlier graft-specific contract intent is superseded by
-  the shared unary `AtmGraftClient` contract for send/read/ack plus the
-  daemon-client-owned graft local IPC contract in
-  `atm_daemon_client::graft_rpc`, rather than by a graft-private `atm-core`
-  requirement. The generic session identifier name reserved for the thin-client
-  line remains `AdvisorySessionId`; later advisory/session work must reuse that
-  name rather than reviving `GraftSessionId`.
+  the shared unary `AtmGraftClient` contract for send/read/ack. Any surviving
+  same-host graft advisory/session transport remains implementation-private to
+  `atm-daemon` / `atm-graft`, rather than an `atm-core` requirement. The
+  generic session identifier name reserved for the thin-client line remains
+  `AdvisorySessionId`; later advisory/session work must reuse that name rather
+  than reviving `GraftSessionId`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport.
   The shared protocol surface is limited to the retained unary ATM command
@@ -216,7 +216,8 @@ Initial crate requirement IDs:
   `ServerTransport` contracts plus route-selection semantics between local and
   cross-host daemon paths. Graft-private same-host session registration,
   queue inspection, and live advisory delivery must stay behind
-  `atm-daemon-client` / `atm-graft` seams instead of this shared boundary.
+  receiver-private `atm-graft` / `atm-daemon` implementation seams instead of
+  this shared boundary.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
