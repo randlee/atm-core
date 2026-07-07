@@ -44,6 +44,18 @@ pub fn outcome_label(value: &'static str) -> OutcomeLabel {
         .expect("ATM observability outcome literals must be valid OutcomeLabel values")
 }
 
+pub fn service_name(value: impl Into<String>) -> Result<ServiceName, AtmError> {
+    ServiceName::new(value.into()).map_err(|source| {
+        AtmError::validation("ATM observability service name is invalid")
+            .with_recovery("Provide a valid ATM-owned observability service name before retrying.")
+            .with_source(source)
+    })
+}
+
+pub fn diagnostic_code(value: impl Into<String>) -> Result<ErrorCode, AtmError> {
+    Ok(ErrorCode::new_owned(value))
+}
+
 pub fn standard_level_for_outcome(outcome: &str) -> Level {
     match outcome {
         "ok" | "sent" | "dry_run" => Level::Info,

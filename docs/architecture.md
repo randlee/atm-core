@@ -1628,7 +1628,8 @@ Implementation rules:
   `ATM_HOME` root for the active installation
 - the invocation directory is not a selector for the retained runtime root;
   daemon socket, lock, database, and retained-log paths remain anchored to the
-  accepted `ATM_HOME` root
+  accepted `ATM_HOME` root; it only drives workspace config discovery after
+  `ATM_HOME` resolves the canonical host runtime root
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version

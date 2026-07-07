@@ -413,7 +413,8 @@ mod tests {
                 records: vec![AtmLogRecord {
                     timestamp: chrono::Utc::now().into(),
                     severity: LogLevelFilter::Info,
-                    service: sc_observability_types::ServiceName::new("atm").expect("service"),
+                    service: atm_core::observability::service_name("atm")
+                        .expect("valid service name"),
                     target: None,
                     action: Some("send".to_string()),
                     message: Some("synthetic".to_string()),

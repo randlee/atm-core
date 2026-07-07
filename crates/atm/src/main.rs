@@ -18,7 +18,8 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmMaintenanceHealthReport,
     AtmMaintenanceWorkerState, AtmObservabilityDiagnostic, AtmObservabilityHealth,
     AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
-    LogOrder, LogTailSession, ObservabilityPort, standard_level_for_outcome,
+    LogOrder, LogTailSession, ObservabilityPort, diagnostic_code, service_name,
+    standard_level_for_outcome,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -31,8 +32,9 @@ use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
-    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
+    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
+    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
+    TargetCategory, Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
@@ -683,13 +685,21 @@ fn map_command_event(
                 .with_source(source)
         })?;
     let fields = build_command_event_fields(&event);
+    let action = ActionName::new(event.action.as_str()).map_err(|source| {
+        AtmError::observability_emit("failed to validate ATM observability action")
+            .with_source(source)
+    })?;
+    let outcome = OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+        AtmError::observability_emit("failed to validate ATM observability outcome")
+            .with_source(source)
+    })?;
     Ok(LogEvent {
         version: schema_version,
         timestamp: Timestamp::now_utc(),
         level: level_for_outcome(event.outcome.as_str()),
         service: service_name.clone(),
         target: target_category.clone(),
-        action: event.action,
+        action,
         message: Some(format!(
             "ATM command {} completed with outcome {}",
             event.command, event.outcome
@@ -698,7 +708,7 @@ fn map_command_event(
         trace: None,
         request_id,
         correlation_id,
-        outcome: Some(event.outcome),
+        outcome: Some(outcome),
         diagnostic: None,
         state_transition: None,
         fields,
@@ -783,7 +793,7 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service,
+        service: service_name(event.service.as_str().to_string())?,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
@@ -897,7 +907,10 @@ fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary.code,
+        code: summary.code.map(|code| {
+            diagnostic_code(code.as_str().to_string())
+                .expect("shared diagnostic codes must be non-empty")
+        }),
         message: summary.message,
     }
 }

@@ -436,6 +436,8 @@ Runtime-root rule:
 - the invocation directory is not a selector for the retained ATM runtime root;
   socket, lock, database, and retained-log paths derive from the accepted
   `ATM_HOME` root, not from the shell working directory
+- the invocation directory is only a workspace config discovery input after
+  `ATM_HOME` resolves the canonical host runtime root
 
 Required canonical paths:
 - `{ATM_HOME}/.claude`

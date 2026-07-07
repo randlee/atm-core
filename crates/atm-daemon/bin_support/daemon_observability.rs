@@ -17,7 +17,9 @@ use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
 use chrono::{DateTime, Utc};
 #[cfg(test)]
-use sc_observability::{JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration};
+use sc_observability::{
+    JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration,
+};
 use sc_observability_types::DiagnosticInfo;
 
 type ActionName = sc_observability_types::ActionName;
@@ -380,8 +382,14 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: event.action.clone(),
-            outcome: event.outcome.clone(),
+            action: ActionName::new(event.action.as_str()).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon command action")
+                    .with_source(source)
+            })?,
+            outcome: OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon command outcome")
+                    .with_source(source)
+            })?,
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
