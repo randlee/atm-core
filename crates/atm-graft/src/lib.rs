@@ -344,49 +344,6 @@ impl GraftSession {
         )
     }
 
-    #[cfg(test)]
-    fn activate_with_graft_config_and_home_dir(
-        client: Arc<dyn GraftSessionClient>,
-        graft_config: Option<GraftConfig>,
-        options: GraftSessionOptions,
-        injector: Arc<dyn HostNudgeInjector>,
-        observability: Arc<dyn GraftObservability>,
-        home_dir: PathBuf,
-    ) -> Result<Self, AtmError> {
-        let initial_snapshot = options.activation_state();
-        let snapshot = Arc::new(RwLock::new(initial_snapshot));
-
-        let Some(graft_config) = graft_config else {
-            return inactive_session(client, snapshot, observability);
-        };
-        if !graft_config.enabled {
-            return inactive_session(client, snapshot, observability);
-        }
-
-        set_session_state(
-            &snapshot,
-            GraftSessionState::Polling,
-            observability.as_ref(),
-        )?;
-        let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            Arc::clone(&client),
-            options,
-            home_dir,
-            Arc::clone(&snapshot),
-            injector,
-            Arc::clone(&observability),
-        )?;
-
-        Ok(Self {
-            client,
-            snapshot,
-            observability,
-            stop_tx: Some(stop_tx),
-            join_handle: Some(join_handle),
-        })
-    }
-
-    #[cfg(not(test))]
     fn activate_with_graft_config_and_home_dir(
         client: Arc<dyn GraftSessionClient>,
         graft_config: Option<GraftConfig>,
@@ -547,6 +504,9 @@ fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
 
 impl Drop for GraftSession {
     fn drop(&mut self) {
+        // Drop performs bounded blocking shutdown because close_internal()
+        // stops the receive loop and waits for its join deadline before this
+        // session can release ownership cleanly.
         if let Err(error) = self.close_internal() {
             let identity = self
                 .snapshot()
@@ -578,6 +538,7 @@ impl AtmGraftClient for GraftSession {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -591,6 +552,7 @@ mod tests {
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, CommandAction, ReadSelection, TeamName};
     use serde_json::json;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -626,17 +588,28 @@ mod tests {
         }
     }
 
-    fn test_home_dir() -> PathBuf {
-        std::env::temp_dir().join("atm-graft-test-home")
+    struct TestPaths {
+        _tempdir: TempDir,
+        home_dir: PathBuf,
+        workspace_root: PathBuf,
     }
 
-    fn test_workspace_dir() -> PathBuf {
-        std::env::temp_dir().join("atm-graft-test-workspace")
+    fn test_paths() -> TestPaths {
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let workspace_root = tempdir.path().join("workspace");
+        fs::create_dir_all(&home_dir).expect("create home dir");
+        fs::create_dir_all(&workspace_root).expect("create workspace dir");
+        TestPaths {
+            _tempdir: tempdir,
+            home_dir,
+            workspace_root,
+        }
     }
 
-    fn session_options() -> GraftSessionOptions {
+    fn session_options(paths: &TestPaths) -> GraftSessionOptions {
         GraftSessionOptions::for_current_process(
-            test_workspace_dir(),
+            paths.workspace_root.clone(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
         )
@@ -645,6 +618,7 @@ mod tests {
 
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
+        let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(
             |request| match request {
                 CoreRequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => Ok(
@@ -704,8 +678,8 @@ mod tests {
         let client = GraftClient::from_transport(transport);
 
         let send_request = SendRequest::new(
-            test_home_dir(),
-            test_workspace_dir(),
+            paths.home_dir.clone(),
+            paths.workspace_root.clone(),
             AgentName::from_validated(TEST_LEAD),
             "qa-a@test-team",
             TeamName::from_validated(TEST_TEAM),
@@ -719,8 +693,8 @@ mod tests {
         client.send_message(send_request).expect("send");
 
         let read_query = ReadQuery::new(
-            test_home_dir(),
-            test_workspace_dir(),
+            paths.home_dir.clone(),
+            paths.workspace_root.clone(),
             AgentName::from_validated(TEST_LEAD),
             None,
             TeamName::from_validated(TEST_TEAM),
@@ -739,8 +713,8 @@ mod tests {
         client.read_message(read_query).expect("read");
 
         let ack_request = AckRequest {
-            home_dir: test_home_dir(),
-            current_dir: test_workspace_dir(),
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.workspace_root.clone(),
             caller_identity: AgentName::from_validated(TEST_LEAD),
             caller_team: TeamName::from_validated(TEST_TEAM),
             message_id: atm_core::schema::AtmMessageId::new(),
@@ -751,14 +725,14 @@ mod tests {
 
     #[test]
     fn session_stays_inactive_without_atm_config() {
-        let home_dir = tempfile::TempDir::new().expect("tempdir");
+        let paths = test_paths();
         let session = GraftSession::activate_with_graft_config_and_home_dir(
             Arc::new(StubSessionClient),
             None,
-            session_options(),
+            session_options(&paths),
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
-            home_dir.path().to_path_buf(),
+            paths.home_dir.clone(),
         )
         .expect("inactive session");
 
@@ -770,14 +744,14 @@ mod tests {
 
     #[test]
     fn session_stays_inactive_when_graft_is_disabled() {
-        let home_dir = tempfile::TempDir::new().expect("tempdir");
+        let paths = test_paths();
         let session = GraftSession::activate_with_graft_config_and_home_dir(
             Arc::new(StubSessionClient),
             Some(GraftConfig { enabled: false }),
-            session_options(),
+            session_options(&paths),
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
-            home_dir.path().to_path_buf(),
+            paths.home_dir.clone(),
         )
         .expect("inactive session");
 

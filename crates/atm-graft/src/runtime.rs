@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 
 use atm_core::GraftConfig;
 use atm_core::boundary::PostSendHookEvent;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorKind};
 use atm_core::list::ListQuery;
 use atm_core::read::ReadQuery;
 use atm_core::schema::AtmMessageId;
@@ -16,6 +16,100 @@ use crate::{
     DEFAULT_LIST_LIMIT, GraftObservability, GraftSessionClient, GraftSessionOptions,
     GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
 };
+
+const DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 2;
+const MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 8;
+#[cfg(test)]
+const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(50);
+#[cfg(not(test))]
+const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
+
+struct InjectRequest {
+    event: PostSendHookEvent,
+    result_tx: SyncSender<Result<(), AtmError>>,
+}
+
+struct BoundedHostNudgeInjector {
+    request_tx: SyncSender<InjectRequest>,
+}
+
+impl BoundedHostNudgeInjector {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Result<Self, AtmError> {
+        let (request_tx, request_rx) = mpsc::sync_channel::<InjectRequest>(0);
+        thread::Builder::new()
+            .name("atm-graft-host-nudge".to_string())
+            .spawn(move || {
+                while let Ok(request) = request_rx.recv() {
+                    let result = injector.inject_nudge(request.event);
+                    let _ = request.result_tx.send(result);
+                }
+            })
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorKind::Internal,
+                    "failed to spawn graft host nudge worker",
+                )
+                .with_source(source)
+                .with_recovery(
+                    "Retry graft activation after the embedding host can spawn one bounded nudge worker thread.",
+                )
+            })?;
+        Ok(Self { request_tx })
+    }
+
+    fn inject_nudge(&self, event: PostSendHookEvent) -> Result<(), AtmError> {
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        self.request_tx
+            .try_send(InjectRequest { event, result_tx })
+            .map_err(inject_request_enqueue_error)?;
+        match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+            Ok(result) => result,
+            Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
+                AtmErrorKind::Timeout,
+                format!(
+                    "graft host nudge injection exceeded the {:?} delivery deadline",
+                    HOST_NUDGE_INJECTION_DEADLINE
+                ),
+            )
+            .with_recovery(
+                "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+            )),
+            Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
+                AtmErrorKind::Internal,
+                "graft host nudge worker disconnected before returning a delivery result",
+            )
+            .with_recovery("Restart the embedding host before retrying graft delivery.")),
+        }
+    }
+}
+
+fn inject_request_enqueue_error(error: TrySendError<InjectRequest>) -> AtmError {
+    match error {
+        TrySendError::Full(_) => AtmError::new(
+            AtmErrorKind::Timeout,
+            "graft host nudge worker is still busy past the bounded delivery deadline",
+        )
+        .with_recovery(
+            "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+        ),
+        TrySendError::Disconnected(_) => AtmError::new(
+            AtmErrorKind::Internal,
+            "graft host nudge worker is unavailable",
+        )
+        .with_recovery("Restart the embedding host before retrying graft delivery."),
+    }
+}
+
+fn next_degraded_poll_interval(
+    base: std::time::Duration,
+    current: std::time::Duration,
+) -> std::time::Duration {
+    let capped = base.saturating_mul(MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER);
+    std::cmp::min(
+        current.saturating_mul(DEGRADED_POLL_INTERVAL_MULTIPLIER),
+        capped,
+    )
+}
 
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
     let config = atm_core::load_atm_config(workspace_root)?;
@@ -138,15 +232,19 @@ pub(crate) struct ReceiveLoopContext {
 }
 
 pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
+    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector))?;
     let mut delivered_message_ids = BTreeSet::new();
+    let base_poll_interval = ctx.options.poll_interval();
+    let mut poll_interval = base_poll_interval;
     loop {
-        match ctx.stop_rx.recv_timeout(ctx.options.poll_interval()) {
+        match ctx.stop_rx.recv_timeout(poll_interval) {
             Ok(()) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
             Err(RecvTimeoutError::Timeout) => {}
         }
 
-        match poll_once(&ctx, &mut delivered_message_ids) {
+        match poll_once(&ctx, &injector, &mut delivered_message_ids) {
             Ok(()) => {
+                poll_interval = base_poll_interval;
                 let _ = set_session_state(
                     &ctx.snapshot,
                     GraftSessionState::Polling,
@@ -154,6 +252,7 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
                 );
             }
             Err(error) => {
+                poll_interval = next_degraded_poll_interval(base_poll_interval, poll_interval);
                 let _ = set_session_state(
                     &ctx.snapshot,
                     GraftSessionState::Degraded,
@@ -170,6 +269,7 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
 
 fn poll_once(
     ctx: &ReceiveLoopContext,
+    injector: &BoundedHostNudgeInjector,
     delivered_message_ids: &mut BTreeSet<AtmMessageId>,
 ) -> Result<(), AtmError> {
     let mut rows = ctx
@@ -189,7 +289,7 @@ fn poll_once(
         }
 
         let event = read_post_send_event(ctx, message_id)?;
-        ctx.injector.inject_nudge(event.clone())?;
+        injector.inject_nudge(event.clone())?;
         let snapshot = read_snapshot(&ctx.snapshot)?;
         ctx.observability.nudge_delivered(&snapshot, &event);
         delivered_message_ids.insert(message_id);
@@ -283,6 +383,7 @@ fn read_post_send_event(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex, RwLock, mpsc};
     use std::time::{Duration, Instant};
@@ -297,13 +398,17 @@ mod tests {
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
     use serde_json::json;
+    use tempfile::TempDir;
 
     use crate::{
         GraftObservability, GraftSessionClient, GraftSessionOptions, GraftSessionState,
         HostNudgeInjector, SessionSnapshot,
     };
 
-    use super::{ReceiveLoopContext, read_post_send_event, read_snapshot, run_receive_loop};
+    use super::{
+        ReceiveLoopContext, next_degraded_poll_interval, read_post_send_event, read_snapshot,
+        run_receive_loop,
+    };
 
     #[derive(Debug, Default)]
     struct RecordingClient {
@@ -414,17 +519,28 @@ mod tests {
 
     impl GraftObservability for NoopObservability {}
 
-    fn test_home_dir() -> PathBuf {
-        std::env::temp_dir().join("atm-graft-runtime-test-home")
+    struct TestPaths {
+        _tempdir: TempDir,
+        home_dir: PathBuf,
+        workspace_root: PathBuf,
     }
 
-    fn test_workspace_dir() -> PathBuf {
-        std::env::temp_dir().join("atm-graft-runtime-test-workspace")
+    fn test_paths() -> TestPaths {
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let workspace_root = tempdir.path().join("workspace");
+        fs::create_dir_all(&home_dir).expect("create home dir");
+        fs::create_dir_all(&workspace_root).expect("create workspace dir");
+        TestPaths {
+            _tempdir: tempdir,
+            home_dir,
+            workspace_root,
+        }
     }
 
-    fn session_options() -> GraftSessionOptions {
+    fn session_options(paths: &TestPaths) -> GraftSessionOptions {
         GraftSessionOptions::for_current_process(
-            test_workspace_dir(),
+            paths.workspace_root.clone(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated(TEST_QA),
         )
@@ -476,6 +592,7 @@ mod tests {
 
     #[test]
     fn read_post_send_event_projects_read_outcome_into_shared_event() {
+        let paths = test_paths();
         let message_id = AtmMessageId::new();
         let client = Arc::new(RecordingClient::default());
         client
@@ -485,8 +602,8 @@ mod tests {
             .insert(message_id, unread_message(message_id));
         let ctx = ReceiveLoopContext {
             client,
-            options: session_options(),
-            home_dir: test_home_dir(),
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
             snapshot: Arc::new(RwLock::new(SessionSnapshot {
                 team: TeamName::from_validated(TEST_TEAM),
                 agent: AgentName::from_validated(TEST_QA),
@@ -509,6 +626,7 @@ mod tests {
 
     #[test]
     fn receive_loop_polls_unread_messages_and_injects_each_message_once() {
+        let paths = test_paths();
         let message_id = AtmMessageId::new();
         let client = Arc::new(RecordingClient::default());
         client
@@ -530,8 +648,8 @@ mod tests {
         }));
         let ctx = ReceiveLoopContext {
             client,
-            options: session_options(),
-            home_dir: test_home_dir(),
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
             snapshot: Arc::clone(&snapshot),
             injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
@@ -556,6 +674,7 @@ mod tests {
 
     #[test]
     fn receive_loop_marks_session_degraded_when_poll_fails() {
+        let paths = test_paths();
         #[derive(Debug, Default)]
         struct FailingClient;
 
@@ -602,8 +721,8 @@ mod tests {
         }));
         let ctx = ReceiveLoopContext {
             client: Arc::new(FailingClient),
-            options: session_options(),
-            home_dir: test_home_dir(),
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
             snapshot: Arc::clone(&snapshot),
             injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
@@ -617,6 +736,98 @@ mod tests {
                 .unwrap_or(false)
         });
         stop_tx.send(()).expect("stop");
+        join.join().expect("join").expect("receive loop");
+
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            GraftSessionState::Degraded
+        );
+    }
+
+    #[test]
+    fn degraded_poll_interval_doubles_and_caps() {
+        let base = Duration::from_millis(10);
+        assert_eq!(
+            next_degraded_poll_interval(base, base),
+            Duration::from_millis(20)
+        );
+        assert_eq!(
+            next_degraded_poll_interval(base, Duration::from_millis(40)),
+            Duration::from_millis(80)
+        );
+        assert_eq!(
+            next_degraded_poll_interval(base, Duration::from_millis(80)),
+            Duration::from_millis(80)
+        );
+    }
+
+    #[test]
+    fn receive_loop_marks_session_degraded_when_injector_blocks_past_deadline() {
+        #[derive(Debug)]
+        struct BlockingInjector {
+            entered_tx: Mutex<Option<mpsc::SyncSender<()>>>,
+            release_rx: Mutex<mpsc::Receiver<()>>,
+        }
+
+        impl HostNudgeInjector for BlockingInjector {
+            fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
+                if let Some(entered_tx) = self.entered_tx.lock().expect("entered lock").take() {
+                    let _ = entered_tx.send(());
+                }
+                let _ = self.release_rx.lock().expect("release lock").recv();
+                Ok(())
+            }
+        }
+
+        let paths = test_paths();
+        let message_id = AtmMessageId::new();
+        let client = Arc::new(RecordingClient::default());
+        client
+            .rows
+            .lock()
+            .expect("rows lock")
+            .push(unread_row(message_id));
+        client
+            .messages
+            .lock()
+            .expect("messages lock")
+            .insert(message_id, unread_message(message_id));
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::channel();
+        let injector = Arc::new(BlockingInjector {
+            entered_tx: Mutex::new(Some(entered_tx)),
+            release_rx: Mutex::new(release_rx),
+        });
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Polling,
+        }));
+        let ctx = ReceiveLoopContext {
+            client,
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+        };
+
+        let join = std::thread::spawn(move || run_receive_loop(ctx));
+        entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("injector entered");
+        wait_until(
+            "graft receive-loop degraded state after blocked injector",
+            || {
+                read_snapshot(&snapshot)
+                    .map(|state| state.state == GraftSessionState::Degraded)
+                    .unwrap_or(false)
+            },
+        );
+        stop_tx.send(()).expect("stop");
+        release_tx.send(()).expect("release injector");
         join.join().expect("join").expect("receive loop");
 
         assert_eq!(
