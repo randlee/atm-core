@@ -2,6 +2,13 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use crate::graft_rpc::{
+    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest, RequestEnvelope as GraftRequestEnvelope,
+    ResponseEnvelope as GraftResponseEnvelope,
+};
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_graft_port,
@@ -20,13 +27,6 @@ use atm_core::{
     },
     read::read_mail,
     send::send_mail_with_runtime_and_graft_port,
-};
-use atm_daemon_client::graft_rpc::{
-    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-    AdvisoryStreamRequest, RequestEnvelope as GraftRequestEnvelope,
-    ResponseEnvelope as GraftResponseEnvelope,
 };
 
 use crate::AtmHomeDir;
@@ -773,6 +773,9 @@ impl DaemonRequestDispatcher {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
                     %error,
                     "failed to hydrate test runtime status cache from runtime-bound roster state"
                 );

@@ -1,3 +1,17 @@
+#![allow(
+    dead_code,
+    reason = "AD.14 keeps this graft advisory/session wire model only as a private transitional implementation until AD.15 and AD.16 delete the remaining consumers"
+)]
+#![allow(
+    clippy::enum_variant_names,
+    reason = "The retained advisory packet family keeps its historical variant names only until AD.15 and AD.16 delete this private transitional module"
+)]
+
+//! Transitional private graft advisory/session wire model retained only until
+//! AD.15 and AD.16 delete the daemon advisory runtime and the graft receiver
+//! session protocol. This module is intentionally not exported by
+//! `atm-daemon-client`.
+
 use std::fmt;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
@@ -106,6 +120,10 @@ pub struct FramePayload {
     pub bytes: Vec<u8>,
 }
 
+#[allow(
+    clippy::enum_variant_names,
+    reason = "The retained advisory packet family keeps its historical variant names only until AD.15 and AD.16 delete this private transitional module"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RequestEnvelope {
     AdvisoryRegister(AdvisorySessionRegistrationRequest),
@@ -115,6 +133,10 @@ pub enum RequestEnvelope {
     AdvisoryStream(AdvisoryStreamRequest),
 }
 
+#[allow(
+    clippy::enum_variant_names,
+    reason = "The retained advisory packet family keeps its historical variant names only until AD.15 and AD.16 delete this private transitional module"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResponseEnvelope {
     AdvisoryRegister(AdvisorySessionRegistrationResponse),

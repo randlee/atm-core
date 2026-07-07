@@ -6,16 +6,16 @@ use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use atm_core::PostSendHookEvent;
-use atm_core::error::AtmError;
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_client::graft_rpc::{
+use crate::graft_rpc::{
     AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent, AdvisoryFetchRequest,
     AdvisoryFetchResponse, AdvisoryMessage, AdvisorySessionId, AdvisorySessionRegistrationRequest,
     AdvisorySessionRegistrationResponse, AdvisorySessionUnregistrationRequest,
     AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
     ResponseEnvelope,
 };
+use atm_core::PostSendHookEvent;
+use atm_core::error::AtmError;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
@@ -684,17 +684,17 @@ mod tests {
 
     use super::AdvisoryRuntime;
     use crate::GraftStreamSink;
+    use crate::graft_rpc::ResponseEnvelope;
+    use crate::graft_rpc::{
+        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
+        AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
+        AdvisoryStreamRequest, AdvisoryStreamResponse,
+    };
     use atm_core::PostSendHookEvent;
     use atm_core::boundary::GraftPostSendPort;
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::types::IsoTimestamp;
-    use atm_daemon_client::graft_rpc::ResponseEnvelope;
-    use atm_daemon_client::graft_rpc::{
-        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
-        AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
-        AdvisoryStreamRequest, AdvisoryStreamResponse,
-    };
 
     fn registration_request() -> AdvisorySessionRegistrationRequest {
         AdvisorySessionRegistrationRequest {

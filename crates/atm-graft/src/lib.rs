@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary::ClientTransport;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorKind};
 use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
@@ -22,20 +22,40 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_client::graft_rpc::{
-    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
-    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
-    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse, AdvisorySessionState,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-    AdvisoryStreamRequest,
-};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
     resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
 };
+use graft_rpc::{
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest,
+};
+use serde as _;
 
 #[cfg(test)]
 use atm_core::send::SendCommandOutcome;
+
+#[allow(
+    dead_code,
+    reason = "AD.14 keeps these graft-local wire aliases only to compile the private transitional advisory/session module until AD.16 removes it"
+)]
+mod wire {
+    pub type FramePayload = atm_daemon_client::FramePayload;
+    pub type MessageKind = atm_daemon_client::MessageKind;
+    pub type RequestId = atm_daemon_client::RequestId;
+
+    pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
+    pub const ATM_FRAME_MAGIC: u32 = u32::from_be_bytes(*b"ATMD");
+    pub const ATM_FRAME_VERSION_V1: u16 = 1;
+    pub const ATM_FRAME_FLAGS_V1: u16 = 0;
+    pub const ATM_FRAME_HEADER_BYTES: usize = 22;
+}
+
+#[path = "../../internal/private_graft_rpc.rs"]
+mod graft_rpc;
 
 mod runtime;
 mod transport;
@@ -56,11 +76,11 @@ const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub type SessionSnapshot = AdvisorySession;
 
-pub use atm_core::{AtmConfig, GraftConfig};
-pub use atm_daemon_client::graft_rpc::{
+pub use self::graft_rpc::{
     AdvisoryDrainRequest as DrainRequest, AdvisoryEvent as Event,
-    AdvisoryFetchRequest as FetchRequest, AdvisorySessionId as SessionId,
+    AdvisoryFetchRequest as FetchRequest, AdvisorySessionId as SessionId, AdvisorySessionState,
 };
+pub use atm_core::{AtmConfig, GraftConfig};
 
 /// Preferred host-facing imports for embedding `atm-graft`.
 pub mod prelude {
@@ -795,7 +815,7 @@ fn spawn_polling_receive_loop(
 }
 
 fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
-    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+    AtmError::new(AtmErrorKind::Internal, "failed to spawn graft receive loop")
         .with_source(source)
         .with_recovery(
             "Retry graft activation after the embedding host allows one live receive thread for the active session.",
@@ -875,6 +895,11 @@ mod tests {
     use std::sync::mpsc;
     use std::time::Duration;
 
+    use crate::graft_rpc::{
+        self, AdvisoryMessage, AdvisorySessionRegistrationResponse,
+        AdvisorySessionUnregistrationResponse, AdvisoryStreamResponse,
+        RequestEnvelope as GraftRequestEnvelope, ResponseEnvelope as GraftResponseEnvelope,
+    };
     use atm_core::protocol::{
         self, RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
     };
@@ -884,11 +909,6 @@ mod tests {
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AckActivationMode, CommandAction, ReadSelection};
     use atm_daemon_client::RequestId as DaemonRequestId;
-    use atm_daemon_client::graft_rpc::{
-        self, AdvisoryMessage, AdvisorySessionRegistrationResponse,
-        AdvisorySessionUnregistrationResponse, AdvisoryStreamResponse,
-        RequestEnvelope as GraftRequestEnvelope, ResponseEnvelope as GraftResponseEnvelope,
-    };
     use interprocess::local_socket::prelude::*;
     use interprocess::local_socket::{ListenerOptions, Stream as LocalSocketStream};
     use tempfile::TempDir;
@@ -1440,7 +1460,7 @@ mod tests {
                     let mut state = state_for_handler.lock().expect("state");
                     *state += 1;
                     if *state == 1 {
-                        Err(AtmError::daemon_unavailable("temporary failure"))
+                        Err(AtmError::new(AtmErrorKind::Internal, "temporary failure"))
                     } else {
                         let _ = notify_tx.send(());
                         Ok(GraftResponseEnvelope::AdvisoryDrain(
@@ -1710,7 +1730,8 @@ mod tests {
             &self,
             _request: AdvisoryStreamRequest,
         ) -> Result<ActiveAdvisoryStream, AtmError> {
-            Err(AtmError::daemon_unavailable(
+            Err(AtmError::new(
+                AtmErrorKind::Internal,
                 "simulated activation advisory-stream failure",
             ))
         }

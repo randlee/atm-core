@@ -1,3 +1,8 @@
+use crate::graft_rpc::{
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
+    AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
+    RequestEnvelope as GraftRequestEnvelope, ResponseEnvelope as GraftResponseEnvelope,
+};
 use atm_core::ack::AckRequest;
 use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
 use atm_core::protocol::{
@@ -7,11 +12,6 @@ use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_client::graft_rpc::{
-    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
-    AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
-    RequestEnvelope as GraftRequestEnvelope, ResponseEnvelope as GraftResponseEnvelope,
-};
 use atm_runtime_test_support::open_sqlite_boundary;
 use tempfile::TempDir;
 

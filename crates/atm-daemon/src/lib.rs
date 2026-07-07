@@ -41,6 +41,24 @@ mod tests_host_ownership;
 mod tests_lifecycle;
 #[cfg(test)]
 mod worker_support;
+#[allow(
+    dead_code,
+    reason = "AD.14 keeps these daemon-local wire aliases only to compile the private transitional advisory/session module until AD.15 removes it"
+)]
+mod wire {
+    pub type FramePayload = atm_daemon_client::FramePayload;
+    pub type MessageKind = atm_daemon_client::MessageKind;
+    pub type RequestId = atm_daemon_client::RequestId;
+
+    pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
+    pub const ATM_FRAME_MAGIC: u32 = u32::from_be_bytes(*b"ATMD");
+    pub const ATM_FRAME_VERSION_V1: u16 = 1;
+    pub const ATM_FRAME_FLAGS_V1: u16 = 0;
+    pub const ATM_FRAME_HEADER_BYTES: usize = 22;
+}
+
+#[path = "../../internal/private_graft_rpc.rs"]
+pub(crate) mod graft_rpc;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,6 +68,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 pub use daemon_runtime_observability::{
     DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
 };
+use serde as _;
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
 pub(crate) use graft_dispatch::{GraftRequestDispatcher, GraftStreamSink};

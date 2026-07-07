@@ -1,5 +1,5 @@
+use crate::graft_rpc::{AdvisoryStreamRequest, RequestEnvelope, ResponseEnvelope};
 use atm_core::error::AtmError;
-use atm_daemon_client::graft_rpc::{AdvisoryStreamRequest, RequestEnvelope, ResponseEnvelope};
 
 pub(crate) trait GraftRequestDispatcher: Send + Sync {
     /// # Errors

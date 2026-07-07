@@ -7,12 +7,13 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{
     JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
 };
-use atm_daemon_client::{RequestId as DaemonRequestId, graft_rpc};
+use atm_daemon_client::RequestId as DaemonRequestId;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
 
 use crate::GraftRequestDispatcher;
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+use crate::graft_rpc;
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
@@ -322,7 +323,7 @@ fn dispatch_advisory_stream(
     dispatcher: &dyn GraftRequestDispatcher,
     force_shutdown: &AtomicBool,
     request_id: DaemonRequestId,
-    request: atm_daemon_client::graft_rpc::AdvisoryStreamRequest,
+    request: graft_rpc::AdvisoryStreamRequest,
 ) -> Result<(), AtmError> {
     apply_deadline_contract(
         stream.set_send_timeout(Some(REQUEST_DEADLINE)),

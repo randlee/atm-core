@@ -2,7 +2,6 @@ use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::protocol::{self, RequestEnvelope, RequestId as CoreRequestId, ResponseEnvelope};
-use atm_daemon_client::graft_rpc;
 use atm_daemon_client::{
     DaemonLocalIpcEndpoint, FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
@@ -15,7 +14,7 @@ use crate::{
     ADVISORY_STREAM_READ_DEADLINE, AdvisoryFetchRequest, AdvisoryFetchResponse,
     AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-    AdvisoryStreamRequest, AdvisoryTransport, SAME_HOST_REQUEST_DEADLINE,
+    AdvisoryStreamRequest, AdvisoryTransport, SAME_HOST_REQUEST_DEADLINE, graft_rpc,
 };
 
 pub(crate) use atm_daemon_client::unexpected_response;
