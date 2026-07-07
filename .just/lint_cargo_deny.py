@@ -45,6 +45,18 @@ def build_runtime_config(repo_root: Path) -> Path:
     return runtime_path
 
 
+def emit_console_text(text: str, *, stream = sys.stdout) -> None:
+    if not text:
+        return
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    if hasattr(stream, "buffer"):
+        stream.buffer.write(text.encode(encoding, errors="replace"))
+        stream.flush()
+        return
+    stream.write(text.encode(encoding, errors="replace").decode(encoding))
+    stream.flush()
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run cargo-deny with the repo policy.")
     parser.add_argument("--root", help="Repo root to inspect.")
@@ -67,9 +79,9 @@ def main(argv: list[str]) -> int:
         encoding="utf-8",
     )
     if completed.stdout:
-        print(completed.stdout, end="")
+        emit_console_text(completed.stdout)
     if completed.stderr:
-        print(completed.stderr, end="", file=sys.stderr)
+        emit_console_text(completed.stderr, stream=sys.stderr)
     return completed.returncode
 
 
