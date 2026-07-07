@@ -554,7 +554,13 @@ fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
         .iter()
         .cloned()
         .map(|selected_message| {
-            let message_key = message_key_for_classified(&selected_message)?;
+            let message_key = selected_message
+                .envelope
+                .message_id
+                .and_then(|message_id| row_by_id.get(&message_id))
+                .map(|row| row.message_key.clone())
+                .map(Ok)
+                .unwrap_or_else(|| message_key_for_classified(&selected_message))?;
             let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?
             else {
                 return Err(AtmError::validation(format!(
