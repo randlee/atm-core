@@ -548,11 +548,13 @@ fn render_doctor_status(status: DoctorStatus) -> &'static str {
     }
 }
 
-fn render_maintenance_state(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+fn render_maintenance_state(
+    state: atm_core::observability::AtmMaintenanceWorkerState,
+) -> &'static str {
     match state {
-        sc_observability_types::MaintenanceWorkerState::Running => "running",
-        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
-        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+        atm_core::observability::AtmMaintenanceWorkerState::Running => "running",
+        atm_core::observability::AtmMaintenanceWorkerState::Degraded => "degraded",
+        atm_core::observability::AtmMaintenanceWorkerState::Stopped => "stopped",
     }
 }
 
