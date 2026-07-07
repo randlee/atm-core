@@ -8,6 +8,10 @@ It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns crate-local structure and
 service boundaries.
 
+Invocation directory is not a daemon/socket/database selector inside
+`atm-core`; crate-owned home/runtime helpers must derive daemon, socket, and
+database roots only from the accepted `ATM_HOME` resolution.
+
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 

@@ -5,6 +5,7 @@ use crate::address::validate_path_segment;
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
+const MAX_ATM_HOME_UTF8_BYTES: usize = 4096;
 const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
 
 /// Resolve the ATM home directory for the current process.
@@ -13,10 +14,35 @@ const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
 ///
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::ConfigHomeUnavailable`] when neither
-/// `ATM_HOME` nor the OS user-home environment variables can be resolved.
+/// `ATM_HOME` nor the OS user-home environment variables can be resolved, or a
+/// config-shaped [`AtmError`] when the `ATM_HOME` override is non-UTF-8,
+/// overlong, or not absolute.
 pub fn atm_home() -> Result<PathBuf, AtmError> {
     if let Some(home) = env::var_os("ATM_HOME").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(home));
+        let raw_home = home.to_str().ok_or_else(|| {
+            AtmError::config("ATM_HOME must be valid UTF-8").with_recovery(
+                "Set ATM_HOME to an absolute UTF-8 local filesystem path before retrying.",
+            )
+        })?;
+        if raw_home.len() > MAX_ATM_HOME_UTF8_BYTES {
+            return Err(
+                AtmError::config(format!(
+                    "ATM_HOME must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+                ))
+                .with_recovery(
+                    "Shorten ATM_HOME to an absolute local filesystem path no longer than 4096 UTF-8 bytes before retrying.",
+                ),
+            );
+        }
+        let path = PathBuf::from(raw_home);
+        if !path.is_absolute() {
+            return Err(AtmError::config(format!(
+                "ATM_HOME must be an absolute path: {}",
+                path.display()
+            ))
+            .with_recovery("Set ATM_HOME to an absolute local filesystem path before retrying."));
+        }
+        return Ok(path);
     }
 
     resolve_user_home()
@@ -244,10 +270,10 @@ mod tests {
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
-        host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
-        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
-        team_dir_from_home, workflow_state_path_from_home,
+        MAX_ATM_HOME_UTF8_BYTES, atm_home, command_invocation_dir, host_db_dir_from_home,
+        host_log_dir, host_log_dir_from_home, host_mail_db_path_from_home,
+        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
+        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -353,6 +379,30 @@ mod tests {
 
         let resolved = atm_home().expect("atm home");
         assert_eq!(resolved, tempdir.path());
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_relative_atm_home_override() {
+        let _env = LocalEnvGuard::set_raw("ATM_HOME", "relative/home");
+
+        let error = atm_home().expect_err("relative ATM_HOME should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_overlong_atm_home_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let overlong = tempdir.path().join("a".repeat(MAX_ATM_HOME_UTF8_BYTES));
+        let _env = LocalEnvGuard::set_raw("ATM_HOME", overlong.to_str().expect("utf8 path"));
+
+        let error = atm_home().expect_err("overlong ATM_HOME should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("must not exceed"));
     }
 
     #[cfg(unix)]
@@ -625,6 +675,24 @@ mod tests {
         let error = host_log_dir().expect_err("non-absolute ATM_LOG_DIR should fail");
         assert!(error.is_config());
         assert!(error.message.contains("absolute path"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_non_utf8_override() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let _env = LocalEnvGuard::set_many_os([
+            ("HOME", None),
+            ("USERPROFILE", None),
+            ("ATM_HOME", Some(OsString::from_vec(vec![0xff, 0xfe, b'a']))),
+        ]);
+
+        let error = atm_home().expect_err("non-utf8 ATM_HOME should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("valid UTF-8"));
     }
 
     /// Windows ATM_LOG_DIR path-shape validation is covered by cross-compile CI

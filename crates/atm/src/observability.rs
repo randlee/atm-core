@@ -305,7 +305,7 @@ mod tests {
             .query(query(LogOrder::OldestFirst))
             .expect("initial query");
         assert_eq!(initial.records.len(), 1);
-        assert_eq!(initial.records[0].service.as_str(), "atm");
+        assert_eq!(initial.records[0].service, "atm");
         assert_eq!(initial.records[0].action.as_deref(), Some("send"));
         assert_eq!(
             initial.records[0]

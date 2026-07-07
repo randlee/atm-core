@@ -140,6 +140,9 @@ Initial crate requirement IDs:
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
+- invocation directory is not a daemon/socket/database selector; `atm-core`
+  must consume it only as workspace config discovery input after the accepted
+  `ATM_HOME` root resolves the canonical host runtime/store paths.
 - `REQ-CORE-TEAM-001` `atm-core` owns the retained local team discovery,
   roster inspection, roster repair, and backup/restore behavior. Satisfies the
   local team-surface aspects of:
