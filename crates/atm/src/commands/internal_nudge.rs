@@ -449,7 +449,7 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::boundary::{BuiltInNudgeTemplateKind, PostSendHookEvent};
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
     use tempfile::tempdir;
 
@@ -460,10 +460,10 @@ mod tests {
 
     fn base_event() -> PostSendHookEvent {
         PostSendHookEvent {
-            sender: "team-lead".parse().expect("sender"),
-            sender_team: "atm-dev".parse().expect("team"),
-            recipient: "arch-ctm".parse().expect("recipient"),
-            recipient_team: "atm-dev".parse().expect("team"),
+            sender: TEST_LEAD.parse().expect("sender"),
+            sender_team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+            recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,
@@ -543,7 +543,7 @@ mod tests {
         let error = render_template(
             "<atm>{{unknown}}</atm>",
             &InternalNudgeInput {
-                from: "team-lead@atm-dev".to_string(),
+                from: format!("{TEST_LEAD}@{TEST_TEAM}"),
                 event: base_event(),
                 sink_target: NudgeSinkTarget::Tmux,
             }
@@ -561,10 +561,10 @@ mod tests {
     #[serial(env)]
     fn internal_nudge_input_reads_post_send_env() {
         let payload = serde_json::json!({
-            "from": "team-lead@atm-dev",
-            "sender": "team-lead",
-            "recipient": "arch-ctm",
-            "team": "atm-dev",
+            "from": format!("{TEST_LEAD}@{TEST_TEAM}"),
+            "sender": TEST_LEAD,
+            "recipient": TEST_ARCH_CTM,
+            "team": TEST_TEAM,
             "message_id": "01KX1TEST00000000000000000",
             "description": "review failing smoke lane",
             "message": "review failing smoke lane",
@@ -581,7 +581,7 @@ mod tests {
 
         let input = InternalNudgeInput::from_env().expect("input");
 
-        assert_eq!(input.from, "team-lead@atm-dev");
+        assert_eq!(input.from, format!("{TEST_LEAD}@{TEST_TEAM}"));
         assert_eq!(input.sink_target, NudgeSinkTarget::Tmux);
         assert_eq!(input.event.task_id.expect("task").as_str(), "AD.21");
     }
