@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-NUDGE-TEMPLATE-OVERRIDE-STORE-REFERENCES"]
 review_gates = ["no_cli_sqlite_lookup", "no_emitter_side_lookup"]
 
 [status]
-state = "planned"
-notes = ["AD.21 introduces the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows."]
+state = "concrete_landed"
+notes = ["AD.21 landed the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows, including the write path consumed by `atm teams set-nudge-template`."]

@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::mail::DoctorFinding;
+use super::{BuiltInNudgeTemplateKind, TeamNudgeTemplateOverrideRow};
 use super::{ReplaySource, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -231,6 +232,30 @@ pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
 }
 
+/// BOUNDARY-NudgeTemplateOverrideStore — see docs/atm-core/boundaries.md.
+pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the storage-neutral lookup for one team-scoped
+    /// built-in nudge template override row cannot complete.
+    fn load_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the storage-neutral upsert for one team-scoped
+    /// built-in nudge template override row cannot complete.
+    fn save_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+        template_body: &str,
+    ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
+}
+
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
 pub trait NonClaudeOutbound: sealed::Sealed {
     /// # Errors
@@ -249,9 +274,11 @@ mod tests {
 
     struct WitnessRosterStoreDoctor;
     struct WitnessConfigDoctor;
+    struct WitnessNudgeTemplateOverrideStore;
 
     impl sealed::Sealed for WitnessRosterStoreDoctor {}
     impl sealed::Sealed for WitnessConfigDoctor {}
+    impl sealed::Sealed for WitnessNudgeTemplateOverrideStore {}
 
     impl RosterStoreDoctor for WitnessRosterStoreDoctor {
         fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError> {
@@ -262,6 +289,30 @@ mod tests {
     impl ConfigDoctor for WitnessConfigDoctor {
         fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
             Ok(ConfigDoctorReport::default())
+        }
+    }
+
+    impl NudgeTemplateOverrideStore for WitnessNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+            template_body: &str,
+        ) -> Result<TeamNudgeTemplateOverrideRow, AtmError> {
+            Ok(TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                template_body: template_body.to_string(),
+                updated_at: crate::types::IsoTimestamp::now(),
+            })
         }
     }
 
@@ -278,6 +329,14 @@ mod tests {
         fn assert_object_safe(_doctor: &dyn ConfigDoctor) {}
 
         let witness = WitnessConfigDoctor;
+        assert_object_safe(&witness);
+    }
+
+    #[test]
+    fn nudge_template_override_store_trait_is_object_safe_and_compiles() {
+        fn assert_object_safe(_store: &dyn NudgeTemplateOverrideStore) {}
+
+        let witness = WitnessNudgeTemplateOverrideStore;
         assert_object_safe(&witness);
     }
 }

@@ -87,6 +87,22 @@ CREATE TABLE IF NOT EXISTS team_roster (
     PRIMARY KEY (team_name, agent_name)
 );
 
+CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
+    team_name TEXT NOT NULL,
+    template_kind TEXT NOT NULL
+        CHECK(template_kind IN (
+            'delivery',
+            'delivery_ack',
+            'delivery_task',
+            'delivery_task_ack',
+            'acknowledge',
+            'acknowledge_task'
+        )),
+    template_body TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (team_name, template_kind)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -109,6 +125,9 @@ CREATE INDEX IF NOT EXISTS idx_daemon_remote_replay_mailbox
 
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
+
+CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
+    ON team_nudge_template_overrides(team_name);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.

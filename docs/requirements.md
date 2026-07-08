@@ -3598,11 +3598,14 @@ mail correctness.
     silently change whether post-send emission is attempted
   - hook configuration lookup must follow the sender's canonical roster
     `home_dir` metadata
-  - authoritative `recipient_pane_id`, when known, must come from canonical ATM
-    roster state rather than from rediscovering live pane routing through local
-    mailbox files
-  - live pane routing for built-in tmux nudge must not depend on committed
-    `.atm.toml` `tmux_pane_id` values
+- authoritative `recipient_pane_id`, when known, must come from canonical ATM
+  roster state rather than from rediscovering live pane routing through local
+  mailbox files
+- live pane routing for built-in tmux nudge must not depend on committed
+  `.atm.toml` `tmux_pane_id` values
+- retained repo-local compatibility helpers may use only authoritative
+  `recipient_pane_id` payload/roster data or an explicit operator-provided
+  `--pane`; they must not revive committed `.atm.toml` pane lookup
 
 - `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
   typed delivery-plan execution are not the governing send-path contract.

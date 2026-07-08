@@ -4,7 +4,7 @@ use crate::error::AtmError;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -115,11 +115,83 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
-    pub message: String,
+    pub description: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BuiltInNudgeTemplateKind {
+    Delivery,
+    DeliveryAck,
+    DeliveryTask,
+    DeliveryTaskAck,
+    Acknowledge,
+    AcknowledgeTask,
+}
+
+impl BuiltInNudgeTemplateKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Delivery => "delivery",
+            Self::DeliveryAck => "delivery_ack",
+            Self::DeliveryTask => "delivery_task",
+            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Acknowledge => "acknowledge",
+            Self::AcknowledgeTask => "acknowledge_task",
+        }
+    }
+
+    pub fn from_post_send_event(event: &PostSendHookEvent) -> Self {
+        match (event.is_ack, event.task_id.is_some(), event.requires_ack) {
+            (true, true, _) => Self::AcknowledgeTask,
+            (true, false, _) => Self::Acknowledge,
+            (false, true, true) => Self::DeliveryTaskAck,
+            (false, true, false) => Self::DeliveryTask,
+            (false, false, true) => Self::DeliveryAck,
+            (false, false, false) => Self::Delivery,
+        }
+    }
+}
+
+impl std::fmt::Display for BuiltInNudgeTemplateKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for BuiltInNudgeTemplateKind {
+    type Err = crate::error::AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "delivery" => Ok(Self::Delivery),
+            "delivery_ack" => Ok(Self::DeliveryAck),
+            "delivery_task" => Ok(Self::DeliveryTask),
+            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
+            "acknowledge" => Ok(Self::Acknowledge),
+            "acknowledge_task" => Ok(Self::AcknowledgeTask),
+            other => Err(crate::error::AtmError::validation(format!(
+                "unsupported built-in nudge template kind `{other}`"
+            ))
+            .with_recovery(
+                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: IsoTimestamp,
 }
 
 /// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.

@@ -12,8 +12,8 @@ use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeSta
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
-    AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
-    UpdateMemberOutcome,
+    AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan,
+    SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.
@@ -444,6 +444,22 @@ pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> 
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    Ok(())
+}
+
+/// Print one set-nudge-template result in human-readable or JSON form.
+pub fn print_set_nudge_template_override_result(
+    outcome: &SetNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Set nudge template override {} for {} at {}",
+            outcome.kind, outcome.team, outcome.updated_at
+        );
     }
     Ok(())
 }

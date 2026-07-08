@@ -1,23 +1,23 @@
 use atm_core::ack::AckRequest;
 use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::graft::{
+    GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
+    read_graft_post_send_message, write_graft_post_send_message,
+};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-use atm_core::types::TeamName;
-use atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
-};
+use atm_core::types::{AgentName, TeamName};
 use atm_runtime_test_support::open_sqlite_boundary;
+use interprocess::local_socket::ListenerOptions;
+use interprocess::local_socket::traits::Listener as _;
 use tempfile::TempDir;
 
-use crate::LocalIpcServerTransportAdapter;
-use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
-use crate::test_support::LifecycleFlagResetGuard;
 
 const TEST_TEAM: &str = "test-team";
 
@@ -114,89 +114,6 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
     .expect("write graft config");
 }
 
-struct RunningDispatcherServer {
-    lifecycle: LifecycleControlSourceAdapter,
-    _reset: LifecycleFlagResetGuard,
-    join: std::thread::JoinHandle<()>,
-    result_rx: std::sync::mpsc::Receiver<Result<(), atm_core::error::AtmError>>,
-}
-
-impl RunningDispatcherServer {
-    fn stop(self) {
-        self.lifecycle.set_terminate_for_test(true);
-        self.result_rx
-            .recv_timeout(std::time::Duration::from_secs(15))
-            .expect("recv serve result")
-            .expect("serve runtime result");
-        self.join.join().expect("join serve thread");
-    }
-}
-
-fn spawn_dispatcher_server(
-    socket_path: std::path::PathBuf,
-    dispatcher: DaemonRequestDispatcher,
-) -> (RunningDispatcherServer, std::sync::mpsc::Receiver<()>) {
-    let server_transport = LocalIpcServerTransportAdapter::new();
-    let mut runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path)
-        .expect("prepare runtime");
-    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
-    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-    let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-    let dispatcher: std::sync::Arc<dyn RequestDispatcher + Send + Sync> =
-        std::sync::Arc::new(dispatcher);
-    let (serve_result_tx, serve_result_rx) = std::sync::mpsc::channel();
-    let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
-    let join = std::thread::spawn(move || {
-        let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
-            crate::local_ipc_transport::RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: std::time::Duration::from_millis(500),
-                force_cancel_deadline: std::time::Duration::from_secs(2),
-                begin_shutdown: || Ok(()),
-                reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
-                publish_ready: move || {
-                    ready_tx.send(()).map_err(|_| {
-                        atm_core::error::AtmError::daemon_unavailable(
-                            "graft warning test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Rerun the graft warning test after restoring the bounded ready-signal handshake.",
-                        )
-                    })
-                },
-            },
-        );
-        serve_result_tx.send(result).expect("send serve result");
-    });
-    (
-        RunningDispatcherServer {
-            lifecycle,
-            _reset: reset,
-            join,
-            result_rx: serve_result_rx,
-        },
-        ready_rx,
-    )
-}
-
-#[derive(Debug, Default)]
-struct RecordingInjector {
-    nudges: std::sync::Mutex<Vec<atm_core::boundary::PostSendHookEvent>>,
-}
-
-impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(
-        &self,
-        nudge: atm_core::boundary::PostSendHookEvent,
-    ) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge);
-        Ok(())
-    }
-}
-
 #[test]
 #[serial_test::serial(env)]
 fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
@@ -243,7 +160,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
                 atm_home.clone(),
                 workspace_dir.clone(),
                 "qa-a".parse().expect("caller"),
-                "team-lead@test-team",
+                &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
                 TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline("please ack".to_string()),
                 None,
@@ -289,42 +206,52 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
 fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
     write_graft_enabled_config(&workspace_dir);
-    let socket_path = atm_home.join(".atm").join("daemon").join("atm-daemon.sock");
+    let recipient_team = TEST_TEAM.parse::<TeamName>().expect("team");
+    let recipient_agent = "qa-a".parse::<AgentName>().expect("agent");
+    let receiver_path =
+        graft_receiver_socket_path_from_home(&atm_home, &recipient_team, &recipient_agent);
+    if let Some(parent) = receiver_path.parent() {
+        std::fs::create_dir_all(parent).expect("receiver dir");
+    }
+    #[cfg(unix)]
+    if receiver_path.exists() {
+        std::fs::remove_file(&receiver_path).expect("remove stale receiver");
+    }
+    let receiver_name =
+        atm_core::protocol::daemon_local_ipc_name_from_path(&receiver_path).expect("receiver name");
+    let listener = ListenerOptions::new()
+        .name(receiver_name)
+        .create_sync()
+        .expect("bind fake graft receiver");
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(1);
+    let receiver_thread = std::thread::spawn(move || {
+        let mut stream = listener.accept().expect("accept graft receiver");
+        let request: GraftPostSendRequest = read_graft_post_send_message(
+            &mut stream,
+            "failed to read graft post-send request",
+            "graft post-send request exceeded the bounded payload cap",
+        )
+        .expect("read graft request");
+        event_tx
+            .send(request.event.clone())
+            .expect("send captured event");
+        write_graft_post_send_message(
+            &mut stream,
+            &GraftPostSendResponse::Delivered,
+            "failed to write graft post-send response",
+            "graft post-send response exceeded the bounded payload cap",
+        )
+        .expect("write graft response");
+        use std::io::Write as _;
+        stream.flush().expect("flush graft response");
+    });
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_DAEMON_SOCKET",
-            Some(socket_path.to_str().expect("utf8 socket path")),
-        ),
-        ("ATM_TEAM", Some(TEST_TEAM)),
-        ("ATM_IDENTITY", Some("qa-a")),
         ("HOME", Some(atm_home.to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
-    let (server, ready_rx) = spawn_dispatcher_server(socket_path, dispatcher);
-    ready_rx
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .expect("daemon ready");
-
-    let client = GraftClient::connect().expect("connect graft client");
-    let injector = std::sync::Arc::new(RecordingInjector::default());
-    let session = GraftSession::activate(
-        client,
-        GraftSessionOptions::for_current_process(
-            workspace_dir.clone(),
-            TEST_TEAM.parse().expect("team"),
-            "qa-a".parse().expect("agent"),
-        ),
-        injector.clone() as std::sync::Arc<dyn HostNudgeInjector>,
-    )
-    .expect("activate graft session");
-    assert_eq!(
-        session.snapshot().expect("snapshot").state,
-        GraftSessionState::Listening
-    );
-
-    let response = session
-        .send(
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
             SendRequest::new(
                 atm_home,
                 workspace_dir,
@@ -338,16 +265,19 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
                 false,
             )
             .expect("send request"),
-        )
+        )))
         .expect("send response");
+    let response = match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        other => panic!("expected send response, got {other:?}"),
+    };
 
     assert!(response.warnings.is_empty());
-    let nudges = injector.nudges.lock().expect("nudges lock");
-    assert_eq!(nudges.len(), 1);
-    assert_eq!(nudges[0].recipient.as_str(), "qa-a");
-    assert_eq!(nudges[0].recipient_team.as_str(), TEST_TEAM);
-    assert_eq!(nudges[0].message, "hello graft");
-
-    drop(session);
-    server.stop();
+    let nudge = event_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("receive graft nudge");
+    assert_eq!(nudge.recipient.as_str(), "qa-a");
+    assert_eq!(nudge.recipient_team.as_str(), TEST_TEAM);
+    assert_eq!(nudge.description, "hello graft");
+    receiver_thread.join().expect("join fake graft receiver");
 }

@@ -92,16 +92,17 @@ pub(crate) mod workflow;
 
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
-    ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
+    AckTransition, AtmProtocol, BuiltInNudgeTemplateKind, ClientTransport, ConfigDoctor,
+    ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, DoctorFinding,
+    LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailMessageState, MailStore,
+    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, PostSendHookEmitter, PostSendHookEvent, RemoteReplayStateRecord,
-    RemoteReplayStore, RequestDispatcher, RosterEntry, RosterHarness, RosterMemberKind,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
-    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
+    PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
+    RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
+    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
+    StatusSource, TaskState, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

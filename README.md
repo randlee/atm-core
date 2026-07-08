@@ -155,7 +155,12 @@ surface and uses the accepted daemon/SQLite runtime for retained mail state.
 
 ## Post-Send Hook
 
-`atm send` can run an optional post-send hook configured in `.atm.toml`:
+ATM ships one default post-send path for successful `atm send` and `atm ack`:
+the built-in `atm internal-nudge` command. Most teams do not need any
+`.atm.toml` hook configuration.
+
+Use `[[atm.post_send_hooks]]` only for an explicit local override or
+compatibility helper:
 
 ```toml
 [[atm.post_send_hooks]]
@@ -168,6 +173,8 @@ command = ["scripts/atm-nudge.sh", "arch-ctm"]
 ```
 
 Behavior:
+- If no matching external rule is configured, ATM falls back to the shipped
+  built-in `atm internal-nudge` path.
 - Each `[[atm.post_send_hooks]]` rule binds one `recipient` and one `command`.
 - `recipient` matches either one exact member name or `*` for all recipients.
 - Multiple matching rules all run, in config order.
@@ -180,6 +187,9 @@ Behavior:
 - Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
 - For troubleshooting hook diagnostics, combine `--stderr-logs` with `ATM_LOG=debug` to surface debug-level hook results on stderr.
 - If the hook exits non-zero, fails to start, or times out, `atm send` still succeeds and prints a warning.
+
+Repo-local `scripts/atm-nudge.sh` / `scripts/atm-nudge.py` remain
+compatibility-only helpers. They are not the shipped default.
 
 Example `ATM_POST_SEND` payload:
 

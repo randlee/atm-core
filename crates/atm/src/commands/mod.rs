@@ -6,6 +6,7 @@ pub(crate) mod caller_context;
 pub mod clear;
 pub mod doctor;
 pub mod help;
+pub(crate) mod internal_nudge;
 pub mod list;
 pub mod log;
 pub mod members;
@@ -19,6 +20,7 @@ pub use ack::AckCommand;
 pub use clear::ClearCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
+pub(crate) use internal_nudge::InternalNudgeCommand;
 pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
@@ -70,6 +72,8 @@ enum Command {
     Log(LogCommand),
     Doctor(DoctorCommand),
     Help(HelpCommand),
+    #[command(hide = true)]
+    InternalNudge(InternalNudgeCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
 }
@@ -85,6 +89,7 @@ impl Command {
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability),
             Self::Help(command) => command.run(observability),
+            Self::InternalNudge(command) => command.run(observability),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
         }

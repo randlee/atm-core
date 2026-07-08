@@ -541,6 +541,9 @@ Required caller-context rules:
 - once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
+- repo-tracked `.atm.toml` is dogfood/bootstrap config only; it must not carry
+  live post-send pane-routing authority through committed
+  `[[rmux.windows.panes]].tmux_pane_id` values
 - `atm-core` owns canonical post-send event construction, but it must not own
   built-in XML template storage, placeholder substitution policy, or sink-local
   transport behavior

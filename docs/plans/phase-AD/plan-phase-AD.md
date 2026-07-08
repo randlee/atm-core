@@ -29,8 +29,9 @@ model in several release-blocking ways:
   invoking shell or explicit command-line context
 - historical Claude/compatibility UUID message-id support still remains in the
   shared identity model even though the accepted runtime is now ULID-only
-- `.atm.toml` still configures `[[atm.post_send_hooks]]`, but the live daemon
-  path can complete a send with no nudge and no warning
+- the accepted `1.2.3` release entered Phase `AD` with repo-local
+  `[[atm.post_send_hooks]]` dogfood config, but the live daemon path could
+  still complete a send with no nudge and no warning
 - the current post-send path is obscured by generic delivery/notification
   machinery instead of one direct post-commit emission path
 - graft-specific session, queue, and stream concepts have leaked into
@@ -61,8 +62,9 @@ model in several release-blocking ways:
 - bare `atm read` on the accepted `1.2.3` release could still resolve as
   `team-lead@atm-dev` even when `ATM_IDENTITY` and `ATM_TEAM` were unset,
   proving that both caller identity and caller team can be guessed today
-- `.atm.toml` currently contains a `team-lead` post-send hook rule, but a live
-  send produced neither the expected nudge nor a sender-visible warning
+- the accepted `1.2.3` dogfood repo config contained a `team-lead`
+  post-send hook rule, but a live send produced neither the expected nudge nor
+  a sender-visible warning
 - `atm doctor --team atm-dev` currently reports
   `ATM_WARNING_IDENTITY_DRIFT`
 - current doctor output shows blank `tmux_pane_id` values in roster state for
@@ -180,6 +182,9 @@ The governing rules are:
 - active `tmux_pane_id` already exists in SQLite roster state and must remain
   authoritative there rather than drifting back to repo config assumptions
 - pane metadata must be settable and repairable from the CLI
+- repo-tracked `.atm.toml` is not a live pane-routing authority; committed
+  dogfood config must not carry `[[atm.post_send_hooks]]` defaults or
+  `[[rmux.windows.panes]].tmux_pane_id` values as production routing truth
 - `ReconcileRuntime` and the watched-source daemon lane are not part of the
   accepted Claude Code runtime and must be removed
 - daemon notification delivery is not a protected subsystem; if notification
@@ -257,6 +262,8 @@ Phase `AD` may:
   `live_cwd`, and log-only startup `launch_cwd` remain
 - remove committed pane-id routing state from repo config and keep live pane
   routing in SQLite roster state plus CLI repair/update flows only
+- keep repo-local troubleshooting helpers roster-backed or explicit-override
+  only; they must not revive `.atm.toml` pane discovery as a production seam
 - add smoke and doctor coverage required to keep these regressions closed
 
 Phase `AD` must not:

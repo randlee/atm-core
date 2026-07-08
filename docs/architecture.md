@@ -1508,6 +1508,9 @@ Current runtime hook-note:
 - the shipped built-in `atm internal-nudge` path must consume this same payload
   contract so ATM does not carry separate external-hook and built-in nudge
   event shapes
+- retained compatibility helpers must treat committed `.atm.toml` pane ids as
+  non-authoritative and use roster/payload pane truth or explicit `--pane`
+  only
 
 Supported structured hook-result levels remain:
 - `debug`

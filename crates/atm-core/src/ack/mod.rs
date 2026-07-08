@@ -671,6 +671,7 @@ fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
     use std::time::Duration;
@@ -707,40 +708,33 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    struct RecordingGraftPort {
-        events: Mutex<Vec<crate::boundary::PostSendHookEvent>>,
-        fail: bool,
-    }
-
-    impl RecordingGraftPort {
-        fn failing() -> Self {
-            Self {
-                events: Mutex::new(Vec::new()),
-                fail: true,
-            }
-        }
-    }
-
-    impl crate::boundary::sealed::Sealed for RecordingGraftPort {}
-
-    impl crate::boundary::GraftPostSendPort for RecordingGraftPort {
-        fn deliver_post_send(
-            &self,
-            event: &crate::boundary::PostSendHookEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            self.events
-                .lock()
-                .expect("graft events lock")
-                .push(event.clone());
-            if self.fail {
-                return Err(crate::error::AtmError::new_with_code(
-                    crate::error_codes::AtmErrorCode::PostSendGraftUnavailable,
-                    crate::error::AtmErrorKind::DaemonUnavailable,
-                    "simulated graft delivery failure",
-                ));
-            }
-            Ok(())
+    fn write_atm_nudge_shim(path: &Path, capture_path: &Path, exit_code: i32) {
+        #[cfg(windows)]
+        fs::write(
+            path,
+            format!(
+                "@echo off\r\n> \"{}\" echo %1^|%ATM_INTERNAL_NUDGE_SINK%^|%ATM_POST_SEND%\r\nexit /b {}\r\n",
+                capture_path.display(),
+                exit_code
+            ),
+        )
+        .expect("write atm shim");
+        #[cfg(not(windows))]
+        fs::write(
+            path,
+            format!(
+                "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$1\" \"$ATM_INTERNAL_NUDGE_SINK\" \"$ATM_POST_SEND\" > \"{}\"\nexit {}\n",
+                capture_path.display(),
+                exit_code
+            ),
+        )
+        .expect("write atm shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod");
         }
     }
 
@@ -1243,11 +1237,6 @@ mod tests {
     fn ack_reply_graft_post_send_dispatches_to_graft_port() {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let home_dir = tempdir.path().join("home");
-        let _env = EnvGuard::set_many([
-            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
-            ("USERPROFILE", None),
-            ("ATM_LOG_DIR", None),
-        ]);
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -1296,12 +1285,24 @@ mod tests {
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
-        let graft_port = RecordingGraftPort::default();
+        let capture_path = tempdir.path().join("ack-nudge.txt");
+        #[cfg(windows)]
+        let atm_path = tempdir.path().join("atm.cmd");
+        #[cfg(not(windows))]
+        let atm_path = tempdir.path().join("atm");
+        write_atm_nudge_shim(&atm_path, &capture_path, 0);
+        let atm_bin = atm_path.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+            ("ATM_TEST_ATM_BIN", Some(atm_bin.as_str())),
+        ]);
 
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            Some(&graft_port),
+            None,
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
@@ -1316,16 +1317,19 @@ mod tests {
         .expect("finalize ack outcome");
 
         assert_eq!(outcome.reply_message_id, reply_message_id);
-        let events = graft_port.events.lock().expect("graft events lock");
-        assert_eq!(events.len(), 1);
-        assert!(events[0].is_ack);
-        assert_eq!(events[0].recipient.as_str(), ROLE_TEAM_LEAD);
-        assert_eq!(events[0].recipient_team.as_str(), TEST_TEAM);
+        assert!(outcome.warnings.is_empty());
+        let captured = fs::read_to_string(&capture_path).expect("capture");
+        assert!(captured.contains("internal-nudge"));
+        assert!(captured.contains("|graft|"));
+        assert!(captured.contains("\"is_ack\":true"));
+        assert!(captured.contains(format!("\"recipient\":\"{ROLE_TEAM_LEAD}\"").as_str()));
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn finalize_ack_outcome_warns_when_graft_post_send_delivery_fails() {
         let tempdir = tempfile::tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -1374,12 +1378,24 @@ mod tests {
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
-        let graft_port = RecordingGraftPort::failing();
+        let capture_path = tempdir.path().join("ack-nudge.txt");
+        #[cfg(windows)]
+        let atm_path = tempdir.path().join("atm.cmd");
+        #[cfg(not(windows))]
+        let atm_path = tempdir.path().join("atm");
+        write_atm_nudge_shim(&atm_path, &capture_path, 7);
+        let atm_bin = atm_path.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+            ("ATM_TEST_ATM_BIN", Some(atm_bin.as_str())),
+        ]);
 
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            Some(&graft_port),
+            None,
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
@@ -1399,15 +1415,6 @@ mod tests {
             outcome.warnings[0]
                 .message
                 .contains("warning: post-send emission failed")
-        );
-        assert!(
-            outcome.warnings[0]
-                .message
-                .contains("ATM_POST_SEND_GRAFT_UNAVAILABLE")
-        );
-        assert_eq!(
-            graft_port.events.lock().expect("graft events lock").len(),
-            1
         );
     }
 
