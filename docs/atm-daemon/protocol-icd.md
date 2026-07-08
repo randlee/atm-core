@@ -488,12 +488,17 @@ Success-family pairing rules:
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
 
-Graft-local same-host pairing rules:
+Historical-only graft advisory pairing rules retained for migration record:
 - `advisory_register_request -> advisory_register_response | graft_error_response`
 - `advisory_unregister_request -> advisory_unregister_response | graft_error_response`
 - `advisory_fetch_request -> advisory_fetch_response | graft_error_response`
 - `advisory_drain_request -> advisory_drain_response | graft_error_response`
 - `advisory_stream_request -> advisory_stream_response* | graft_error_response`
+
+These packet families are no longer active after the AD.15/AD.16 graft reset.
+The live graft implementation now uses a private same-host request/reply lane
+between `atm-daemon` and `atm-graft` rather than shared advisory register,
+fetch/drain, or stream packet kinds.
 
 ### 8.1.1 One-Request-Per-Connection Rule
 
