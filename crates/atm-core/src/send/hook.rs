@@ -1215,7 +1215,7 @@ mod tests {
         #[cfg(windows)]
         fs::write(
             &atm_path,
-            "@echo off\r\n> \"%ATM_TEST_CAPTURE%\" echo %1|%ATM_INTERNAL_NUDGE_SINK%|%ATM_POST_SEND%\r\nexit /b 0\r\n",
+            "@echo off\r\n> \"%ATM_TEST_CAPTURE%\" echo %1^|%ATM_INTERNAL_NUDGE_SINK%^|%ATM_POST_SEND%\r\nexit /b 0\r\n",
         )
         .expect("write atm shim");
         #[cfg(not(windows))]
