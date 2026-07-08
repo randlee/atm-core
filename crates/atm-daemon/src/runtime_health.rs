@@ -377,6 +377,11 @@ impl DaemonRequestDispatcher {
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn home_dir_for_test(&self) -> &std::path::Path {
+        self.home_dir.as_path()
+    }
 }
 
 fn with_shutdown_finalizer_registry<R>(

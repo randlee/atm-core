@@ -1,6 +1,6 @@
 # agent-team-mail (`atm`)
 
-`agent-team-mail` is the retained `1.0` CLI and core library for local ATM
+`agent-team-mail` is the retained local ATM release line for daemon-backed
 mailbox workflows.
 
 This repository is now the source of truth for publishing:
@@ -9,11 +9,13 @@ This repository is now the source of truth for publishing:
 
 The installed command remains `atm`.
 
-## What `1.0` Includes
+## What The Retained Release Includes
 
-The retained `1.0` release scope is the daemon-free CLI/core pair:
+The retained release scope is the daemon-backed local ATM line:
 - `agent-team-mail` — the `atm` CLI
 - `agent-team-mail-core` — the core Rust library used by the CLI
+- the same-host daemon/runtime path used by the accepted send/read/ack flow and
+  post-send delivery lanes
 
 This release line continues to consume the published `sc-observability` family
 for retained logging and health reporting:
@@ -21,8 +23,8 @@ for retained logging and health reporting:
 - `sc-observability-types`
 - `sc-observability-otlp`
 
-This repo does not publish the retired legacy daemon, MCP, TUI, or CI-monitor
-artifacts as part of the retained `1.0` surface.
+This repo does not publish the retired legacy MCP, TUI, or CI-monitor artifacts
+as part of the retained release surface.
 
 ## Installation
 
@@ -186,7 +188,7 @@ Example `ATM_POST_SEND` payload:
   "sender": "team-lead",
   "recipient": "arch-ctm",
   "team": "atm-dev",
-  "message_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message_id": "01KX6Q7Q4L3Q5QG1T6JQ7Z9Y8M",
   "requires_ack": true
 }
 ```

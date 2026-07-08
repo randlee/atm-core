@@ -504,8 +504,9 @@ fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
 
 impl Drop for GraftSession {
     fn drop(&mut self) {
-        // Drop performs best-effort shutdown and may block while the bounded
-        // receive-loop join path completes.
+        // Drop performs bounded blocking shutdown because close_internal()
+        // stops the receive loop and waits for its join deadline before this
+        // session can release ownership cleanly.
         if let Err(error) = self.close_internal() {
             let identity = self
                 .snapshot()

@@ -427,10 +427,24 @@ fn finish_lifecycle_shutdown(
     join_helper: std::thread::JoinHandle<()>,
     result_rx: std::sync::mpsc::Receiver<std::thread::Result<()>>,
 ) -> Result<(), AtmError> {
-    let result = result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE);
-    let _ = join_helper.join();
+    finish_lifecycle_shutdown_with_deadline(
+        observability,
+        join_helper,
+        result_rx,
+        LIFECYCLE_WORKER_JOIN_DEADLINE,
+    )
+}
+
+fn finish_lifecycle_shutdown_with_deadline(
+    observability: &SubsystemObservability,
+    join_helper: std::thread::JoinHandle<()>,
+    result_rx: std::sync::mpsc::Receiver<std::thread::Result<()>>,
+    deadline: Duration,
+) -> Result<(), AtmError> {
+    let result = result_rx.recv_timeout(deadline);
     match result {
         Ok(Ok(())) => {
+            join_completed_lifecycle_helper(join_helper)?;
             observability.emit_or_warn(
                 "shutdown_worker",
                 "ok",
@@ -439,6 +453,7 @@ fn finish_lifecycle_shutdown(
             Ok(())
         }
         Ok(Err(_)) => {
+            let _ = join_completed_lifecycle_helper(join_helper);
             observability.emit_or_warn(
                 "shutdown_worker",
                 "failed",
@@ -452,6 +467,7 @@ fn finish_lifecycle_shutdown(
             ))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            drop(join_helper);
             observability.emit_or_warn(
                 "shutdown_worker",
                 "degraded",
@@ -465,6 +481,11 @@ fn finish_lifecycle_shutdown(
             ))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            if join_helper.is_finished() {
+                let _ = join_completed_lifecycle_helper(join_helper);
+            } else {
+                drop(join_helper);
+            }
             observability.emit_or_warn(
                 "shutdown_worker",
                 "failed",
@@ -477,6 +498,60 @@ fn finish_lifecycle_shutdown(
                 "Restart the daemon; lifecycle helper ownership was lost while the runtime was shutting down.",
             ))
         }
+    }
+}
+
+fn join_completed_lifecycle_helper(
+    join_helper: std::thread::JoinHandle<()>,
+) -> Result<(), AtmError> {
+    join_helper.join().map_err(|_| {
+        AtmError::daemon_unavailable("daemon lifecycle join helper panicked during runtime teardown")
+            .with_recovery(
+                "Restart the daemon; lifecycle join coordination crashed while the runtime was shutting down.",
+            )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LIFECYCLE_WORKER_JOIN_DEADLINE, finish_lifecycle_shutdown_with_deadline};
+    use crate::{DaemonSubsystem, SubsystemObservability};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn finish_lifecycle_shutdown_timeout_returns_without_waiting_for_join_helper_completion() {
+        let observability = SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl);
+        let (_result_tx, result_rx) = mpsc::channel::<std::thread::Result<()>>();
+        let (continue_tx, continue_rx) = mpsc::sync_channel::<()>(0);
+        let (done_tx, done_rx) = mpsc::sync_channel::<()>(1);
+        let join_helper = std::thread::spawn(move || {
+            let _ = continue_rx.recv();
+            let _ = done_tx.send(());
+        });
+        let deadline = LIFECYCLE_WORKER_JOIN_DEADLINE.min(Duration::from_millis(50));
+
+        let started = Instant::now();
+        let error = finish_lifecycle_shutdown_with_deadline(
+            &observability,
+            join_helper,
+            result_rx,
+            deadline,
+        )
+        .expect_err("timeout should fail");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "timed shutdown should return promptly after its deadline"
+        );
+
+        continue_tx
+            .send(())
+            .expect("release detached lifecycle join helper");
+        done_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("join helper should exit after release");
     }
 }
 
@@ -620,6 +695,32 @@ mod windows_tests {
     use std::thread::ThreadId;
     use std::time::Duration;
 
+    struct SharedLifecycleResetGuard {
+        adapter: LifecycleControlSourceAdapter,
+    }
+
+    impl SharedLifecycleResetGuard {
+        fn install() -> Self {
+            let seed = LifecycleControlSourceAdapter::install().expect("install lifecycle seed");
+            seed.reset_shared_state_for_test()
+                .expect("reset shared lifecycle before test");
+            let adapter = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+            adapter.set_terminate_for_test(false);
+            adapter.set_reload_for_test(false);
+            Self { adapter }
+        }
+    }
+
+    impl Drop for SharedLifecycleResetGuard {
+        fn drop(&mut self) {
+            self.adapter.set_terminate_for_test(false);
+            self.adapter.set_reload_for_test(false);
+            self.adapter
+                .reset_shared_state_for_test()
+                .expect("reset shared lifecycle after test");
+        }
+    }
+
     fn worker_thread_id() -> ThreadId {
         let shared = super::SHARED_LIFECYCLE.lock().expect("shared lifecycle");
         shared
@@ -632,6 +733,7 @@ mod windows_tests {
     #[test]
     #[serial_test::serial(env)]
     fn windows_reload_flag_is_shared_across_install_calls() {
+        let _reset = SharedLifecycleResetGuard::install();
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
         first.set_reload_for_test(false);
@@ -646,6 +748,7 @@ mod windows_tests {
     #[test]
     #[serial_test::serial(env)]
     fn windows_terminate_flag_is_shared_across_install_calls() {
+        let _reset = SharedLifecycleResetGuard::install();
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
         first.set_reload_for_test(false);
@@ -659,6 +762,7 @@ mod windows_tests {
     #[test]
     #[serial_test::serial(env)]
     fn windows_terminate_request_wakes_waiters() {
+        let _reset = SharedLifecycleResetGuard::install();
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
         first.set_reload_for_test(false);
@@ -687,6 +791,7 @@ mod windows_tests {
     #[test]
     #[serial_test::serial(env)]
     fn windows_install_reuses_one_lifecycle_worker_until_shutdown() {
+        let _reset = SharedLifecycleResetGuard::install();
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         let first_worker = worker_thread_id();
         let second = LifecycleControlSourceAdapter::install().expect("install second");

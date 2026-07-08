@@ -404,7 +404,12 @@ impl RuntimeComposition {
         let runtime = self
             .prepare_runtime_with(
                 "daemon background lane shutdown failed during test runtime preparation rollback",
-                |server_transport| server_transport.prepare_runtime_at_socket_path(socket_path),
+                |server_transport| {
+                    server_transport.prepare_runtime_at_socket_path_for_home(
+                        socket_path,
+                        self.request_dispatcher.home_dir_for_test(),
+                    )
+                },
             )
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
@@ -758,6 +763,9 @@ mod tests {
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
+    use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    use crate::test_support::LifecycleFlagResetGuard;
+
     use super::RuntimeComposition;
     use super::{RuntimeLifecycle, RuntimeLifecycleState, shutdown_lane_with_deadline};
 
@@ -861,6 +869,8 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        let _reset = LifecycleFlagResetGuard::install(lifecycle);
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&parent_file, "x").expect("parent file");
@@ -873,6 +883,14 @@ mod tests {
 
         assert!(error.is_daemon_unavailable());
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+        assert!(
+            atm_core::home::host_runtime_lock_path_from_home(
+                tempdir.path(),
+                crate::host_ownership::HOST_RUNTIME_OWNER_LOCK_FILE,
+            )
+            .exists(),
+            "test startup should isolate owner.lock under the temp home root"
+        );
         let retained_log_path =
             atm_core::home::host_log_dir_from_home(tempdir.path()).join("atm.log.jsonl");
         let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");

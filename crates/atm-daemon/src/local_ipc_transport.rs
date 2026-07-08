@@ -298,6 +298,30 @@ impl PreparedRuntimeServer {
             LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
         let ownership =
             HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    #[cfg(test)]
+    fn bind_with_observability_and_home_for_test(
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
+        let lifecycle_control =
+            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
+        let ownership = HostOwnershipAdapter::new_with_observability(host_ownership_observability)
+            .acquire_at_home_for_test(host_home_dir)?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    fn bind_after_install(
+        endpoint_path: PathBuf,
+        observability: SubsystemObservability,
+        lifecycle_control: LifecycleControlSourceAdapter,
+        ownership: HostOwnershipGuard,
+    ) -> Result<Self, AtmError> {
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
@@ -930,6 +954,21 @@ impl LocalIpcServerTransportAdapter {
             self.lifecycle_observability.clone(),
         )
     }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_runtime_at_socket_path_for_home(
+        &self,
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        PreparedRuntimeServer::bind_with_observability_and_home_for_test(
+            endpoint_path,
+            host_home_dir,
+            self.observability.clone(),
+            self.host_ownership_observability.clone(),
+            self.lifecycle_observability.clone(),
+        )
+    }
 }
 
 impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
@@ -970,6 +1009,8 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
+    #[cfg(windows)]
+    use tempfile::TempDir;
     #[cfg(unix)]
     use tempfile::TempDir;
 
@@ -1015,6 +1056,24 @@ mod tests {
         assert_eq!(
             result,
             LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prepare_local_ipc_endpoint_rejects_logical_parent_that_is_a_file() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&parent_file, "x").expect("parent file");
+        let endpoint = parent_file.join("daemon.sock");
+
+        let error = prepare_local_ipc_endpoint(&endpoint).expect_err("prepare endpoint");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            error
+                .to_string()
+                .contains("failed to create daemon local IPC directory")
         );
     }
 

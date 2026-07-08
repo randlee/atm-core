@@ -78,7 +78,7 @@ def run_row(root: Path, spec: SuiteRowSpec) -> SmokeRow:
             row.notes = f"first failing command: {shlex.join(command)}"
             row.observed_behavior = build_failure_observation(completed)
             row.expected_behavior = "all targeted validation commands exit 0"
-            row.likely_root_cause = "one or more targeted AD.11 evidence checks regressed"
+            row.likely_root_cause = "one or more targeted Phase AD evidence checks regressed"
             row.artifact_pointer = shlex.join(command)
             return row
     row.verdict = "PASS"
