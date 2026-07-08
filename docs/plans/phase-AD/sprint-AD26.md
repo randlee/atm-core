@@ -171,11 +171,16 @@ Required runtime meaning after this sprint:
   - `ATM_POST_SEND_TMUX_SEND_FAILED`
   - `ATM_POST_SEND_GRAFT_UNAVAILABLE`
   - `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
-- `runtime_sqlite_observer.rs` and `test_observability.rs` must stop importing
-  `sc_observability_types::{ActionName, OutcomeLabel}` directly and instead
-  route those alias types through the accepted
-  `DaemonRuntimeObservability` seam so `RULE-001` is closed in the same sprint
-  that repairs the live post-send runtime seam
+- the deferred `AD18/ARCH-004` scope ruling lands here for the dual
+  `lib.rs` + `main.rs` `atm-daemon` crate:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the only
+    sanctioned non-`main.rs` encapsulation seam allowed to import
+    `sc_observability_types::{ActionName, OutcomeLabel}` directly
+  - every other file under `crates/atm-daemon/src/` must route those alias
+    types through `DaemonRuntimeObservability` instead of importing
+    `sc_observability_types` directly
+  - the sign-off record for this sanctioned exception must be restated in
+    `docs/atm-core/boundaries.md` and `docs/plans/phase-AD/readiness.md`
 - `LocalTmuxNudgeTarget` reuses the roster-backed pane-routing target shape
   already accepted in `AD.22`; it must not fall back to `.atm.toml` pane
   lookup
@@ -206,9 +211,10 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   implementation still bypasses it
 - mixed-success accounting that treats “matched with one success and one
   failure” as no emission
-- direct `sc_observability_types::{ActionName, OutcomeLabel}` imports in
-  `crates/atm-daemon/src/runtime_sqlite_observer.rs` and
-  `crates/atm-daemon/src/test_observability.rs`
+- direct `sc_observability_types::{ActionName, OutcomeLabel}` imports anywhere
+  under `crates/atm-daemon/src/` except:
+  - `crates/atm-daemon/src/main.rs`
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs`
 
 ## Deliverables
 
@@ -222,8 +228,9 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
 - boundary TOMLs, boundary inventory docs, readiness criteria, and runtime code
   all describe the same mechanism
 - the accepted runtime observability helpers close `RULE-001` by routing
-  `ActionName` / `OutcomeLabel` through `DaemonRuntimeObservability` rather
-  than direct daemon helper imports
+  `ActionName` / `OutcomeLabel` through `DaemonRuntimeObservability`
+  everywhere under `crates/atm-daemon/src/` except the explicitly sanctioned
+  `daemon_runtime_observability.rs` encapsulation seam
 
 ## This Sprint Does Not Close
 
@@ -251,8 +258,11 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   - zero matching hooks still trigger the built-in path
   - graft-backed delivery goes through the graft port rather than subprocess
     bypass
-- targeted daemon-observability validation proves
-  `runtime_sqlite_observer.rs` and `test_observability.rs` no longer import
+- `rg -n 'sc_observability_types::(ActionName|OutcomeLabel)' crates/atm-daemon/src --glob '!main.rs'`
+  returns matches only in
+  `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- targeted daemon-observability validation proves no other file under
+  `crates/atm-daemon/src/` imports
   `sc_observability_types::{ActionName, OutcomeLabel}` directly
 - `boundaries/atm-core/post-send-hook-emitter.toml`,
   `boundaries/atm-core/graft-post-send-port.toml`,

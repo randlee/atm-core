@@ -51,6 +51,12 @@ true:
   the accepted line
 - `.triage/phase-AD/direct-fix-track.md` exists and names the final owner plus
   closure artifact for the non-code obligations surfaced during plan review
+- the AD18/ARCH-004 RULE-001 scope ruling is recorded on the accepted line:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the only
+    sanctioned non-`main.rs` daemon source file allowed to import
+    `sc_observability_types::{ActionName, OutcomeLabel}` directly
+  - every other `crates/atm-daemon/src/` file routes those aliases through the
+    sanctioned encapsulation seam
 - the accepted post-send line keeps `PostSendHookEmitter` attempt-only and
   `GraftPostSendPort` receiver-specific, with built-in override lookup upstream
   of the emitter after `AD.27`

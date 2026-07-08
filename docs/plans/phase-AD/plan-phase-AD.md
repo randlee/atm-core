@@ -368,8 +368,29 @@ pub struct PostSendHookEvent {
     pub recipient_pane_id: Option<PaneId>,
 }
 
+pub enum PostSendBuiltInTarget {
+    LocalTmux(LocalTmuxNudgeTarget),
+    Graft(GraftNudgeTarget),
+}
+
+pub struct BuiltInPostSendDispatch {
+    pub event: PostSendHookEvent,
+    pub target: PostSendBuiltInTarget,
+}
+
+pub trait GraftPostSendPort: sealed::Sealed {
+    fn deliver_post_send(
+        &self,
+        event: &PostSendHookEvent,
+        target: &GraftNudgeTarget,
+    ) -> Result<(), AtmError>;
+}
+
 pub trait PostSendHookEmitter: sealed::Sealed {
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+    fn emit_post_send(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Result<PostSendEmissionPath, AtmError>;
 }
 ```
 
@@ -389,12 +410,22 @@ Required runtime meaning:
   - daemon/local doctor paths must not invent or require caller identity
 - send:
   - persist
-  - if recipient has post-send hook capability, call `emit(...)`
-  - if `emit(...)` fails, log it and append a sender-visible warning
+  - if recipient has post-send hook capability, caller-owned send/ack logic
+    resolves external-hook matches plus any built-in fallback target before it
+    calls `emit_post_send(...)`
+  - if `emit_post_send(...)` fails, log it and append a sender-visible warning
   - `AD.6` owns the stable post-send emission failure warning/error code used
     by both local-tmux and graft emitters; earlier sprints may reference the
     warning behavior, but they must not invent competing codes for the same
     failure class
+  - the deferred `AD18/ARCH-004` RULE-001 scope ruling is now explicit on this
+    follow-up line:
+    - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the only
+      sanctioned non-`main.rs` daemon source file allowed to import
+      `sc_observability_types::{ActionName, OutcomeLabel}` directly
+    - every other `crates/atm-daemon/src/` file must route those aliases
+      through that encapsulation seam
+    - `AD.26` owns the widened grep gate that enforces this ruling
 - external post-send compatibility:
   - `ATM_POST_SEND.description` is guaranteed on the retained line
   - `ATM_POST_SEND.task_id` remains present as a string contract for external
@@ -412,8 +443,8 @@ If notification logging survives, it should stay equally direct:
 ```rust
 persist_message(...)?;
 if recipient_has_post_send_hook {
-    match post_send_hook_emitter.emit(&event) {
-        Ok(()) => append_notification_log(&event)?,
+    match post_send_hook_emitter.emit_post_send(&dispatch) {
+        Ok(path) => append_notification_log(&event, path)?,
         Err(error) => {
             log_post_send_failure(&error);
             append_sender_warning(render_post_send_warning(&error));
