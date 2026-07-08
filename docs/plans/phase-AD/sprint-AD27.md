@@ -1,7 +1,7 @@
 ---
 id: AD.27
 title: Upstream Built-In Template Resolution Extraction
-status: complete
+status: planned
 branch: feature/pAD-s27-upstream-built-in-template-resolution
 worktree: ../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution
 target: integrate/phase-AD
@@ -18,7 +18,6 @@ target: integrate/phase-AD
 
 - `AD.26` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-AD/readiness.md`
 
 ## Exact Targets
 

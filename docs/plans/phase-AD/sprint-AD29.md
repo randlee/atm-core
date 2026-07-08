@@ -1,13 +1,13 @@
 ---
 id: AD.29
-title: Phase AD Post-Send Smoke And Windows Daemon Depth
-status: complete
-branch: feature/pAD-s29-phase-ad-post-send-smoke-and-windows-depth
-worktree: ../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-and-windows-depth
+title: Phase AD Post-Send Smoke Matrix Closeout
+status: planned
+branch: feature/pAD-s29-phase-ad-post-send-smoke-matrix
+worktree: ../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix
 target: integrate/phase-AD
 ---
 
-# Sprint AD.29 — Phase AD Post-Send Smoke And Windows Daemon Depth
+# Sprint AD.29 — Phase AD Post-Send Smoke Matrix Closeout
 
 ## Goal
 
@@ -23,24 +23,21 @@ target: integrate/phase-AD
 - `AD.27` complete
 - `AD.28` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-AD/readiness.md`
+
+`AD.28` is a functional dependency, not just numeric merge order: this smoke
+matrix includes graft-backed post-send delivery, and that case would remain
+flaky until the host-nudge timing race from `AD.28` is closed.
 
 ## Exact Targets
 
-- `.github/workflows/ci.yml`
-- `crates/atm-daemon/src/local_ipc_transport.rs`
-- `crates/atm-daemon/src/tests.rs`
 - `scripts/smoke/run.py`
 - `scripts/smoke/run_thorough.py`
 - `reports/smoke/smoke.md`
 - `reports/smoke/smoke-thorough.md`
-- `docs/atm-daemon/architecture.md`
-- `docs/cross-platform-guidelines.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-AD/readiness.md`
 - `docs/plans/phase-AD/sprint-AD29.md`
 
 ## Interfaces To Add Or Modify
@@ -57,7 +54,7 @@ pub enum PhaseAdPostSendSmokeCase {
 }
 ```
 
-The accepted smoke/service-hardening ownership after this sprint is:
+The accepted smoke ownership after this sprint is:
 
 - `AD.24` owns any shared smoke harness, environment orchestration, or
   cross-branch smoke scaffolding
@@ -68,24 +65,16 @@ The accepted smoke/service-hardening ownership after this sprint is:
   - built-in fallback when no external hook matches
   - reset-to-default after a prior explicit override
   - explicit disable behavior if the retained product design keeps that state
-- Windows daemon integration depth must include the restored same-host local
-  IPC cases that are still Unix-only in the reviewed line:
-  - dispatcher panic during shutdown
-  - injected accept-error handling
-  - post-terminate connection rejection
 
 ## Paths To Delete
 
 - ad hoc Phase AD smoke checks that prove only one post-send happy path
-- Unix-only gating on Windows-capable local IPC depth tests
 - duplicate smoke-plan scope that belongs to the sibling `AD.24` harness sprint
 
 ## Deliverables
 
 - one authoritative Phase AD smoke matrix proves the repaired post-send states
   end-to-end
-- Windows daemon CI covers the remaining local IPC shutdown/error/rejection
-  depth cases named above
 - readiness evidence cites the accepted smoke/service-hardening lane directly
   instead of scattering proof across unrelated PR notes
 - docs distinguish clearly between shared smoke harness ownership (`AD.24`) and
@@ -97,16 +86,12 @@ The accepted smoke/service-hardening ownership after this sprint is:
 - boundary wiring/accounting by themselves
 - template-resolution extraction by itself
 - the `atm-graft` deadline-race fix by itself
+- Windows daemon integration-depth closure from `RSH-AD-END-001`
 
 ## Acceptance Criteria
 
 - the authoritative smoke lane passes with evidence for all five Phase AD
   post-send cases
-- Windows CI runs the repaired local IPC depth cases rather than treating them
-  as Unix-only, specifically:
-  - dispatcher panic during shutdown
-  - injected accept-error handling
-  - post-terminate connection rejection
 - readiness docs point to one accepted smoke/service-hardening evidence line
   for final closure
 - no duplicated smoke scope remains between `AD.24` and `AD.29`
@@ -118,6 +103,4 @@ The accepted smoke/service-hardening ownership after this sprint is:
 - `python3 .just/run_lint.py all`
 - `just smoke normal`
 - `just smoke thorough`
-- targeted Windows/local-IPC integration coverage for dispatcher panic during
-  shutdown, accept-error injection, and post-terminate connection rejection
 - `git diff --check`

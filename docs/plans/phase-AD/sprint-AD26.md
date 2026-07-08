@@ -1,7 +1,7 @@
 ---
 id: AD.26
 title: Post-Send Boundary Wiring And Hook Accounting Repair
-status: complete
+status: planned
 branch: feature/pAD-s26-post-send-boundary-wiring-and-accounting
 worktree: ../atm-core-worktrees/feature/pAD-s26-post-send-boundary-wiring-and-accounting
 target: integrate/phase-AD
@@ -19,10 +19,11 @@ target: integrate/phase-AD
 
 - `AD.25` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-AD/readiness.md`
-- phase-end findings:
-  - `phase-ad-end-final-verdict.txt`
-  - `phase-ad-end-review.XXXXXX.md`
+- review provenance:
+  - ATM message `01KX1P4D0SEZXWW90VW2F7FF27` from `quality-mgr`,
+    `2026-07-08`, subject `PHASE-AD-END-QA FINAL VERDICT`
+  - ATM message `01KX1MTJE596JE8SC2766V0Q10` from `arch-ctm`,
+    `2026-07-08`, subject `PHASE-AD-END-REVIEW complete`
 
 ## Exact Targets
 
@@ -44,7 +45,6 @@ target: integrate/phase-AD
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `docs/plans/phase-AD/readiness.md`
 - `docs/plans/phase-AD/sprint-AD26.md`
 
 ## Interfaces To Add Or Modify
@@ -56,6 +56,12 @@ This sprint makes the architectural call explicitly:
 - wire both as live runtime seams
 - delete the `std::process::Command` subprocess bypass from the accepted
   send/ack path
+
+ADR-019 already fixes the accepted architecture to one direct post-persist
+emitter seam with receiver-specific handoff staying capability-specific, so
+wiring the existing boundaries is the correct closure and retiring them would
+contradict the accepted Phase AD design rather than repairing implementation
+drift.
 
 The accepted accounting shape after this sprint is:
 
@@ -160,8 +166,9 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
     bypass
 - `boundaries/atm-core/post-send-hook-emitter.toml`,
   `boundaries/atm-core/graft-post-send-port.toml`,
-  `docs/atm-core/boundaries.md`, and `docs/plans/phase-AD/readiness.md` all
-  match the accepted live mechanism
+  `docs/atm-core/boundaries.md`, `docs/plans/phase-AD/plan-phase-AD.md`, and
+  `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` all match
+  the accepted live mechanism
 
 ## Required Validation
 

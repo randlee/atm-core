@@ -1,7 +1,7 @@
 ---
 id: AD.28
 title: atm-graft Host-Nudge Deadline Race Hardening
-status: complete
+status: planned
 branch: feature/pAD-s28-graft-host-nudge-deadline-race-hardening
 worktree: ../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening
 target: integrate/phase-AD
@@ -18,7 +18,8 @@ target: integrate/phase-AD
 
 - `AD.17` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- `FTQ-AD-END-001` from `phase-ad-end-final-verdict.txt`
+- `FTQ-AD-END-001` from ATM message `01KX1P4D0SEZXWW90VW2F7FF27`
+  (`quality-mgr`, `2026-07-08`, subject `PHASE-AD-END-QA FINAL VERDICT`)
 
 ## Exact Targets
 

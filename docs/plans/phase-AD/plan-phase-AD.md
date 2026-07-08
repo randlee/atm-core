@@ -118,7 +118,7 @@ The authoritative follow-up blockers are:
   depth cases together
 
 `Phase AD` therefore extends again with a follow-up line. `AD.25` through
-`AD.29` are release-blocking closure sprints for these phase-end findings.
+`AD.30` are release-blocking closure sprints for these phase-end findings.
 `AD.23` remains reserved outside this worktree, and `AD.24` is the sibling
 smoke-harness planning slot consumed by `AD.29` rather than renumbered here.
 
@@ -426,7 +426,7 @@ Phase `AD` orchestration rule:
   sprint, merge the full predecessor chain before starting new work on the
   current sprint
 - sprint branches must merge forward numerically:
-  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20 -> AD.21 -> AD.22 -> AD.25 -> AD.26 -> AD.27 -> AD.28 -> AD.29`
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20 -> AD.21 -> AD.22 -> AD.25 -> AD.26 -> AD.27 -> AD.28 -> AD.29 -> AD.30`
 - do not stop downstream development waiting for prior sprint QA to pass
 - do not run pairwise cross-merges between unrelated `AD` sprint branches
 - `AD.24` is planned in a sibling smoke-test worktree and is consumed by
@@ -458,7 +458,8 @@ Phase `AD` orchestration rule:
 24. [AD.26 Post-Send Boundary Wiring And Hook Accounting Repair](./sprint-AD26.md)
 25. [AD.27 Upstream Built-In Template Resolution Extraction](./sprint-AD27.md)
 26. [AD.28 `atm-graft` Host-Nudge Deadline Race Hardening](./sprint-AD28.md)
-27. [AD.29 Phase AD Post-Send Smoke And Windows Daemon Depth](./sprint-AD29.md)
+27. [AD.29 Phase AD Post-Send Smoke Matrix Closeout](./sprint-AD29.md)
+28. [AD.30 Windows Daemon Integration-Depth Coverage Closeout](./sprint-AD30.md)
 
 ## Phase Exit Criteria
 
@@ -547,6 +548,8 @@ Phase `AD` closes only when:
   - built-in fallback
   - override reset-to-default
   - override disable behavior when that state is retained
+- the Windows daemon integration-depth gap from `RSH-AD-END-001` is closed in
+  its own sprint and no longer relies on Unix-only local IPC depth coverage
 - Windows daemon integration coverage includes the remaining post-restore local
   IPC depth cases for dispatcher panic during shutdown, accept-error injection,
   and post-terminate connection rejection

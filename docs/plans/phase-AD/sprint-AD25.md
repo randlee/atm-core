@@ -1,7 +1,7 @@
 ---
 id: AD.25
 title: Built-In Nudge Override Lifecycle And Reset Semantics
-status: complete
+status: planned
 branch: feature/pAD-s25-built-in-nudge-override-lifecycle
 worktree: ../atm-core-worktrees/feature/pAD-s25-built-in-nudge-override-lifecycle
 target: integrate/phase-AD
@@ -19,9 +19,11 @@ target: integrate/phase-AD
 
 - `AD.22` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
-- phase-end findings:
-  - `phase-ad-end-final-verdict.txt`
-  - `phase-ad-end-review.XXXXXX.md`
+- review provenance:
+  - ATM message `01KX1P4D0SEZXWW90VW2F7FF27` from `quality-mgr`,
+    `2026-07-08`, subject `PHASE-AD-END-QA FINAL VERDICT`
+  - ATM message `01KX1MTJE596JE8SC2766V0Q10` from `arch-ctm`,
+    `2026-07-08`, subject `PHASE-AD-END-REVIEW complete`
 
 ## Exact Targets
 
