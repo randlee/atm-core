@@ -66,11 +66,12 @@ Architectural consequence:
 The current runtime uses this split for embedded host-agent integration:
 
 - `atm-core` owns the semantic client protocol contract
-- `atm-daemon` owns generic request handling plus generic post-commit nudge
-  routing/queue state; it must not own `atm-graft` as a named internal
-  subsystem
+- `atm-daemon` owns generic request handling plus post-commit emission
+  dispatch only; it must not own graft-private receiver buffering, pending
+  queue mechanics, or `atm-graft` as a named internal subsystem
 - `atm-graft` owns the concrete same-host daemon client, graft-session
-  lifecycle, and host bridge
+  lifecycle, host bridge, and any receiver-private buffering or pending nudge
+  queue state
 
 Shared command and client-message diagrams live in:
 - [`../atm/flow-diagrams.md`](../atm/flow-diagrams.md)

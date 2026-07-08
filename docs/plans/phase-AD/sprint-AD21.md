@@ -31,7 +31,9 @@ target: integrate/phase-AD
 - `crates/atm-core/src/team_admin.rs`
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/commands/teams.rs`
-- `crates/atm/src/commands/internal_nudge.rs`
+- `crates/atm/src/commands/internal_nudge.rs` for the built-in renderer and
+  concrete `TmuxNudgeSink`
+- `crates/atm-graft/src/nudge_sink.rs` for the concrete `GraftNudgeSink`
 - `crates/atm/src/main.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`
 - `docs/requirements.md`
@@ -119,8 +121,10 @@ The accepted built-in rendering contract after this sprint is:
   and upstream of `atm internal-nudge`; neither `atm-core` nor `atm` may
   perform direct SQLite I/O for this lookup
 - `atm internal-nudge` must dispatch to exactly one concrete sink:
-  - `TmuxNudgeSink` for local tmux-backed recipients
-  - `GraftNudgeSink` for graft-backed recipients
+  - `TmuxNudgeSink` for local tmux-backed recipients, implemented in
+    `crates/atm/src/commands/internal_nudge.rs`
+  - `GraftNudgeSink` for graft-backed recipients, implemented in
+    `crates/atm-graft/src/nudge_sink.rs`
 - this sprint consumes the existing `TmuxNudgeSink` and `GraftNudgeSink`
   ownership lines only; it does not redesign sink-private mechanics beyond the
   already accepted built-in template and dispatch contract
