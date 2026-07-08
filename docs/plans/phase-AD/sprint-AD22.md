@@ -40,15 +40,21 @@ target: integrate/phase-AD
 
 ## Interfaces To Add Or Modify
 
-The accepted pane-routing ownership rule after this sprint is:
+The accepted pane-routing ownership rule after this sprint is carried by the
+existing canonical roster row plus the retained `atm members --json`
+projection; this sprint does not introduce a new Rust coordinator struct just
+to restate that invariant.
 
-```rust
-pub struct RosterMemberNudgeTarget {
-    pub recipient: AgentName,
-    pub recipient_team: TeamName,
-    pub recipient_pane_id: Option<PaneId>,
-}
-```
+Accepted seam:
+
+- canonical roster/store truth keeps `recipient_pane_id` on `RosterEntry`
+- retained local team projection in `crates/atm-core/src/team_admin.rs`
+  exposes that same value through `MemberSummary.tmux_pane_id`
+- `crates/atm/src/commands/teams.rs` continues to surface the same roster
+  projection to CLI JSON consumers such as `scripts/atm-nudge.py`
+- compatibility helpers may consume only that canonical roster projection or
+  an explicit `--pane`; they may not rediscover live pane ids from committed
+  `.atm.toml`
 
 with these invariants:
 

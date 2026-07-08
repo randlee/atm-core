@@ -27,6 +27,7 @@ TEST_TEAM = "test-team"
 TEST_AGENT = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
 TEST_QM = "test-qm"
+TEST_TEAM_LEAD_ADDR = f"{TEST_TEAM_LEAD}@{TEST_TEAM}"
 
 
 def _parse_json(text: str) -> dict:
@@ -200,6 +201,37 @@ class TestReadPaneFromRoster(unittest.TestCase):
         self.assertEqual(result.pane_id, "%17")
         self.assertEqual(result.source_path, "atm members --team <team> --json")
 
+    def test_roster_match_skips_toml_fallback_lookup(self):
+        process = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "team": TEST_TEAM,
+                    "members": [
+                        {"name": TEST_AGENT, "tmux_pane_id": "%17"},
+                    ],
+                }
+            ),
+            stderr="",
+        )
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("subprocess.run", return_value=process) as mock_run,
+            patch.object(
+                _MOD,
+                "discover_atm_toml",
+                side_effect=AssertionError("pane lookup must not consult .atm.toml"),
+            ),
+        ):
+            result = _MOD.read_pane_from_roster(TEST_AGENT, TEST_TEAM, {"sender": TEST_TEAM_LEAD})
+        self.assertEqual(result.pane_id, "%17")
+        self.assertEqual(
+            mock_run.call_args.args[0],
+            ["atm", "members", "--team", TEST_TEAM, "--json"],
+        )
+        self.assertEqual(mock_run.call_args.kwargs["env"]["ATM_TEAM"], TEST_TEAM)
+        self.assertEqual(mock_run.call_args.kwargs["env"]["ATM_IDENTITY"], TEST_TEAM_LEAD)
+
     def test_reports_command_failure(self):
         process = MagicMock(returncode=1, stdout="", stderr="boom")
         with patch("subprocess.run", return_value=process):
@@ -302,13 +334,13 @@ class TestBuildMessage(unittest.TestCase):
             TEST_TEAM,
             {
                 "is_ack": True,
-                "from": "team-lead@atm-dev",
+                "from": TEST_TEAM_LEAD_ADDR,
                 "message_id": "01JACKTEST00000000000000000",
             },
         )
         self.assertEqual(
             message,
-            '<atm from="team-lead@atm-dev" message-id="01JACKTEST00000000000000000" kind="ack"/>',
+            f'<atm from="{TEST_TEAM_LEAD_ADDR}" message-id="01JACKTEST00000000000000000" kind="ack"/>',
         )
 
     def test_ack_task_message_uses_compact_ack_shape_with_task_id(self):
@@ -316,14 +348,14 @@ class TestBuildMessage(unittest.TestCase):
             TEST_TEAM,
             {
                 "is_ack": True,
-                "from": "team-lead@atm-dev",
+                "from": TEST_TEAM_LEAD_ADDR,
                 "message_id": "01JACKTASK0000000000000000",
                 "task_id": "AD.22",
             },
         )
         self.assertEqual(
             message,
-            '<atm from="team-lead@atm-dev" message-id="01JACKTASK0000000000000000" kind="ack" task-id="AD.22"/>',
+            f'<atm from="{TEST_TEAM_LEAD_ADDR}" message-id="01JACKTASK0000000000000000" kind="ack" task-id="AD.22"/>',
         )
 
 

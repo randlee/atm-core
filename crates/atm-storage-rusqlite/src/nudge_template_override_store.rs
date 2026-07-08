@@ -28,7 +28,7 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
                     "SELECT template_body, updated_at
                      FROM team_nudge_template_overrides
                      WHERE team_name = ?1 AND template_kind = ?2;",
-                    params![team.as_str(), template_kind_value(kind)],
+                    params![team.as_str(), kind.as_str()],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
                 .optional()
@@ -55,22 +55,17 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
         template_body: &str,
     ) -> Result<TeamNudgeTemplateOverrideRow, AtmError> {
         let updated_at = IsoTimestamp::now();
-        let updated_at_raw = updated_at.into_inner().to_rfc3339();
+        let updated_at_raw = updated_at.to_string();
         self.db.with_connection(|connection| {
             connection
                 .execute(
                     "INSERT INTO team_nudge_template_overrides(
                         team_name, template_kind, template_body, updated_at
                      ) VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team_name, template_kind) DO UPDATE SET
+                    ON CONFLICT(team_name, template_kind) DO UPDATE SET
                         template_body = excluded.template_body,
                         updated_at = excluded.updated_at;",
-                    params![
-                        team.as_str(),
-                        template_kind_value(kind),
-                        template_body,
-                        &updated_at_raw,
-                    ],
+                    params![team.as_str(), kind.as_str(), template_body, &updated_at_raw,],
                 )
                 .map_err(|error| {
                     self.db
@@ -80,14 +75,10 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
                 team_name: team.clone(),
                 kind,
                 template_body: template_body.to_string(),
-                updated_at: parse_updated_at(updated_at_raw.clone())?,
+                updated_at,
             })
         })
     }
-}
-
-fn template_kind_value(kind: BuiltInNudgeTemplateKind) -> &'static str {
-    kind.as_str()
 }
 
 fn parse_updated_at(raw: String) -> Result<IsoTimestamp, AtmError> {

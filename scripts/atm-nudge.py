@@ -3,10 +3,10 @@
 
 atm-nudge.py [--pane <id>] <recipient> [<message>]
 
-This script is no longer a live post-send hook. Production `.atm.toml`
-post-send wiring routes through `scripts/atm-nudge.sh`, which requires
-authoritative pane metadata in `ATM_POST_SEND` and does not use `.atm.toml`
-pane routing truth.
+ATM now ships the built-in `atm internal-nudge` path as the default post-send
+emitter. This helper survives only as an explicit repo-local override or
+manual troubleshooting tool, and it must resolve pane routing from canonical
+ATM roster state or an explicit `--pane`.
 
 Legacy helper: nudge a named agent's tmux pane after successful send.
 
