@@ -670,6 +670,11 @@ Status summary:
 - `AD.11` (`feature/pAD-s11-smoke-and-readiness-closeout`) is complete: smoke
   artifacts, readiness validation, and closeout evidence converge on one
   accepted branch tip for the phase release gate.
+- `AD.17` (`feature/pAD-s17-boundary-reset-verification-closeout`) is
+  complete: the graft post-send boundary reset is verified end-to-end on the
+  accepted line, the Windows `atm-daemon` CI lane is restored as an explicit
+  gate, and release-surface closeout docs are aligned with the verified
+  daemon-backed, ULID-only ATM line.
 
 Planning branch:
 - `plan/post-send-hook-fix`
@@ -706,6 +711,7 @@ Sprint line:
 - `AD.9 [COMPLETE]` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
 - `AD.10 [COMPLETE]` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
 - `AD.11 [COMPLETE]` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.17 [COMPLETE]` `feature/pAD-s17-boundary-reset-verification-closeout`
 
 Acceptance:
 - the phase closes only through

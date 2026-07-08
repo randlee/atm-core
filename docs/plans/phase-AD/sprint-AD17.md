@@ -1,7 +1,7 @@
 ---
 id: AD.17
 title: Boundary Reset Verification Closeout
-status: planned
+status: complete
 branch: feature/pAD-s17-boundary-reset-verification-closeout
 worktree: ../atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout
 target: integrate/phase-AD
