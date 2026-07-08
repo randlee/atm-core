@@ -660,11 +660,13 @@ Deliverables:
   notification queue/worker runtime
 - `atm teams update-member` as the accepted repair path for existing member
   metadata
-- corrective `AD.12` through `AD.20` closure of:
+- corrective `AD.12` through `AD.22` closure of:
   - ULID-only retained message identity
   - graft advisory boundary reset
   - raw CLI runtime-root unification
   - read-mutation and read-selector output consistency
+  - shipped built-in post-send nudge plus bounded template override support
+  - pane-routing ownership cleanup out of committed repo config
 
 Sprint line:
 - `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
@@ -687,12 +689,14 @@ Sprint line:
 - `AD.18` `feature/pAD-s18-raw-cli-runtime-root-unification`
 - `AD.19` `feature/pAD-s19-read-mutation-output-consistency-repair`
 - `AD.20` `feature/pAD-s20-read-body-search-metadata-consistency-repair`
+- `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
+- `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
 
 Acceptance:
 - the phase closes only through
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
 - readiness is valid only if `AD.1` through `AD.11` and `AD.12` through
-  `AD.20` all pass on the accepted line
+  `AD.22` all pass on the accepted line
 
 ## 39. Chore: ADR Rationale Audit [COMPLETE]
 

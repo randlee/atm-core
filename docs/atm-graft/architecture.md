@@ -227,9 +227,16 @@ Architectural rules:
 - when the recipient uses the graft capability, the graft receiver
   implementation is responsible for handing that event to the host injection
   seam
+- the concrete graft-backed sink is `GraftNudgeSink`; it is one receiver sink
+  behind the shared post-send boundary, not a special daemon-owned runtime
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message_id`
+- acknowledge-family nudges use the compact built-in envelope:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- task-bearing delivery or acknowledge nudges may carry `task_id`; delivery
+  nudges may additionally carry `description`
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - the exact transport or callback mechanism used for that handoff is private to
