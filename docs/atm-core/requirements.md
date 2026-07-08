@@ -147,8 +147,8 @@ Initial crate requirement IDs:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` row-key model, the one-logical-message-identity rule
-  (`AtmMessageId`), and required lookup/dedupe constraints for the compatible
-  `message_id` wire form.
+  (`AtmMessageId`), and required lookup/dedupe constraints for the retained
+  ULID `message_id` wire form.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
@@ -159,8 +159,8 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, protocol, transport, config ingress, direct post-send emission,
-  advisory transport, and status-source calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, config ingress, direct post-send emission, and
+  status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
   Phase-Z follow-on note: repository-local lint must also be able to reject
   direct command-entry retained-runtime acquisition in `atm teams`,
@@ -192,9 +192,9 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
   `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
   requirement.
-  The generic session identifier name reserved for the thin-client line is
-  `AdvisorySessionId`; later advisory/session work must build on that
-  generic core-owned name rather than reviving `GraftSessionId`.
+  No graft-private lifecycle, session, queue, or stream identifier is reserved
+  in shared `atm-core`; receiver-private runtime state belongs in the receiver
+  implementation unless it is proven to be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
@@ -334,11 +334,6 @@ Required `atm-core` crate rules:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - `atm-core` framed transport helpers must delimit packets explicitly rather
   than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary
@@ -462,8 +457,8 @@ Required config rules:
   present in `config.json`
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
   identities
-- `[[atm.post_send_hooks]]` may define ATM-owned best-effort post-send
-  automation rules
+- `[[atm.post_send_hooks]]` may define ATM-owned external override commands for
+  post-send behavior; they are not the only shipped post-send path
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
@@ -518,14 +513,15 @@ Required caller-context rules:
 - the hook inherits process environment and also receives one ATM-owned JSON
   payload in `ATM_POST_SEND` with:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
   - `team`
   - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
   - `requires_ack`
   - `is_ack`
-  - optional `task_id` when present
+  - optional `to`
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
 - the hook must run after successful non-`dry-run` `atm send`
@@ -534,6 +530,8 @@ Required caller-context rules:
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata
+- if no matching external rule is configured, `atm-core` must still hand off
+  the same canonical event to the shipped built-in `atm internal-nudge` path
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -543,6 +541,13 @@ Required caller-context rules:
 - once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
+- `atm-core` owns canonical post-send event construction, but it must not own
+  built-in XML template storage, placeholder substitution policy, or sink-local
+  transport behavior
+- any team-scoped built-in template override lookup must cross a dedicated
+  storage-neutral `NudgeTemplateOverrideStore` boundary before
+  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  inside the emitter path
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

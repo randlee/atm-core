@@ -29,12 +29,6 @@ Notes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
-  - typed advisory-session envelopes for:
-    - register
-    - unregister
-    - fetch
-    - drain
-    - live advisory stream
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
@@ -61,9 +55,9 @@ Notes:
 - `atm-graft` now lands as one such thin client crate and is expected to stay
   on this boundary plus the shared ATM envelopes rather than on any daemon-
   private request family.
-- Long-lived advisory registration, fetch/drain inspection, and live advisory
-  stream traffic are part of this shared boundary family rather than a
-  plugin-private daemon API.
+- Receiver-private lifecycle, buffering, or wakeup state must not be promoted
+  into shared transport methods or shared request/response DTOs on this
+  boundary.
 
 ## WatchEventSource
 
@@ -181,6 +175,24 @@ Canonical machine-readable boundary source:
 Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
   diagnosis into daemon or CLI code.
+
+## NudgeTemplateOverrideStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/nudge-template-override-store.toml](../../boundaries/atm-core/nudge-template-override-store.toml)
+
+Purpose:
+- Own the storage-neutral lookup contract for team-scoped built-in nudge
+  template override rows.
+
+Notes:
+- This boundary exists specifically so built-in nudge override lookup resolves
+  upstream of `PostSendHookEmitter`.
+- `atm-core` owns the contract and selection semantics, but does not own the
+  concrete SQLite table or any direct SQLite calls.
+- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- `atm` remains the owner of the six built-in product template bodies and the
+  bounded placeholder substitution/rendering policy.
 
 ## Phase AA Runtime Composition Adjuncts
 

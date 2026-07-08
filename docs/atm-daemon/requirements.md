@@ -67,15 +67,14 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
-  - production requirement: one live advisory stream per active embedded
-    client session
-  - the live advisory stream is the production nudge-delivery path whenever the
-    selected same-host transport supports streaming
+
+Receiver-specific post-send handoff rule:
+- receiver implementation details are not modeled as daemon packet families
+- the accepted daemon line must not require graft session registration,
+  fetch/drain inspection, bounded per-session daemon nudge queues, or a
+  dedicated advisory-stream request/response family
+- daemon ownership ends at durable persistence plus post-send emission through
+  the accepted capability seam
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`

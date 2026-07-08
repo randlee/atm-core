@@ -800,10 +800,10 @@ Architectural rules:
 - ATM-owned machine state belongs in SQLite-backed state and projections.
 - `metadata.atm` is not an approved namespace and must not survive in active
   compatibility output.
-- ATM keeps one logical message identity; shared inbox `message_id` is the
-  compatibility wire encoding of that identity.
+- ATM keeps one logical message identity; retained `message_id` is the ULID
+  text form of that identity.
 - if SQLite persists `message_id`, it stores that same identity in the
-  compatibility wire form rather than as a second ATM-owned id.
+  retained ULID text form rather than as a second ATM-owned id.
 - compatibility reads may tolerate established historical top-level additive
   fields and `metadata.atm` derivatives, but they remain read-compatible
   inputs rather than the active or forward-write contract
@@ -870,7 +870,7 @@ Current runtime note:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `MessageId` | The one logical ATM message identity rendered in the compatibility form used by ATM and Claude-compatible consumers. |
+| `message_id` | `MessageId` | The one logical ATM message identity rendered in retained ULID text form. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -892,8 +892,8 @@ Normal send JSON output includes:
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
 
-For the ATM-authored compatibility wire shape, `message_id` is the shared
-inbox identifier used by ATM and Claude-compatible consumers.
+For the retained ATM wire shape, `message_id` is the shared ULID identifier
+used by ATM-authored messages.
 
 Dry-run send JSON output includes:
 - `action = "send"`
@@ -1068,8 +1068,8 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
-  `AckOutcome.reply_message_id` uses the one logical message identity in the
-  CLI/output-compatible form
+`AckOutcome.reply_message_id` uses the one logical message identity in the
+retained CLI/output ULID form
 - reply text
 - warnings: Vec<String>
 - Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -1466,11 +1466,12 @@ contain:
 - `recipient`
 - `team`
 - `from`
-- `to`
 - `message_id`
+- `description`
+- `task_id` as a string; it may be empty when no task is associated
 - `requires_ack`
 - `is_ack`
-- optional `task_id` when present
+- optional `to`
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
@@ -1489,6 +1490,9 @@ Current runtime hook-note:
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
+- the shipped built-in `atm internal-nudge` path must consume this same payload
+  contract so ATM does not carry separate external-hook and built-in nudge
+  event shapes
 
 Supported structured hook-result levels remain:
 - `debug`
@@ -2387,8 +2391,8 @@ Phase O adds three architecture-level hardening decisions:
      eviction
 
 3. **Atomic writes must use collision-proof temp names**
-   - temp files for atomic replacement must use ULID-based suffixes instead of
-     timestamp-only suffixes
+   - temp files for atomic replacement must use ULID-based or equivalently
+     collision-proof non-UUID suffixes instead of timestamp-only suffixes
    - this keeps same-process rapid writes to the same target path from
      colliding on the temp-file name while preserving the target basename for
      operator debugging
@@ -2443,8 +2447,8 @@ Minimum key rules:
 - `message_key` must be source-typed:
   - `atm:<ulid>` for ATM-authored rows
   - `ext:<fingerprint>` for imported external rows without ATM ids
-- the shared inbox `message_id` is the compatibility wire encoding of the one
-  logical ATM message identity
+- retained `message_id` is the ULID text encoding of the one logical ATM
+  message identity
 
 Minimum index/constraint rules:
 - unique identity enforcement on `message_key`
@@ -2607,12 +2611,26 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
+- the shipped default emitter path is `atm internal-nudge`
+- the built-in renderer selects exactly one of six named template kinds:
+  `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
+  `acknowledge`, and `acknowledge_task`
+- any team-scoped built-in template override row must be resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
+  emitter/render path runs; `atm` and `atm-core` must not perform direct
+  SQLite lookup for this feature
+- external `[[atm.post_send_hooks]]` commands remain the explicit full-override
+  path
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is direct post-send emission plus optional direct
-  notification-log append at the event site, not `NotificationSink` or a
-  daemon-owned notification worker/runtime
+- the accepted compact built-in acknowledge forms are:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- the accepted seam is a dedicated post-send emitter with optional direct
+  notification-log append at the event site, not
+  `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
+  worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 

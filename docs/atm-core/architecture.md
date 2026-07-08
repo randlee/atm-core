@@ -52,9 +52,9 @@ Consequences:
 - Client and server transports share one contract family.
 - The `atm-graft` crate is allowed only as a thin consumer of that shared
   contract family; it must not introduce a second daemon-specific client API.
-- Thin plugin crates must stay on the shared contract family; if advisory
-  registration or notification streaming is added later, it must extend this
-  shared line rather than introducing a graft-private daemon API.
+- Thin plugin crates must stay on the shared contract family for unary
+  command/request behavior and must not introduce receiver-private stream or
+  session APIs into the shared daemon contract.
 
 Alternatives considered:
 - Keep the protocol modeled as daemon API types.
@@ -102,8 +102,8 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
-- Shared core request and query surfaces must resolve only canonical ULID text
-  to `AtmMessageId`.
+- Shared core request and query surfaces must resolve ULID text only to
+  `AtmMessageId`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
@@ -275,11 +275,6 @@ Phase AC supersession note:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
@@ -432,16 +427,17 @@ Identity-specific policy:
   payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload contains:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
-- `team`
-- `message_id`
-- `requires_ack`
-- `is_ack`
-- optional `task_id` when present
-- optional `recipient_pane_id` when authoritative roster truth includes a
-  pane mapping for the recipient
+  - `team`
+  - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
+  - `requires_ack`
+  - `is_ack`
+  - optional `to`
+  - optional `recipient_pane_id` when authoritative roster truth includes a
+    pane mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
@@ -581,6 +577,18 @@ Architectural rules:
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through
   `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+- `atm-core` owns one canonical post-send event model carrying sender/team,
+  message id, description, task id, ack flags, and authoritative
+  `recipient_pane_id` when known
+- any team-scoped built-in template override lookup must cross a
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  only and must not grow SQLite lookup behavior
+- `atm-core` does not own built-in XML template bodies, template override
+  storage, tmux injection, or graft host-wakeup mechanics
+- the concrete receiver sinks behind that seam are:
+  - `TmuxNudgeSink` for local tmux-backed recipients
+  - `GraftNudgeSink` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation
