@@ -32,8 +32,11 @@ target: integrate/phase-AD
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/commands/teams.rs`
 - `crates/atm/src/commands/internal_nudge.rs` for the built-in renderer and
-  concrete `TmuxNudgeSink`
-- `crates/atm-graft/src/nudge_sink.rs` for the concrete `GraftNudgeSink`
+  concrete `TmuxNudgeSink`, plus the daemon-client transport dispatch used for
+  graft-backed recipients
+- `crates/atm-graft/src/nudge_sink.rs` for the receiver-side
+  `GraftNudgeSink` implementation consumed by `atm-graft` on its own side of
+  the daemon boundary
 - `crates/atm/src/main.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`
 - `docs/requirements.md`
@@ -120,14 +123,18 @@ The accepted built-in rendering contract after this sprint is:
   `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
   and upstream of `atm internal-nudge`; neither `atm-core` nor `atm` may
   perform direct SQLite I/O for this lookup
-- `atm internal-nudge` must dispatch to exactly one concrete sink:
-  - `TmuxNudgeSink` for local tmux-backed recipients, implemented in
-    `crates/atm/src/commands/internal_nudge.rs`
-  - `GraftNudgeSink` for graft-backed recipients, implemented in
-    `crates/atm-graft/src/nudge_sink.rs`
-- this sprint consumes the existing `TmuxNudgeSink` and `GraftNudgeSink`
-  ownership lines only; it does not redesign sink-private mechanics beyond the
-  already accepted built-in template and dispatch contract
+- `atm internal-nudge` must choose exactly one built-in delivery path:
+  - local tmux-backed recipients use the concrete `TmuxNudgeSink`
+    implementation in `crates/atm/src/commands/internal_nudge.rs`
+  - graft-backed recipients use the shared daemon API / client transport that
+    `atm` already depends on, matching `docs/atm-graft/requirements.md`; the
+    receiver-side `GraftNudgeSink` remains implemented in
+    `crates/atm-graft/src/nudge_sink.rs` and is consumed by `atm-graft` on
+    its own side of the daemon boundary
+- this sprint consumes the existing `TmuxNudgeSink` and receiver-side
+  `GraftNudgeSink` ownership lines only; it does not authorize a direct
+  `atm -> atm-graft` crate dependency or redesign sink-private mechanics
+  beyond the already accepted built-in template and dispatch contract
 - `TmuxNudgeSink` must preserve the current operational tmux-injection pattern:
   paste the rendered nudge text, send `Enter`, wait about `250ms` to `300ms`,
   then send a second `Enter`; the exact delay stays implementation-tunable but
@@ -235,8 +242,9 @@ with the planned SQLite storage contract owned by `atm-storage-rusqlite`:
   `atm-storage-rusqlite` and resolved through `NudgeTemplateOverrideStore`
   can replace any subset of the six built-in templates without requiring
   repo-local Python script distribution
-- the built-in path resolves exactly one concrete sink after rendering:
-  `TmuxNudgeSink` or `GraftNudgeSink`
+- the built-in path resolves exactly one post-render delivery path:
+  `TmuxNudgeSink` locally or the shared daemon API / client transport for
+  graft-backed recipients
 - the accepted docs describe the exact six-template contract, the placeholder
   inventory, and the override-precedence rule above
 - built-in `acknowledge` and `acknowledge_task` defaults are intentionally
@@ -287,7 +295,11 @@ with the planned SQLite storage contract owned by `atm-storage-rusqlite`:
     `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`
 - targeted sink-selection coverage proves:
   - local tmux-backed recipients route through `TmuxNudgeSink`
-  - graft-backed recipients route through `GraftNudgeSink`
+  - graft-backed recipients route through the shared daemon API / client
+    transport rather than a direct `atm -> atm-graft` call
+  - `atm-graft` receiver coverage proves the receiver-side `GraftNudgeSink`
+    consumes graft-delivery nudges on `atm-graft`'s side of the daemon
+    boundary
   - tmux sink regression coverage verifies the documented paste + `Enter` +
     short sleep + second `Enter` behavior
 - docs state explicitly that the default installed nudge path no longer depends
