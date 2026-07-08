@@ -81,6 +81,15 @@ pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
     ])
 }
 
+pub(super) fn install_home_env_with_atm_bin(home_dir: &Path, atm_bin: &str) -> EnvGuard {
+    EnvGuard::set_many([
+        ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+        ("ATM_LOG_DIR", None),
+        ("ATM_TEST_ATM_BIN", Some(atm_bin)),
+    ])
+}
+
 fn assert_recovered_payload_texts(
     original: &InboxMessage,
     companion: &InboxMessage,
@@ -639,7 +648,14 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
+    let capture_path = tempdir.path().join("graft-nudge.txt");
+    #[cfg(windows)]
+    let atm_path = tempdir.path().join("atm.cmd");
+    #[cfg(not(windows))]
+    let atm_path = tempdir.path().join("atm");
+    super::graft_warning_tests::write_atm_nudge_shim(&atm_path, &capture_path, 0);
+    let atm_bin = atm_path.display().to_string();
+    let _env = install_home_env_with_atm_bin(&home_dir, atm_bin.as_str());
 
     let outcome = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
@@ -652,8 +668,14 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_notification_log_absent(&home_dir);
+    let events = read_notification_events(&home_dir);
+    assert_eq!(events.len(), 1);
     assert_non_claude_sqlite_failure_observability(&observability);
+    let captured = fs::read_to_string(&capture_path).expect("capture");
+    assert!(captured.contains("internal-nudge"));
+    assert!(captured.contains("|graft|"));
+    assert!(captured.contains(format!("\"sender\":\"{TEST_SENDER}\"").as_str()));
+    assert!(!captured.contains("\"sender\":\"atm-system\""));
 }
 
 #[test]

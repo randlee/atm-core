@@ -197,3 +197,22 @@ pub fn with_default_roster_store<T>(
         (Err(error), Err(_)) => Err(error),
     }
 }
+
+pub fn with_default_nudge_template_override_store<T>(
+    f: impl FnOnce(&(dyn boundary::NudgeTemplateOverrideStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
+    let override_store = sqlite_backend.nudge_template_override_store();
+    let result = f(override_store.as_ref());
+    let finalize_result =
+        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
+    match (result, finalize_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(_)) => Err(error),
+    }
+}

@@ -27,6 +27,7 @@ use atm_daemon_client::{
     resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
 };
 
+mod nudge_sink;
 mod runtime;
 mod transport;
 

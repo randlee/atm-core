@@ -11,12 +11,12 @@ use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, read_graft_post_send_message,
     write_graft_post_send_message,
 };
-use atm_core::protocol::ProtocolErrorEnvelope;
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
 
+use crate::nudge_sink::GraftNudgeSink;
 use crate::{
     GraftObservability, GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE,
     SessionSnapshot,
@@ -42,6 +42,12 @@ struct InjectRequest {
 
 struct BoundedHostNudgeInjector {
     request_tx: SyncSender<InjectRequest>,
+}
+
+impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
+    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError> {
+        Self::inject_nudge(self, nudge)
+    }
 }
 
 impl BoundedHostNudgeInjector {
@@ -390,19 +396,15 @@ fn handle_graft_receiver_connection(
         "graft post-send request exceeded the bounded payload cap",
     )?;
     let event = request.event;
-    let response = match injector.inject_nudge(event.clone()) {
-        Ok(()) => {
-            let snapshot = read_snapshot(&ctx.snapshot)?;
-            ctx.observability.nudge_delivered(&snapshot, &event);
-            GraftPostSendResponse::Delivered
-        }
-        Err(error) => {
-            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                ctx.observability
-                    .session_error(&snapshot, "inject_nudge", &error);
-            }
-            GraftPostSendResponse::Error(ProtocolErrorEnvelope::from_error(&error))
-        }
+    let response = match (GraftNudgeSink {
+        injector,
+        snapshot: &ctx.snapshot,
+        observability: ctx.observability.as_ref(),
+    })
+    .deliver(event)
+    {
+        Ok(()) => GraftPostSendResponse::Delivered,
+        Err(error) => GraftPostSendResponse::Error(error),
     };
     write_graft_post_send_message(
         stream,
@@ -561,7 +563,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: AtmMessageId::new(),
-            message: "review failing smoke lane".to_string(),
+            description: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

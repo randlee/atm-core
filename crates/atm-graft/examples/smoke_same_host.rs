@@ -158,14 +158,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
     if !nudge
-        .message
+        .description
         .as_str()
         .contains(&args.expected_nudge_substring)
     {
         return Err(io::Error::other(format!(
-            "expected nudge message to contain {:?}, found {:?}",
+            "expected nudge description to contain {:?}, found {:?}",
             args.expected_nudge_substring,
-            nudge.message.as_str()
+            nudge.description.as_str()
         ))
         .into());
     }
@@ -243,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "recipient": nudge.recipient.to_string(),
                 "recipient_team": nudge.recipient_team.to_string(),
                 "message_id": nudge.message_id.to_string(),
-                "message": nudge.message,
+                "description": nudge.description,
                 "requires_ack": nudge.requires_ack,
                 "is_ack": nudge.is_ack,
                 "task_id": nudge.task_id.map(|task_id| task_id.to_string()),

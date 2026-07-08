@@ -4,7 +4,7 @@ use crate::error::AtmError;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -115,11 +115,45 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
-    pub message: String,
+    pub description: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BuiltInNudgeTemplateKind {
+    Delivery,
+    DeliveryAck,
+    DeliveryTask,
+    DeliveryTaskAck,
+    Acknowledge,
+    AcknowledgeTask,
+}
+
+impl BuiltInNudgeTemplateKind {
+    pub fn from_post_send_event(event: &PostSendHookEvent) -> Self {
+        match (event.is_ack, event.task_id.is_some(), event.requires_ack) {
+            (true, true, _) => Self::AcknowledgeTask,
+            (true, false, _) => Self::Acknowledge,
+            (false, true, true) => Self::DeliveryTaskAck,
+            (false, true, false) => Self::DeliveryTask,
+            (false, false, true) => Self::DeliveryAck,
+            (false, false, false) => Self::Delivery,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: IsoTimestamp,
 }
 
 /// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.

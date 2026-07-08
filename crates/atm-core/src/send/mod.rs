@@ -459,7 +459,13 @@ fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
-    logical_messages_from_persistence(persistence, requires_ack, false).map_err(|error| {
+    crate::delivery_plan::LogicalMessage::new(
+        persistence.original_message.clone(),
+        requires_ack,
+        false,
+    )
+    .map(|message| vec![message])
+    .map_err(|error| {
         AtmError::mailbox_write(error.to_string()).with_recovery(
             "Repair the persisted delivery record shape before retrying post-send emission.",
         )
