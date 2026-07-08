@@ -122,6 +122,16 @@ Follow-up work:
 - `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
+- `atm` owns the shipped built-in `internal-nudge` command, the six bounded
+  template bodies, direct placeholder substitution for those templates, and
+  the final built-in sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- `atm` may consume a team-scoped built-in template override body only through
+  the storage-neutral upstream contract accepted for Phase `AD`; it must not
+  perform direct SQLite lookup itself.
+- `atm` owns `TmuxNudgeSink`, including the current tmux-injection sequence:
+  paste rendered text, send `Enter`, wait about `250ms` to `300ms`, then send
+  a second `Enter`; the exact delay remains implementation-tunable but the
+  accepted design must preserve and verify the double-enter behavior.
 - `atm` owns the default retained logger baseline needed to keep daemon
   lifecycle `info!` events and all `warn!` / `error!` events visible when
   `ATM_LOG` is unset.
@@ -146,6 +156,9 @@ Follow-up work:
   concrete backend crates into thin-client dependency graphs
 - `atm` must preserve typed runtime error identity until the rendering
   boundary instead of collapsing failures into panic/unwrap control flow
+- `atm` must keep built-in acknowledge nudges compact:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 
 ## 3.1 Phase R CLI / Runtime Split
 

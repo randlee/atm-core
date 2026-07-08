@@ -36,7 +36,6 @@ The crate-local machine-readable boundary inventory lives in:
 - daemon singleton/runtime lifecycle
 - concrete socket transport
 - direct agent-process notification transport
-- graft-private same-host advisory/session IPC contracts
 
 ## 3. Requirement Namespace
 
@@ -113,20 +112,6 @@ Initial crate requirement IDs:
   U.3 note: logical-current projection must remain mode-aware; terminal
   `add-details` preserves predecessor context in the effective current body,
   while terminal `supersede` does not.
-  AD.20 note: metadata-backed `--contains` stays summary-first and bounded, but
-  must reload durable body text for surviving summary-miss candidates so read
-  and list never degrade the documented full-body contains contract into
-  summary-only matching.
-- `REQ-CORE-READ-001` `atm-core` owns the single-message read-mutation output
-  contract: when read-side mutation is applied, the returned selected message,
-  `selected_message_id`, and `bucket_counts` must stay self-consistent with
-  the durable post-mutation mailbox state, while ack-only fields remain owned
-  by the ack path. Satisfies:
-  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-RUNTIME-ROOT-001` `atm-core` must treat the invocation directory as
-  command-local context only, never as a selector for socket, lock, database,
-  or retained-log runtime roots. Those paths derive from the accepted
-  `ATM_HOME` root.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and direct post-send-emission behavior above the owned
   boundaries. Satisfies the send-path service aspects of:
@@ -148,9 +133,6 @@ Initial crate requirement IDs:
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
-- invocation directory is not a daemon/socket/database selector; `atm-core`
-  must consume it only as workspace config discovery input after the accepted
-  `ATM_HOME` root resolves the canonical host runtime/store paths.
 - `REQ-CORE-TEAM-001` `atm-core` owns the retained local team discovery,
   roster inspection, roster repair, and backup/restore behavior. Satisfies the
   local team-surface aspects of:
@@ -165,8 +147,8 @@ Initial crate requirement IDs:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` row-key model, the one-logical-message-identity rule
-  (`AtmMessageId`), and required lookup/dedupe constraints for the compatible
-  `message_id` wire form.
+  (`AtmMessageId`), and required lookup/dedupe constraints for the retained
+  ULID `message_id` wire form.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
@@ -178,9 +160,7 @@ Initial crate requirement IDs:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
   store, protocol, transport, config ingress, direct post-send emission, and
-  status-source calls. Shared `atm-core` boundaries must not absorb
-  graft-private same-host advisory/session transport concerns. Satisfies the
-  subsystem-boundary aspects of:
+  status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
   Phase-Z follow-on note: repository-local lint must also be able to reject
   direct command-entry retained-runtime acquisition in `atm teams`,
@@ -208,22 +188,19 @@ Initial crate requirement IDs:
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
-  Any earlier graft-specific contract intent is superseded by the shared unary
-  `AtmGraftClient` contract for send/read/ack. No dedicated graft
-  advisory/session transport remains an `atm-core` requirement on the accepted
-  line.
+  Any earlier graft-specific contract intent is superseded by
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
+  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
+  requirement.
+  No graft-private lifecycle, session, queue, or stream identifier is reserved
+  in shared `atm-core`; receiver-private runtime state belongs in the receiver
+  implementation unless it is proven to be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
-  used by client transport, server transport, and in-process test transport.
-  The shared protocol surface is limited to the retained unary ATM command
-  families and must not grow graft-only advisory/session packets. Satisfies:
+  used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
   `ServerTransport` contracts plus route-selection semantics between local and
-  cross-host daemon paths. Graft-private same-host session registration,
-  queue inspection, and live advisory delivery must stay behind
-  receiver-private `atm-graft` / `atm-daemon` implementation seams instead of
-  this shared boundary.
-  Satisfies:
+  cross-host daemon paths. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
   retry semantics exposed at service boundaries. Satisfies:
@@ -480,8 +457,8 @@ Required config rules:
   present in `config.json`
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
   identities
-- `[[atm.post_send_hooks]]` may define ATM-owned best-effort post-send
-  automation rules
+- `[[atm.post_send_hooks]]` may define ATM-owned external override commands for
+  post-send behavior; they are not the only shipped post-send path
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
@@ -536,14 +513,15 @@ Required caller-context rules:
 - the hook inherits process environment and also receives one ATM-owned JSON
   payload in `ATM_POST_SEND` with:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
   - `team`
   - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
   - `requires_ack`
   - `is_ack`
-  - optional `task_id` when present
+  - optional `to`
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
 - the hook must run after successful non-`dry-run` `atm send`
@@ -552,6 +530,8 @@ Required caller-context rules:
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata
+- if no matching external rule is configured, `atm-core` must still hand off
+  the same canonical event to the shipped built-in `atm internal-nudge` path
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -561,6 +541,13 @@ Required caller-context rules:
 - once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
+- `atm-core` owns canonical post-send event construction, but it must not own
+  built-in XML template storage, placeholder substitution policy, or sink-local
+  transport behavior
+- any team-scoped built-in template override lookup must cross a dedicated
+  storage-neutral `NudgeTemplateOverrideStore` boundary before
+  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  inside the emitter path
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

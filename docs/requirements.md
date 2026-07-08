@@ -532,8 +532,8 @@ Required rules:
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
 - no `metadata.atm` namespace may survive in active compatibility output
-- shared inbox `message_id` is the compatibility wire encoding of the one
-  logical ATM message identity
+- retained `message_id` is the ULID text form of the one logical ATM message
+  identity
 - ATM-owned workflow, delete/close, expiry, sender-projection, and repair
   state must live in SQLite-owned state, not in shared JSON
 - write-path validation may reject wrong-format ATM-owned compatibility fields
@@ -858,8 +858,10 @@ Alias rules:
   SQLite-owned state for routing, validation, and audit
 
 Post-send-hook rules:
-- `[[atm.post_send_hooks]]` is the only supported post-send hook shape in this
-  release line
+- ATM always has one shipped default post-send path in the installed binary:
+  `atm internal-nudge`
+- `[[atm.post_send_hooks]]` is the supported external override shape for
+  post-send behavior
 - each rule binds exactly one `recipient` selector and one `command` argv
 - `recipient` must be either one concrete team member name or `*`
 - multiple matching rules may run for a single send, in config order
@@ -876,34 +878,59 @@ Post-send-hook rules:
   JSON payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload must contain:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
   - `team`
   - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty when no task is associated
   - `requires_ack`
   - `is_ack`
-  - optional `task_id` when present
+  - optional `to` for compatibility
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
 - Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
+- built-in `atm internal-nudge` must use this same `ATM_POST_SEND` payload
+  contract
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must use the sender's authoritative ATM roster
   `home_dir` metadata rather than the caller's live process working directory
+- if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
+  must still attempt the shipped built-in `atm internal-nudge` path
+- the built-in shipped nudge path must support exactly six named template
+  cases:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- the default built-in acknowledge nudge shapes are intentionally compact:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- teams may override any subset of those six built-in template bodies through
+  host-scoped, team-keyed ATM-managed override rows resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract; any unset case falls
+  back to the product default body for that case
+- built-in precedence is:
+  - matching external `[[atm.post_send_hooks]]` command
+  - resolved team override row for the selected template kind
+  - built-in product default template body for that kind
 - example payload:
   ```json
   {
     "from": "arch-ctm@atm-dev",
-    "to": "recipient@atm-dev",
     "sender": "arch-ctm",
     "recipient": "recipient",
     "team": "atm-dev",
     "message_id": "...",
+    "description": "review failing smoke lane",
+    "task_id": "",
     "requires_ack": false,
     "is_ack": false,
     "recipient_pane_id": "%1"
@@ -997,6 +1024,8 @@ Retired from the current implementation:
 - match rules only by resolved recipient identity
 - support `recipient = "*"` wildcard matching for all recipients
 - execute all matching post-send-hook rules in config order
+- if no matching external rule exists, execute the built-in `atm internal-nudge`
+  path instead of silently skipping post-send emission
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
@@ -1007,7 +1036,8 @@ Retired from the current implementation:
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
-- `message_id` is the shared-wire form of the one logical ATM message identity
+- `message_id` is the retained ULID form of the one logical ATM message
+  identity
 
 `message_id` is required on every message written by `atm send`.
 
@@ -2090,7 +2120,7 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - ATM uses one logical message identity and exports it through `message_id` on
   the shared compatibility surface
-- ATM service addressing accepts only ULID text for `message_id`
+- ATM service addressing accepts ULID text only
 - thread/update metadata uses `parentMessageId` plus `threadMode`
 - time-bounded ephemeral retention uses SQLite-owned `expires_at`
 - ATM-authored machine identifiers must not be null or blank
@@ -2483,9 +2513,8 @@ Required testing architecture:
     SKIP row output and root-cause notes for every deviation
   - `just smoke thorough` must also include one real same-host `atm-graft`
     lane that proves:
-    - one graft host session registers against the same daemon used by the CLI
-      lane
-    - advisory nudge delivery succeeds end-to-end
+    - one graft host session connects to the same daemon used by the CLI lane
+    - post-send nudge delivery succeeds end-to-end
     - unary graft `read`, `ack`, and `send` all succeed over the shared daemon
       contract
     - the CLI operator can observe the graft-host reply/follow-up effects
@@ -3553,6 +3582,11 @@ mail correctness.
   - `atm ack` persists the reply to durable ATM state
   - after successful persistence, ATM emits post-send behavior only when the
     recipient exposes that capability
+  - the shipped default post-send path is the built-in `atm internal-nudge`
+    implementation
+  - teams may override any subset of the six built-in nudge template bodies
+    through host-scoped, team-keyed ATM-managed override rows resolved through
+    the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
   - post-send emission must not redefine send success after persistence
 
@@ -3567,6 +3601,8 @@ mail correctness.
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files
+  - live pane routing for built-in tmux nudge must not depend on committed
+    `.atm.toml` `tmux_pane_id` values
 
 - `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
   typed delivery-plan execution are not the governing send-path contract.

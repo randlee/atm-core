@@ -1,7 +1,7 @@
 # agent-team-mail (`atm`)
 
-`agent-team-mail` is the retained local ATM release line for daemon-backed
-mailbox workflows.
+`agent-team-mail` is the retained ATM CLI and daemon-backed runtime for local
+ATM mailbox workflows.
 
 This repository is now the source of truth for publishing:
 - `agent-team-mail`
@@ -9,13 +9,14 @@ This repository is now the source of truth for publishing:
 
 The installed command remains `atm`.
 
-## What The Retained Release Includes
+## What The Retained Line Includes
 
-The retained release scope is the daemon-backed local ATM line:
-- `agent-team-mail` — the `atm` CLI
-- `agent-team-mail-core` — the core Rust library used by the CLI
-- the same-host daemon/runtime path used by the accepted send/read/ack flow and
-  post-send delivery lanes
+The retained release scope is the `atm` CLI plus the accepted same-host
+daemon/SQLite runtime it bootstraps and talks to:
+- `agent-team-mail` — the `atm` CLI entrypoint
+- `agent-team-mail-core` — shared semantic and boundary code
+- `atm-daemon` — the retained same-host daemon runtime used by `send`, `read`,
+  `ack`, and `doctor`
 
 This release line continues to consume the published `sc-observability` family
 for retained logging and health reporting:
@@ -23,8 +24,8 @@ for retained logging and health reporting:
 - `sc-observability-types`
 - `sc-observability-otlp`
 
-This repo does not publish the retired legacy MCP, TUI, or CI-monitor artifacts
-as part of the retained release surface.
+This repo does not publish the retired Claude-compatibility runtime, MCP, TUI,
+or CI-monitor artifacts as part of the retained ATM surface.
 
 ## Installation
 
@@ -84,8 +85,9 @@ cargo install --path crates/atm --bin atm
 
 ## Quick Start
 
-ATM works against the local Claude team mailbox layout under `~/.claude/teams`.
-Typical flows:
+ATM runs against the accepted ATM home/runtime layout and persists retained
+mail state through the same-host daemon plus durable SQLite storage. Typical
+flows:
 
 ### Send a message
 
@@ -149,7 +151,7 @@ The `teams` command also contains retained team-administration subcommands:
 ## Configuration Notes
 
 ATM resolves runtime identity and team context from the current CLI/config
-surface and uses the local Claude team directory layout for mailbox storage.
+surface and uses the accepted daemon/SQLite runtime for retained mail state.
 
 ## Post-Send Hook
 
@@ -188,7 +190,7 @@ Example `ATM_POST_SEND` payload:
   "sender": "team-lead",
   "recipient": "arch-ctm",
   "team": "atm-dev",
-  "message_id": "01KX6Q7Q4L3Q5QG1T6JQ7Z9Y8M",
+  "message_id": "01KWTMCQ418Q96BFRDTKGZMEAS",
   "requires_ack": true
 }
 ```

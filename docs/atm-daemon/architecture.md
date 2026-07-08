@@ -86,8 +86,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- direct post-send emission routing for local recipients plus receiver-owned
-  graft recipients through the shared post-send seam
+- direct post-send emission routing for local and graft-backed recipients
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -127,12 +126,15 @@ Current packet-supported daemon surface:
 - doctor
 - heartbeat
 
-Post-send ownership rule:
-- the daemon owns post-persist event emission only
-- the daemon does not own graft session registration, pending nudge queues,
-  fetch/drain inspection, or live advisory streams
-- `atm-graft` is one receiver-owned consumer implementation behind the shared
-  post-send seam, not a daemon-owned subsystem
+Receiver-handoff rule:
+- the daemon may emit one post-send event after durable message commit
+- receiver-specific delivery details stay behind receiver implementations such
+  as local tmux and `atm-graft`
+- the accepted daemon architecture must not require daemon-owned graft session
+  registration, per-session nudge queues, fetch/drain inspection, or a
+  dedicated advisory-stream request family
+- transport receive loops remain thin request dispatch paths rather than
+  homes for receiver-specific session behavior
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
@@ -193,8 +195,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   Windows lifecycle adapter, but Phase S parity does not depend on a separate
   SCM-only host model
 - client-specific runtime logic is owned by the client crate; `atm-daemon`
-  must not own embedded client receive behavior, session maps, or client-side
-  notification loops
+  may serve the advisory transport but must not own embedded client receive
+  behavior
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
@@ -254,9 +256,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
     the fact
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
-- daemon retained-log reporting must use the accepted-`ATM_HOME` ATM log
-  contract: `{ATM_HOME}/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR`
-  when overridden.
+- daemon retained-log reporting must use the host-scoped ATM log contract:
+  `~/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR` when overridden.
 - daemon health/reporting must not point retained-log status at `.local/share`,
   `~/logs`, `~/.claude/logs`, or other non-ATM-owned defaults.
 - the default retained daemon logging baseline must keep:
@@ -265,7 +266,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   - every daemon/runtime/transport `error!` event
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
-  - post-send emission belongs only to the post-send boundary
+  - post-send emission belongs only to the post-send/advisory boundary
   - local-IPC and network I/O belong only to the transport boundary
 - UDP is not an approved daemon control-plane transport for same-host CLI
   request/response traffic; same-host and remote request families require the
@@ -334,14 +335,14 @@ Architectural rule:
   - a daemon-side startup gate before serving state
   - a repository lint/CI gate that prevents ordinary tests from designing
     around the runtime invariant
-- no alternate socket path or test-only helper is an exception to the
-  singleton rule inside one accepted `ATM_HOME` installation
-- the ownership root is `{ATM_HOME}/.atm/daemon/` derived from the accepted
-  `ATM_HOME`, not from the invocation directory or serving socket path
+- no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
+  exception to the singleton rule
+- the host-wide ownership root is `~/.atm/daemon/` derived from the OS user
+  home, not from `ATM_HOME` or the serving socket path
 - client-side launch admission uses the stable lock file
-  `{ATM_HOME}/.atm/daemon/launch.lock`
+  `~/.atm/daemon/launch.lock`
 - daemon-side serving admission uses the stable lock file
-  `{ATM_HOME}/.atm/daemon/owner.lock`
+  `~/.atm/daemon/owner.lock`
 - Phase S host ownership uses one cross-platform whole-file exclusive-lock
   contract on those stable file paths rather than lock-file creation/deletion
   as the ownership signal
@@ -355,9 +356,8 @@ Architectural rule:
 - owner-visible metadata is the lock-file contents in documented
   `pid[:token]` form while the exclusive lock is held
 - lock files must live on a local filesystem with working host-local advisory
-  lock semantics; network-mounted or NFS-backed
-  `{ATM_HOME}/.atm/daemon/` roots are not a supported singleton deployment
-  configuration
+  lock semantics; network-mounted or NFS-backed `~/.atm/daemon/` roots are not
+  a supported singleton deployment configuration
 - if an exclusive lock on `owner.lock` can be acquired, startup may inspect
   and replace stale owner metadata under that held lock; if recovery cannot
   safely claim the same lock path, startup must fail with
@@ -431,8 +431,8 @@ Privacy boundary:
   crate-private
 - status-cache submodules expose only the boundary needed for daemon health and
   routing decisions; cache internals and mutation helpers remain crate-private
-- post-send submodules expose only the owned post-send boundary traits or
-  façades required by runtime composition; delivery
+- post-send receiver-handoff submodules expose only the owned post-send
+  boundary traits or façades required by runtime composition; delivery
   internals remain
   crate-private
 - observability submodules expose only the daemon-owned event sink façade used
@@ -464,6 +464,7 @@ V.2 migration targets:
 - `daemon_observability.rs`
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
+- `advisory_runtime.rs`
 - `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
@@ -670,9 +671,6 @@ The daemon must use explicit, small resource ceilings.
 
 Required caps:
 - max concurrent accepted connections: `64`
-  - rationale: same-host ATM traffic is unary request/response, so `64`
-    comfortably exceeds realistic single-host caller fan-out while still
-    bounding per-connection worker threads and shutdown drain pressure
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
 - bounded remote retry queue depth: `256`
@@ -820,4 +818,4 @@ Initial use cases:
 - singleton runtime enforcement
 - local transport adapter structure
 - remote daemon-to-daemon protocol structure
-- direct post-send routing structure
+- direct post-send/advisory routing structure

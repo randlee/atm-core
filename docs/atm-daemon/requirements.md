@@ -33,8 +33,8 @@ The canonical daemon/client recovery text rule set lives in:
 - daemon-private orchestration around injected `atm-core` service boundaries
 - live agent status cache
 - daemon-side `sc-observability` emission
-- daemon-side direct post-send emission routing for local recipients plus
-  receiver-owned graft recipients through the shared post-send seam
+- daemon-side direct post-send emission routing for local and graft-backed
+  recipients
 
 `atm-daemon` does not own:
 
@@ -68,15 +68,13 @@ Current request/response packet families owned by the daemon transport line:
 - doctor
 - heartbeat
 
-Forbidden daemon-owned request/response packet families:
-- graft advisory register
-- graft advisory unregister
-- graft advisory fetch
-- graft advisory drain
-- graft advisory stream
-  - graft receiver registration, queue ownership, inspection, and any
-    long-lived receive loop belong to the graft-side implementation, not to
-    `atm-daemon`
+Receiver-specific post-send handoff rule:
+- receiver implementation details are not modeled as daemon packet families
+- the accepted daemon line must not require graft session registration,
+  fetch/drain inspection, bounded per-session daemon nudge queues, or a
+  dedicated advisory-stream request/response family
+- daemon ownership ends at durable persistence plus post-send emission through
+  the accepted capability seam
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`
@@ -366,15 +364,12 @@ Requirement IDs:
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
-- singleton enforcement is installation-wide rather than socket-path-local;
-  changing the socket path or test working directory must not create a legal
-  second daemon inside one accepted `ATM_HOME`
-- invocation directory is not a daemon/socket/database selector; daemon
-  singleton, socket, and durable-store roots are derived from the accepted
-  `ATM_HOME` runtime root only
-- the ownership mechanism uses stable permanent lock-file paths under
-  `{ATM_HOME}/.atm/daemon/` rather than lock-file creation/deletion as the
-  ownership signal:
+- singleton enforcement is host-wide rather than socket-path-local; changing
+  `ATM_HOME`, socket path, or test working directory must not create a legal
+  second daemon
+- the host-wide ownership mechanism uses stable permanent lock-file paths under
+  `~/.atm/daemon/` rather than lock-file creation/deletion as the ownership
+  signal:
   - `launch.lock`
   - `owner.lock`
 - the cross-platform locking foundation is one whole-file exclusive-lock
@@ -388,12 +383,9 @@ Required runtime rules:
 - owner-visible metadata is the lock-file contents while the exclusive lock is
   held, not the mere existence of the lock file path
 - owner-record contents use the documented `pid[:token]` format
-- supported singleton deployment assumes `{ATM_HOME}/.atm/daemon/` is on a
-  local filesystem with working host-local advisory lock semantics; NFS or
-  other network-mounted roots are not supported singleton configurations
-- the invocation directory is not a daemon runtime-root selector; accepted
-  socket and lock paths derive from the accepted `ATM_HOME` root even when ATM
-  commands run from sibling worktrees or other working directories
+- supported singleton deployment assumes `~/.atm/daemon/` is on a local
+  filesystem with working host-local advisory lock semantics; NFS or other
+  network-mounted roots are not supported singleton configurations
 - daemon startup is blocked by at least two runtime guard layers:
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
@@ -551,8 +543,8 @@ Required runtime rules:
   concrete socket/runtime adapter types
 - daemon boundary traits are sealed by default; opening a runtime/transport
   extension point requires explicit architecture review
-- any direct post-send implementation must remain isolated from transport and
-  store implementations behind its owned boundary
+- any direct post-send/advisory implementation must remain isolated from
+  transport and store implementations behind its owned boundary
 - daemon post-send notification logging, if retained, must append directly at
   the event site; a daemon-owned notification worker/runtime is not an accepted
   production subsystem

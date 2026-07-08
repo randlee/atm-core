@@ -1,0 +1,316 @@
+---
+id: AD.21
+title: Built-In Post-Send Nudge And Six-Template Override Surface
+status: planned
+branch: feature/pAD-s21-built-in-post-send-nudge-and-template-overrides
+worktree: ../atm-core-worktrees/feature/pAD-s21-built-in-post-send-nudge-and-template-overrides
+target: integrate/phase-AD
+---
+
+# Sprint AD.21 — Built-In Post-Send Nudge And Six-Template Override Surface
+
+## Goal
+
+- make post-send nudge work in a normal installed ATM binary with no repo-local
+  Python or shell dependency while preserving a full local command override
+  path and a bounded team-tunable built-in template surface
+
+## Hard Dependencies
+
+- `AD.20` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/plans/phase-AD/violation-inventory.md`
+
+## Exact Targets
+
+- `boundaries/atm-core/nudge-template-override-store.toml`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/config/mod.rs`
+- `crates/atm-core/src/config/types.rs`
+- `crates/atm-core/src/config/discovery.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm/src/commands/mod.rs`
+- `crates/atm/src/commands/teams.rs`
+- `crates/atm/src/commands/internal_nudge.rs` for the built-in renderer and
+  concrete `TmuxNudgeSink`, plus the daemon-client transport dispatch used for
+  graft-backed recipients
+- `crates/atm-graft/src/nudge_sink.rs` for the receiver-side
+  `GraftNudgeSink` implementation consumed by `atm-graft` on its own side of
+  the daemon boundary
+- `crates/atm/src/main.rs`
+- `crates/atm-core/tests/mailbox_locking.rs`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm/requirements.md`
+- `docs/atm/architecture.md`
+- `docs/atm-graft/requirements.md`
+- `docs/atm-graft/architecture.md`
+- `docs/atm-rusqlite/requirements.md`
+- `docs/atm-rusqlite/architecture.md`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/project-plan.md`
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/plans/phase-AD/sprint-AD21.md`
+
+## Interfaces To Add Or Modify
+
+The built-in nudge renderer is case-based, not logic-programmable:
+
+```rust
+pub enum BuiltInNudgeTemplateKind {
+    Delivery,
+    DeliveryAck,
+    DeliveryTask,
+    DeliveryTaskAck,
+    Acknowledge,
+    AcknowledgeTask,
+}
+
+pub struct BuiltInNudgeEvent {
+    pub from: String,
+    pub team: TeamName,
+    pub message_id: AtmMessageId,
+    pub description: String,
+    pub task_id: String,
+}
+
+pub struct BuiltInNudgeTemplateSet {
+    pub delivery: String,
+    pub delivery_ack: String,
+    pub delivery_task: String,
+    pub delivery_task_ack: String,
+    pub acknowledge: String,
+    pub acknowledge_task: String,
+}
+
+pub trait NudgeTemplateOverrideStore: sealed::Sealed {
+    fn load_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError>;
+}
+
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: OffsetDateTime,
+}
+```
+
+The accepted built-in rendering contract after this sprint is:
+
+- ATM chooses exactly one of the six template kinds above
+- built-in rendering performs direct placeholder substitution only
+- no conditional language, no Jinja evaluation, and no template-side branching
+- supported placeholders are exactly:
+  - `{{from}}`
+  - `{{team}}`
+  - `{{message_id}}`
+  - `{{description}}`
+  - `{{task_id}}`
+- `{{task_id}}` and `{{description}}` are always available; one or both may be
+  empty strings depending on the message family
+- the shipped built-in path is the hidden/internal `atm internal-nudge`
+  subcommand rather than a repo-local Python or shell script
+- built-in template bodies and bounded placeholder substitution remain owned by
+  `atm`, not `atm-core`
+- any team-scoped override lookup must cross the storage-neutral
+  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  and upstream of `atm internal-nudge`; neither `atm-core` nor `atm` may
+  perform direct SQLite I/O for this lookup
+- `atm internal-nudge` must choose exactly one built-in delivery path:
+  - local tmux-backed recipients use the concrete `TmuxNudgeSink`
+    implementation in `crates/atm/src/commands/internal_nudge.rs`
+  - graft-backed recipients use the shared daemon API / client transport that
+    `atm` already depends on, matching `docs/atm-graft/requirements.md`; the
+    receiver-side `GraftNudgeSink` remains implemented in
+    `crates/atm-graft/src/nudge_sink.rs` and is consumed by `atm-graft` on
+    its own side of the daemon boundary
+- this sprint consumes the existing `TmuxNudgeSink` and receiver-side
+  `GraftNudgeSink` ownership lines only; it does not authorize a direct
+  `atm -> atm-graft` crate dependency or redesign sink-private mechanics
+  beyond the already accepted built-in template and dispatch contract
+- `TmuxNudgeSink` must preserve the current operational tmux-injection pattern:
+  paste the rendered nudge text, send `Enter`, wait about `250ms` to `300ms`,
+  then send a second `Enter`; the exact delay stays implementation-tunable but
+  the accepted design must record that this timing-sensitive double-enter path
+  exists and needs verification
+
+The accepted default XML templates are:
+
+```xml
+<!-- delivery -->
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>read atm --team {{team}}</action>
+  <description>{{description}}</description>
+  <action>execute the assigned task</action>
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
+</atm>
+
+<!-- delivery_ack -->
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>read atm --team {{team}}</action>
+  <action>ack the message</action>
+  <description>{{description}}</description>
+  <action>execute the assigned task</action>
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
+</atm>
+
+<!-- delivery_task -->
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>read atm --team {{team}}</action>
+  <task id="{{task_id}}">{{description}}</task>
+  <action>execute the assigned task</action>
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
+</atm>
+
+<!-- delivery_task_ack -->
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>read atm --team {{team}}</action>
+  <action>ack the message</action>
+  <task id="{{task_id}}">{{description}}</task>
+  <action>execute the assigned task</action>
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
+</atm>
+
+<!-- acknowledge -->
+<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>
+
+<!-- acknowledge_task -->
+<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>
+```
+
+The accepted precedence order after this sprint is:
+
+1. matching external `[[atm.post_send_hooks]]` command
+2. resolved built-in template override row for the active team and selected
+   template kind returned through `NudgeTemplateOverrideStore`
+3. built-in product default template for that template kind
+
+The first concrete override-store shape for this phase is:
+
+```rust
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: OffsetDateTime,
+}
+```
+
+with the planned SQLite storage contract owned by `atm-storage-rusqlite`:
+
+- table: `team_nudge_template_overrides`
+- columns:
+  - `team_name TEXT NOT NULL`
+  - `template_kind TEXT NOT NULL`
+  - `template_body TEXT NOT NULL`
+  - `updated_at TEXT NOT NULL`
+- primary key: `(team_name, template_kind)`
+- migration reference: extend
+  `crates/atm-storage-rusqlite/src/shared_db.rs::DB_MIGRATIONS` with the
+  additive `team_nudge_template_overrides` schema step during `AD.21`
+- owning storage crate: `atm-storage-rusqlite`
+
+## Paths To Delete
+
+- any assumption that a shipped ATM install requires `scripts/atm-nudge.py`,
+  `scripts/atm-nudge.sh`, Python, or shell scripts for its default nudge path
+- any new design that introduces conditional logic or Jinja execution into the
+  built-in template renderer
+- any post-send fallback that silently skips built-in nudge when no matching
+  external hook rule is configured
+
+## Deliverables
+
+- the installed `atm` binary exposes a built-in internal nudge path usable as
+  the default post-send implementation with no repo-local script dependency
+- `[[atm.post_send_hooks]]` remains the full command/script override path and
+  still wins when a matching rule is configured
+- the built-in path selects one of the six accepted template kinds and renders
+  it through fixed placeholder substitution only
+- host-scoped, team-keyed template override rows stored by
+  `atm-storage-rusqlite` and resolved through `NudgeTemplateOverrideStore`
+  can replace any subset of the six built-in templates without requiring
+  repo-local Python script distribution
+- the built-in path resolves exactly one post-render delivery path:
+  `TmuxNudgeSink` locally or the shared daemon API / client transport for
+  graft-backed recipients
+- the accepted docs describe the exact six-template contract, the placeholder
+  inventory, and the override-precedence rule above
+- built-in `acknowledge` and `acknowledge_task` defaults are intentionally
+  minimal and do not repeat delivery-only context such as description, extra
+  action text, console hints, or delivery-oriented body text
+- the accepted docs state explicitly that external `[[atm.post_send_hooks]]`
+  consumers remain supported and that the retained payload guarantees
+  `description`, preserves string-valued `task_id` semantics, and leaves `to`
+  optional/compatibility-only
+- the accepted docs state explicitly that `AD.21` closes the graft-architecture
+  drift for built-in nudge ownership; `AD.22` may reference those docs but does
+  not reopen sink or receiver-mechanics design
+
+## This Sprint Does Not Close
+
+- removal of git-tracked tmux pane ids from `.atm.toml`
+- migration of current dogfooding repo config away from committed pane routing
+- retirement or deletion of the repo-local nudge scripts used only for current
+  dogfood compatibility
+
+## Acceptance Criteria
+
+- targeted regression coverage proves the built-in renderer selects the correct
+  one of the six template kinds for:
+  - `atm send`
+  - `atm send --requires-ack`
+  - `atm send --task ...`
+  - `atm send --task ... --requires-ack`
+  - `atm ack` without task context
+  - `atm ack` with task context
+- targeted regression coverage proves placeholder substitution is direct and
+  bounded:
+  - no unknown placeholder silently disappears
+  - no conditional or Jinja-style syntax is evaluated
+  - empty `task_id` never renders the task templates
+- targeted precedence coverage proves:
+  - matching external `[[atm.post_send_hooks]]` rules still override the
+    built-in path
+  - host-scoped, team-keyed built-in template override rows loaded through
+    `NudgeTemplateOverrideStore` replace only the addressed template kinds
+  - any unset template kind falls back to the product default body for that
+    kind
+- targeted rendering coverage proves the default built-in acknowledge templates
+  stay intentionally smaller than delivery templates:
+  - `acknowledge` renders exactly
+    `<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>`
+  - `acknowledge_task` renders exactly
+    `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`
+- targeted sink-selection coverage proves:
+  - local tmux-backed recipients route through `TmuxNudgeSink`
+  - graft-backed recipients route through the shared daemon API / client
+    transport rather than a direct `atm -> atm-graft` call
+  - `atm-graft` receiver coverage proves the receiver-side `GraftNudgeSink`
+    consumes graft-delivery nudges on `atm-graft`'s side of the daemon
+    boundary
+  - tmux sink regression coverage verifies the documented paste + `Enter` +
+    short sleep + second `Enter` behavior
+- docs state explicitly that the default installed nudge path no longer depends
+  on repo-local scripts or external interpreters
+- docs enumerate the exact six template names and exact placeholder inventory
+
+## Required Validation
+
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `python3 .just/run_lint.py all`
+- targeted built-in template-kind selection regression coverage
+- targeted template precedence regression coverage
+- `git diff --check`

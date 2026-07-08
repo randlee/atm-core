@@ -14,14 +14,13 @@
 ATM had accumulated multiple message-identity representations:
 
 - `AtmMessageId` in ATM code
-- Claude Code `message_id` at the shared inbox boundary
 - `metadata.atm.messageId` inside the compatibility envelope
 - `legacy_message_id` / `LegacyMessageId` compatibility naming in the earlier
   pre-production SQLite line
 
 That shape created duplicated storage, ambiguous query paths, and confusing
-ownership. Phase U resolves that by keeping one logical ATM identity and
-eliminating the retired alternate-id compatibility cast.
+ownership. The accepted Phase AD line resolves that by keeping one logical ATM
+identity and retiring UUID compatibility along with the Claude JSON backend.
 
 ## Decision
 
@@ -29,20 +28,18 @@ ATM keeps one logical message identity: `AtmMessageId`.
 
 Rules:
 - `AtmMessageId` is the only ATM-owned message identity in code.
-- ATM renders `AtmMessageId` as canonical ULID text anywhere it serializes or
-  accepts a message identity.
+- `AtmMessageId` is encoded as ULID text on retained ATM boundaries.
 - ATM must not persist or query a second ATM-owned message-id field for the
   same logical message.
 - `metadata.atm.messageId` is removed from the design and implementation.
 - `LegacyMessageId` and `legacy_*` naming are removed from the active identity
   model. Remaining references may survive only as historical planning or
   removal-ledger context, not as runtime compatibility.
-- CLI and service addressing accept only ULID text for `AtmMessageId`.
+- CLI and service addressing accept ULID text only.
 
 SQLite consequence:
 - if SQLite stores a durable `message_id` field, that field stores the same
-  logical identity in canonical ULID text only; it is not a second ATM-owned
-  identity.
+  logical identity in ULID text only; it is not a second ATM-owned identity.
 
 ## Consequences
 
@@ -56,6 +53,8 @@ Required implementation consequences:
   sidecar keys as a read-compatibility shim only; all new writes use `atm:`,
   and the shim can be removed once older workflow-state files no longer need
   to be read in place
+- UUID compatibility code is removed from retained CLI, daemon, storage, and
+  schema/tooling paths
 - future ATM features must use `AtmMessageId` as the only ATM-owned message
   identity
 

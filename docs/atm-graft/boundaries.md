@@ -14,8 +14,8 @@ Canonical machine-readable boundary source:
 Purpose:
 - consume the shared thin-client daemon request boundary owned by `atm-core`
 - consume the shared same-host bootstrap seam owned by `atm-daemon-client`
-- provide concrete embedded same-host client behavior for `send`, `read`,
-  `ack`, and `list`
+- provide concrete embedded same-host client behavior for `send`, `read`, and
+  `ack`
 
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
@@ -29,20 +29,18 @@ Rules:
 
 Purpose:
 - own the concrete `GraftSession` lifecycle used by an embedded host CLI
-- keep one receiver-local listener thread active while the session is enabled
-- accept daemon-originated `PostSendHookEvent` payloads and translate them into
-  host-consumable nudge deliveries
+- own any receiver-private activation, wakeup, and temporary buffering needed
+  to hand post-send events to the host
+- drive host wake/event callback on arrival
 
 Rules:
-- `atm-graft` must not own daemon queue state, direct SQLite access, or direct
-  inbox-JSONL access
-- receiver-local state is limited to lifecycle state plus bounded in-flight
-  nudge handling
+- `atm-graft` must not own direct SQLite access or direct inbox-JSONL access
 - automatic between-tool-call nudge injection belongs to this consumer layer
-- session runtime code must accept one bounded same-host request/reply exchange
-  per daemon-originated nudge
-- no daemon-owned advisory registration, fetch/drain, or stream/session
-  protocol may cross this boundary
+- reconnect and shutdown behavior are owned here rather than in daemon-private
+  runtime code
+- receiver-private task/thread/callback choices stay inside this consumer layer
+- `atm-graft` must not require shared daemon session registration, daemon-owned
+  per-session queues, or a dedicated shared advisory-stream packet family
 
 ## Host Injection Consumer
 
@@ -53,5 +51,4 @@ Purpose:
 Rules:
 - the host executable owns the final insertion point
 - `atm-graft` must drive that path automatically once nudges arrive
-- the injected payload type is `atm_core::boundary::PostSendHookEvent`
 - external terminal automation is not an accepted production delivery path

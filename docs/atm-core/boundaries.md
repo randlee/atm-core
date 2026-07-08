@@ -34,10 +34,6 @@ Notes:
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
     `atm doctor`; after `AA.3` it carries daemon-owned runtime state only and
     no store-specific readiness fields
-- Graft-only advisory/session envelopes are intentionally not part of this
-  shared protocol family. Any surviving same-host graft advisory/session DTOs
-  are private implementation detail inside `atm-daemon` / `atm-graft`, not an
-  `atm-core` or `atm-daemon-client` boundary contract.
 - `atm-runtime-test-support` is an allowed workspace-local dependent for the
   retained-runtime test harness seam; it is not a production consumer
   boundary.
@@ -56,11 +52,12 @@ Notes:
   and receive.
 - Thin clients must use this shared boundary and must not take a dependency on
   `atm-daemon` internals.
-- `atm-graft` uses this boundary for unary send/read/ack only.
-- Long-lived advisory registration, fetch/drain inspection, and live advisory
-  stream traffic are intentionally outside this shared boundary and must stay
-  behind receiver-private implementation inside `atm-graft`, with no shared
-  `atm-daemon-client` contract reintroduced for that traffic.
+- `atm-graft` now lands as one such thin client crate and is expected to stay
+  on this boundary plus the shared ATM envelopes rather than on any daemon-
+  private request family.
+- Receiver-private lifecycle, buffering, or wakeup state must not be promoted
+  into shared transport methods or shared request/response DTOs on this
+  boundary.
 
 ## WatchEventSource
 
@@ -119,10 +116,6 @@ Purpose:
 
 Notes:
 - Transport-specific listeners should not embed request-family logic.
-- Shared dispatch through this boundary is limited to the public ATM unary
-  protocol surface. Graft-private receiver behavior must stay behind
-  receiver-local `atm-graft` implementation and must not leak back into
-  `atm-core`.
 
 ## MailStore
 
@@ -182,6 +175,24 @@ Canonical machine-readable boundary source:
 Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
   diagnosis into daemon or CLI code.
+
+## NudgeTemplateOverrideStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/nudge-template-override-store.toml](../../boundaries/atm-core/nudge-template-override-store.toml)
+
+Purpose:
+- Own the storage-neutral lookup contract for team-scoped built-in nudge
+  template override rows.
+
+Notes:
+- This boundary exists specifically so built-in nudge override lookup resolves
+  upstream of `PostSendHookEmitter`.
+- `atm-core` owns the contract and selection semantics, but does not own the
+  concrete SQLite table or any direct SQLite calls.
+- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- `atm` remains the owner of the six built-in product template bodies and the
+  bounded placeholder substitution/rendering policy.
 
 ## Phase AA Runtime Composition Adjuncts
 
@@ -368,7 +379,7 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the one accepted graft-backed same-host handoff for post-send events
+- Owns the one accepted graft-backed advisory handoff for post-send events
   after `atm-core` has already decided that recipient-side graft emission is
   required.
 
@@ -376,13 +387,9 @@ Notes:
 - This stays narrower than `PostSendHookEmitter`:
   - `atm-core` still decides whether graft-backed post-send applies
   - `atm-core` still logs failures and constructs sender-visible warnings
-  - the port only attempts one bounded graft-side delivery request
-- daemon-owned advisory runtime glue remains retired
+  - the port only attempts the graft-side advisory delivery
 - the accepted out-of-owner implementation is
-  `atm_daemon::runtime_health::DaemonGraftPostSendPort`, which resolves the
-  authoritative recipient `home_dir`, opens the receiver-owned same-host
-  graft socket, sends one `PostSendHookEvent`, waits for one bounded reply,
-  and closes the connection
+  `atm_daemon::advisory_runtime::AdvisoryRuntime`.
 - this boundary must not expand into generic notification routing, mailbox
   compatibility append, tmux delivery, or local process spawning.
 
