@@ -16,10 +16,10 @@ product requirements without re-owning `atm-core` service semantics,
 
 - same-host daemon-client integration for linked Rust host-agent executables
 - graft-session lifecycle
-- automatic unread-message polling when graft mode is active
-- projection of durable unread messages into `PostSendHookEvent`
+- receiver-owned same-host post-send listener when graft mode is active
+- receipt of daemon-originated `PostSendHookEvent` payloads for host injection
 - automatic between-tool-call nudge injection bridge for the embedding host
-- one receiver-local poll thread while the session is active
+- one receiver-local listener thread while the session is active
 - graft-mode activation rules based on discovered `.atm.toml`
 - graft-side observability through an ATM-owned injected boundary supplied by
   the embedding host
@@ -59,7 +59,7 @@ Initial crate requirement IDs:
   contract and structured payload rendering used for between-tool-call
   injection.
 - `REQ-GRAFT-OBS-001` `atm-graft` owns graft-side structured observability
-  emission for activation, connectivity, poll-loop health, and nudge-delivery
+  emission for activation, connectivity, listener health, and nudge-delivery
   behavior.
 
 ## 4. Required References
@@ -113,11 +113,11 @@ Required rules:
   - `message`
   - `requires_ack`
 - in embedded mode, `atm-graft` must automatically surface daemon-originated
-  nudges into the host's between-tool-call context flow by polling unread mail
-  through the shared daemon API and projecting each durable unread message into
-  `PostSendHookEvent`
-- embedded mode must keep one persistent receive task/thread while the session
-  is active
+  nudges into the host's between-tool-call context flow by binding one
+  receiver-owned same-host local socket, accepting one bounded
+  `PostSendHookEvent` request per connection, and returning one typed reply
+- embedded mode must keep one persistent receiver listener task/thread while
+  the session is active
 - production `atm-graft` acceptance must not depend on `tmux send-keys`,
   shell-hook polling, or any equivalent external terminal-injection mechanism
 - the intended production integration is a custom host CLI with `atm-graft`
@@ -151,7 +151,7 @@ Required rules:
 - `atm-graft` must emit structured observability for:
   - active / inactive graft mode
   - daemon connect / reconnect
-  - poll-loop health
+  - listener health
   - nudge delivery success / failure
 - the observability boundary must be injected by the host binary; `atm-graft`
   must not require a direct public dependency on `sc-observability`
@@ -165,9 +165,9 @@ Required rules:
   - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
   - `atm-graft` remains inert when `.atm.toml` is absent
 - `REQ-GRAFT-RUNTIME-001`
-  - `GraftSession` owns the receiver-local background thread
-  - receiver-local state is limited to lifecycle state plus transient
-    delivered-id tracking
+  - `GraftSession` owns the receiver-local listener thread
+  - receiver-local state is limited to lifecycle state and bounded in-flight
+    nudge handling
   - no daemon advisory registration, fetch/drain, or stream/session protocol is
     required
 - `REQ-GRAFT-CLIENT-001`
@@ -180,10 +180,11 @@ Required rules:
 - `REQ-GRAFT-NOTIFY-001`
   - daemon-originated nudge receipt is automatic in embedded mode
   - host-facing delivery uses `PostSendHookEvent`
+  - delivery uses one bounded same-host request/reply exchange per nudge
   - no acceptance path relies on `tmux send-keys` or external terminal key
     injection as the delivery mechanism
 - `REQ-GRAFT-OBS-001`
-  - graft activation/connectivity/poll-loop/nudge paths emit through an
+  - graft activation/connectivity/listener/nudge paths emit through an
     injected ATM-owned observability boundary
   - the concrete exported observability/injection seams include
     `GraftObservability` and `HostNudgeInjector`

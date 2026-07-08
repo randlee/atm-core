@@ -15,8 +15,8 @@ only graft-local client/runtime behavior.
   vocabulary, and the host-facing `PostSendHookEvent`.
 - `atm-daemon-client` owns same-host endpoint resolution, daemon binary
   resolution, probe, and supervised daemon bootstrap convenience.
-- `atm-graft` owns the concrete thin client, the receiver-owned poll loop, and
-  the host injection seam.
+- `atm-graft` owns the concrete thin client, the receiver-owned same-host
+  listener, and the host injection seam.
 - `atm-graft` must not depend on `atm-daemon` as a Rust crate.
 - `atm-graft` must not depend on storage crates or read SQLite directly.
 - `atm-graft` must not reintroduce graft-private protocol families when the
@@ -64,12 +64,12 @@ active.
 
 That thread:
 
-- periodically issues a unary `list` request for unread messages
-- issues an exact unary `read` for each unread message id not yet injected
-- projects the durable message into `PostSendHookEvent`
+- binds one deterministic same-host local socket under the recipient home root
+- accepts one bounded connection per daemon-originated nudge
+- reads one typed `PostSendHookEvent` request payload from that connection
 - calls the injected `HostNudgeInjector`
-- tracks only the minimal in-memory delivered-id set needed to avoid
-  reinjecting the same still-unread message
+- writes one typed success/error reply back to the daemon
+- closes the connection before returning to `accept`
 
 The session does not:
 
@@ -82,7 +82,7 @@ The session does not:
 Lifecycle states are:
 
 - `Inactive`
-- `Polling`
+- `Listening`
 - `Degraded`
 - `Closed`
 - `CloseFailed`
@@ -105,8 +105,8 @@ Required event fields are:
 Architectural rules:
 
 - the durable ATM message remains the source of truth
-- `atm-graft` does not own mailbox semantics; it only reads through the shared
-  daemon API
+- `atm-graft` does not own mailbox semantics; it only accepts daemon-originated
+  post-send events and routes them into the host injection seam
 - a host-specific projection may exist inside the embedding executable, but it
   must stay outside `atm-graft`
 - external terminal automation such as `tmux send-keys` remains out of scope

@@ -29,17 +29,18 @@ Rules:
 
 Purpose:
 - own the concrete `GraftSession` lifecycle used by an embedded host CLI
-- keep one receiver-local poll thread active while the session is enabled
-- translate durable unread messages into host-consumable `PostSendHookEvent`
-  values
+- keep one receiver-local listener thread active while the session is enabled
+- accept daemon-originated `PostSendHookEvent` payloads and translate them into
+  host-consumable nudge deliveries
 
 Rules:
 - `atm-graft` must not own daemon queue state, direct SQLite access, or direct
   inbox-JSONL access
-- receiver-local state is limited to lifecycle state plus the transient
-  delivered-id set needed to avoid reinjecting the same unread message
+- receiver-local state is limited to lifecycle state plus bounded in-flight
+  nudge handling
 - automatic between-tool-call nudge injection belongs to this consumer layer
-- session runtime code must use the shared unary ATM protocol only
+- session runtime code must accept one bounded same-host request/reply exchange
+  per daemon-originated nudge
 - no daemon-owned advisory registration, fetch/drain, or stream/session
   protocol may cross this boundary
 

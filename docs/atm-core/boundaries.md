@@ -368,7 +368,7 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the one accepted graft-backed advisory handoff for post-send events
+- Owns the one accepted graft-backed same-host handoff for post-send events
   after `atm-core` has already decided that recipient-side graft emission is
   required.
 
@@ -376,9 +376,12 @@ Notes:
 - This stays narrower than `PostSendHookEmitter`:
   - `atm-core` still decides whether graft-backed post-send applies
   - `atm-core` still logs failures and constructs sender-visible warnings
-  - the port only attempts the graft-side advisory delivery
+  - the port only attempts one bounded graft-side delivery request
 - the accepted out-of-owner implementation is
-  `atm_daemon::advisory_runtime::AdvisoryRuntime`.
+  `atm_daemon::runtime_health::DaemonGraftPostSendPort`, which resolves the
+  authoritative recipient `home_dir`, opens the receiver-owned same-host
+  graft socket, sends one `PostSendHookEvent`, waits for one bounded reply,
+  and closes the connection.
 - this boundary must not expand into generic notification routing, mailbox
   compatibility append, tmux delivery, or local process spawning.
 

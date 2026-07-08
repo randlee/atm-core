@@ -428,9 +428,9 @@ THOROUGH_ROWS = [
     ),
     SuiteRowSpec(
         id="AD11-GRAFT-001",
-        flow="graft-backed post-send emission path remains optional and explicit",
+        flow="graft-backed post-send uses a direct same-host receiver socket with typed warning fallback",
         commands=graft_commands(),
-        pass_note="the graft-backed emission seam delegates through the dedicated graft port and surfaces failure without leaking graft ownership into the core send path",
+        pass_note="the graft-backed emission seam performs one bounded same-host receiver delivery attempt and still surfaces typed sender warnings when the receiver path is unavailable",
     ),
     SuiteRowSpec(
         id="AD11-AUTH-001",

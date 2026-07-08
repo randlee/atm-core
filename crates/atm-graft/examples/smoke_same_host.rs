@@ -129,9 +129,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let activation_snapshot = session.snapshot()?;
-    if activation_snapshot.state != GraftSessionState::Polling {
+    if activation_snapshot.state != GraftSessionState::Listening {
         return Err(io::Error::other(format!(
-            "expected polling graft session, found {:?}",
+            "expected listening graft session, found {:?}",
             activation_snapshot.state
         ))
         .into());
