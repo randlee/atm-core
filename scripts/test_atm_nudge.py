@@ -6,7 +6,6 @@ import io
 import json
 import os
 import shlex
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -18,9 +17,7 @@ _MOD = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MOD)
 
 PaneLookup = _MOD.PaneLookup
-ERR_AMBIGUOUS = _MOD.ERR_AMBIGUOUS
 ERR_EMPTY_PANE = _MOD.ERR_EMPTY_PANE
-ERR_FILE_MISSING = _MOD.ERR_FILE_MISSING
 ERR_INVALID_STRUCTURE = _MOD.ERR_INVALID_STRUCTURE
 ERR_NOT_FOUND = _MOD.ERR_NOT_FOUND
 ERR_PARSE_ERROR = _MOD.ERR_PARSE_ERROR
@@ -42,7 +39,6 @@ def _parse_json(text: str) -> dict:
 def _run_with_mocked_lookups(
     args: list[str],
     roster: PaneLookup,
-    toml: PaneLookup,
     *,
     team: str = TEST_TEAM,
 ) -> tuple[int, dict, dict, MagicMock]:
@@ -50,7 +46,6 @@ def _run_with_mocked_lookups(
     stdout_buf = io.StringIO()
     with (
         patch.object(_MOD, "read_pane_from_roster", return_value=roster),
-        patch.object(_MOD, "read_pane_from_toml", return_value=toml),
         patch.object(_MOD, "resolve_team", return_value=team),
         patch.object(_MOD, "read_post_send_payload", return_value={}),
         patch.object(_MOD, "nudge_pane") as mock_nudge,
@@ -174,128 +169,6 @@ class TestCandidateStartDirs(unittest.TestCase):
         self.assertEqual(dirs, [Path("/tmp/proj").resolve()])
 
 
-class TestReadPaneFromToml(unittest.TestCase):
-    def _with_project(self, toml_text: str, fn):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            project = root / "repo" / "nested"
-            project.mkdir(parents=True)
-            (root / "repo" / ".atm.toml").write_text(toml_text, encoding="utf-8")
-            with patch.dict(
-                os.environ,
-                {
-                    "CLAUDE_PROJECT_DIR": str(project),
-                    "PWD": str(project),
-                    "HOME": str(root / "home"),
-                    "USERPROFILE": str(root / "home"),
-                },
-                clear=False,
-            ):
-                with patch("os.getcwd", return_value=str(project)):
-                    fn(root / "repo" / ".atm.toml")
-
-    def test_reads_team_specific_match(self):
-        def run(path: Path):
-            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
-            self.assertEqual(result.pane_id, "%2")
-            self.assertEqual(Path(result.source_path), path.resolve())
-
-        self._with_project(
-            f"""
-[atm]
-default_team = "{TEST_TEAM}"
-
-[rmux]
-
-[[rmux.windows]]
-name = "agents"
-[[rmux.windows.panes]]
-name = "{TEST_QM}"
-tmux_pane_id = "%2"
-env = {{ ATM_TEAM = "{TEST_TEAM}" }}
-[[rmux.windows.panes]]
-name = "{TEST_QM}"
-tmux_pane_id = "%9"
-env = {{ ATM_TEAM = "schook" }}
-""",
-            run,
-        )
-
-    def test_falls_back_to_single_unscoped_match(self):
-        def run(_path: Path):
-            result = _MOD.read_pane_from_toml(TEST_AGENT, TEST_TEAM)
-            self.assertEqual(result.pane_id, "%1")
-
-        self._with_project(
-            f"""
-[atm]
-default_team = "{TEST_TEAM}"
-
-[rmux]
-
-[[rmux.windows]]
-name = "agents"
-[[rmux.windows.panes]]
-name = "{TEST_AGENT}"
-tmux_pane_id = "%1"
-""",
-            run,
-        )
-
-    def test_reports_ambiguous_same_team_match(self):
-        def run(_path: Path):
-            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
-            self.assertEqual(result.error_code, ERR_AMBIGUOUS)
-            self.assertIn("%2", result.error_msg)
-            self.assertIn("%7", result.error_msg)
-
-        self._with_project(
-            f"""
-[atm]
-default_team = "{TEST_TEAM}"
-
-[rmux]
-
-[[rmux.windows]]
-name = "agents"
-[[rmux.windows.panes]]
-name = "{TEST_QM}"
-tmux_pane_id = "%2"
-env = {{ ATM_TEAM = "{TEST_TEAM}" }}
-[[rmux.windows.panes]]
-name = "{TEST_QM}"
-tmux_pane_id = "%7"
-env = {{ ATM_TEAM = "{TEST_TEAM}" }}
-""",
-            run,
-        )
-
-    def test_reports_parse_error(self):
-        def run(path: Path):
-            result = _MOD.read_pane_from_toml(TEST_AGENT, TEST_TEAM)
-            self.assertEqual(result.error_code, ERR_PARSE_ERROR)
-            self.assertIn(str(path), result.error_msg)
-
-        self._with_project("not valid toml =", run)
-
-    def test_reports_file_missing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with patch.dict(
-                os.environ,
-                {
-                    "CLAUDE_PROJECT_DIR": str(root),
-                    "PWD": str(root),
-                    "HOME": str(root / "home"),
-                    "USERPROFILE": str(root / "home"),
-                },
-                clear=False,
-            ):
-                with patch("os.getcwd", return_value=str(root)):
-                    result = _MOD.read_pane_from_toml(TEST_AGENT, TEST_TEAM)
-        self.assertEqual(result.error_code, ERR_FILE_MISSING)
-
-
 class TestReadPaneFromRoster(unittest.TestCase):
     def test_reports_invalid_members_structure(self):
         process = MagicMock(returncode=0, stdout='{"members": {}}', stderr="")
@@ -355,14 +228,12 @@ class TestOverrideMode(unittest.TestCase):
         with (
             patch.object(_MOD, "nudge_pane") as mock_nudge,
             patch.object(_MOD, "read_pane_from_roster") as mock_roster,
-            patch.object(_MOD, "read_pane_from_toml") as mock_toml,
             patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
         ):
             rc = _MOD.main(["atm-nudge.py", "--pane", "%1", TEST_AGENT, "<atm/>"])
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, "<atm/>")
         mock_roster.assert_not_called()
-        mock_toml.assert_not_called()
 
     def test_override_without_message_builds_default(self):
         with (
@@ -370,7 +241,6 @@ class TestOverrideMode(unittest.TestCase):
             patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
             patch.object(_MOD, "read_post_send_payload", return_value={}),
             patch.object(_MOD, "read_pane_from_roster"),
-            patch.object(_MOD, "read_pane_from_toml"),
         ):
             rc = _MOD.main(["atm-nudge.py", "--pane", "%1", TEST_AGENT])
         self.assertEqual(rc, 0)
@@ -385,14 +255,14 @@ class TestBuildMessage(unittest.TestCase):
         self.assertIn(f"read atm --team {TEST_TEAM}", message)
         self.assertIn("execute the assigned task", message)
         self.assertIn('busy="after-current-task"', message)
-        self.assertNotIn("message ", message)
+        self.assertIn("<description></description>", message)
 
-    def test_send_message_includes_message_id_when_present(self):
+    def test_send_message_includes_message_id_as_attribute_when_present(self):
         message = _MOD.build_message(
             TEST_TEAM,
             {"message_id": "01JSENDTEST0000000000000000"},
         )
-        self.assertIn("<message-id>01JSENDTEST0000000000000000</message-id>", message)
+        self.assertIn('message-id="01JSENDTEST0000000000000000"', message)
         self.assertIn("execute the assigned task", message)
 
     def test_send_message_includes_description_when_present(self):
@@ -403,23 +273,58 @@ class TestBuildMessage(unittest.TestCase):
                 "summary": "review failing smoke lane",
             },
         )
-        self.assertIn("<message-id>01JSENDTEST0000000000000000</message-id>", message)
+        self.assertIn('message-id="01JSENDTEST0000000000000000"', message)
         self.assertIn("<description>review failing smoke lane</description>", message)
 
-    def test_ack_message_requests_immediate_work_with_message_context(self):
+    def test_requires_ack_message_includes_ack_action(self):
         message = _MOD.build_message(
             TEST_TEAM,
-            {"is_ack": True, "message_id": "01JACKTEST00000000000000000"},
+            {"requires_ack": True, "message_id": "01JREQACK00000000000000000"},
         )
-        self.assertIn(f"read atm --team {TEST_TEAM}", message)
-        self.assertIn("<message-id>01JACKTEST00000000000000000</message-id>", message)
-        self.assertIn("message 01JACKTEST00000000000000000 acknowledged", message)
-        self.assertIn("complete associated work immediately", message)
-        self.assertIn(
-            'busy="complete tasks based on established priority"',
+        self.assertIn("<action>ack the message</action>", message)
+        self.assertIn('message-id="01JREQACK00000000000000000"', message)
+        self.assertIn("execute the assigned task", message)
+
+    def test_task_message_uses_task_element(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {
+                "message_id": "01JTASKTEST0000000000000000",
+                "task_id": "AD.22",
+                "description": "finish cleanup",
+            },
+        )
+        self.assertIn('<task id="AD.22">finish cleanup</task>', message)
+        self.assertNotIn("<description>", message)
+
+    def test_ack_message_uses_compact_ack_shape(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {
+                "is_ack": True,
+                "from": "team-lead@atm-dev",
+                "message_id": "01JACKTEST00000000000000000",
+            },
+        )
+        self.assertEqual(
             message,
+            '<atm from="team-lead@atm-dev" message-id="01JACKTEST00000000000000000" kind="ack"/>',
         )
-        self.assertNotIn("execute the assigned task", message)
+
+    def test_ack_task_message_uses_compact_ack_shape_with_task_id(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {
+                "is_ack": True,
+                "from": "team-lead@atm-dev",
+                "message_id": "01JACKTASK0000000000000000",
+                "task_id": "AD.22",
+            },
+        )
+        self.assertEqual(
+            message,
+            '<atm from="team-lead@atm-dev" message-id="01JACKTASK0000000000000000" kind="ack" task-id="AD.22"/>',
+        )
 
 
 class TestMainBehavior(unittest.TestCase):
@@ -427,85 +332,26 @@ class TestMainBehavior(unittest.TestCase):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
             PaneLookup("%1", None, None, "atm members --team <team> --json"),
-            PaneLookup("%1", None, None, "/repo/.atm.toml"),
         )
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", TEST_AGENT, unittest.mock.ANY)
         self.assertEqual(stderr_json, {})
         self.assertEqual(stdout_json, {})
 
-    def test_roster_match_skips_toml_fallback_lookup(self):
-        with (
-            patch.object(_MOD, "resolve_team", return_value=TEST_TEAM),
-            patch.object(_MOD, "read_post_send_payload", return_value={}),
-            patch.object(
-                _MOD,
-                "read_pane_from_roster",
-                return_value=PaneLookup(
-                    "%5",
-                    None,
-                    None,
-                    "atm members --team <team> --json",
-                ),
-            ),
-            patch.object(_MOD, "read_pane_from_toml") as mock_toml,
-            patch.object(_MOD, "nudge_pane") as mock_nudge,
-            patch.object(_MOD, "emit_json_stderr"),
-            patch.object(_MOD, "emit_hook_result"),
-            patch.object(_MOD, "log"),
-        ):
-            rc = _MOD.main(["atm-nudge.py", TEST_AGENT])
-
-        self.assertEqual(rc, 0)
-        mock_toml.assert_not_called()
-        mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
-
-    def test_roster_pane_wins_when_roster_and_toml_disagree(self):
+    def test_roster_match_uses_roster_pane(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
             PaneLookup("%5", None, None, "atm members --team <team> --json"),
-            PaneLookup("%9", None, None, "/repo/.atm.toml"),
         )
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%5", TEST_AGENT, unittest.mock.ANY)
         self.assertEqual(stderr_json, {})
         self.assertEqual(stdout_json, {})
 
-    def test_toml_fallback_still_nudges_and_warns(self):
-        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            [TEST_AGENT],
-            PaneLookup(None, ERR_EMPTY_PANE, "missing roster pane", "atm members --team <team> --json"),
-            PaneLookup("%1", None, None, "/repo/.atm.toml"),
-        )
-        self.assertEqual(rc, 0)
-        mock_nudge.assert_called_once_with("%1", TEST_AGENT, unittest.mock.ANY)
-        self.assertEqual(stderr_json["status"], "warning")
-        self.assertIn(".atm.toml fallback", " ".join(stderr_json["call_to_action"]))
-        self.assertIn("SQLite-backed pane metadata", " ".join(stderr_json["call_to_action"]))
-        self.assertIn("--pane %1", stderr_json["nudge_command"])
-        self.assertEqual(stderr_json["pane_resolution"]["delivered_pane"], "%1")
-        self.assertEqual(stdout_json["level"], "warn")
-        self.assertEqual(stdout_json["fields"]["delivered_pane"], "%1")
-        self.assertEqual(stdout_json["fields"]["roster_error_code"], ERR_EMPTY_PANE)
-
-    def test_roster_command_failure_still_uses_toml_fallback(self):
-        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            [TEST_QM],
-            PaneLookup(None, ERR_COMMAND_FAILED, "atm members failed", "atm members --team <team> --json"),
-            PaneLookup("%2", None, None, "/repo/.atm.toml"),
-        )
-        self.assertEqual(rc, 0)
-        mock_nudge.assert_called_once_with("%2", TEST_QM, unittest.mock.ANY)
-        self.assertEqual(stderr_json["status"], "warning")
-        self.assertIn("already sent to pane %2", " ".join(stderr_json["call_to_action"]))
-        self.assertTrue(any("atm members --team test-team --json" in item for item in stderr_json["fix"]))
-        self.assertEqual(stdout_json["fields"]["roster_error_code"], ERR_COMMAND_FAILED)
-
-    def test_roster_and_toml_failure_emit_manual_nudge_and_fix_call_to_action(self):
+    def test_roster_failure_emits_manual_nudge_and_fix_call_to_action(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_QM],
             PaneLookup(None, ERR_EMPTY_PANE, "bad roster", "atm members --team <team> --json"),
-            PaneLookup(None, ERR_PARSE_ERROR, "bad toml", "/repo/.atm.toml"),
         )
         self.assertEqual(rc, 1)
         mock_nudge.assert_not_called()
@@ -515,13 +361,11 @@ class TestMainBehavior(unittest.TestCase):
         self.assertIn("VERIFY the pane id", " ".join(stderr_json["call_to_action"]))
         self.assertIn(f"--pane {CODEX_DEFAULT_PANE}", stderr_json["nudge_command"])
         self.assertIn("Repair canonical ATM roster pane metadata", " ".join(stderr_json["fix"]))
-        self.assertIn("Fix or restore the repo-local .atm.toml", " ".join(stderr_json["fix"]))
 
-    def test_neither_source_found_uses_default_pane(self):
+    def test_missing_roster_member_uses_default_manual_pane_hint(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             [TEST_AGENT],
             PaneLookup(None, ERR_NOT_FOUND, "missing member", "atm members --team <team> --json"),
-            PaneLookup(None, ERR_NOT_FOUND, "missing recipient", "/repo/.atm.toml"),
         )
         self.assertEqual(rc, 1)
         mock_nudge.assert_not_called()
@@ -532,8 +376,7 @@ class TestMainBehavior(unittest.TestCase):
     def test_error_payload_includes_input_and_resolution_context(self):
         rc, stderr_json, _, _ = _run_with_mocked_lookups(
             [TEST_AGENT],
-            PaneLookup(None, ERR_FILE_MISSING, "missing", "atm members --team <team> --json"),
-            PaneLookup(None, ERR_FILE_MISSING, "missing", None),
+            PaneLookup(None, ERR_COMMAND_FAILED, "missing", "atm members --team <team> --json"),
         )
         self.assertEqual(rc, 1)
         self.assertIn("input", stderr_json)

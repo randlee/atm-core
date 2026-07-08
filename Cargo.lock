@@ -137,7 +137,6 @@ version = "1.2.3"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
- "atm-graft",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",

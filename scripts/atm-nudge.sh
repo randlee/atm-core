@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # atm-nudge.sh [recipient]
 #
-# Payload-driven post-send hook helper for ATM.
-# The authoritative pane id must come from the ATM_POST_SEND payload.
+# Compatibility / explicit-override post-send helper for ATM.
+# This is not the shipped default nudge path; the built-in default is
+# `atm internal-nudge`. The authoritative pane id must come from the
+# ATM_POST_SEND payload.
 
 set -euo pipefail
 
@@ -25,16 +27,54 @@ payload = json.loads(sys.argv[1])
 recipient = payload.get("recipient") or sys.argv[2]
 team = payload.get("team") or ""
 pane = payload.get("recipient_pane_id") or ""
+from_value = payload.get("from") or ""
+message_id = payload.get("message_id") or ""
+task_id = payload.get("task_id") or ""
+description = payload.get("description") or payload.get("summary") or ""
+requires_ack = payload.get("requires_ack") is True
+is_ack = payload.get("is_ack") is True
+
+attrs = []
+if from_value:
+    attrs.append(f'from="{from_value}"')
+if message_id:
+    attrs.append(f'message-id="{message_id}"')
+base = "<atm" + (f" {' '.join(attrs)}" if attrs else "")
+
+if is_ack:
+    if task_id:
+        message = f'{base} kind="ack" task-id="{task_id}"/>'
+    else:
+        message = f'{base} kind="ack"/>'
+else:
+    parts = [f"{base}>", f"<action>read atm --team {team}</action>"]
+    if requires_ack:
+        parts.append("<action>ack the message</action>")
+    if task_id:
+        parts.append(f'<task id="{task_id}">{description}</task>')
+    else:
+        parts.append(f"<description>{description}</description>")
+    parts.extend(
+        [
+            "<action>execute the assigned task</action>",
+            '<when idle="immediate" busy="after-current-task"/>',
+            '<console announce="concise" pause="false"/>',
+            "</atm>",
+        ]
+    )
+    message = "".join(parts)
+
 print(recipient)
 print(team)
 print(pane)
+print(message)
 PY
 )
 
 RECIPIENT="${PAYLOAD_FIELDS[0]:-}"
 TEAM="${PAYLOAD_FIELDS[1]:-${ATM_TEAM:-atm-dev}}"
 PANE_ID="${PAYLOAD_FIELDS[2]:-}"
-MESSAGE="You have unread ATM messages. Run: atm read --team ${TEAM}"
+MESSAGE="${PAYLOAD_FIELDS[3]:-}"
 LOG_FILE="${TMPDIR:-/tmp}/atm-nudge.log"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
@@ -42,8 +82,14 @@ if [[ -z "${PANE_ID:-}" ]]; then
     printf '%s recipient=%s missing authoritative pane id in ATM_POST_SEND payload\n' "$TIMESTAMP" "$RECIPIENT" >> "$LOG_FILE"
     exit 1
 fi
+if [[ -z "${MESSAGE:-}" ]]; then
+    printf '%s recipient=%s missing rendered nudge message\n' "$TIMESTAMP" "$RECIPIENT" >> "$LOG_FILE"
+    exit 1
+fi
 
 tmux send-keys -t "$PANE_ID" -l "$MESSAGE"
+tmux send-keys -t "$PANE_ID" Enter
+sleep 0.25
 tmux send-keys -t "$PANE_ID" Enter
 
 printf '%s nudged recipient=%s pane=%s\n' "$TIMESTAMP" "$RECIPIENT" "$PANE_ID" >> "$LOG_FILE"

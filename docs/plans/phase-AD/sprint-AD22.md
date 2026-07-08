@@ -2,8 +2,8 @@
 id: AD.22
 title: Nudge Routing State Ownership And Dogfood Transition Cleanup
 status: planned
-branch: feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup
-worktree: ../atm-core-worktrees/feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup
+branch: feature/pAD-s22-built-in-nudge-hardening-part2
+worktree: ../atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2
 target: integrate/phase-AD
 ---
 
@@ -25,9 +25,7 @@ target: integrate/phase-AD
 - `.atm.toml`
 - `scripts/atm-nudge.py`
 - `scripts/atm-nudge.sh`
-- `scripts/atm-nudge-xml-1.py`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm/src/commands/teams.rs`
+- `scripts/test_atm_nudge.py`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
@@ -62,6 +60,9 @@ with these invariants:
   update path for pane routing
 - repo-local scripts may exist only as explicit compatibility tools or explicit
   local overrides; they are not the default shipped nudge implementation
+- compatibility helpers that survive must resolve pane routing from canonical
+  roster state or explicit `--pane` only; they must not rediscover live pane
+  ids from committed repo config
 
 ## Paths To Delete
 
@@ -81,6 +82,8 @@ with these invariants:
   marked explicit local override path
 - repo-local nudge scripts are either deleted or marked compatibility-only with
   no ambiguity that they are not the default shipped path
+- retained compatibility helpers render the same six accepted XML forms as the
+  built-in path when they are used explicitly
 - if any residual graft-facing nudge docs remain after `AD.21`, this sprint
   closes them without reopening sink-private receiver behavior
 
@@ -100,6 +103,8 @@ with these invariants:
 - any retained repo-local script clearly states compatibility-only or
   override-only status and no accepted doc treats it as the default installed
   path
+- targeted regression coverage proves `scripts/atm-nudge.py` resolves panes
+  from canonical roster state only unless the operator passes `--pane`
 - `atm teams add-member` / `update-member` docs remain the explicit pane repair
   and update workflow
 

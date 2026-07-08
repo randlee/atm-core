@@ -38,6 +38,7 @@ mod tests {
 
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::{AtmError, AtmErrorKind};
+    use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
 
     use super::GraftNudgeSink;
     use crate::{GraftObservability, GraftSessionState, HostNudgeInjector, SessionSnapshot};
@@ -72,10 +73,10 @@ mod tests {
 
     fn request_event() -> PostSendHookEvent {
         PostSendHookEvent {
-            sender: "team-lead".parse().expect("sender"),
-            sender_team: "atm-dev".parse().expect("team"),
-            recipient: "arch-ctm".parse().expect("recipient"),
-            recipient_team: "atm-dev".parse().expect("team"),
+            sender: TEST_LEAD.parse().expect("sender"),
+            sender_team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+            recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,
@@ -87,8 +88,8 @@ mod tests {
 
     fn snapshot() -> Arc<RwLock<SessionSnapshot>> {
         Arc::new(RwLock::new(SessionSnapshot {
-            team: "atm-dev".parse().expect("team"),
-            agent: "arch-ctm".parse().expect("agent"),
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_ARCH_CTM.parse().expect("agent"),
             state: GraftSessionState::Listening,
         }))
     }

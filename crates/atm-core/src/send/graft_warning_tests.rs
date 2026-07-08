@@ -35,14 +35,20 @@ pub(super) fn write_atm_nudge_shim(
         ),
     )
     .expect("write atm shim");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(path).expect("metadata").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(path, perms).expect("chmod");
-    }
+    set_executable_permissions(path);
 }
+
+#[cfg(unix)]
+fn set_executable_permissions(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut perms = fs::metadata(path).expect("metadata").permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(path, perms).expect("chmod");
+}
+
+#[cfg(not(unix))]
+fn set_executable_permissions(_path: &std::path::Path) {}
 
 #[test]
 fn load_send_alert_state_parse_errors_are_config_errors() {

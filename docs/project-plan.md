@@ -487,6 +487,8 @@ The rewrite is ready when:
   testing
 - `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
   known
+- repo-tracked dogfood config does not carry live `[[atm.post_send_hooks]]`
+  defaults or committed `tmux_pane_id` routing truth
 - retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged

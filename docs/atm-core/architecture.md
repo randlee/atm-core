@@ -454,6 +454,9 @@ Identity-specific policy:
 - after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
+- committed `.atm.toml` pane ids are not live routing truth; any retained
+  compatibility helper must consume authoritative roster/payload pane metadata
+  or an explicit operator-provided pane id
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should compare the live `config.json` roster against canonical ATM
