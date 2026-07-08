@@ -23,6 +23,8 @@ use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
+
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendRequestEnvelope {
@@ -673,12 +675,8 @@ pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
 /// Resolve the canonical daemon socket path for one accepted ATM home root.
 pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
     platform_local_ipc_endpoint_path(
-        home::host_runtime_dir_from_home(home_dir).join(daemon_socket_file_name()),
+        home::host_runtime_dir_from_home(home_dir).join(DAEMON_SOCKET_FILENAME),
     )
-}
-
-fn daemon_socket_file_name() -> &'static str {
-    concat!("atm", "-daemon", ".sock")
 }
 
 /// Resolve the active local IPC name for the ATM request transport.
@@ -900,11 +898,12 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_file_name, daemon_socket_path, daemon_socket_path_from_home, next_request_id,
-        platform_local_ipc_endpoint_path, request_from_frame_payload, request_to_frame_payload,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope,
+        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
+        next_request_id, platform_local_ipc_endpoint_path, request_from_frame_payload,
+        request_to_frame_payload,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -998,7 +997,7 @@ mod tests {
     fn daemon_socket_path_from_home_uses_atm_home_runtime_subtree() {
         let tempdir = TempDir::new().expect("tempdir");
         let logical_endpoint =
-            crate::home::host_runtime_dir_from_home(tempdir.path()).join(daemon_socket_file_name());
+            crate::home::host_runtime_dir_from_home(tempdir.path()).join(DAEMON_SOCKET_FILENAME);
 
         assert_eq!(
             daemon_socket_path_from_home(tempdir.path()),

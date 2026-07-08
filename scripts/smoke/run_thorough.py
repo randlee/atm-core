@@ -562,6 +562,35 @@ THOROUGH_ROWS = [
         ],
         pass_note="shared-host smoke proves multi-workspace raw CLI bootstrap reuses one daemon, preserves team isolation, and keeps runtime ownership under the accepted ATM_HOME root",
     ),
+    SuiteRowSpec(
+        id="AD19-READ-OUTPUT-001",
+        flow="read mutation returns the message it actually mutated together with post-mutation bucket counts",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "read_unread_output_stays_consistent_with_the_mutated_message",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "ack_persists_read_state_and_acknowledged_timestamp",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact",
+    ),
 ]
 
 

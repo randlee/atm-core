@@ -58,6 +58,8 @@ impl Drop for ShutdownFinalizerDrainGuard {
     }
 }
 
+mod runtime_root;
+
 #[test]
 #[serial_test::serial(env)]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {

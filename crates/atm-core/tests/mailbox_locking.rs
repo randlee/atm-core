@@ -729,6 +729,129 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
 
 #[test]
 #[serial_test::serial(env)]
+fn read_unread_output_stays_consistent_with_the_mutated_message() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let older_id = AtmMessageId::new();
+    let newer_id = AtmMessageId::new();
+    let now = Utc::now();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[
+            unread_message_at(
+                TEAM_LEAD,
+                "older unread",
+                older_id,
+                now - chrono::Duration::seconds(5),
+            ),
+            unread_message_at(TEAM_LEAD, "newer unread", newer_id, now),
+        ],
+    );
+
+    let unread_query = fixture
+        .read_query(PRIMARY_AGENT)
+        .with_selection_mode(ReadSelection::Unread)
+        .with_ack_activation_mode(AckActivationMode::ReadOnly);
+
+    let first = read_mail(unread_query.clone(), &observability).expect("first unread read");
+    assert!(first.mutation_applied);
+    assert_eq!(first.selected_message_id, Some(newer_id));
+    assert_eq!(
+        first
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(newer_id)
+    );
+    assert_eq!(
+        first
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("newer unread")
+    );
+    assert_eq!(
+        first.message.as_ref().map(|message| message.envelope.read),
+        Some(true)
+    );
+    assert_eq!(first.bucket_counts.unread, 1);
+
+    let second = read_mail(unread_query, &observability).expect("second unread read");
+    assert!(second.mutation_applied);
+    assert_eq!(second.selected_message_id, Some(older_id));
+    assert_eq!(
+        second
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(older_id)
+    );
+    assert_eq!(
+        second
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("older unread")
+    );
+    assert_eq!(
+        second.message.as_ref().map(|message| message.envelope.read),
+        Some(true)
+    );
+    assert_eq!(second.bucket_counts.unread, 0);
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn ack_persists_read_state_and_acknowledged_timestamp() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            TEAM_LEAD,
+            "needs ack",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let ack_outcome = ack_mail(
+        fixture.ack_request(PRIMARY_AGENT, message_id, "ack reply"),
+        &observability,
+    )
+    .expect("ack outcome");
+    assert_eq!(ack_outcome.message_id, message_id);
+
+    let query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        AckActivationMode::ReadOnly,
+        Some(&message_id.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("read query");
+    let outcome = read_mail(query, &observability).expect("read acked message");
+    let message = outcome.message.expect("acked message");
+
+    assert_eq!(message.envelope.message_id, Some(message_id));
+    assert!(message.envelope.read);
+    assert!(message.envelope.pending_ack_at.is_none());
+    assert!(message.envelope.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -1355,10 +1478,19 @@ fn read_message_at(
 }
 
 fn unread_message(from: &str, text: &str, message_id: AtmMessageId) -> InboxMessage {
+    unread_message_at(from, text, message_id, Utc::now())
+}
+
+fn unread_message_at(
+    from: &str,
+    text: &str,
+    message_id: AtmMessageId,
+    timestamp: chrono::DateTime<Utc>,
+) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: false,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,

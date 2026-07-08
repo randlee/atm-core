@@ -113,6 +113,12 @@ Initial crate requirement IDs:
   U.3 note: logical-current projection must remain mode-aware; terminal
   `add-details` preserves predecessor context in the effective current body,
   while terminal `supersede` does not.
+- `REQ-CORE-READ-001` `atm-core` owns the single-message read-mutation output
+  contract: when read-side mutation is applied, the returned selected message,
+  `selected_message_id`, and `bucket_counts` must stay self-consistent with
+  the durable post-mutation mailbox state, while ack-only fields remain owned
+  by the ack path. Satisfies:
+  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and direct post-send-emission behavior above the owned
   boundaries. Satisfies the send-path service aspects of:
