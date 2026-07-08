@@ -34,6 +34,9 @@ state.
 
 - `boundaries/atm-core/post-send-hook-emitter.toml`
 - `boundaries/atm-core/graft-post-send-port.toml`
+- `.just/lint_boundaries.py`
+- `.just/allowlists/scb_observability_allowlist.toml`
+- `.just/fixtures/scb_observability_known_bad.rs`
 - `crates/atm-core/src/boundary/mod.rs`
 - `crates/atm-core/src/send/hook.rs`
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
@@ -52,6 +55,7 @@ state.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/observability.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/adr/ADR-020-rule001-observability-adapter-exception.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/sprint-AD26.md`
@@ -172,15 +176,29 @@ Required runtime meaning after this sprint:
   - `ATM_POST_SEND_GRAFT_UNAVAILABLE`
   - `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
 - the deferred `AD18/ARCH-004` scope ruling lands here for the dual
-  `lib.rs` + `main.rs` `atm-daemon` crate:
-  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the only
-    sanctioned non-`main.rs` encapsulation seam allowed to import
-    `sc_observability_types::{ActionName, OutcomeLabel}` directly
-  - every other file under `crates/atm-daemon/src/` must route those alias
-    types through `DaemonRuntimeObservability` instead of importing
-    `sc_observability_types` directly
-  - the sign-off record for this sanctioned exception must be restated in
-    `docs/atm-core/boundaries.md` and `docs/plans/phase-AD/readiness.md`
+  `lib.rs` + `main.rs` `atm-daemon` crate as a library-internal adapter
+  exception, not a binary-internal one:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is a real library
+    module declared from `lib.rs` and publicly re-exported; this sprint must
+    describe it honestly as the sanctioned library-internal adapter module
+  - that module becomes the only sanctioned non-`main.rs` location allowed to
+    import `sc_observability_types::{ActionName, OutcomeLabel}` directly
+  - the concrete achievable mechanism is:
+    - export crate-visible aliases or constructor helpers from
+      `daemon_runtime_observability.rs`, for example
+      `pub(crate) type DaemonActionName = sc_observability_types::ActionName`
+      and `pub(crate) type DaemonOutcomeLabel = ...`
+    - make `runtime_sqlite_observer.rs` and `test_observability.rs` consume
+      those crate-visible daemon aliases/helpers instead of importing
+      `sc_observability_types` directly
+  - the sign-off record for this sanctioned library-internal adapter exception
+    must be restated in `docs/atm-core/boundaries.md`,
+    `docs/plans/phase-AD/readiness.md`, and a dedicated ADR
+    `docs/adr/ADR-020-rule001-observability-adapter-exception.md`
+  - the sprint must also wire this exception into `.just/lint_boundaries.py`
+    using the existing allowlist pattern extended with one explicit module-root
+    sentinel such as `symbol = "__module__"` so the sanctioned adapter file is
+    mechanically allowlisted while any new direct import elsewhere still fails
 - `LocalTmuxNudgeTarget` reuses the roster-backed pane-routing target shape
   already accepted in `AD.22`; it must not fall back to `.atm.toml` pane
   lookup
@@ -200,6 +218,9 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   "override lookup upstream of `PostSendHookEmitter`" clause from `ADR-019`
 - that single remaining exception is tracked as `ADR-019-EXC-AD26-001` and
   must be closed by `AD.27`
+- the separate `RULE-001` library-internal adapter exception is governed by
+  `ADR-020` and must not be described as binary-internal anywhere on the
+  accepted line
 
 ## Paths To Delete
 
@@ -215,6 +236,8 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   under `crates/atm-daemon/src/` except:
   - `crates/atm-daemon/src/main.rs`
   - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- manual-only QA grep gates with no matching `.just/lint_boundaries.py`
+  enforcement for the sanctioned adapter exception
 
 ## Deliverables
 
@@ -231,6 +254,11 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   `ActionName` / `OutcomeLabel` through `DaemonRuntimeObservability`
   everywhere under `crates/atm-daemon/src/` except the explicitly sanctioned
   `daemon_runtime_observability.rs` encapsulation seam
+- `ADR-020` records the scope, rationale, review conditions, and CI
+  enforcement requirements for this library-internal adapter exception
+- `.just/lint_boundaries.py`, `.just/allowlists/scb_observability_allowlist.toml`,
+  and `.just/fixtures/scb_observability_known_bad.rs` mechanically enforce the
+  exception in CI instead of relying only on a manual review-time grep
 
 ## This Sprint Does Not Close
 
@@ -264,9 +292,15 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
 - targeted daemon-observability validation proves no other file under
   `crates/atm-daemon/src/` imports
   `sc_observability_types::{ActionName, OutcomeLabel}` directly
+- `python3 .just/lint_boundaries.py` fails on
+  `.just/fixtures/scb_observability_known_bad.rs` and accepts only the
+  `daemon_runtime_observability.rs` module-root allowlist entry declared in
+  `.just/allowlists/scb_observability_allowlist.toml`
 - `boundaries/atm-core/post-send-hook-emitter.toml`,
   `boundaries/atm-core/graft-post-send-port.toml`,
-  `docs/atm-core/boundaries.md`, `docs/plans/phase-AD/plan-phase-AD.md`, and
+  `docs/atm-core/boundaries.md`,
+  `docs/adr/ADR-020-rule001-observability-adapter-exception.md`,
+  `docs/plans/phase-AD/plan-phase-AD.md`, and
   `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` all match
   the accepted live mechanism
 

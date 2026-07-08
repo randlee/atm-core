@@ -375,17 +375,25 @@ Notes:
   is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
-- AD18/ARCH-004 scope ruling, accepted on the `AD.25` through `AD.30`
-  follow-up line:
-  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the sanctioned
-    binary-internal encapsulation seam for direct
+- AD18/ARCH-004 scope ruling, governed by
+  `docs/adr/ADR-020-rule001-observability-adapter-exception.md`, is accepted
+  on the `AD.25` through `AD.30` follow-up line:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is a sanctioned
+    library-internal adapter module for direct
     `sc_observability_types::{ActionName, OutcomeLabel}` imports in the dual
     `lib.rs` + `main.rs` `atm-daemon` crate
   - `crates/atm-daemon/src/main.rs` may still import those construction types
     directly as the binary entrypoint
+  - `daemon_runtime_observability.rs` must expose a concrete achievable
+    crate-visible mechanism, such as `pub(crate)` aliases or constructor
+    helpers, so `runtime_sqlite_observer.rs` and `test_observability.rs` stop
+    importing `sc_observability_types` directly
   - every other file under `crates/atm-daemon/src/` must route those aliases
-    through `DaemonRuntimeObservability`; relocating the import to any other
+    through the sanctioned adapter module; relocating the import to any other
     daemon source file is a boundary violation
+  - CI enforcement must live in `.just/lint_boundaries.py` with one explicit
+    allowlist entry for the sanctioned adapter module rather than only a manual
+    review-time grep
 
 ## GraftPostSendPort
 

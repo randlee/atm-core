@@ -28,6 +28,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-017 — Claude Inbox Fail-Soft Read Policy](./ADR-017-claude-inbox-fail-soft-read-policy.md)
 - [ADR-018 — Storage Contract Reset And Backend Interchangeability](./ADR-018-storage-contract-reset-and-backend-interchangeability.md)
 - [ADR-019 — Direct Post-Send Emission And Claude Backend Retirement](./ADR-019-direct-post-send-and-claude-json-retirement.md)
+- [ADR-020 — RULE-001 Observability Adapter Exception](./ADR-020-rule001-observability-adapter-exception.md)
 
 ## Extracted Crate-Local ADRs
 

@@ -137,7 +137,7 @@ one explicit home:
 
 | Item | Technical owner | Closure-artifact owner | Tracking artifact |
 | --- | --- | --- | --- |
-| `RULE-001` direct `sc_observability_types` imports in `runtime_sqlite_observer.rs` and `test_observability.rs` | `AD.26` | `AD.26` | `docs/plans/phase-AD/sprint-AD26.md` |
+| `RULE-001` direct `sc_observability_types` imports in daemon observability helper files | `AD.26` | `AD.26` | `docs/plans/phase-AD/sprint-AD26.md` plus `docs/adr/ADR-020-rule001-observability-adapter-exception.md` |
 | `AD9-BLANKPANE-001` validated-on-entry blank pane drift for `team-lead` / `arch-ctm` | `AD.9` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
 | `ERRDOC-001` member/team-admin error-code closure evidence | `AD.9` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
 | historical `FTQ-001` env-race record reconciliation | accepted-line code fix predates this follow-up | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
@@ -378,7 +378,7 @@ pub struct BuiltInPostSendDispatch {
     pub target: PostSendBuiltInTarget,
 }
 
-pub trait GraftPostSendPort: sealed::Sealed {
+pub trait GraftPostSendPort: sealed::Sealed + Send + Sync {
     fn deliver_post_send(
         &self,
         event: &PostSendHookEvent,
@@ -386,7 +386,7 @@ pub trait GraftPostSendPort: sealed::Sealed {
     ) -> Result<(), AtmError>;
 }
 
-pub trait PostSendHookEmitter: sealed::Sealed {
+pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
     fn emit_post_send(
         &self,
         dispatch: &BuiltInPostSendDispatch,
@@ -419,13 +419,17 @@ Required runtime meaning:
     warning behavior, but they must not invent competing codes for the same
     failure class
   - the deferred `AD18/ARCH-004` RULE-001 scope ruling is now explicit on this
-    follow-up line:
-    - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the only
-      sanctioned non-`main.rs` daemon source file allowed to import
-      `sc_observability_types::{ActionName, OutcomeLabel}` directly
-    - every other `crates/atm-daemon/src/` file must route those aliases
-      through that encapsulation seam
-    - `AD.26` owns the widened grep gate that enforces this ruling
+    follow-up line as a library-internal adapter exception:
+    - `crates/atm-daemon/src/daemon_runtime_observability.rs` is a real
+      library module declared from `lib.rs`, not a binary-internal file
+    - that module is the only sanctioned non-`main.rs` daemon source file
+      allowed to import `sc_observability_types::{ActionName, OutcomeLabel}`
+      directly
+    - `AD.26` makes the exception achievable by exporting crate-visible daemon
+      aliases or constructor helpers from that module and routing
+      `runtime_sqlite_observer.rs` plus `test_observability.rs` through them
+    - `ADR-020` plus `.just/lint_boundaries.py` own the formal ruling and CI
+      enforcement for this exception
 - external post-send compatibility:
   - `ATM_POST_SEND.description` is guaranteed on the retained line
   - `ATM_POST_SEND.task_id` remains present as a string contract for external
