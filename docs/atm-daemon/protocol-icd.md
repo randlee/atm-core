@@ -404,15 +404,16 @@ The current protocol-layer envelope mapping is:
 - `ResponseEnvelope::Error(...)`
   - `error_response`
 
-### 7.2.1 Graft-Local Same-Host Advisory Extension
+### 7.2.1 Historical Graft-Local Same-Host Advisory Extension (Removed)
 
-The graft session surface reuses the ATM frame header from Section 5, but it is
-not part of the shared `atm-core::protocol::{RequestEnvelope, ResponseEnvelope}`
-family.
+This removed graft-local packet family reused the ATM frame header from Section
+5, but it was never part of the shared
+`atm-core::protocol::{RequestEnvelope, ResponseEnvelope}` family.
 
-No separate graft-local advisory/session packet family is accepted on the
-retained line. Receiver-local graft behavior must build on the shared unary
-contract instead of introducing a second same-host protocol family.
+This section is retained only to identify deleted packet kinds. No separate
+graft-local advisory/session packet family is accepted on the retained line.
+Receiver-local graft behavior must build on the shared unary contract instead
+of introducing a second same-host protocol family.
 
 Historical graft-local packet kinds:
 - requests
@@ -431,12 +432,13 @@ Historical graft-local packet kinds:
   - `0x1ffe` `graft_error_response`
 
 Rules:
-- this extension is same-host only
-- it must not leak into cross-host daemon transport or the shared `atm-core`
-  protocol enums
-- unary graft requests still follow one request / one response
-- `advisory_stream_request` opens one request followed by zero or more
-  `advisory_stream_response` frames on that dedicated connection
+- this historical extension was same-host only
+- it was never allowed to leak into cross-host daemon transport or the shared
+  `atm-core` protocol enums
+- the retained runtime no longer permits unary graft requests or live
+  advisory-stream framing on this deleted protocol family
+- any receiver-local graft polling or nudge handling must remain above the
+  shared unary ATM contract instead of reviving these packet kinds
 
 ### 7.3 DTOs That Are Not Current Public Packet Kinds
 
