@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD22-QA-002-ROSTER-STRUCT>
+  a triage:Finding ;
+  triage:findingId "AD22-QA-002-ROSTER-STRUCT" ;
+  triage:title "Missing RosterMemberNudgeTarget struct" ;
+  triage:description "Sprint AD.22's primary code deliverable is a new `RosterMemberNudgeTarget` struct in crates/atm-core/src/team_admin.rs and crates/atm/src/commands/teams.rs. req-qa found it does not exist anywhere in the codebase outside the sprint doc's own code sample — zero Rust files were changed in this sprint's diff vs origin/feature/pAD-s21-built-in-nudge-hardening. The sprint doc explicitly defines this struct as a required interface under 'Interfaces To Add Or Modify' section." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "BLOCKING" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-QA-002-ROSTER-STRUCT/S22/missing> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pAD-s22-built-in-nudge-hardening-part2/master> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pAD-s22-built-in-nudge-hardening-part2/master> .
+
+<urn:atm:triage:occurrence/AD22-QA-002-ROSTER-STRUCT/S22/missing>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line -1 ;
+  triage:snippet "pub struct RosterMemberNudgeTarget { pub recipient: AgentName, pub recipient_team: TeamName, pub recipient_pane_id: Option<PaneId>, }" ;
+  triage:status "absent" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pAD-s22-built-in-nudge-hardening-part2/master> .
+
+<urn:atm:triage:worktree/feature-pAD-s22-built-in-nudge-hardening-part2/master>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pAD-s21-built-in-nudge-hardening/master>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 1 .
