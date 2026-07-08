@@ -120,6 +120,25 @@ pub fn production() {
             self.assertEqual(violations[0].path, "crates/atm-core/src/example.rs")
             self.assertEqual(violations[0].kind, "production_scope_canonical_literal")
 
+    def test_collect_identity_violations_flags_forbidden_production_literal_without_canonical_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/example.rs").write_text(
+                'pub const TEST_ARCH_CTM: &str = "arch-ctm";\n',
+                encoding="utf-8",
+            )
+
+            violations = collect_identity_violations(
+                repo_root,
+                forbidden_literals=load_forbidden_literals(repo_root),
+                production_canonical_literals=load_production_canonical_literals(repo_root),
+            )
+
+            self.assertEqual(len(violations), 1)
+            self.assertEqual(violations[0].path, "crates/atm-core/src/example.rs")
+            self.assertEqual(violations[0].kind, "production_scope_forbidden_literal")
+
     def test_collect_identity_violations_allows_non_semantic_prose_mentions(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

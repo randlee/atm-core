@@ -6,7 +6,9 @@ use clap::Args;
 use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
-use crate::composition::{CliComposition, resolve_command_runtime_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -32,7 +34,12 @@ impl AckCommand {
         let (home_dir, current_dir) = resolve_command_runtime_context("ack")?;
         let json = self.json;
         let request = self.build_request(home_dir.clone(), current_dir.clone())?;
-        let composition = CliComposition::bootstrap("ack", observability, &current_dir, &home_dir)?;
+        let composition = CliComposition::bootstrap(
+            "ack",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.ack(request)?;
 
         output::print_ack_result(&outcome, json)

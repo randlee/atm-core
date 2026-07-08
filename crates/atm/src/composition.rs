@@ -126,6 +126,32 @@ impl CliBootstrapError {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct InvocationDir<'a>(&'a Path);
+
+impl<'a> InvocationDir<'a> {
+    pub(crate) fn new(path: &'a Path) -> Self {
+        Self(path)
+    }
+
+    fn as_path(self) -> &'a Path {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AtmHomePath<'a>(&'a Path);
+
+impl<'a> AtmHomePath<'a> {
+    pub(crate) fn new(path: &'a Path) -> Self {
+        Self(path)
+    }
+
+    fn as_path(self) -> &'a Path {
+        self.0
+    }
+}
+
 pub(crate) fn resolve_command_runtime_context(
     command: &'static str,
 ) -> Result<(PathBuf, PathBuf), AtmError> {
@@ -165,8 +191,7 @@ impl LocalIpcClientTransportAdapter {
         daemon_try_connect(&self.endpoint)
     }
 
-    /// This function performs blocking IPC I/O. Callers in async contexts must
-    /// wrap this in `tokio::task::spawn_blocking`.
+    /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let envelope = encode_request_envelope(request)?;
         let response =
@@ -410,9 +435,11 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
-        invocation_dir: &Path,
-        atm_home: &Path,
+        invocation_dir: InvocationDir<'_>,
+        atm_home: AtmHomePath<'_>,
     ) -> Result<Self, AtmError> {
+        let invocation_dir = invocation_dir.as_path();
+        let atm_home = atm_home.as_path();
         let canonical_endpoint =
             resolve_daemon_local_ipc_endpoint_from_home(atm_home).map_err(|source| {
                 let error = CliBootstrapError::RuntimeRootInvalid {
@@ -607,9 +634,10 @@ mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
-        open_sqlite_boundary, resolve_command_runtime_context,
+        AtmHomePath, CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, InvocationDir, LaunchGateGuard,
+        LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary,
+        resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
 
@@ -1503,7 +1531,12 @@ mod tests {
         let observability = CliObservability::fallback();
 
         let (result, logs) = capture_runtime_root_logs(|| {
-            CliComposition::bootstrap("send", &observability, &invocation_dir, &invalid_atm_home)
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&invalid_atm_home),
+            )
         });
         let error = result.expect_err("non-utf8 ATM_HOME should fail bootstrap");
 
@@ -1541,7 +1574,12 @@ mod tests {
         let observability = CliObservability::fallback();
 
         let (result, logs) = capture_runtime_root_logs(|| {
-            CliComposition::bootstrap("send", &observability, &invocation_dir, &atm_home)
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&atm_home),
+            )
         });
         let error = result.expect_err("conflicting daemon socket override should fail");
 
@@ -1551,6 +1589,77 @@ mod tests {
         );
         assert!(logs.contains("raw cli runtime-root failure"));
         assert!(logs.contains("ATM_RUNTIME_BOOTSTRAP_REFUSED"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reports_atm_home_unresolved() {
+        let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
+
+        let error =
+            resolve_command_runtime_context("send").expect_err("missing ATM_HOME should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    #[serial(env)]
+    fn bootstrap_reports_runtime_root_invalid_for_invalid_socket_override() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        struct SocketEnvRestore(Option<OsString>);
+
+        impl Drop for SocketEnvRestore {
+            fn drop(&mut self) {
+                match self.0.take() {
+                    Some(value) => {
+                        // SAFETY: this test is serialized on the shared env lock.
+                        unsafe { std::env::set_var("ATM_DAEMON_SOCKET", value) };
+                    }
+                    None => {
+                        // SAFETY: this test is serialized on the shared env lock.
+                        unsafe { std::env::remove_var("ATM_DAEMON_SOCKET") };
+                    }
+                }
+            }
+        }
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let invocation_dir = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let _socket_restore = SocketEnvRestore(std::env::var_os("ATM_DAEMON_SOCKET"));
+        // SAFETY: this test is serialized on the shared env lock.
+        unsafe {
+            std::env::set_var(
+                "ATM_DAEMON_SOCKET",
+                OsString::from_vec(vec![0x66, 0x6f, 0x80]),
+            );
+        }
+
+        let error = CliComposition::bootstrap(
+            "send",
+            &CliObservability::fallback(),
+            InvocationDir::new(&invocation_dir),
+            AtmHomePath::new(&atm_home),
+        )
+        .expect_err("invalid daemon socket override should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeRootInvalid
+        );
     }
 
     #[test]

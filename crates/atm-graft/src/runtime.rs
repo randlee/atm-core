@@ -1,5 +1,5 @@
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
@@ -7,22 +7,27 @@ use std::thread::{self, JoinHandle};
 use atm_core::GraftConfig;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorKind};
-use atm_core::list::ListQuery;
-use atm_core::read::ReadQuery;
-use atm_core::schema::AtmMessageId;
-use atm_core::types::{AckActivationMode, ReadSelection};
-
-use crate::{
-    DEFAULT_LIST_LIMIT, GraftObservability, GraftSessionClient, GraftSessionOptions,
-    GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
+use atm_core::graft::{
+    GraftPostSendRequest, GraftPostSendResponse, read_graft_post_send_message,
+    write_graft_post_send_message,
+};
+use atm_core::protocol::ProtocolErrorEnvelope;
+use interprocess::local_socket::prelude::*;
+use interprocess::local_socket::{
+    Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
 
-const DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 2;
-const MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 8;
+use crate::{
+    GraftObservability, GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE,
+    SessionSnapshot,
+};
+
 #[cfg(test)]
 const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(50);
 #[cfg(not(test))]
 const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
+const LISTENER_WAKE_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
+const GRAFT_RECEIVER_IO_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 
 type ReceiveLoopJoinHelper = (
     Receiver<Result<(), AtmError>>,
@@ -104,17 +109,6 @@ fn inject_request_enqueue_error(error: TrySendError<InjectRequest>) -> AtmError 
         )
         .with_recovery("Restart the embedding host before retrying graft delivery."),
     }
-}
-
-fn next_degraded_poll_interval(
-    base: std::time::Duration,
-    current: std::time::Duration,
-) -> std::time::Duration {
-    let capped = base.saturating_mul(MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER);
-    std::cmp::min(
-        current.saturating_mul(DEGRADED_POLL_INTERVAL_MULTIPLIER),
-        capped,
-    )
 }
 
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
@@ -205,7 +199,7 @@ fn handle_join_helper_disconnect(join_helper: JoinHandle<()>) -> Result<(), AtmE
 }
 
 fn receive_loop_panic_error() -> AtmError {
-    AtmError::daemon_unavailable("graft receive loop panicked")
+    AtmError::daemon_unavailable("graft receiver loop panicked")
         .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
 }
 
@@ -242,286 +236,247 @@ fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId)
     )
 }
 
-pub(crate) struct ReceiveLoopContext {
-    pub(crate) client: Arc<dyn GraftSessionClient>,
-    pub(crate) options: GraftSessionOptions,
-    pub(crate) home_dir: std::path::PathBuf,
+pub(crate) struct GraftReceiverLoopContext {
+    pub(crate) endpoint_path: PathBuf,
     pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
     pub(crate) injector: Arc<dyn HostNudgeInjector>,
     pub(crate) observability: Arc<dyn GraftObservability>,
     pub(crate) stop_rx: Receiver<()>,
 }
 
-pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
+pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector))?;
-    let mut delivered_message_ids = BTreeSet::new();
-    let base_poll_interval = ctx.options.poll_interval();
-    let mut poll_interval = base_poll_interval;
+    let listener = bind_graft_receiver_listener(&ctx.endpoint_path)?;
     loop {
-        match ctx.stop_rx.recv_timeout(poll_interval) {
-            Ok(()) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
-            Err(RecvTimeoutError::Timeout) => {}
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(());
         }
-
-        match poll_once(&ctx, &injector, &mut delivered_message_ids) {
-            Ok(()) => {
-                poll_interval = base_poll_interval;
-                let _ = set_session_state(
-                    &ctx.snapshot,
-                    GraftSessionState::Polling,
-                    ctx.observability.as_ref(),
-                );
-            }
-            Err(error) => {
-                poll_interval = next_degraded_poll_interval(base_poll_interval, poll_interval);
-                let _ = set_session_state(
-                    &ctx.snapshot,
-                    GraftSessionState::Degraded,
-                    ctx.observability.as_ref(),
-                );
-                if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                    ctx.observability
-                        .session_error(&snapshot, "poll_unread_messages", &error);
-                }
-            }
+        let mut stream = accept_graft_receiver_connection(&listener, &ctx.endpoint_path)?;
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(());
         }
+        handle_graft_receiver_connection(&ctx, &injector, &mut stream)?;
     }
 }
 
-fn poll_once(
-    ctx: &ReceiveLoopContext,
-    injector: &BoundedHostNudgeInjector,
-    delivered_message_ids: &mut BTreeSet<AtmMessageId>,
-) -> Result<(), AtmError> {
-    let mut rows = ctx
-        .client
-        .list_messages(build_unread_list_query(ctx)?)?
-        .rows;
-    rows.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
-
-    let mut current_unread_message_ids = BTreeSet::new();
-    for row in rows {
-        let Some(message_id) = row.message_id else {
-            continue;
-        };
-        current_unread_message_ids.insert(message_id);
-        if delivered_message_ids.contains(&message_id) {
-            continue;
-        }
-
-        let event = read_post_send_event(ctx, message_id)?;
-        injector.inject_nudge(event.clone())?;
-        let snapshot = read_snapshot(&ctx.snapshot)?;
-        ctx.observability.nudge_delivered(&snapshot, &event);
-        delivered_message_ids.insert(message_id);
+pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), AtmError> {
+    let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("graft-listener-wake-connect".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(LocalSocketStream::connect(name));
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn graft listener wake worker")
+                .with_recovery(
+                    "Restart the graft-enabled host; the same-host listener wake path could not create its bounded connect helper.",
+                )
+                .with_source(source)
+        })?;
+    match result_rx.recv_timeout(LISTENER_WAKE_CONNECT_DEADLINE) {
+        Ok(Ok(_stream)) => Ok(()),
+        Ok(Err(source)) => Err(
+            AtmError::daemon_unavailable(format!(
+                "failed to wake graft receiver listener at {}",
+                endpoint_path.display()
+            ))
+            .with_recovery(
+                "Restart the graft-enabled host; the receiver listener could not be nudged out of accept cleanly during shutdown.",
+            )
+            .with_source(source),
+        ),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
+            AtmError::daemon_unavailable(format!(
+                "timed out waking graft receiver listener at {}",
+                endpoint_path.display()
+            ))
+            .with_recovery(
+                "Restart the graft-enabled host; the listener wake connection exceeded the bounded shutdown budget.",
+            ),
+        ),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
+            AtmError::daemon_unavailable(format!(
+                "graft listener wake worker disconnected unexpectedly for {}",
+                endpoint_path.display()
+            ))
+            .with_recovery(
+                "Restart the graft-enabled host; the local IPC wake path aborted before it could connect to the listener.",
+            ),
+        ),
     }
+}
 
-    delivered_message_ids.retain(|message_id| current_unread_message_ids.contains(message_id));
+fn stop_requested(stop_rx: &Receiver<()>) -> bool {
+    matches!(
+        stop_rx.try_recv(),
+        Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected)
+    )
+}
+
+fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError> {
+    prepare_graft_receiver_endpoint(endpoint_path)?;
+    ListenerOptions::new()
+        .name(atm_core::protocol::daemon_local_ipc_name_from_path(
+            endpoint_path,
+        )?)
+        .create_sync()
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind graft receiver endpoint at {}",
+                endpoint_path.display()
+            ))
+            .with_recovery(
+                "Confirm the graft receiver endpoint path is writable and no conflicting graft listener still owns the same-host address before retrying activation.",
+            )
+            .with_source(source)
+        })
+}
+
+fn prepare_graft_receiver_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
+    if let Some(parent) = endpoint_path.parent() {
+        fs::create_dir_all(parent).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to prepare graft receiver directory {}",
+                parent.display()
+            ))
+            .with_recovery(
+                "Create the graft receiver runtime directory or repair its permissions before retrying activation.",
+            )
+            .with_source(source)
+        })?;
+    }
+    #[cfg(unix)]
+    if endpoint_path.exists() {
+        fs::remove_file(endpoint_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to remove stale graft receiver endpoint {}",
+                endpoint_path.display()
+            ))
+            .with_recovery(
+                "Remove the stale graft receiver socket path or restart the graft-enabled host before retrying activation.",
+            )
+            .with_source(source)
+        })?;
+    }
     Ok(())
 }
 
-fn build_unread_list_query(ctx: &ReceiveLoopContext) -> Result<ListQuery, AtmError> {
-    ListQuery::new(
-        ctx.home_dir.clone(),
-        ctx.options.workspace_root().to_path_buf(),
-        ctx.options.agent().clone(),
-        None,
-        ctx.options.team().clone(),
-        ReadSelection::Unread,
-        false,
-        Some(DEFAULT_LIST_LIMIT),
-        None,
-        None,
-        None,
-        None,
-    )
-}
-
-fn build_exact_read_query(
-    ctx: &ReceiveLoopContext,
-    message_id: AtmMessageId,
-) -> Result<ReadQuery, AtmError> {
-    let message_id = message_id.to_string();
-    ReadQuery::new(
-        ctx.home_dir.clone(),
-        ctx.options.workspace_root().to_path_buf(),
-        ctx.options.agent().clone(),
-        None,
-        ctx.options.team().clone(),
-        ReadSelection::All,
-        false,
-        false,
-        AckActivationMode::ReadOnly,
-        Some(message_id.as_str()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-}
-
-fn read_post_send_event(
-    ctx: &ReceiveLoopContext,
-    message_id: AtmMessageId,
-) -> Result<PostSendHookEvent, AtmError> {
-    let outcome = ctx
-        .client
-        .read_message(build_exact_read_query(ctx, message_id)?)?;
-    let message = outcome.message.ok_or_else(|| {
+fn accept_graft_receiver_connection(
+    listener: &LocalSocketListener,
+    endpoint_path: &Path,
+) -> Result<LocalSocketStream, AtmError> {
+    listener.accept().map_err(|source| {
         AtmError::daemon_unavailable(format!(
-            "graft read for message {message_id} returned no selected message"
+            "failed while accepting graft receiver connection at {}",
+            endpoint_path.display()
         ))
         .with_recovery(
-            "Retry the graft receive loop after atm-daemon and atm-graft use the same ATM read contract.",
+            "Restart the graft-enabled host; the same-host graft receiver listener stopped accepting connections unexpectedly.",
         )
-    })?;
-    let envelope = message.envelope;
-    let durable_message_id = envelope.message_id.ok_or_else(|| {
-        AtmError::daemon_unavailable(format!(
-            "graft read for message {message_id} returned a durable record without a message_id"
-        ))
-        .with_recovery(
-            "Repair the retained mailbox state so every ATM-authored message keeps its ULID before retrying graft delivery.",
-        )
-    })?;
-    let recipient_team = ctx.options.team().clone();
-    Ok(PostSendHookEvent {
-        sender: envelope.from,
-        sender_team: envelope
-            .source_team
-            .unwrap_or_else(|| recipient_team.clone()),
-        recipient: ctx.options.agent().clone(),
-        recipient_team,
-        message_id: durable_message_id,
-        message: envelope.text,
-        requires_ack: envelope.pending_ack_at.is_some() && envelope.acknowledged_at.is_none(),
-        is_ack: envelope.acknowledges_message_id.is_some(),
-        task_id: envelope.task_id,
-        recipient_pane_id: None,
+        .with_source(source)
     })
+}
+
+fn handle_graft_receiver_connection(
+    ctx: &GraftReceiverLoopContext,
+    injector: &BoundedHostNudgeInjector,
+    stream: &mut LocalSocketStream,
+) -> Result<(), AtmError> {
+    apply_receiver_deadlines(stream)?;
+    let request: GraftPostSendRequest = read_graft_post_send_message(
+        stream,
+        "failed to read graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    let event = request.event;
+    let response = match injector.inject_nudge(event.clone()) {
+        Ok(()) => {
+            let snapshot = read_snapshot(&ctx.snapshot)?;
+            ctx.observability.nudge_delivered(&snapshot, &event);
+            GraftPostSendResponse::Delivered
+        }
+        Err(error) => {
+            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                ctx.observability
+                    .session_error(&snapshot, "inject_nudge", &error);
+            }
+            GraftPostSendResponse::Error(ProtocolErrorEnvelope::from_error(&error))
+        }
+    };
+    write_graft_post_send_message(
+        stream,
+        &response,
+        "failed to write graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )?;
+    use std::io::Write as _;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send response")
+            .with_recovery(
+                "Restart the graft-enabled host; the direct graft post-send response could not be flushed to the caller.",
+            )
+            .with_source(source)
+    })
+}
+
+fn apply_receiver_deadlines(stream: &LocalSocketStream) -> Result<(), AtmError> {
+    apply_receiver_deadline(
+        stream.set_recv_timeout(Some(GRAFT_RECEIVER_IO_DEADLINE)),
+        "failed to apply graft receiver receive timeout",
+    )?;
+    apply_receiver_deadline(
+        stream.set_send_timeout(Some(GRAFT_RECEIVER_IO_DEADLINE)),
+        "failed to apply graft receiver send timeout",
+    )?;
+    Ok(())
+}
+
+fn apply_receiver_deadline(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<(), AtmError> {
+    match result {
+        Ok(()) => Ok(()),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
+        Err(source) => Err(AtmError::daemon_unavailable(message)
+            .with_recovery(
+                "Restart the graft-enabled host; the graft receiver could not apply its bounded local-socket I/O deadline.",
+            )
+            .with_source(source)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex, RwLock, mpsc};
+    use std::path::{Path, PathBuf};
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex, RwLock};
     use std::time::{Duration, Instant};
 
     use atm_core::boundary::PostSendHookEvent;
-    use atm_core::error::AtmError;
+    use atm_core::error::{AtmError, AtmErrorKind};
     use atm_core::error_codes::AtmErrorCode;
-    use atm_core::list::{ListOutcome, ListQuery, ListRow};
-    use atm_core::protocol::ProtocolErrorEnvelope;
-    use atm_core::read::{BucketCounts, ReadOutcome};
-    use atm_core::schema::{AtmMessageId, InboxMessage};
+    use atm_core::graft::{
+        GraftPostSendRequest, GraftPostSendResponse, read_graft_post_send_message,
+        write_graft_post_send_message,
+    };
+    use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
-    use atm_core::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
-    use serde_json::json;
+    use atm_core::types::{AgentName, TeamName};
+    use interprocess::local_socket::Stream as LocalSocketStream;
+    use interprocess::local_socket::traits::Stream as _;
     use tempfile::TempDir;
 
-    use crate::{
-        GraftObservability, GraftSessionClient, GraftSessionOptions, GraftSessionState,
-        HostNudgeInjector, SessionSnapshot,
-    };
+    use crate::{GraftObservability, HostNudgeInjector};
 
     use super::{
-        ReceiveLoopContext, next_degraded_poll_interval, read_post_send_event, read_snapshot,
-        run_receive_loop,
+        GraftReceiverLoopContext, bind_graft_receiver_listener, join_receive_loop_with_deadline,
+        load_graft_config, read_snapshot, run_graft_receiver_loop, wake_graft_receiver_listener,
     };
-
-    #[derive(Debug, Default)]
-    struct RecordingClient {
-        rows: Mutex<Vec<ListRow>>,
-        messages: Mutex<std::collections::HashMap<AtmMessageId, InboxMessage>>,
-    }
-
-    impl atm_core::graft::AtmGraftClient for RecordingClient {
-        fn send_message(
-            &self,
-            _request: atm_core::send::SendRequest,
-        ) -> Result<atm_core::send::SendOutcome, AtmError> {
-            panic!("send_message not used in runtime tests")
-        }
-
-        fn read_message(&self, query: atm_core::read::ReadQuery) -> Result<ReadOutcome, AtmError> {
-            let message_id = query
-                .message_id_filter()
-                .copied()
-                .expect("runtime tests use exact message id");
-            let envelope = self
-                .messages
-                .lock()
-                .expect("messages lock")
-                .get(&message_id)
-                .cloned()
-                .expect("message");
-            Ok(serde_json::from_value(json!({
-                "action": "read",
-                "team": "test-team",
-                "agent": "qa-a",
-                "selection_mode": "all",
-                "mutation_applied": false,
-                "count": 1,
-                "message": {
-                    "bucket": "unread",
-                    "class": "unread",
-                    "from": envelope.from,
-                    "text": envelope.text,
-                    "timestamp": envelope.timestamp,
-                    "read": envelope.read,
-                    "source_team": envelope.source_team,
-                    "summary": envelope.summary,
-                    "message_id": envelope.message_id,
-                    "pendingAckAt": envelope.pending_ack_at,
-                    "acknowledgedAt": envelope.acknowledged_at,
-                    "acknowledgesMessageId": envelope.acknowledges_message_id,
-                    "parentMessageId": envelope.parent_message_id,
-                    "threadMode": envelope.thread_mode,
-                    "expiresAt": envelope.expires_at,
-                    "taskId": envelope.task_id
-                },
-                "selected_message_id": message_id,
-                "match_count": 1,
-                "additional_match_count": 0,
-                "bucket_counts": {
-                    "unread": 1,
-                    "pending_ack": 0,
-                    "history": 0
-                }
-            }))
-            .expect("read outcome"))
-        }
-
-        fn acknowledge_message(
-            &self,
-            _request: atm_core::ack::AckRequest,
-        ) -> Result<atm_core::ack::AckOutcome, AtmError> {
-            panic!("acknowledge_message not used in runtime tests")
-        }
-    }
-
-    impl GraftSessionClient for RecordingClient {
-        fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
-            let rows = self.rows.lock().expect("rows lock").clone();
-            let unread = rows.len();
-            Ok(ListOutcome {
-                action: CommandAction::List,
-                team: TeamName::from_validated("test-team"),
-                agent: AgentName::from_validated("qa-a"),
-                selection_mode: atm_core::types::ReadSelection::Unread,
-                history_collapsed: false,
-                count: unread,
-                rows,
-                bucket_counts: BucketCounts {
-                    unread,
-                    pending_ack: 0,
-                    history: 0,
-                },
-            })
-        }
-    }
+    use crate::{GraftSessionState, SessionSnapshot};
 
     #[derive(Debug, Default)]
     struct RecordingInjector {
@@ -535,6 +490,20 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct FailingInjector;
+
+    impl HostNudgeInjector for FailingInjector {
+        fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
+            Err(AtmError::new_with_code(
+                AtmErrorCode::PostSendGraftUnavailable,
+                AtmErrorKind::DaemonUnavailable,
+                "synthetic graft receiver unavailable",
+            )
+            .with_recovery("restart the graft host"))
+        }
+    }
+
     #[derive(Debug, Default)]
     struct NoopObservability;
 
@@ -542,318 +511,180 @@ mod tests {
 
     struct TestPaths {
         _tempdir: TempDir,
-        home_dir: PathBuf,
         workspace_root: PathBuf,
     }
 
+    type SpawnedReceiver = (
+        std::sync::mpsc::Sender<()>,
+        std::thread::JoinHandle<Result<(), AtmError>>,
+        Arc<RwLock<SessionSnapshot>>,
+    );
+
     fn test_paths() -> TestPaths {
         let tempdir = TempDir::new().expect("tempdir");
-        let home_dir = tempdir.path().join("home");
         let workspace_root = tempdir.path().join("workspace");
-        fs::create_dir_all(&home_dir).expect("create home dir");
         fs::create_dir_all(&workspace_root).expect("create workspace dir");
         TestPaths {
             _tempdir: tempdir,
-            home_dir,
             workspace_root,
         }
     }
 
-    fn session_options(paths: &TestPaths) -> GraftSessionOptions {
-        GraftSessionOptions::for_current_process(
-            paths.workspace_root.clone(),
-            TeamName::from_validated(TEST_TEAM),
-            AgentName::from_validated(TEST_QA),
+    fn receiver_endpoint_path(paths: &TestPaths) -> PathBuf {
+        atm_core::graft::graft_receiver_socket_path_from_home(
+            &paths.workspace_root,
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
         )
-        .with_poll_interval(Duration::from_millis(1))
     }
 
-    fn wait_until(description: &str, predicate: impl Fn() -> bool) {
+    fn connect_receiver(endpoint_path: &Path) -> LocalSocketStream {
         let deadline = Instant::now() + Duration::from_secs(1);
-        while Instant::now() < deadline {
-            if predicate() {
-                return;
+        let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)
+            .expect("receiver ipc name");
+        loop {
+            match LocalSocketStream::connect(name.clone()) {
+                Ok(stream) => return stream,
+                Err(error) if Instant::now() < deadline => {
+                    let _ = error;
+                    std::thread::yield_now();
+                }
+                Err(error) => panic!("failed to connect to graft receiver: {error}"),
             }
-            std::thread::yield_now();
         }
-        panic!("timed out waiting for {description}");
     }
 
-    fn unread_row(message_id: AtmMessageId) -> ListRow {
-        ListRow {
-            message_id: Some(message_id),
-            summary: "review failing smoke lane".to_string(),
-            from: AgentName::from_validated(TEST_LEAD),
-            timestamp: IsoTimestamp::now(),
-            read: false,
-            pending_ack: false,
+    fn request_event() -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_LEAD),
+            sender_team: TeamName::from_validated(TEST_TEAM),
+            recipient: AgentName::from_validated(TEST_QA),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
+            message_id: AtmMessageId::new(),
+            message: "review failing smoke lane".to_string(),
+            requires_ack: false,
+            is_ack: false,
             task_id: None,
+            recipient_pane_id: None,
         }
     }
 
-    fn unread_message(message_id: AtmMessageId) -> InboxMessage {
-        InboxMessage {
-            from: AgentName::from_validated(TEST_LEAD),
-            text: "review failing smoke lane".to_string(),
-            timestamp: IsoTimestamp::now(),
-            read: false,
-            source_team: Some(TeamName::from_validated(TEST_TEAM)),
-            summary: Some("review failing smoke lane".to_string()),
-            message_id: Some(message_id),
-            pending_ack_at: None,
-            acknowledged_at: None,
-            acknowledges_message_id: None,
-            parent_message_id: None,
-            thread_mode: None,
-            expires_at: None,
-            task_id: None,
-            extra: Default::default(),
-        }
-    }
-
-    #[test]
-    fn read_post_send_event_projects_read_outcome_into_shared_event() {
-        let paths = test_paths();
-        let message_id = AtmMessageId::new();
-        let client = Arc::new(RecordingClient::default());
-        client
-            .messages
-            .lock()
-            .expect("messages lock")
-            .insert(message_id, unread_message(message_id));
-        let ctx = ReceiveLoopContext {
-            client,
-            options: session_options(&paths),
-            home_dir: paths.home_dir.clone(),
-            snapshot: Arc::new(RwLock::new(SessionSnapshot {
-                team: TeamName::from_validated(TEST_TEAM),
-                agent: AgentName::from_validated(TEST_QA),
-                state: GraftSessionState::Polling,
-            })),
-            injector: Arc::new(RecordingInjector::default()),
-            observability: Arc::new(NoopObservability),
-            stop_rx: mpsc::channel().1,
-        };
-
-        let event = read_post_send_event(&ctx, message_id).expect("event");
-
-        assert_eq!(event.message_id, message_id);
-        assert_eq!(event.sender, AgentName::from_validated(TEST_LEAD));
-        assert_eq!(event.sender_team, TeamName::from_validated(TEST_TEAM));
-        assert_eq!(event.recipient, AgentName::from_validated(TEST_QA));
-        assert_eq!(event.recipient_team, TeamName::from_validated(TEST_TEAM));
-        assert_eq!(event.message, "review failing smoke lane");
-    }
-
-    #[test]
-    fn receive_loop_polls_unread_messages_and_injects_each_message_once() {
-        let paths = test_paths();
-        let message_id = AtmMessageId::new();
-        let client = Arc::new(RecordingClient::default());
-        client
-            .rows
-            .lock()
-            .expect("rows lock")
-            .push(unread_row(message_id));
-        client
-            .messages
-            .lock()
-            .expect("messages lock")
-            .insert(message_id, unread_message(message_id));
-        let injector = Arc::new(RecordingInjector::default());
+    fn spawn_receiver(
+        endpoint_path: PathBuf,
+        injector: Arc<dyn HostNudgeInjector>,
+    ) -> SpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
-            state: GraftSessionState::Polling,
+            state: GraftSessionState::Listening,
         }));
-        let ctx = ReceiveLoopContext {
-            client,
-            options: session_options(&paths),
-            home_dir: paths.home_dir.clone(),
+        let ctx = GraftReceiverLoopContext {
+            endpoint_path,
             snapshot: Arc::clone(&snapshot),
-            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
+            injector,
             observability: Arc::new(NoopObservability),
             stop_rx,
         };
+        let join = std::thread::spawn(move || run_graft_receiver_loop(ctx));
+        (stop_tx, join, snapshot)
+    }
 
-        let join = std::thread::spawn(move || run_receive_loop(ctx));
-        wait_until("graft receive-loop delivery", || {
-            injector.nudges.lock().expect("nudges lock").len() == 1
-        });
+    fn stop_receiver(
+        endpoint_path: &Path,
+        stop_tx: std::sync::mpsc::Sender<()>,
+        join: std::thread::JoinHandle<Result<(), AtmError>>,
+    ) {
         stop_tx.send(()).expect("stop");
-        join.join().expect("join").expect("receive loop");
+        let _ = wake_graft_receiver_listener(endpoint_path);
+        join_receive_loop_with_deadline(join).expect("join receiver");
+    }
 
+    #[test]
+    fn load_config_reads_graft_enabled_and_defaults() {
+        let tempdir = TempDir::new().expect("tempdir");
+        fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm.graft]\nenabled = true\n",
+        )
+        .expect("write config");
+        assert!(
+            load_graft_config(tempdir.path())
+                .expect("graft config")
+                .expect("config")
+                .enabled
+        );
+    }
+
+    #[test]
+    fn receiver_listener_binds_at_expected_endpoint() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let listener = bind_graft_receiver_listener(&endpoint_path).expect("bind listener");
+        drop(listener);
+    }
+
+    #[test]
+    fn receiver_loop_delivers_direct_nudge_and_returns_ack() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, join, snapshot) = spawn_receiver(
+            endpoint_path.clone(),
+            injector.clone() as Arc<dyn HostNudgeInjector>,
+        );
+
+        let request = GraftPostSendRequest {
+            event: request_event(),
+        };
+        let mut stream = connect_receiver(&endpoint_path);
+        write_graft_post_send_message(&mut stream, &request, "write request", "oversized request")
+            .expect("write request");
+        let response: GraftPostSendResponse =
+            read_graft_post_send_message(&mut stream, "read response", "oversized response")
+                .expect("read response");
+
+        assert_eq!(response, GraftPostSendResponse::Delivered);
         let nudges = injector.nudges.lock().expect("nudges lock");
         assert_eq!(nudges.len(), 1);
-        assert_eq!(nudges[0].message_id, message_id);
+        assert_eq!(nudges[0], request.event);
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
-            GraftSessionState::Polling
+            GraftSessionState::Listening
         );
+
+        stop_receiver(&endpoint_path, stop_tx, join);
     }
 
     #[test]
-    fn receive_loop_marks_session_degraded_when_poll_fails() {
+    fn receiver_loop_returns_typed_error_when_injector_fails() {
         let paths = test_paths();
-        #[derive(Debug, Default)]
-        struct FailingClient;
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let (stop_tx, join, _snapshot) =
+            spawn_receiver(endpoint_path.clone(), Arc::new(FailingInjector));
 
-        impl atm_core::graft::AtmGraftClient for FailingClient {
-            fn send_message(
-                &self,
-                _request: atm_core::send::SendRequest,
-            ) -> Result<atm_core::send::SendOutcome, AtmError> {
-                panic!("send_message not used in runtime tests")
-            }
-
-            fn read_message(
-                &self,
-                _query: atm_core::read::ReadQuery,
-            ) -> Result<ReadOutcome, AtmError> {
-                panic!("read_message not used in runtime tests")
-            }
-
-            fn acknowledge_message(
-                &self,
-                _request: atm_core::ack::AckRequest,
-            ) -> Result<atm_core::ack::AckOutcome, AtmError> {
-                panic!("acknowledge_message not used in runtime tests")
-            }
-        }
-
-        impl GraftSessionClient for FailingClient {
-            fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
-                Err(ProtocolErrorEnvelope {
-                    code: AtmErrorCode::DaemonUnavailable,
-                    message: "simulated list failure".to_string(),
-                    recovery: vec!["Retry after the daemon recovers.".to_string()],
-                }
-                .into_atm_error())
-            }
-        }
-
-        let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, stop_rx) = mpsc::channel();
-        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
-            team: TeamName::from_validated(TEST_TEAM),
-            agent: AgentName::from_validated(TEST_QA),
-            state: GraftSessionState::Polling,
-        }));
-        let ctx = ReceiveLoopContext {
-            client: Arc::new(FailingClient),
-            options: session_options(&paths),
-            home_dir: paths.home_dir.clone(),
-            snapshot: Arc::clone(&snapshot),
-            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
-            observability: Arc::new(NoopObservability),
-            stop_rx,
+        let request = GraftPostSendRequest {
+            event: request_event(),
         };
+        let mut stream = connect_receiver(&endpoint_path);
+        write_graft_post_send_message(&mut stream, &request, "write request", "oversized request")
+            .expect("write request");
+        let response: GraftPostSendResponse =
+            read_graft_post_send_message(&mut stream, "read response", "oversized response")
+                .expect("read response");
 
-        let join = std::thread::spawn(move || run_receive_loop(ctx));
-        wait_until("graft receive-loop degraded state", || {
-            read_snapshot(&snapshot)
-                .map(|state| state.state == GraftSessionState::Degraded)
-                .unwrap_or(false)
-        });
-        stop_tx.send(()).expect("stop");
-        join.join().expect("join").expect("receive loop");
-
-        assert_eq!(
-            read_snapshot(&snapshot).expect("snapshot").state,
-            GraftSessionState::Degraded
-        );
-    }
-
-    #[test]
-    fn degraded_poll_interval_doubles_and_caps() {
-        let base = Duration::from_millis(10);
-        assert_eq!(
-            next_degraded_poll_interval(base, base),
-            Duration::from_millis(20)
-        );
-        assert_eq!(
-            next_degraded_poll_interval(base, Duration::from_millis(40)),
-            Duration::from_millis(80)
-        );
-        assert_eq!(
-            next_degraded_poll_interval(base, Duration::from_millis(80)),
-            Duration::from_millis(80)
-        );
-    }
-
-    #[test]
-    fn receive_loop_marks_session_degraded_when_injector_blocks_past_deadline() {
-        #[derive(Debug)]
-        struct BlockingInjector {
-            entered_tx: Mutex<Option<mpsc::SyncSender<()>>>,
-            release_rx: Mutex<mpsc::Receiver<()>>,
-        }
-
-        impl HostNudgeInjector for BlockingInjector {
-            fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
-                if let Some(entered_tx) = self.entered_tx.lock().expect("entered lock").take() {
-                    let _ = entered_tx.send(());
-                }
-                let _ = self.release_rx.lock().expect("release lock").recv();
-                Ok(())
+        match response {
+            GraftPostSendResponse::Delivered => panic!("expected typed failure response"),
+            GraftPostSendResponse::Error(error) => {
+                assert_eq!(error.code, AtmErrorCode::PostSendGraftUnavailable);
+                assert!(
+                    error
+                        .message
+                        .contains("synthetic graft receiver unavailable")
+                );
             }
         }
 
-        let paths = test_paths();
-        let message_id = AtmMessageId::new();
-        let client = Arc::new(RecordingClient::default());
-        client
-            .rows
-            .lock()
-            .expect("rows lock")
-            .push(unread_row(message_id));
-        client
-            .messages
-            .lock()
-            .expect("messages lock")
-            .insert(message_id, unread_message(message_id));
-        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
-        let (release_tx, release_rx) = mpsc::channel();
-        let injector = Arc::new(BlockingInjector {
-            entered_tx: Mutex::new(Some(entered_tx)),
-            release_rx: Mutex::new(release_rx),
-        });
-        let (stop_tx, stop_rx) = mpsc::channel();
-        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
-            team: TeamName::from_validated(TEST_TEAM),
-            agent: AgentName::from_validated(TEST_QA),
-            state: GraftSessionState::Polling,
-        }));
-        let ctx = ReceiveLoopContext {
-            client,
-            options: session_options(&paths),
-            home_dir: paths.home_dir.clone(),
-            snapshot: Arc::clone(&snapshot),
-            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
-            observability: Arc::new(NoopObservability),
-            stop_rx,
-        };
-
-        let join = std::thread::spawn(move || run_receive_loop(ctx));
-        entered_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("injector entered");
-        wait_until(
-            "graft receive-loop degraded state after blocked injector",
-            || {
-                read_snapshot(&snapshot)
-                    .map(|state| state.state == GraftSessionState::Degraded)
-                    .unwrap_or(false)
-            },
-        );
-        stop_tx.send(()).expect("stop");
-        release_tx.send(()).expect("release injector");
-        join.join().expect("join").expect("receive loop");
-
-        assert_eq!(
-            read_snapshot(&snapshot).expect("snapshot").state,
-            GraftSessionState::Degraded
-        );
+        stop_receiver(&endpoint_path, stop_tx, join);
     }
 }

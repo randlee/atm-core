@@ -1,10 +1,10 @@
 # Smoke
 
 - status: `passed`
-- timestamp: `2026-07-07T00:31:06.326863+00:00`
-- binary SHA: `56c349a920c8915e96121a4790869a281c4dd445`
-- duration secs: `41.17`
-- summary: `pass=22`, `fail=0`, `skip=0`
+- timestamp: `2026-07-07T00:44:54.662511+00:00`
+- binary SHA: `9e5b3e4123163ad37065a4821ddb46d672eb6ff0`
+- duration secs: `27.618`
+- summary: `pass=23`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
   that row were executed after the failure
@@ -33,3 +33,4 @@
 | `AD18-RUNTIME-ROOT-001` | raw CLI runtime ownership stays anchored to the accepted ATM_HOME root | `PASS` | raw CLI bootstrap, socket ownership, and daemon lock state all stay rooted under the accepted ATM_HOME runtime subtree |
 | `AD18-RUNTIME-ROOT-002` | sibling worktrees with one ATM_HOME keep one canonical runtime root while preserving invocation-directory reporting | `PASS` | sibling-worktree regression coverage proves one ATM_HOME stays canonical while command-local invocation directories remain distinct and explicit |
 | `AD19-READ-OUTPUT-001` | read mutation returns the message it actually mutated together with post-mutation bucket counts | `PASS` | read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact |
+| `AD20-READ-CONTAINS-001` | metadata-backed contains stays full-body correct while keeping durable-body reload bounded | `PASS` | metadata-backed contains stays full-body correct and only reloads durable body for surviving summary-miss candidates |

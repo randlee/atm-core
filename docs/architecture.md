@@ -1039,6 +1039,10 @@ Queue-inspection architectural rules:
   logical task thread does not surface as several superseded matches
 - `--contains` applies to both summary text and full durable message body text
 - summary/count queries must remain separable from full-body detail fetch
+- metadata-backed `--contains` evaluation must remain summary-first and bounded:
+  rows rejected by earlier metadata-only filters or already matched by summary
+  must not trigger durable-body reload, and only surviving summary-miss
+  candidates may fetch durable body text for the final contains check
 
 Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
@@ -1626,9 +1630,11 @@ Implementation rules:
 - `ATM_LOG_DIR` overrides the exact retained log directory
 - without `ATM_LOG_DIR`, the retained log path is derived from the accepted
   `ATM_HOME` root for the active installation
-- invocation directory is not a daemon/socket/database selector; it only
-  drives workspace config discovery after `ATM_HOME` resolves the canonical
-  host runtime root
+- the invocation directory is not a daemon/socket/database selector; daemon
+  socket, lock, database, and retained-log paths remain anchored to the
+  accepted `ATM_HOME` root
+- after `ATM_HOME` resolves the canonical host runtime root, the invocation
+  directory is used only for workspace config discovery
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version

@@ -119,6 +119,28 @@ impl LocalServiceRuntime {
             non_claude_outbound,
         }
     }
+
+    pub fn load_roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
+        Ok(self
+            .roster_store
+            .load_roster(team)?
+            .members
+            .into_iter()
+            .find(|member| &member.agent_name == agent))
+    }
+
+    pub fn load_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
+        self.roster_store
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
+    }
 }
 
 impl fmt::Debug for LocalServiceRuntime {
@@ -314,21 +336,14 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
-        Ok(self
-            .roster_store
-            .load_roster(team)?
-            .members
-            .into_iter()
-            .find(|member| &member.agent_name == agent))
+        Self::load_roster_member(self, team, agent)
     }
 
     fn load_team_roster(
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
-        self.roster_store
-            .load_roster(team)
-            .map(|snapshot| snapshot.members)
+        Self::load_team_roster(self, team)
     }
 
     fn deliver_non_claude_payloads(

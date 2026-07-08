@@ -195,6 +195,9 @@ pub(crate) fn query_mailbox_metadata_rows(
             AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
                 .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
         })?;
+        // AD.20 keeps this query bounded to mailbox header data only. Full
+        // durable message text is reloaded later, and only for surviving
+        // summary-miss `--contains` candidates that still need a body check.
         let sql = "SELECT
                  mail_messages.message_key,
                  mail_messages.message_id,

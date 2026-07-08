@@ -1,6 +1,6 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
-//! Production embedded delivery uses a receiver-owned polling loop built on
-//! shared unary ATM request/response calls.
+//! Production embedded delivery uses a receiver-owned same-host listener that
+//! accepts one bounded nudge request per connection.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -13,7 +13,6 @@ use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary::{ClientTransport, PostSendHookEvent};
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
-use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
@@ -32,14 +31,12 @@ mod runtime;
 mod transport;
 
 use runtime::{
-    ReceiveLoopContext, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-    run_receive_loop, set_session_state,
+    GraftReceiverLoopContext, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+    run_graft_receiver_loop, set_session_state, wake_graft_receiver_listener,
 };
 use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-pub(crate) const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
-pub(crate) const DEFAULT_LIST_LIMIT: usize = 200;
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub use atm_core::{AtmConfig, GraftConfig};
@@ -47,7 +44,7 @@ pub use atm_core::{AtmConfig, GraftConfig};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraftSessionState {
     Inactive,
-    Polling,
+    Listening,
     Degraded,
     Closed,
     CloseFailed,
@@ -99,7 +96,6 @@ pub struct GraftSessionOptions {
     workspace_root: PathBuf,
     team: TeamName,
     agent: AgentName,
-    poll_interval: Duration,
 }
 
 impl GraftSessionOptions {
@@ -108,7 +104,6 @@ impl GraftSessionOptions {
             workspace_root: workspace_root.into(),
             team,
             agent,
-            poll_interval: DEFAULT_POLL_INTERVAL,
         }
     }
 
@@ -118,13 +113,6 @@ impl GraftSessionOptions {
         agent: AgentName,
     ) -> Self {
         Self::new(workspace_root, team, agent)
-    }
-
-    #[cfg(test)]
-    fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
-        assert!(!poll_interval.is_zero(), "poll_interval must be non-zero");
-        self.poll_interval = poll_interval;
-        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -146,20 +134,12 @@ impl GraftSessionOptions {
     pub(crate) fn agent(&self) -> &AgentName {
         &self.agent
     }
-
-    pub(crate) fn poll_interval(&self) -> Duration {
-        self.poll_interval
-    }
 }
 
 /// Thin daemon-backed same-host client for embedded graft consumers.
 #[derive(Clone)]
 pub struct GraftClient {
     transport: Arc<dyn ClientTransport + Send + Sync>,
-}
-
-pub(crate) trait GraftSessionClient: AtmGraftClient {
-    fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError>;
 }
 
 impl fmt::Debug for GraftClient {
@@ -266,20 +246,12 @@ impl AtmGraftClient for GraftClient {
     }
 }
 
-impl GraftSessionClient for GraftClient {
-    fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::List(query))? {
-            ResponseEnvelope::List(outcome) => Ok(outcome),
-            other => Err(unexpected_response("list", other)),
-        }
-    }
-}
-
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
-    client: Arc<dyn GraftSessionClient>,
+    client: Arc<dyn AtmGraftClient>,
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
+    endpoint_path: Option<PathBuf>,
     stop_tx: Option<Sender<()>>,
     join_handle: Option<JoinHandle<Result<(), AtmError>>>,
 }
@@ -333,24 +305,21 @@ impl GraftSession {
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
         let graft_config = load_graft_config(&options.workspace_root)?;
-        let home_dir = atm_core::home::atm_home()?;
-        Self::activate_with_graft_config_and_home_dir(
+        Self::activate_with_graft_config(
             Arc::new(client),
             graft_config,
             options,
             injector,
             observability,
-            home_dir,
         )
     }
 
-    fn activate_with_graft_config_and_home_dir(
-        client: Arc<dyn GraftSessionClient>,
+    fn activate_with_graft_config(
+        client: Arc<dyn AtmGraftClient>,
         graft_config: Option<GraftConfig>,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
-        home_dir: PathBuf,
     ) -> Result<Self, AtmError> {
         let initial_snapshot = options.activation_state();
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
@@ -362,42 +331,45 @@ impl GraftSession {
             return inactive_session(client, snapshot, observability);
         }
 
-        set_session_state(
-            &snapshot,
-            GraftSessionState::Polling,
-            observability.as_ref(),
-        )?;
+        let endpoint_path = atm_core::graft::graft_receiver_socket_path_from_home(
+            options.workspace_root(),
+            options.team(),
+            options.agent(),
+        );
         let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            Arc::clone(&client),
+            endpoint_path.clone(),
             options,
-            home_dir,
             Arc::clone(&snapshot),
             injector,
             Arc::clone(&observability),
         )?;
 
+        set_session_state(
+            &snapshot,
+            GraftSessionState::Listening,
+            observability.as_ref(),
+        )?;
         Ok(Self {
             client,
             snapshot,
             observability,
+            endpoint_path: Some(endpoint_path),
             stop_tx: Some(stop_tx),
             join_handle: Some(join_handle),
         })
     }
 
     fn start_graft_receive_loop(
-        worker_client: Arc<dyn GraftSessionClient>,
+        endpoint_path: PathBuf,
         options: GraftSessionOptions,
-        home_dir: PathBuf,
         worker_snapshot: Arc<RwLock<SessionSnapshot>>,
         injector: Arc<dyn HostNudgeInjector>,
         worker_observability: Arc<dyn GraftObservability>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
         let join_handle = spawn_graft_receive_loop(
-            worker_client,
+            endpoint_path,
             options,
-            home_dir,
             worker_snapshot,
             injector,
             worker_observability,
@@ -434,6 +406,9 @@ impl GraftSession {
         if let Some(stop_tx) = self.stop_tx.take() {
             let _ = stop_tx.send(());
         }
+        if let Some(endpoint_path) = self.endpoint_path.as_ref() {
+            let _ = wake_graft_receiver_listener(endpoint_path);
+        }
         if let Some(join_handle) = self.join_handle.take()
             && let Err(error) = join_receive_loop_with_deadline(join_handle)
         {
@@ -454,7 +429,7 @@ impl GraftSession {
 }
 
 fn inactive_session(
-    client: Arc<dyn GraftSessionClient>,
+    client: Arc<dyn AtmGraftClient>,
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
 ) -> Result<GraftSession, AtmError> {
@@ -463,15 +438,15 @@ fn inactive_session(
         client,
         snapshot,
         observability,
+        endpoint_path: None,
         stop_tx: None,
         join_handle: None,
     })
 }
 
 fn spawn_graft_receive_loop(
-    worker_client: Arc<dyn GraftSessionClient>,
+    endpoint_path: PathBuf,
     options: GraftSessionOptions,
-    home_dir: PathBuf,
     worker_snapshot: Arc<RwLock<SessionSnapshot>>,
     injector: Arc<dyn HostNudgeInjector>,
     worker_observability: Arc<dyn GraftObservability>,
@@ -481,10 +456,8 @@ fn spawn_graft_receive_loop(
     std::thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
-            run_receive_loop(ReceiveLoopContext {
-                client: worker_client,
-                options,
-                home_dir,
+            run_graft_receiver_loop(GraftReceiverLoopContext {
+                endpoint_path,
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,
@@ -542,7 +515,6 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    use atm_core::list::{ListOutcome, ListQuery};
     use atm_core::protocol::{
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
     };
@@ -582,12 +554,6 @@ mod tests {
         }
     }
 
-    impl GraftSessionClient for StubSessionClient {
-        fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
-            panic!("list_messages should not run in inactive-session tests")
-        }
-    }
-
     struct TestPaths {
         _tempdir: TempDir,
         home_dir: PathBuf,
@@ -613,7 +579,6 @@ mod tests {
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
         )
-        .with_poll_interval(Duration::from_millis(5))
     }
 
     #[test]
@@ -726,13 +691,12 @@ mod tests {
     #[test]
     fn session_stays_inactive_without_atm_config() {
         let paths = test_paths();
-        let session = GraftSession::activate_with_graft_config_and_home_dir(
+        let session = GraftSession::activate_with_graft_config(
             Arc::new(StubSessionClient),
             None,
             session_options(&paths),
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
-            paths.home_dir.clone(),
         )
         .expect("inactive session");
 
@@ -745,13 +709,12 @@ mod tests {
     #[test]
     fn session_stays_inactive_when_graft_is_disabled() {
         let paths = test_paths();
-        let session = GraftSession::activate_with_graft_config_and_home_dir(
+        let session = GraftSession::activate_with_graft_config(
             Arc::new(StubSessionClient),
             Some(GraftConfig { enabled: false }),
             session_options(&paths),
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
-            paths.home_dir.clone(),
         )
         .expect("inactive session");
 
@@ -778,7 +741,7 @@ mod tests {
             ("USERPROFILE", None),
         ]);
 
-        let session = GraftSession::activate_with_graft_config_and_home_dir(
+        let session = GraftSession::activate_with_graft_config(
             Arc::new(StubSessionClient),
             load_graft_config(tempdir.path()).expect("graft config"),
             GraftSessionOptions::for_current_process(
@@ -788,7 +751,6 @@ mod tests {
             ),
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
-            tempdir.path().to_path_buf(),
         )
         .expect("inactive session");
 

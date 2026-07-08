@@ -1,11 +1,20 @@
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::boundary;
+use crate::error::AtmError;
 use crate::schema::InboxMessage;
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
-use crate::types::{DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
+use crate::types::{DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TeamName};
 
 use super::{BucketCounts, ClassifiedMessage, ReadQuery, filters, state};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataBackedReadSelection {
+    pub summary_text: Option<String>,
+    pub message_text: Option<String>,
+}
 
 pub(crate) fn selection_state_for_mailbox_metadata_rows(
     rows: &[boundary::MailStoreMailboxMetadataRow],
@@ -25,12 +34,11 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     }
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);
-    let filtered = apply_filters(
+    let filtered = apply_metadata_only_filters(
         logical_current,
         query.sender_filter.as_ref(),
         query.timestamp_filter,
         query.task_filter.as_ref(),
-        query.contains_filter.as_deref(),
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     (bucket_counts, selected)
@@ -49,7 +57,11 @@ pub(crate) fn classify_mailbox_metadata_rows(
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: row.from_agent.clone(),
-                text: row.summary.as_deref().unwrap_or_default().to_string(),
+                // Metadata rows intentionally do not carry durable message body
+                // text. AD.20 keeps this projection empty so later contains
+                // evaluation cannot accidentally treat summary-only data as the
+                // durable body contract.
+                text: String::new(),
                 timestamp: row.message_at,
                 read: row.read,
                 source_team: None,
@@ -89,23 +101,231 @@ pub(crate) fn classify_mailbox_metadata_rows(
         .collect()
 }
 
-pub(crate) fn apply_filters(
+pub(crate) fn apply_metadata_only_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&crate::types::AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&crate::types::TaskId>,
-    contains_filter: Option<&str>,
 ) -> Vec<ClassifiedMessage> {
-    filters::apply_contains_filter(
-        filters::apply_task_filter(
-            filters::apply_timestamp_filter(
-                filters::apply_sender_filter(messages, sender_filter),
-                timestamp_filter,
-            ),
-            task_filter,
+    filters::apply_task_filter(
+        filters::apply_timestamp_filter(
+            filters::apply_sender_filter(messages, sender_filter),
+            timestamp_filter,
         ),
-        contains_filter,
+        task_filter,
     )
+}
+
+pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &crate::types::AgentName,
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    messages: Vec<ClassifiedMessage>,
+    contains_needle: Option<&str>,
+) -> Result<Vec<ClassifiedMessage>, AtmError> {
+    let Some(needle) = contains_needle else {
+        return Ok(messages);
+    };
+    let row_by_id = metadata_rows
+        .iter()
+        .filter_map(|row| row.message_id.map(|message_id| (message_id, row)))
+        .collect::<HashMap<_, _>>();
+
+    messages
+        .into_iter()
+        .map(|message| -> Result<Option<ClassifiedMessage>, AtmError> {
+            let row = metadata_rows.get(message.source_index.get()).ok_or_else(|| {
+                AtmError::validation(format!(
+                    "sqlite mailbox metadata source index {} is out of range during contains filtering",
+                    message.source_index.get()
+                ))
+                .with_recovery(
+                    "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read` or `atm list`.",
+                )
+            })?;
+            let mut selection = MetadataBackedReadSelection {
+                summary_text: row.summary.clone(),
+                message_text: None,
+            };
+            if filters::text_contains_needle(selection.summary_text.as_deref(), needle) {
+                return Ok(Some(message));
+            }
+            selection.message_text = Some(load_durable_message_text(
+                runtime,
+                home_dir,
+                team,
+                agent,
+                &row_by_id,
+                &message,
+                row,
+            )?);
+            Ok(filters::text_contains_needle(
+                selection.message_text.as_deref(),
+                needle,
+            )
+            .then_some(message))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|selected| selected.into_iter().flatten().collect())
+}
+
+pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &crate::types::AgentName,
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    selected_message: &ClassifiedMessage,
+    exact_message_id: Option<crate::schema::AtmMessageId>,
+) -> Result<ClassifiedMessage, AtmError> {
+    let row_by_id = metadata_rows
+        .iter()
+        .filter_map(|row| row.message_id.map(|message_id| (message_id, row)))
+        .collect::<HashMap<_, _>>();
+    let metadata_row = metadata_rows
+        .get(selected_message.source_index.get())
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "sqlite mailbox metadata source index {} is out of range during durable reload",
+                selected_message.source_index.get()
+            ))
+            .with_recovery(
+                "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read`.",
+            )
+        })?;
+    let Some(record) =
+        runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
+    else {
+        return Err(AtmError::validation(format!(
+            "sqlite mailbox metadata row {} could not be reloaded for read output",
+            metadata_row.message_key
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox row before retrying `atm read`.",
+        ));
+    };
+    let envelope = if exact_message_id == record.envelope.message_id {
+        record.envelope
+    } else if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
+        load_logical_current_record(
+            runtime,
+            home_dir,
+            team,
+            agent,
+            &row_by_id,
+            selected_message,
+            record.envelope,
+        )?
+    } else {
+        record.envelope
+    };
+    Ok(ClassifiedMessage {
+        source_index: selected_message.source_index,
+        source_path: selected_message.source_path.clone(),
+        bucket: state::display_bucket_for_class(state::classify_message(&envelope)),
+        class: state::classify_message(&envelope),
+        envelope,
+    })
+}
+
+fn load_durable_message_text<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &crate::types::AgentName,
+    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
+    selected_message: &ClassifiedMessage,
+    metadata_row: &boundary::MailStoreMailboxMetadataRow,
+) -> Result<String, AtmError> {
+    let Some(record) =
+        runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
+    else {
+        return Err(AtmError::validation(format!(
+            "sqlite mailbox metadata row {} could not be reloaded for contains filtering",
+            metadata_row.message_key
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox row before retrying `atm read` or `atm list`.",
+        ));
+    };
+    let envelope = if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
+        load_logical_current_record(
+            runtime,
+            home_dir,
+            team,
+            agent,
+            row_by_id,
+            selected_message,
+            record.envelope,
+        )?
+    } else {
+        record.envelope
+    };
+    Ok(envelope.text)
+}
+
+fn load_logical_current_record<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &crate::types::AgentName,
+    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
+    selected_message: &ClassifiedMessage,
+    terminal_envelope: InboxMessage,
+) -> Result<InboxMessage, AtmError> {
+    let Some(mut current_id) = terminal_envelope.message_id else {
+        return Ok(terminal_envelope);
+    };
+
+    let mut chain_ids = Vec::new();
+    while let Some(row) = row_by_id.get(&current_id) {
+        chain_ids.push(current_id);
+        let Some(parent_id) = row.parent_message_id else {
+            break;
+        };
+        current_id = parent_id;
+    }
+    chain_ids.reverse();
+
+    let mut chain = Vec::new();
+    for message_id in chain_ids {
+        let Some(row) = row_by_id.get(&message_id) else {
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
+                message_id
+            ))
+            .with_recovery(
+                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
+            ));
+        };
+        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
+        else {
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
+                row.message_key
+            ))
+            .with_recovery(
+                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
+            ));
+        };
+        chain.push(record.envelope);
+    }
+    let thread_index = ThreadIndex::new(&chain);
+    thread_index
+        .logical_current_envelope(
+            terminal_envelope
+                .message_id
+                .or(selected_message.envelope.message_id)
+                .unwrap_or(current_id),
+        )
+        .ok_or_else(|| {
+            AtmError::validation("failed to reconstruct logical current thread envelope")
+                .with_recovery(
+                    "Repair or remove the malformed sqlite mailbox thread rows before retrying `atm read` or `atm list`.",
+                )
+        })
 }
 
 pub(crate) fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {

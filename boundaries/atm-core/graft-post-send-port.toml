@@ -5,7 +5,7 @@ name = "GraftPostSendPort"
 
 [public]
 trait = "GraftPostSendPort"
-notes = "sealed graft-backed post-send handoff contract landed in Phase AD AD.8; receiver-owned implementations may satisfy it, but daemon-owned advisory runtime glue is retired"
+notes = "sealed graft-backed post-send handoff contract landed in Phase AD AD.8; daemon-owned advisory runtime glue is retired, and the accepted runtime uses a daemon-side direct same-host graft delivery adapter that connects to the receiver-owned graft socket"
 
 [implementation]
 visibility = "trait_only"
@@ -43,4 +43,4 @@ review_gates = ["no_process_spawn_substitution", "no_notification_sink_substitut
 
 [status]
 state = "active"
-notes = ["Phase AD AD.8 established the canonical graft-backed post-send delivery port.", "The current accepted runtime keeps daemon-owned advisory runtime deleted; receiver-owned implementations may satisfy this port while the daemon fallback remains an unavailable sentinel."]
+notes = ["Phase AD AD.8 established the canonical graft-backed post-send delivery port.", "The accepted runtime keeps daemon-owned advisory runtime deleted and uses atm_daemon::runtime_health::DaemonGraftPostSendPort to connect directly to the receiver-owned graft socket for one bounded reply."]
