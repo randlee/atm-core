@@ -455,8 +455,8 @@ Required config rules:
   present in `config.json`
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
   identities
-- `[[atm.post_send_hooks]]` may define ATM-owned best-effort post-send
-  automation rules
+- `[[atm.post_send_hooks]]` may define ATM-owned external override commands for
+  post-send behavior; they are not the only shipped post-send path
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
@@ -510,20 +510,23 @@ Required caller-context rules:
 - the hook inherits process environment and also receives one ATM-owned JSON
   payload in `ATM_POST_SEND` with:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
   - `team`
   - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
   - `requires_ack`
   - `is_ack`
-  - optional `task_id` when present
+  - optional `to`
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
 - the hook must run after successful non-`dry-run` `atm send`
 - the hook must also run after successful `atm ack`, using the reply message as
   the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- if no matching external rule is configured, `atm-core` must still hand off
+  the same canonical event to the shipped built-in `atm internal-nudge` path
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -533,6 +536,13 @@ Required caller-context rules:
 - once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
+- `atm-core` owns canonical post-send event construction, but it must not own
+  built-in XML template storage, placeholder substitution policy, or sink-local
+  transport behavior
+- any team-scoped built-in template override lookup must cross a dedicated
+  storage-neutral `NudgeTemplateOverrideStore` boundary before
+  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  inside the emitter path
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

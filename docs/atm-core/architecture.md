@@ -427,16 +427,17 @@ Identity-specific policy:
   payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload contains:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
-- `team`
-- `message_id`
-- `requires_ack`
-- `is_ack`
-- optional `task_id` when present
-- optional `recipient_pane_id` when authoritative roster truth includes a
-  pane mapping for the recipient
+  - `team`
+  - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
+  - `requires_ack`
+  - `is_ack`
+  - optional `to`
+  - optional `recipient_pane_id` when authoritative roster truth includes a
+    pane mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
@@ -565,6 +566,18 @@ Architectural rules:
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through
   `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+- `atm-core` owns one canonical post-send event model carrying sender/team,
+  message id, description, task id, ack flags, and authoritative
+  `recipient_pane_id` when known
+- any team-scoped built-in template override lookup must cross a
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  only and must not grow SQLite lookup behavior
+- `atm-core` does not own built-in XML template bodies, template override
+  storage, tmux injection, or graft host-wakeup mechanics
+- the concrete receiver sinks behind that seam are:
+  - `TmuxNudgeSink` for local tmux-backed recipients
+  - `GraftNudgeSink` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

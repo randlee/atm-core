@@ -1456,11 +1456,12 @@ contain:
 - `recipient`
 - `team`
 - `from`
-- `to`
 - `message_id`
+- `description`
+- `task_id` as a string; it may be empty when no task is associated
 - `requires_ack`
 - `is_ack`
-- optional `task_id` when present
+- optional `to`
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
@@ -1475,6 +1476,9 @@ Current runtime hook-note:
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
+- the shipped built-in `atm internal-nudge` path must consume this same payload
+  contract so ATM does not carry separate external-hook and built-in nudge
+  event shapes
 
 Supported structured hook-result levels remain:
 - `debug`
@@ -2590,11 +2594,24 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
+- the shipped default emitter path is `atm internal-nudge`
+- the built-in renderer selects exactly one of six named template kinds:
+  `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
+  `acknowledge`, and `acknowledge_task`
+- any team-scoped built-in template override row must be resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
+  emitter/render path runs; `atm` and `atm-core` must not perform direct
+  SQLite lookup for this feature
+- external `[[atm.post_send_hooks]]` commands remain the explicit full-override
+  path
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
 - the accepted seam is a dedicated post-send emitter, not
   `DeliveryPlan`/`NotificationSink`
+- the accepted compact built-in acknowledge forms are:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 
 ### 21.4 One Interface, Two Transport Implementations
 

@@ -111,8 +111,44 @@ Initial crate requirement IDs:
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings
 - keeping `atm --help` / `atm send --help` aligned with the active post-send
-  hook config surface; the CLI help references the ATM-owned hook semantics,
-  while `atm-core` owns the underlying matching and migration behavior
+  hook and built-in nudge surface; the CLI help references both the shipped
+  `atm internal-nudge` default and the external override semantics, while
+  `atm-core` owns the underlying matching and migration behavior
+
+## 3.1 Built-In Nudge Surface
+
+Requirement ID:
+- `REQ-ATM-NUDGE-001`
+
+Required rules:
+- `atm` owns the shipped built-in post-send implementation as the hidden
+  `atm internal-nudge` subcommand
+- `atm internal-nudge` must select exactly one built-in template kind:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- `atm` owns direct placeholder substitution for those templates; no Jinja or
+  conditional template language is allowed on the built-in path
+- `atm` owns the six built-in default template bodies, but any team-scoped
+  override lookup for those bodies must cross the storage-neutral
+  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  rather than performing direct SQLite access in the CLI crate
+- built-in precedence is:
+  - matching external `[[atm.post_send_hooks]]` command
+  - resolved team-scoped override body returned through the upstream
+    `NudgeTemplateOverrideStore` contract for the selected template kind
+  - built-in product default template body for that kind
+- any unset override case must fall back to the built-in product default body
+  for that exact template kind
+- the default built-in acknowledge template bodies are:
+  - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>`
+  - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`
+- the built-in path must not access SQLite directly; the first concrete
+  host-scoped override storage remains `atm-storage-rusqlite` implementation
+  detail behind the accepted `atm-core` contract
 
 ## 4. Command Ownership
 

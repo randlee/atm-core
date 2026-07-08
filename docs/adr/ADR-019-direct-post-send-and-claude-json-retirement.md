@@ -73,6 +73,21 @@ The accepted model is:
 - `atm send` persists the message to durable ATM state
 - if the recipient exposes a post-send hook capability, ATM emits one
   post-send event
+- the shipped default post-send path is the built-in `atm internal-nudge`
+  command rather than a repo-local Python or shell script
+- external `[[atm.post_send_hooks]]` commands remain the explicit override
+  path when configured
+- the built-in renderer is bounded to six named template kinds only:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- any team-scoped built-in template override lookup must cross the accepted
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; neither `atm` nor `atm-core` may perform direct
+  SQLite lookup in the emitter path
 - emission failure is logged and surfaced as a sender-visible warning
 - `atm read` reads durable ATM state only
 
@@ -97,6 +112,7 @@ pub trait PostSendHookEmitter: sealed::Sealed {
 - local tmux-backed recipients use a local post-send emitter
 - graft-backed recipients use a graft receiver implementation behind the same
   post-send capability seam
+- the concrete built-in sink names are `TmuxNudgeSink` and `GraftNudgeSink`
 - graft receiver details such as host wakeup, temporary buffering, or
   active/inactive runtime state stay private to `atm-graft` and must not leak
   into shared daemon request/response families

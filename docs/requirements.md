@@ -845,8 +845,10 @@ Alias rules:
   SQLite-owned state for routing, validation, and audit
 
 Post-send-hook rules:
-- `[[atm.post_send_hooks]]` is the only supported post-send hook shape in this
-  release line
+- ATM always has one shipped default post-send path in the installed binary:
+  `atm internal-nudge`
+- `[[atm.post_send_hooks]]` is the supported external override shape for
+  post-send behavior
 - each rule binds exactly one `recipient` selector and one `command` argv
 - `recipient` must be either one concrete team member name or `*`
 - multiple matching rules may run for a single send, in config order
@@ -863,32 +865,57 @@ Post-send-hook rules:
   JSON payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload must contain:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
   - `team`
   - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty when no task is associated
   - `requires_ack`
   - `is_ack`
-  - optional `task_id` when present
+  - optional `to` for compatibility
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
 - Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
+- built-in `atm internal-nudge` must use this same `ATM_POST_SEND` payload
+  contract
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
+  must still attempt the shipped built-in `atm internal-nudge` path
+- the built-in shipped nudge path must support exactly six named template
+  cases:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- the default built-in acknowledge nudge shapes are intentionally compact:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- teams may override any subset of those six built-in template bodies through
+  host-scoped, team-keyed ATM-managed override rows resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract; any unset case falls
+  back to the product default body for that case
+- built-in precedence is:
+  - matching external `[[atm.post_send_hooks]]` command
+  - resolved team override row for the selected template kind
+  - built-in product default template body for that kind
 - example payload:
   ```json
   {
     "from": "arch-ctm@atm-dev",
-    "to": "recipient@atm-dev",
     "sender": "arch-ctm",
     "recipient": "recipient",
     "team": "atm-dev",
     "message_id": "...",
+    "description": "review failing smoke lane",
+    "task_id": "",
     "requires_ack": false,
     "is_ack": false,
     "recipient_pane_id": "%1"
@@ -982,6 +1009,8 @@ Retired from the current implementation:
 - match rules only by resolved recipient identity
 - support `recipient = "*"` wildcard matching for all recipients
 - execute all matching post-send-hook rules in config order
+- if no matching external rule exists, execute the built-in `atm internal-nudge`
+  path instead of silently skipping post-send emission
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
@@ -3503,6 +3532,11 @@ mail correctness.
   - `atm ack` persists the reply to durable ATM state
   - after successful persistence, ATM emits post-send behavior only when the
     recipient exposes that capability
+  - the shipped default post-send path is the built-in `atm internal-nudge`
+    implementation
+  - teams may override any subset of the six built-in nudge template bodies
+    through host-scoped, team-keyed ATM-managed override rows resolved through
+    the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
   - post-send emission must not redefine send success after persistence
 
@@ -3515,6 +3549,8 @@ mail correctness.
   - authoritative `recipient_pane_id`, when known, must come from canonical ATM
     roster state rather than from rediscovering live pane routing through local
     mailbox files
+  - live pane routing for built-in tmux nudge must not depend on committed
+    `.atm.toml` `tmux_pane_id` values
 
 - `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
   typed delivery-plan execution are not the governing send-path contract.

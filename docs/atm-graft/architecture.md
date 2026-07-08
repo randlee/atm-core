@@ -66,11 +66,12 @@ Architectural consequence:
 The current runtime uses this split for embedded host-agent integration:
 
 - `atm-core` owns the semantic client protocol contract
-- `atm-daemon` owns generic request handling plus generic post-commit nudge
-  routing/queue state; it must not own `atm-graft` as a named internal
-  subsystem
+- `atm-daemon` owns generic request handling plus post-commit emission
+  dispatch only; it must not own graft-private receiver buffering, pending
+  queue mechanics, or `atm-graft` as a named internal subsystem
 - `atm-graft` owns the concrete same-host daemon client, graft-session
-  lifecycle, and host bridge
+  lifecycle, host bridge, and any receiver-private buffering or pending nudge
+  queue state
 
 Shared command and client-message diagrams live in:
 - [`../atm/flow-diagrams.md`](../atm/flow-diagrams.md)
@@ -227,9 +228,16 @@ Architectural rules:
 - when the recipient uses the graft capability, the graft receiver
   implementation is responsible for handing that event to the host injection
   seam
+- the concrete graft-backed sink is `GraftNudgeSink`; it is one receiver sink
+  behind the shared post-send boundary, not a special daemon-owned runtime
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message_id`
+- acknowledge-family nudges use the compact built-in envelope:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- task-bearing delivery or acknowledge nudges may carry `task_id`; delivery
+  nudges may additionally carry `description`
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - the exact transport or callback mechanism used for that handoff is private to
@@ -296,13 +304,17 @@ not true:
 
 - `atm-graft` has no Rust dependency on `atm-daemon`
 - `atm-graft` has no direct SQLite or inbox-JSONL access
-- the daemon remains the sole owner of pending-nudge queue state
-- the hook/poll nudge path uses the same daemon API contract as the embedded
-  session path
+- any receiver-private buffering or idle wakeup state stays inside
+  `atm-graft`; the daemon owns post-send emission, not graft-private pending
+  queue mechanics
+- the hook/push nudge path uses the same documented post-send event family as
+  any embedded receive path and must not require a separate advisory
+  register/fetch/drain surface
 - embedded mode includes one required receive task/thread and automatic
   between-tool-call nudge injection
-- embedded mode keeps one persistent daemon connection for nudges and signals
-  the host when new nudges arrive while it is idle
+- embedded mode may use request/response wakeups or another thin
+  receiver-private mechanism; the architecture must not require one persistent
+  shared daemon connection for nudge delivery
 - production graft delivery does not rely on `tmux send-keys` or equivalent
   external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded

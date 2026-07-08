@@ -50,6 +50,9 @@ model in several release-blocking ways:
 - `atm read --contains` can still miss messages whose full durable body text
   contains the needle when the metadata path only reconstructs summary-level
   text
+- the accepted `1.2.3` release still leaves default post-send nudge dependent
+  on repo-local scripts and dogfood-only wrapper usage instead of a shipped ATM
+  binary path
 
 ## Validated Breakage On Entry
 
@@ -146,6 +149,21 @@ The governing rules are:
   delivery-plan abstraction
 - ATM owns post-send emission, emission logging, and sender warnings on
   emission failure
+- the shipped default post-send path is the built-in `atm internal-nudge`
+  command
+- one concrete 1.2.3 release root cause was that `cargo publish` did not ship
+  `scripts/atm-nudge.py` or `scripts/atm-nudge.sh`, so any default path that
+  still depended on repo-local scripts could not work from an installed binary
+- the built-in renderer is bounded to exactly six named template kinds:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- the accepted built-in compact acknowledge forms are:
+  - `<atm kind="ack" from="..." message-id="..."/>`
+  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - ATM does not own receiver-side consumption after successful emission
 - retained ATM message identity is ULID-only across CLI, daemon, storage,
   schemas, and docs; historical UUID-wire compatibility is retired with the
@@ -153,6 +171,11 @@ The governing rules are:
 - graft and tmux remain receiver implementations behind the post-send boundary;
   daemon/core contracts must not model graft-specific session registration,
   fetch/drain, stream control, or queue semantics as shared infrastructure
+- local tmux-backed recipients use `TmuxNudgeSink`
+- graft-backed recipients use `GraftNudgeSink`
+- `TmuxNudgeSink` preserves the current paste + `Enter` + short sleep +
+  second-`Enter` operational path, with the delay treated as an
+  implementation-tuning parameter rather than an unspecified side effect
 - `atm read` is a database read path only
 - active `tmux_pane_id` already exists in SQLite roster state and must remain
   authoritative there rather than drifting back to repo config assumptions
@@ -205,6 +228,9 @@ Phase `AD` may:
 - preserve diagnostic commands that do not need caller identity; `doctor`
   remains identity-free with optional team scoping
 - simplify the post-send nudge path to one post-commit emission seam
+- restore a shipped built-in post-send nudge path for normal ATM installs
+- allow bounded built-in nudge template overrides without requiring teams to
+  copy repo-local scripts across many repos
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
 - remove graft-only session registration, fetch/drain, queue, and advisory
@@ -223,6 +249,8 @@ Phase `AD` may:
   and member-home metadata and remove lingering `.atm.toml` assumptions
 - simplify directory metadata ownership so only durable `home_dir`, runtime
   `live_cwd`, and log-only startup `launch_cwd` remain
+- remove committed pane-id routing state from repo config and keep live pane
+  routing in SQLite roster state plus CLI repair/update flows only
 - add smoke and doctor coverage required to keep these regressions closed
 
 Phase `AD` must not:
@@ -262,6 +290,7 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
+    pub description: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
@@ -295,6 +324,15 @@ Required runtime meaning:
     by both local-tmux and graft emitters; earlier sprints may reference the
     warning behavior, but they must not invent competing codes for the same
     failure class
+- external post-send compatibility:
+  - `ATM_POST_SEND.description` is guaranteed on the retained line
+  - `ATM_POST_SEND.task_id` remains present as a string contract for external
+    hooks and may be empty when no task is associated
+  - optional `to` remains compatibility-only and must not become required for
+    the built-in shipped nudge path
+  - repo-local `[[atm.post_send_hooks]]` consumers stay supported; any
+    dogfood script updates needed for the tightened payload contract land in
+    `AD.22`
 - read:
   - load from durable state only
 
@@ -359,7 +397,7 @@ Phase `AD` orchestration rule:
   sprint, merge the full predecessor chain before starting new work on the
   current sprint
 - sprint branches must merge forward numerically:
-  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20`
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20 -> AD.21 -> AD.22`
 - do not stop downstream development waiting for prior sprint QA to pass
 - do not run pairwise cross-merges between unrelated `AD` sprint branches
 
@@ -383,6 +421,8 @@ Phase `AD` orchestration rule:
 18. [AD.18 Raw CLI Runtime Root Unification](./sprint-AD18.md)
 19. [AD.19 Read Mutation Output Consistency Repair](./sprint-AD19.md)
 20. [AD.20 Read Body-Search Metadata Consistency Repair](./sprint-AD20.md)
+21. [AD.21 Built-In Post-Send Nudge And Six-Template Override Surface](./sprint-AD21.md)
+22. [AD.22 Nudge Routing State Ownership And Dogfood Transition Cleanup](./sprint-AD22.md)
 
 ## Phase Exit Criteria
 
@@ -407,6 +447,11 @@ Phase `AD` closes only when:
 - `atm read --contains` matches both summary text and full durable message
   body text on the accepted metadata path, with no false negative when the
   match appears only in stored body text
+- a normal installed ATM binary can emit the default post-send nudge without
+  repo-local Python or shell scripts
+- the accepted built-in nudge path supports the six named template cases from
+  `AD.21`, and template override precedence is explicit rather than implicit
+  script sprawl
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning
@@ -436,6 +481,8 @@ Phase `AD` closes only when:
   delivery, nudge delivery, or context injection
 - active pane-id authority and repair flow runs through the existing SQLite
   roster state plus CLI, not `.atm.toml`
+- committed repo config no longer carries stale tmux pane ids as live routing
+  state
 - the validated-on-entry roster drift for `team-lead` and `arch-ctm` is
   repaired on the accepted line
 - any remaining drift category not validated on entry is surfaced with accurate
