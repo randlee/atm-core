@@ -1,0 +1,72 @@
+boundary_id = "BOUNDARY-ObservabilityPort-CLI"
+owner_package = "atm"
+owner_crate_path = "atm"
+name = "CliObservability"
+
+[public]
+trait = "ObservabilityPort"
+notes = "CliObservability is the allowlisted ATM CLI implementation of the sealed atm-core observability boundary."
+
+[implementation]
+type = "CliObservability"
+module = "atm::observability"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = [
+  "atm::main::init_observability",
+  "atm::observability::CliObservability::new",
+]
+
+[ownership]
+io_owns = [
+  "command_observability_emit",
+  "log_snapshot_query",
+  "log_tail_follow",
+  "observability_health_query",
+]
+io_forbidden = [
+  "sqlite",
+  "daemon_runtime_bootstrap",
+  "mailbox_storage_selection",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = [
+  "atm-core -> sc-observability",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "CliObservability::from_boxed_port",
+]
+
+[contracts]
+request_types = ["CommandEvent", "AtmLogQuery"]
+response_types = ["AtmLogSnapshot", "LogTailSession", "AtmObservabilityHealth"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-OBSERVABILITY-CLI-EDGES",
+  "LINT-BOUNDARY-OBSERVABILITY-CLI-REFERENCES",
+]
+review_gates = [
+  "sealed_impl_allowlisted",
+  "no_cli_observability_to_sqlite_edge",
+]
+
+[status]
+state = "active"
+notes = [
+  "CliObservability is the permit-listed out-of-owner sealed impl site for the atm-core ObservabilityPort boundary.",
+  "The CLI implementation may depend on atm-core boundary types but must not become a runtime-root selector or storage owner.",
+]

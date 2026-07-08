@@ -432,12 +432,20 @@ Path resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
+Invocation directory is not a daemon/socket/database selector. It is only a
+workspace config discovery input after `ATM_HOME` resolves the canonical host
+runtime root.
+
 Required canonical paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`
 - `{ATM_HOME}/.claude/teams/{team}`
 - `{ATM_HOME}/.claude/teams/{team}/config.json`
 - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
+- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
+- `{ATM_HOME}/.atm/daemon/launch.lock`
+- `{ATM_HOME}/.atm/db/mail.db`
+- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
 - `{ATM_HOME}/.config/atm/config.toml`
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`
@@ -1256,6 +1264,13 @@ Required behavior:
 - persist read-triggered state changes back to the physical inbox file that
   owns the selected displayed message when origin inbox files are present in
   the merged surface
+- when a read-side mutation is applied, the returned `message` payload and
+  `selected_message_id` must still refer to that same mutated durable message;
+  `atm read` must not mark one message read and then silently swap the output
+  payload to a different unread message
+- `bucket_counts` in the read outcome must describe the post-mutation mailbox
+  state produced by that command execution rather than stale pre-mutation
+  counts
 
 ### 7.5 Shared Message Classification And Deduplication
 
@@ -1413,6 +1428,15 @@ Every list row must include:
 - `match_count`
 - `additional_match_count`
 - `bucket_counts`
+
+When `mutation_applied = true` and `message` is present:
+- `message.message_id` and `selected_message_id` must identify the same
+  durable message
+- `bucket_counts` must reflect the mailbox state after the read-side mutation
+  completes
+- the read-side mutation contract is distinct from `atm ack`; read may mark a
+  message `read = true`, but only ack clears `pending_ack_at` and sets
+  `acknowledged_at`
 
 Human-readable `atm read` output must render one message body only. When
 additional matches exist, it must state that more matches were found and direct

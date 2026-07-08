@@ -1,6 +1,6 @@
 ---
 title: Phase AD Plan
-status: complete
+status: active
 branch: integrate/phase-AD
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD
 ---

@@ -51,6 +51,9 @@ Rules:
 - protocol v1 may still carry `RequestEnvelope` / `ResponseEnvelope` values
   inside `RpcEnvelope.body`, but new message or roster body clones must not be
   introduced under that wrapper
+- graft-only advisory/session local IPC is not an accepted
+  `atm-daemon-client` boundary surface and must not be reintroduced under
+  `RpcEnvelope`
 - `atm-daemon-client` must not depend on `atm-storage-rusqlite` or any
   retired backend crate
 - backend-specific persistence concerns stay below the storage seam and must not

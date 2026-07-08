@@ -1,5 +1,4 @@
 use anyhow::Result;
-use atm_core::home;
 use atm_core::list::ListQuery;
 use clap::Args;
 
@@ -7,7 +6,7 @@ use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
 use crate::commands::util::parse_timestamp;
-use crate::composition::CliComposition;
+use crate::composition::{CliComposition, resolve_command_runtime_context};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -52,11 +51,11 @@ pub struct ListCommand {
 
 impl ListCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("list")?;
         let json = self.json;
-        let query = self.build_query(home_dir, current_dir)?;
-        let composition = CliComposition::bootstrap("list", observability)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
+        let composition =
+            CliComposition::bootstrap("list", observability, &current_dir, &home_dir)?;
         let outcome = composition.list(query)?;
         output::print_list_result(&outcome, json)
     }

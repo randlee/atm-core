@@ -1,22 +1,121 @@
-use std::io;
+use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 
 use atm_core::GraftConfig;
-use atm_core::error::AtmError;
-use atm_core::graft::{
-    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisorySessionPort,
-    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse, AdvisorySessionState,
-    AdvisorySessionUnregistrationRequest, AdvisoryStreamRequest,
+use atm_core::boundary::PostSendHookEvent;
+use atm_core::error::{AtmError, AtmErrorKind};
+use atm_core::list::ListQuery;
+use atm_core::read::ReadQuery;
+use atm_core::schema::AtmMessageId;
+use atm_core::types::{AckActivationMode, ReadSelection};
+
+use crate::{
+    DEFAULT_LIST_LIMIT, GraftObservability, GraftSessionClient, GraftSessionOptions,
+    GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
 };
-use atm_core::protocol::{self, ResponseEnvelope};
 
-use crate::transport::ActiveAdvisoryStream;
-use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
+const DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 2;
+const MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER: u32 = 8;
+#[cfg(test)]
+const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(50);
+#[cfg(not(test))]
+const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
 
-const MAX_LIVE_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);
+type ReceiveLoopJoinHelper = (
+    Receiver<Result<(), AtmError>>,
+    JoinHandle<()>,
+    std::thread::ThreadId,
+);
+
+struct InjectRequest {
+    event: PostSendHookEvent,
+    result_tx: SyncSender<Result<(), AtmError>>,
+}
+
+struct BoundedHostNudgeInjector {
+    request_tx: SyncSender<InjectRequest>,
+}
+
+impl BoundedHostNudgeInjector {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Result<Self, AtmError> {
+        let (request_tx, request_rx) = mpsc::sync_channel::<InjectRequest>(0);
+        thread::Builder::new()
+            .name("atm-graft-host-nudge".to_string())
+            .spawn(move || {
+                while let Ok(request) = request_rx.recv() {
+                    let result = injector.inject_nudge(request.event);
+                    let _ = request.result_tx.send(result);
+                }
+            })
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorKind::Internal,
+                    "failed to spawn graft host nudge worker",
+                )
+                .with_source(source)
+                .with_recovery(
+                    "Retry graft activation after the embedding host can spawn one bounded nudge worker thread.",
+                )
+            })?;
+        Ok(Self { request_tx })
+    }
+
+    fn inject_nudge(&self, event: PostSendHookEvent) -> Result<(), AtmError> {
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        self.request_tx
+            .try_send(InjectRequest { event, result_tx })
+            .map_err(inject_request_enqueue_error)?;
+        match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+            Ok(result) => result,
+            Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
+                AtmErrorKind::Timeout,
+                format!(
+                    "graft host nudge injection exceeded the {:?} delivery deadline",
+                    HOST_NUDGE_INJECTION_DEADLINE
+                ),
+            )
+            .with_recovery(
+                "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+            )),
+            Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
+                AtmErrorKind::Internal,
+                "graft host nudge worker disconnected before returning a delivery result",
+            )
+            .with_recovery("Restart the embedding host before retrying graft delivery.")),
+        }
+    }
+}
+
+fn inject_request_enqueue_error(error: TrySendError<InjectRequest>) -> AtmError {
+    match error {
+        TrySendError::Full(_) => AtmError::new(
+            AtmErrorKind::Timeout,
+            "graft host nudge worker is still busy past the bounded delivery deadline",
+        )
+        .with_recovery(
+            "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+        ),
+        TrySendError::Disconnected(_) => AtmError::new(
+            AtmErrorKind::Internal,
+            "graft host nudge worker is unavailable",
+        )
+        .with_recovery("Restart the embedding host before retrying graft delivery."),
+    }
+}
+
+fn next_degraded_poll_interval(
+    base: std::time::Duration,
+    current: std::time::Duration,
+) -> std::time::Duration {
+    let capped = base.saturating_mul(MAX_DEGRADED_POLL_INTERVAL_MULTIPLIER);
+    std::cmp::min(
+        current.saturating_mul(DEGRADED_POLL_INTERVAL_MULTIPLIER),
+        capped,
+    )
+}
 
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
     let config = atm_core::load_atm_config(workspace_root)?;
@@ -38,7 +137,7 @@ pub(crate) fn read_snapshot(
 
 fn write_snapshot(
     snapshot: &Arc<RwLock<SessionSnapshot>>,
-    state: AdvisorySessionState,
+    state: GraftSessionState,
 ) -> Result<(), AtmError> {
     let mut snapshot = snapshot.write().map_err(|_| {
         AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
@@ -51,7 +150,7 @@ fn write_snapshot(
 
 pub(crate) fn set_session_state(
     snapshot: &Arc<RwLock<SessionSnapshot>>,
-    state: AdvisorySessionState,
+    state: GraftSessionState,
     observability: &dyn GraftObservability,
 ) -> Result<(), AtmError> {
     write_snapshot(snapshot, state)?;
@@ -59,589 +158,379 @@ pub(crate) fn set_session_state(
     Ok(())
 }
 
-pub(crate) fn validate_batch_limit_against_capacity(
-    batch_limit: AdvisoryBatchLimit,
-    queue_capacity: usize,
-) -> Result<(), AtmError> {
-    if batch_limit.get() > queue_capacity {
-        return Err(AtmError::validation(format!(
-            "graft batch limit {} exceeds daemon queue capacity {}",
-            batch_limit.get(),
-            queue_capacity
-        ))
-        .with_recovery(
-            "Lower the graft batch limit or restart against a daemon that advertises a larger graft nudge queue before retrying session activation.",
-        ));
-    }
-    Ok(())
-}
-
-pub(crate) fn register_session_with_validated_batch_limit(
-    client: &dyn AdvisorySessionPort,
-    request: AdvisorySessionRegistrationRequest,
-    batch_limit: AdvisoryBatchLimit,
-) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-    let response = client.register_session(request.clone())?;
-    if let Err(validation_error) =
-        validate_batch_limit_against_capacity(batch_limit, response.queue_capacity)
-    {
-        return Err(cleanup_registered_session_after_error(
-            client,
-            &request.session_id,
-            "graft batch-limit validation",
-            validation_error,
-        ));
-    }
-    Ok(response)
-}
-
-pub(crate) fn cleanup_registered_session_after_error(
-    client: &dyn AdvisorySessionPort,
-    session_id: &atm_core::graft::AdvisorySessionId,
-    failed_step: &str,
-    original_error: AtmError,
-) -> AtmError {
-    let original_code = original_error.code;
-    let original_message = original_error.message.clone();
-    match client.unregister_session(AdvisorySessionUnregistrationRequest {
-        session_id: session_id.clone(),
-    }) {
-        Ok(cleanup) if cleanup.closed => original_error,
-        Ok(_) => AtmError::daemon_advisory_session_cleanup_failed(format!(
-            "graft advisory session {session_id} may still be registered after {failed_step} failed ({original_code}: {original_message}); daemon unregister completed without closing the session"
-        ))
-        .with_source(original_error),
-        Err(cleanup_error) => AtmError::daemon_advisory_session_cleanup_failed(format!(
-            "graft advisory session {session_id} may still be registered after {failed_step} failed ({original_code}: {original_message}); daemon unregister failed during cleanup"
-        ))
-        .with_source(cleanup_error),
-    }
-}
-
 pub(crate) fn join_receive_loop_with_deadline(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
+    let (result_rx, join_helper, join_helper_thread_id) =
+        spawn_receive_loop_join_helper(join_handle)?;
+    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
+        Ok(result) => finish_join_receive_loop(join_helper, result),
+        Err(RecvTimeoutError::Timeout) => {
+            Err(join_receive_loop_timeout_error(join_helper_thread_id))
+        }
+        Err(RecvTimeoutError::Disconnected) => handle_join_helper_disconnect(join_helper),
+    }
+}
+
+fn spawn_receive_loop_join_helper(
+    join_handle: JoinHandle<Result<(), AtmError>>,
+) -> Result<ReceiveLoopJoinHelper, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     let join_helper = thread::Builder::new()
         .name("atm-graft-receive-loop-join".to_string())
         .spawn(move || {
-            let result = match join_handle.join() {
-                Ok(result) => result,
-                Err(_) => Err(AtmError::daemon_unavailable("graft receive loop panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )),
-            };
+            let result = join_handle
+                .join()
+                .unwrap_or_else(|_| Err(receive_loop_panic_error()));
             let _ = result_tx.send(result);
         })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
-                .with_source(source)
-                .with_recovery(
-                    "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
-                )
-        })?;
+        .map_err(join_helper_spawn_error)?;
     let join_helper_thread_id = join_helper.thread().id();
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
-        Ok(result) => {
-            join_helper.join().map_err(|_| {
-                AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )
-            })?;
-            result
-        }
-        Err(RecvTimeoutError::Timeout) => {
-            tracing::debug!(
-                timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
-                thread_id = ?join_helper_thread_id,
-                "graft receive-loop join timed out; helper left detached after deadline"
-            );
-            Err(AtmError::daemon_unavailable(format!(
-                "graft receive loop shutdown exceeded the {:?} join deadline",
-                RECEIVE_LOOP_JOIN_DEADLINE
-            ))
-            .with_recovery(
-                "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
-            ))
-        }
-        Err(RecvTimeoutError::Disconnected) => join_helper.join().map_or_else(
-            |_| {
-                Err(
-                    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                        .with_recovery(
-                            "Restart the embedding host and atm-daemon before retrying graft mode.",
-                        ),
-                )
-            },
-            |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Restart the embedding host and atm-daemon before retrying graft mode.",
-                ))
-            },
-        ),
-    }
+    Ok((result_rx, join_helper, join_helper_thread_id))
+}
+
+fn finish_join_receive_loop(
+    join_helper: JoinHandle<()>,
+    result: Result<(), AtmError>,
+) -> Result<(), AtmError> {
+    join_helper.join().map_err(|_| join_helper_panic_error())?;
+    result
+}
+
+fn handle_join_helper_disconnect(join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+    join_helper.join().map_or_else(
+        |_| Err(join_helper_panic_error()),
+        |_| Err(join_helper_disconnect_error()),
+    )
+}
+
+fn receive_loop_panic_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive loop panicked")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_spawn_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
+        .with_source(source)
+        .with_recovery(
+            "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
+        )
+}
+
+fn join_helper_panic_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_disconnect_error() -> AtmError {
+    AtmError::daemon_unavailable("graft receive-loop join helper disconnected unexpectedly")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId) -> AtmError {
+    tracing::debug!(
+        timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
+        thread_id = ?join_helper_thread_id,
+        "graft receive-loop join timed out; helper left detached after deadline"
+    );
+    AtmError::daemon_unavailable(format!(
+        "graft receive loop shutdown exceeded the {:?} join deadline",
+        RECEIVE_LOOP_JOIN_DEADLINE
+    ))
+    .with_recovery(
+        "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
+    )
 }
 
 pub(crate) struct ReceiveLoopContext {
     pub(crate) client: Arc<dyn GraftSessionClient>,
-    pub(crate) registration_request: AdvisorySessionRegistrationRequest,
-    pub(crate) drain_request: AdvisoryDrainRequest,
-    pub(crate) poll_interval: std::time::Duration,
+    pub(crate) options: GraftSessionOptions,
+    pub(crate) home_dir: std::path::PathBuf,
     pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
-    pub(crate) injector: Arc<dyn crate::HostNudgeInjector>,
-    pub(crate) observability: Arc<dyn GraftObservability>,
-    pub(crate) stop_rx: Receiver<()>,
-}
-
-pub(crate) struct LiveReceiveLoopContext {
-    pub(crate) client: Arc<dyn GraftSessionClient>,
-    pub(crate) registration_request: AdvisorySessionRegistrationRequest,
-    pub(crate) advisory_stream: ActiveAdvisoryStream,
-    pub(crate) limit: AdvisoryBatchLimit,
-    pub(crate) reconnect_backoff: std::time::Duration,
-    pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
-    pub(crate) injector: Arc<dyn crate::HostNudgeInjector>,
+    pub(crate) injector: Arc<dyn HostNudgeInjector>,
     pub(crate) observability: Arc<dyn GraftObservability>,
     pub(crate) stop_rx: Receiver<()>,
 }
 
 pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
-    let session_id = ctx.drain_request.session_id.clone();
+    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector))?;
+    let mut delivered_message_ids = BTreeSet::new();
+    let base_poll_interval = ctx.options.poll_interval();
+    let mut poll_interval = base_poll_interval;
     loop {
-        if should_stop_receive_loop(&ctx, &session_id)? {
-            return Ok(());
+        match ctx.stop_rx.recv_timeout(poll_interval) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
+            Err(RecvTimeoutError::Timeout) => {}
         }
 
-        match ctx.client.drain_nudges(ctx.drain_request.clone()) {
-            Ok(response) => handle_drain_response(&ctx, &session_id, response)?,
-            Err(error) => handle_drain_failure(&ctx, &session_id, error)?,
-        }
-    }
-}
-
-pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(), AtmError> {
-    let mut backoff = ctx.reconnect_backoff;
-    loop {
-        if stop_requested(&ctx.stop_rx) {
-            return close_live_receive_loop(&ctx);
-        }
-
-        let frame = match protocol::read_frame(
-            &mut ctx.advisory_stream.stream,
-            "failed to read graft advisory-stream frame",
-            "graft advisory-stream frame exceeded the maximum supported size",
-        ) {
-            Ok(Some(frame)) => frame,
-            Ok(None) => return Ok(()),
-            Err(error) if is_socket_timeout_error(&error) => {
-                continue;
+        match poll_once(&ctx, &injector, &mut delivered_message_ids) {
+            Ok(()) => {
+                poll_interval = base_poll_interval;
+                let _ = set_session_state(
+                    &ctx.snapshot,
+                    GraftSessionState::Polling,
+                    ctx.observability.as_ref(),
+                );
             }
             Err(error) => {
-                backoff = reconnect_live_receive_loop(&mut ctx, error, backoff)?;
-                continue;
-            }
-        };
-        let (response_id, response) = protocol::response_from_frame_payload(frame)?;
-        if response_id != ctx.advisory_stream.request_id {
-            return Err(AtmError::daemon_unavailable(format!(
-                "advisory stream response request_id {} did not match request_id {}",
-                response_id, ctx.advisory_stream.request_id
-            ))
-            .with_recovery(
-                "Align the embedding host, atm-graft, and atm-daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
-            ));
-        }
-        match response {
-            ResponseEnvelope::AdvisoryStream(batch) => {
-                backoff = handle_live_advisory_batch(&ctx, batch)?;
-            }
-            ResponseEnvelope::Error(error) => return Err(error.into_atm_error()),
-            other => {
-                return Err(crate::transport::unexpected_response(
-                    "advisory stream",
-                    other,
-                ));
-            }
-        }
-    }
-}
-
-fn should_stop_receive_loop(
-    ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
-) -> Result<bool, AtmError> {
-    match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
-        Ok(()) => {
-            unregister_session_and_close(
-                &*ctx.client,
-                session_id,
-                &ctx.snapshot,
-                ctx.observability.as_ref(),
-            )?;
-            Ok(true)
-        }
-        Err(RecvTimeoutError::Timeout) => Ok(false),
-        Err(RecvTimeoutError::Disconnected) => {
-            set_session_state(
-                &ctx.snapshot,
-                AdvisorySessionState::Closed,
-                ctx.observability.as_ref(),
-            )?;
-            Ok(true)
-        }
-    }
-}
-
-fn handle_drain_response(
-    ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
-    response: atm_core::graft::AdvisoryDrainResponse,
-) -> Result<(), AtmError> {
-    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
-    for nudge in response.nudges {
-        ctx.injector.inject_nudge(nudge.clone())?;
-        ctx.observability.nudge_delivered(session_id, &nudge);
-    }
-    Ok(())
-}
-
-fn handle_drain_failure(
-    ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
-    error: AtmError,
-) -> Result<(), AtmError> {
-    set_session_state(
-        &ctx.snapshot,
-        AdvisorySessionState::Disconnected,
-        ctx.observability.as_ref(),
-    )?;
-    ctx.observability
-        .session_error(session_id, "drain_nudges", &error);
-    tracing::debug!(session_id = %session_id, error = %error.message, "graft receive loop will retry after drain failure");
-    attempt_receive_loop_reregistration(ctx, session_id)
-}
-
-fn attempt_receive_loop_reregistration(
-    ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
-) -> Result<(), AtmError> {
-    match register_session_with_validated_batch_limit(
-        &*ctx.client,
-        ctx.registration_request.clone(),
-        ctx.drain_request.limit,
-    ) {
-        Ok(_) => ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref()),
-        Err(register_error) if is_duplicate_registration(&register_error) => {
-            ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())
-        }
-        Err(register_error) => {
-            if register_error.is_validation() {
-                ctx.observability.session_error(
-                    session_id,
-                    "validate_batch_limit",
-                    &register_error,
+                poll_interval = next_degraded_poll_interval(base_poll_interval, poll_interval);
+                let _ = set_session_state(
+                    &ctx.snapshot,
+                    GraftSessionState::Degraded,
+                    ctx.observability.as_ref(),
                 );
-                return Err(register_error);
+                if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                    ctx.observability
+                        .session_error(&snapshot, "poll_unread_messages", &error);
+                }
             }
-            ctx.observability
-                .session_error(session_id, "register_session", &register_error);
-            ctx.observability
-                .session_state_changed(&read_snapshot(&ctx.snapshot)?);
-            tracing::debug!(session_id = %session_id, error = %register_error.message, "graft receive loop failed to re-register session");
-            Ok(())
         }
     }
 }
 
-fn ensure_registered_snapshot(
-    snapshot: &Arc<RwLock<SessionSnapshot>>,
-    observability: &dyn GraftObservability,
+fn poll_once(
+    ctx: &ReceiveLoopContext,
+    injector: &BoundedHostNudgeInjector,
+    delivered_message_ids: &mut BTreeSet<AtmMessageId>,
 ) -> Result<(), AtmError> {
-    if read_snapshot(snapshot)?.state != AdvisorySessionState::Registered {
-        set_session_state(snapshot, AdvisorySessionState::Registered, observability)?;
+    let mut rows = ctx
+        .client
+        .list_messages(build_unread_list_query(ctx)?)?
+        .rows;
+    rows.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
+
+    let mut current_unread_message_ids = BTreeSet::new();
+    for row in rows {
+        let Some(message_id) = row.message_id else {
+            continue;
+        };
+        current_unread_message_ids.insert(message_id);
+        if delivered_message_ids.contains(&message_id) {
+            continue;
+        }
+
+        let event = read_post_send_event(ctx, message_id)?;
+        injector.inject_nudge(event.clone())?;
+        let snapshot = read_snapshot(&ctx.snapshot)?;
+        ctx.observability.nudge_delivered(&snapshot, &event);
+        delivered_message_ids.insert(message_id);
     }
+
+    delivered_message_ids.retain(|message_id| current_unread_message_ids.contains(message_id));
     Ok(())
 }
 
-fn close_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmError> {
-    unregister_session_and_close(
-        &*ctx.client,
-        &ctx.registration_request.session_id,
-        &ctx.snapshot,
-        ctx.observability.as_ref(),
+fn build_unread_list_query(ctx: &ReceiveLoopContext) -> Result<ListQuery, AtmError> {
+    ListQuery::new(
+        ctx.home_dir.clone(),
+        ctx.options.workspace_root().to_path_buf(),
+        ctx.options.agent().clone(),
+        None,
+        ctx.options.team().clone(),
+        ReadSelection::Unread,
+        false,
+        Some(DEFAULT_LIST_LIMIT),
+        None,
+        None,
+        None,
+        None,
     )
 }
 
-fn reconnect_live_receive_loop(
-    ctx: &mut LiveReceiveLoopContext,
-    error: AtmError,
-    backoff: std::time::Duration,
-) -> Result<std::time::Duration, AtmError> {
-    set_session_state(
-        &ctx.snapshot,
-        AdvisorySessionState::Disconnected,
-        ctx.observability.as_ref(),
-    )?;
-    ctx.observability.session_error(
-        &ctx.registration_request.session_id,
-        "advisory_stream",
-        &error,
-    );
-    let _ = ctx.stop_rx.recv_timeout(backoff);
-    if stop_requested(&ctx.stop_rx) {
-        close_live_receive_loop(ctx)?;
-        return Ok(backoff);
-    }
-    reregister_live_receive_loop(ctx)?;
-    let advisory_stream = ctx
+fn build_exact_read_query(
+    ctx: &ReceiveLoopContext,
+    message_id: AtmMessageId,
+) -> Result<ReadQuery, AtmError> {
+    let message_id = message_id.to_string();
+    ReadQuery::new(
+        ctx.home_dir.clone(),
+        ctx.options.workspace_root().to_path_buf(),
+        ctx.options.agent().clone(),
+        None,
+        ctx.options.team().clone(),
+        ReadSelection::All,
+        false,
+        false,
+        AckActivationMode::ReadOnly,
+        Some(message_id.as_str()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
+fn read_post_send_event(
+    ctx: &ReceiveLoopContext,
+    message_id: AtmMessageId,
+) -> Result<PostSendHookEvent, AtmError> {
+    let outcome = ctx
         .client
-        .open_advisory_stream(AdvisoryStreamRequest {
-            registration: ctx.registration_request.clone(),
-            limit: ctx.limit,
-        })
-        .map_err(|error| {
-            cleanup_registered_session_after_error(
-                &*ctx.client,
-                &ctx.registration_request.session_id,
-                "graft advisory-stream reconnect",
-                error,
-            )
-        })?;
-    ctx.advisory_stream = advisory_stream;
-    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref()).map_err(|error| {
-        cleanup_registered_session_after_error(
-            &*ctx.client,
-            &ctx.registration_request.session_id,
-            "graft advisory-stream reconnect state publication",
-            error,
+        .read_message(build_exact_read_query(ctx, message_id)?)?;
+    let message = outcome.message.ok_or_else(|| {
+        AtmError::daemon_unavailable(format!(
+            "graft read for message {message_id} returned no selected message"
+        ))
+        .with_recovery(
+            "Retry the graft receive loop after atm-daemon and atm-graft use the same ATM read contract.",
         )
     })?;
-    Ok(std::cmp::min(
-        backoff.saturating_mul(2),
-        MAX_LIVE_RECONNECT_BACKOFF,
-    ))
-}
-
-fn reregister_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmError> {
-    match register_session_with_validated_batch_limit(
-        &*ctx.client,
-        ctx.registration_request.clone(),
-        ctx.limit,
-    ) {
-        Ok(_) => Ok(()),
-        Err(register_error) if is_duplicate_registration(&register_error) => Ok(()),
-        Err(register_error) => Err(register_error),
-    }
-}
-
-fn handle_live_advisory_batch(
-    ctx: &LiveReceiveLoopContext,
-    batch: atm_core::graft::AdvisoryStreamResponse,
-) -> Result<std::time::Duration, AtmError> {
-    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
-    for nudge in batch.nudges {
-        ctx.injector.inject_nudge(nudge.clone())?;
-        ctx.observability
-            .nudge_delivered(&ctx.registration_request.session_id, &nudge);
-    }
-    Ok(ctx.reconnect_backoff)
-}
-
-fn unregister_session_and_close(
-    client: &dyn AdvisorySessionPort,
-    session_id: &atm_core::graft::AdvisorySessionId,
-    snapshot: &Arc<RwLock<SessionSnapshot>>,
-    observability: &dyn GraftObservability,
-) -> Result<(), AtmError> {
-    match client.unregister_session(AdvisorySessionUnregistrationRequest {
-        session_id: session_id.clone(),
-    }) {
-        Ok(_) => set_session_state(snapshot, AdvisorySessionState::Closed, observability),
-        Err(error) => {
-            set_session_state(snapshot, AdvisorySessionState::CloseFailed, observability)?;
-            observability.session_error(session_id, "unregister_session", &error);
-            Err(error)
-        }
-    }
-}
-
-fn is_duplicate_registration(error: &AtmError) -> bool {
-    error.code == atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
-}
-
-fn stop_requested(stop_rx: &Receiver<()>) -> bool {
-    matches!(stop_rx.try_recv(), Ok(()) | Err(TryRecvError::Disconnected))
-}
-
-fn is_socket_timeout_error(error: &AtmError) -> bool {
-    error
-        .source
-        .as_ref()
-        .and_then(|source| source.downcast_ref::<io::Error>())
-        .is_some_and(|source| {
-            matches!(
-                source.kind(),
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-            )
-        })
+    let envelope = message.envelope;
+    let durable_message_id = envelope.message_id.ok_or_else(|| {
+        AtmError::daemon_unavailable(format!(
+            "graft read for message {message_id} returned a durable record without a message_id"
+        ))
+        .with_recovery(
+            "Repair the retained mailbox state so every ATM-authored message keeps its ULID before retrying graft delivery.",
+        )
+    })?;
+    let recipient_team = ctx.options.team().clone();
+    Ok(PostSendHookEvent {
+        sender: envelope.from,
+        sender_team: envelope
+            .source_team
+            .unwrap_or_else(|| recipient_team.clone()),
+        recipient: ctx.options.agent().clone(),
+        recipient_team,
+        message_id: durable_message_id,
+        message: envelope.text,
+        requires_ack: envelope.pending_ack_at.is_some() && envelope.acknowledged_at.is_none(),
+        is_ack: envelope.acknowledges_message_id.is_some(),
+        task_id: envelope.task_id,
+        recipient_pane_id: None,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
-    use std::sync::{Arc, Mutex, RwLock};
-    use std::time::Duration;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex, RwLock, mpsc};
+    use std::time::{Duration, Instant};
 
-    use atm_core::ack::{AckOutcome, AckRequest};
+    use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
-    use atm_core::graft::{
-        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
-        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySessionId, AdvisorySessionPort,
-        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-        AdvisorySessionState, AdvisorySessionUnregistrationRequest,
-        AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AtmGraftClient,
-    };
-    use atm_core::protocol;
-    use atm_core::read::{ReadOutcome, ReadQuery};
-    use atm_core::send::{SendOutcome, SendRequest};
-    use atm_core::types::IsoTimestamp;
-    use interprocess::local_socket::prelude::*;
-    use interprocess::local_socket::{ListenerOptions, Stream as LocalSocketStream};
+    use atm_core::error_codes::AtmErrorCode;
+    use atm_core::list::{ListOutcome, ListQuery, ListRow};
+    use atm_core::protocol::ProtocolErrorEnvelope;
+    use atm_core::read::{BucketCounts, ReadOutcome};
+    use atm_core::schema::{AtmMessageId, InboxMessage};
+    use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
+    use atm_core::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
+    use serde_json::json;
     use tempfile::TempDir;
 
-    use super::{
-        LiveReceiveLoopContext, ReceiveLoopContext, attempt_receive_loop_reregistration,
-        read_snapshot, reconnect_live_receive_loop, register_session_with_validated_batch_limit,
-    };
     use crate::{
-        GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot,
-        transport::ActiveAdvisoryStream,
+        GraftObservability, GraftSessionClient, GraftSessionOptions, GraftSessionState,
+        HostNudgeInjector, SessionSnapshot,
     };
 
-    #[derive(Debug, Clone, Copy)]
-    enum UnregisterBehavior {
-        Closed,
-        NotClosed,
-        Error,
+    use super::{
+        ReceiveLoopContext, next_degraded_poll_interval, read_post_send_event, read_snapshot,
+        run_receive_loop,
+    };
+
+    #[derive(Debug, Default)]
+    struct RecordingClient {
+        rows: Mutex<Vec<ListRow>>,
+        messages: Mutex<std::collections::HashMap<AtmMessageId, InboxMessage>>,
     }
 
-    #[derive(Debug)]
-    struct RecordingSessionClient {
-        queue_capacity: usize,
-        unregister_behavior: UnregisterBehavior,
-        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
-    }
-
-    impl RecordingSessionClient {
-        fn new(queue_capacity: usize) -> Self {
-            Self {
-                queue_capacity,
-                unregister_behavior: UnregisterBehavior::Closed,
-                unregister_calls: Mutex::new(Vec::new()),
-            }
-        }
-
-        fn with_unregister_behavior(
-            queue_capacity: usize,
-            unregister_behavior: UnregisterBehavior,
-        ) -> Self {
-            Self {
-                queue_capacity,
-                unregister_behavior,
-                unregister_calls: Mutex::new(Vec::new()),
-            }
-        }
-    }
-
-    impl AtmGraftClient for RecordingSessionClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
-            panic!("send_message is not used by runtime registration tests")
-        }
-
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-            panic!("read_message is not used by runtime registration tests")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message is not used by runtime registration tests")
-        }
-    }
-
-    impl AdvisorySessionPort for RecordingSessionClient {
-        fn register_session(
+    impl atm_core::graft::AtmGraftClient for RecordingClient {
+        fn send_message(
             &self,
-            request: AdvisorySessionRegistrationRequest,
-        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-            Ok(AdvisorySessionRegistrationResponse {
-                team: request.team,
-                agent: request.agent,
-                session_id: request.session_id,
-                registered_at: IsoTimestamp::now(),
-                queue_capacity: self.queue_capacity,
-            })
+            _request: atm_core::send::SendRequest,
+        ) -> Result<atm_core::send::SendOutcome, AtmError> {
+            panic!("send_message not used in runtime tests")
         }
 
-        fn unregister_session(
-            &self,
-            request: AdvisorySessionUnregistrationRequest,
-        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-            self.unregister_calls
+        fn read_message(&self, query: atm_core::read::ReadQuery) -> Result<ReadOutcome, AtmError> {
+            let message_id = query
+                .message_id_filter()
+                .copied()
+                .expect("runtime tests use exact message id");
+            let envelope = self
+                .messages
                 .lock()
-                .expect("unregister calls")
-                .push(request.session_id.clone());
-            match self.unregister_behavior {
-                UnregisterBehavior::Closed => Ok(AdvisorySessionUnregistrationResponse {
-                    session_id: request.session_id,
-                    closed: true,
-                }),
-                UnregisterBehavior::NotClosed => Ok(AdvisorySessionUnregistrationResponse {
-                    session_id: request.session_id,
-                    closed: false,
-                }),
-                UnregisterBehavior::Error => {
-                    Err(AtmError::daemon_unavailable("simulated unregister failure"))
+                .expect("messages lock")
+                .get(&message_id)
+                .cloned()
+                .expect("message");
+            Ok(serde_json::from_value(json!({
+                "action": "read",
+                "team": "test-team",
+                "agent": "qa-a",
+                "selection_mode": "all",
+                "mutation_applied": false,
+                "count": 1,
+                "message": {
+                    "bucket": "unread",
+                    "class": "unread",
+                    "from": envelope.from,
+                    "text": envelope.text,
+                    "timestamp": envelope.timestamp,
+                    "read": envelope.read,
+                    "source_team": envelope.source_team,
+                    "summary": envelope.summary,
+                    "message_id": envelope.message_id,
+                    "pendingAckAt": envelope.pending_ack_at,
+                    "acknowledgedAt": envelope.acknowledged_at,
+                    "acknowledgesMessageId": envelope.acknowledges_message_id,
+                    "parentMessageId": envelope.parent_message_id,
+                    "threadMode": envelope.thread_mode,
+                    "expiresAt": envelope.expires_at,
+                    "taskId": envelope.task_id
+                },
+                "selected_message_id": message_id,
+                "match_count": 1,
+                "additional_match_count": 0,
+                "bucket_counts": {
+                    "unread": 1,
+                    "pending_ack": 0,
+                    "history": 0
                 }
-            }
+            }))
+            .expect("read outcome"))
         }
 
-        fn fetch_nudges(
+        fn acknowledge_message(
             &self,
-            _request: AdvisoryFetchRequest,
-        ) -> Result<AdvisoryFetchResponse, AtmError> {
-            panic!("fetch_nudges is not used by runtime registration tests")
-        }
-
-        fn drain_nudges(
-            &self,
-            _request: AdvisoryDrainRequest,
-        ) -> Result<AdvisoryDrainResponse, AtmError> {
-            panic!("drain_nudges is not used by runtime registration tests")
+            _request: atm_core::ack::AckRequest,
+        ) -> Result<atm_core::ack::AckOutcome, AtmError> {
+            panic!("acknowledge_message not used in runtime tests")
         }
     }
 
-    impl GraftSessionClient for RecordingSessionClient {
-        fn supports_live_advisory_stream(&self) -> bool {
-            false
-        }
-
-        fn open_advisory_stream(
-            &self,
-            _request: AdvisoryStreamRequest,
-        ) -> Result<crate::transport::ActiveAdvisoryStream, AtmError> {
-            panic!("open_advisory_stream is not used by runtime registration tests")
+    impl GraftSessionClient for RecordingClient {
+        fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
+            let rows = self.rows.lock().expect("rows lock").clone();
+            let unread = rows.len();
+            Ok(ListOutcome {
+                action: CommandAction::List,
+                team: TeamName::from_validated("test-team"),
+                agent: AgentName::from_validated("qa-a"),
+                selection_mode: atm_core::types::ReadSelection::Unread,
+                history_collapsed: false,
+                count: unread,
+                rows,
+                bucket_counts: BucketCounts {
+                    unread,
+                    pending_ack: 0,
+                    history: 0,
+                },
+            })
         }
     }
 
     #[derive(Debug, Default)]
-    struct NoopInjector;
+    struct RecordingInjector {
+        nudges: Mutex<Vec<PostSendHookEvent>>,
+    }
 
-    impl HostNudgeInjector for NoopInjector {
-        fn inject_nudge(&self, _nudge: AdvisoryEvent) -> Result<(), AtmError> {
+    impl HostNudgeInjector for RecordingInjector {
+        fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError> {
+            self.nudges.lock().expect("nudges lock").push(nudge);
             Ok(())
         }
     }
@@ -651,408 +540,320 @@ mod tests {
 
     impl GraftObservability for NoopObservability {}
 
-    fn registration_request() -> AdvisorySessionRegistrationRequest {
-        AdvisorySessionRegistrationRequest {
-            team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
-            session_id: AdvisorySessionId::new("session-1").expect("session id"),
-            pid: 4242,
-            started_at: IsoTimestamp::now(),
+    struct TestPaths {
+        _tempdir: TempDir,
+        home_dir: PathBuf,
+        workspace_root: PathBuf,
+    }
+
+    fn test_paths() -> TestPaths {
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let workspace_root = tempdir.path().join("workspace");
+        fs::create_dir_all(&home_dir).expect("create home dir");
+        fs::create_dir_all(&workspace_root).expect("create workspace dir");
+        TestPaths {
+            _tempdir: tempdir,
+            home_dir,
+            workspace_root,
+        }
+    }
+
+    fn session_options(paths: &TestPaths) -> GraftSessionOptions {
+        GraftSessionOptions::for_current_process(
+            paths.workspace_root.clone(),
+            TeamName::from_validated(TEST_TEAM),
+            AgentName::from_validated(TEST_QA),
+        )
+        .with_poll_interval(Duration::from_millis(1))
+    }
+
+    fn wait_until(description: &str, predicate: impl Fn() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while Instant::now() < deadline {
+            if predicate() {
+                return;
+            }
+            std::thread::yield_now();
+        }
+        panic!("timed out waiting for {description}");
+    }
+
+    fn unread_row(message_id: AtmMessageId) -> ListRow {
+        ListRow {
+            message_id: Some(message_id),
+            summary: "review failing smoke lane".to_string(),
+            from: AgentName::from_validated(TEST_LEAD),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            pending_ack: false,
+            task_id: None,
+        }
+    }
+
+    fn unread_message(message_id: AtmMessageId) -> InboxMessage {
+        InboxMessage {
+            from: AgentName::from_validated(TEST_LEAD),
+            text: "review failing smoke lane".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TeamName::from_validated(TEST_TEAM)),
+            summary: Some("review failing smoke lane".to_string()),
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Default::default(),
         }
     }
 
     #[test]
-    fn register_session_with_invalid_batch_limit_cleans_up_registered_slot() {
-        let client = RecordingSessionClient::new(1);
-        let error = register_session_with_validated_batch_limit(
-            &client,
-            registration_request(),
-            AdvisoryBatchLimit::new(8).expect("limit"),
-        )
-        .expect_err("batch-limit validation should fail");
-
-        assert!(error.is_validation());
-        assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
-        );
-    }
-
-    #[test]
-    fn register_session_with_invalid_batch_limit_reports_not_closed_cleanup_failure() {
-        let client =
-            RecordingSessionClient::with_unregister_behavior(1, UnregisterBehavior::NotClosed);
-        let error = register_session_with_validated_batch_limit(
-            &client,
-            registration_request(),
-            AdvisoryBatchLimit::new(8).expect("limit"),
-        )
-        .expect_err("batch-limit validation should fail");
-
-        assert!(!error.is_validation());
-        assert_eq!(
-            error.code,
-            atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        );
-        assert!(error.message.contains("without closing the session"));
-        assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
-        );
-    }
-
-    #[test]
-    fn register_session_with_invalid_batch_limit_reports_unregister_cleanup_failure() {
-        let client = RecordingSessionClient::with_unregister_behavior(1, UnregisterBehavior::Error);
-        let error = register_session_with_validated_batch_limit(
-            &client,
-            registration_request(),
-            AdvisoryBatchLimit::new(8).expect("limit"),
-        )
-        .expect_err("batch-limit validation should fail");
-
-        assert!(!error.is_validation());
-        assert_eq!(
-            error.code,
-            atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        );
-        assert!(
-            error
-                .message
-                .contains("daemon unregister failed during cleanup")
-        );
-        let source = error.source.as_ref().expect("cleanup source").to_string();
-        assert!(source.contains("simulated unregister failure"));
-        assert!(source.contains("atm-daemon binary is installed"));
-        assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
-        );
-    }
-
-    #[test]
-    fn reregistration_cleans_up_registered_slot_when_batch_limit_validation_fails() {
-        let client = Arc::new(RecordingSessionClient::new(1));
-        let registration = registration_request();
-        let session_id = registration.session_id.clone();
-        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
-            team: registration.team.clone(),
-            agent: registration.agent.clone(),
-            session_id: session_id.clone(),
-            state: AdvisorySessionState::Disconnected,
-        }));
-        let (_stop_tx, stop_rx) = mpsc::channel();
+    fn read_post_send_event_projects_read_outcome_into_shared_event() {
+        let paths = test_paths();
+        let message_id = AtmMessageId::new();
+        let client = Arc::new(RecordingClient::default());
+        client
+            .messages
+            .lock()
+            .expect("messages lock")
+            .insert(message_id, unread_message(message_id));
         let ctx = ReceiveLoopContext {
-            client: client.clone(),
-            registration_request: registration,
-            drain_request: AdvisoryDrainRequest {
-                session_id: session_id.clone(),
-                limit: AdvisoryBatchLimit::new(8).expect("limit"),
-            },
-            poll_interval: Duration::from_millis(10),
-            snapshot: snapshot.clone(),
-            injector: Arc::new(NoopInjector),
+            client,
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
+            snapshot: Arc::new(RwLock::new(SessionSnapshot {
+                team: TeamName::from_validated(TEST_TEAM),
+                agent: AgentName::from_validated(TEST_QA),
+                state: GraftSessionState::Polling,
+            })),
+            injector: Arc::new(RecordingInjector::default()),
+            observability: Arc::new(NoopObservability),
+            stop_rx: mpsc::channel().1,
+        };
+
+        let event = read_post_send_event(&ctx, message_id).expect("event");
+
+        assert_eq!(event.message_id, message_id);
+        assert_eq!(event.sender, AgentName::from_validated(TEST_LEAD));
+        assert_eq!(event.sender_team, TeamName::from_validated(TEST_TEAM));
+        assert_eq!(event.recipient, AgentName::from_validated(TEST_QA));
+        assert_eq!(event.recipient_team, TeamName::from_validated(TEST_TEAM));
+        assert_eq!(event.message, "review failing smoke lane");
+    }
+
+    #[test]
+    fn receive_loop_polls_unread_messages_and_injects_each_message_once() {
+        let paths = test_paths();
+        let message_id = AtmMessageId::new();
+        let client = Arc::new(RecordingClient::default());
+        client
+            .rows
+            .lock()
+            .expect("rows lock")
+            .push(unread_row(message_id));
+        client
+            .messages
+            .lock()
+            .expect("messages lock")
+            .insert(message_id, unread_message(message_id));
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Polling,
+        }));
+        let ctx = ReceiveLoopContext {
+            client,
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
             stop_rx,
         };
 
-        let error = attempt_receive_loop_reregistration(&ctx, &session_id)
-            .expect_err("invalid batch limit must fail after cleanup");
+        let join = std::thread::spawn(move || run_receive_loop(ctx));
+        wait_until("graft receive-loop delivery", || {
+            injector.nudges.lock().expect("nudges lock").len() == 1
+        });
+        stop_tx.send(()).expect("stop");
+        join.join().expect("join").expect("receive loop");
 
-        assert!(error.is_validation());
-        assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
-        );
+        let nudges = injector.nudges.lock().expect("nudges lock");
+        assert_eq!(nudges.len(), 1);
+        assert_eq!(nudges[0].message_id, message_id);
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
-            AdvisorySessionState::Disconnected
+            GraftSessionState::Polling
         );
     }
 
-    #[derive(Debug)]
-    struct ReconnectFailureClient {
-        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
-    }
-
-    impl AdvisorySessionPort for ReconnectFailureClient {
-        fn register_session(
-            &self,
-            request: AdvisorySessionRegistrationRequest,
-        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-            Ok(AdvisorySessionRegistrationResponse {
-                team: request.team,
-                agent: request.agent,
-                session_id: request.session_id,
-                registered_at: IsoTimestamp::now(),
-                queue_capacity: 16,
-            })
-        }
-
-        fn unregister_session(
-            &self,
-            request: AdvisorySessionUnregistrationRequest,
-        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-            self.unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .push(request.session_id.clone());
-            Ok(AdvisorySessionUnregistrationResponse {
-                session_id: request.session_id,
-                closed: true,
-            })
-        }
-
-        fn fetch_nudges(
-            &self,
-            _request: AdvisoryFetchRequest,
-        ) -> Result<AdvisoryFetchResponse, AtmError> {
-            panic!("fetch_nudges is not used by reconnect tests")
-        }
-
-        fn drain_nudges(
-            &self,
-            _request: AdvisoryDrainRequest,
-        ) -> Result<AdvisoryDrainResponse, AtmError> {
-            panic!("drain_nudges is not used by reconnect tests")
-        }
-    }
-
-    impl AtmGraftClient for ReconnectFailureClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
-            panic!("send_message is not used by reconnect tests")
-        }
-
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-            panic!("read_message is not used by reconnect tests")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message is not used by reconnect tests")
-        }
-    }
-
-    impl GraftSessionClient for ReconnectFailureClient {
-        fn supports_live_advisory_stream(&self) -> bool {
-            true
-        }
-
-        fn open_advisory_stream(
-            &self,
-            _request: AdvisoryStreamRequest,
-        ) -> Result<ActiveAdvisoryStream, AtmError> {
-            Err(AtmError::daemon_unavailable(
-                "simulated advisory-stream reopen failure",
-            ))
-        }
-    }
-
     #[test]
-    fn reconnect_live_receive_loop_cleans_up_when_stream_reopen_fails() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let endpoint_path = tempdir.path().join("reconnect.sock");
-        let listener = ListenerOptions::new()
-            .name(protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"))
-            .create_sync()
-            .expect("create listener");
-        let server = std::thread::spawn(move || {
-            let _stream = listener.accept().expect("accept");
-        });
-        let stream = LocalSocketStream::connect(
-            protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"),
-        )
-        .expect("connect");
-        let client = Arc::new(ReconnectFailureClient {
-            unregister_calls: Mutex::new(Vec::new()),
-        });
+    fn receive_loop_marks_session_degraded_when_poll_fails() {
+        let paths = test_paths();
+        #[derive(Debug, Default)]
+        struct FailingClient;
+
+        impl atm_core::graft::AtmGraftClient for FailingClient {
+            fn send_message(
+                &self,
+                _request: atm_core::send::SendRequest,
+            ) -> Result<atm_core::send::SendOutcome, AtmError> {
+                panic!("send_message not used in runtime tests")
+            }
+
+            fn read_message(
+                &self,
+                _query: atm_core::read::ReadQuery,
+            ) -> Result<ReadOutcome, AtmError> {
+                panic!("read_message not used in runtime tests")
+            }
+
+            fn acknowledge_message(
+                &self,
+                _request: atm_core::ack::AckRequest,
+            ) -> Result<atm_core::ack::AckOutcome, AtmError> {
+                panic!("acknowledge_message not used in runtime tests")
+            }
+        }
+
+        impl GraftSessionClient for FailingClient {
+            fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
+                Err(ProtocolErrorEnvelope {
+                    code: AtmErrorCode::DaemonUnavailable,
+                    message: "simulated list failure".to_string(),
+                    recovery: vec!["Retry after the daemon recovers.".to_string()],
+                }
+                .into_atm_error())
+            }
+        }
+
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, stop_rx) = mpsc::channel();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
-            team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
-            session_id: AdvisorySessionId::new("session-1").expect("session"),
-            state: AdvisorySessionState::Registered,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Polling,
         }));
-        let (_stop_tx, stop_rx) = mpsc::channel();
-        let mut ctx = LiveReceiveLoopContext {
-            client: Arc::clone(&client) as Arc<dyn GraftSessionClient>,
-            registration_request: registration_request(),
-            advisory_stream: ActiveAdvisoryStream {
-                stream,
-                request_id: protocol::next_request_id(),
-            },
-            limit: AdvisoryBatchLimit::new(8).expect("limit"),
-            reconnect_backoff: Duration::from_millis(1),
-            snapshot,
-            injector: Arc::new(NoopInjector),
+        let ctx = ReceiveLoopContext {
+            client: Arc::new(FailingClient),
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
             stop_rx,
         };
 
-        let error = reconnect_live_receive_loop(
-            &mut ctx,
-            AtmError::daemon_unavailable("stream read failed"),
-            Duration::from_millis(1),
-        )
-        .expect_err("stream reopen should fail");
+        let join = std::thread::spawn(move || run_receive_loop(ctx));
+        wait_until("graft receive-loop degraded state", || {
+            read_snapshot(&snapshot)
+                .map(|state| state.state == GraftSessionState::Degraded)
+                .unwrap_or(false)
+        });
+        stop_tx.send(()).expect("stop");
+        join.join().expect("join").expect("receive loop");
 
-        assert_eq!(error.message, "simulated advisory-stream reopen failure");
         assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
+            read_snapshot(&snapshot).expect("snapshot").state,
+            GraftSessionState::Degraded
         );
-        server.join().expect("join server");
-    }
-
-    #[derive(Debug)]
-    struct ReconnectValidationFailureClient {
-        unregister_calls: Mutex<Vec<AdvisorySessionId>>,
-    }
-
-    impl AdvisorySessionPort for ReconnectValidationFailureClient {
-        fn register_session(
-            &self,
-            request: AdvisorySessionRegistrationRequest,
-        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-            Ok(AdvisorySessionRegistrationResponse {
-                team: request.team,
-                agent: request.agent,
-                session_id: request.session_id,
-                registered_at: IsoTimestamp::now(),
-                queue_capacity: 1,
-            })
-        }
-
-        fn unregister_session(
-            &self,
-            request: AdvisorySessionUnregistrationRequest,
-        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-            self.unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .push(request.session_id.clone());
-            Ok(AdvisorySessionUnregistrationResponse {
-                session_id: request.session_id,
-                closed: true,
-            })
-        }
-
-        fn fetch_nudges(
-            &self,
-            _request: AdvisoryFetchRequest,
-        ) -> Result<AdvisoryFetchResponse, AtmError> {
-            panic!("fetch_nudges is not used by reconnect validation tests")
-        }
-
-        fn drain_nudges(
-            &self,
-            _request: AdvisoryDrainRequest,
-        ) -> Result<AdvisoryDrainResponse, AtmError> {
-            panic!("drain_nudges is not used by reconnect validation tests")
-        }
-    }
-
-    impl AtmGraftClient for ReconnectValidationFailureClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
-            panic!("send_message is not used by reconnect validation tests")
-        }
-
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-            panic!("read_message is not used by reconnect validation tests")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message is not used by reconnect validation tests")
-        }
-    }
-
-    impl GraftSessionClient for ReconnectValidationFailureClient {
-        fn supports_live_advisory_stream(&self) -> bool {
-            true
-        }
-
-        fn open_advisory_stream(
-            &self,
-            _request: AdvisoryStreamRequest,
-        ) -> Result<ActiveAdvisoryStream, AtmError> {
-            panic!("open_advisory_stream should not run after validation failure")
-        }
     }
 
     #[test]
-    fn reconnect_live_receive_loop_cleans_up_when_reregistration_batch_limit_is_invalid() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let endpoint_path = tempdir.path().join("reconnect-validation.sock");
-        let listener = ListenerOptions::new()
-            .name(protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"))
-            .create_sync()
-            .expect("create listener");
-        let server = std::thread::spawn(move || {
-            let _stream = listener.accept().expect("accept");
+    fn degraded_poll_interval_doubles_and_caps() {
+        let base = Duration::from_millis(10);
+        assert_eq!(
+            next_degraded_poll_interval(base, base),
+            Duration::from_millis(20)
+        );
+        assert_eq!(
+            next_degraded_poll_interval(base, Duration::from_millis(40)),
+            Duration::from_millis(80)
+        );
+        assert_eq!(
+            next_degraded_poll_interval(base, Duration::from_millis(80)),
+            Duration::from_millis(80)
+        );
+    }
+
+    #[test]
+    fn receive_loop_marks_session_degraded_when_injector_blocks_past_deadline() {
+        #[derive(Debug)]
+        struct BlockingInjector {
+            entered_tx: Mutex<Option<mpsc::SyncSender<()>>>,
+            release_rx: Mutex<mpsc::Receiver<()>>,
+        }
+
+        impl HostNudgeInjector for BlockingInjector {
+            fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
+                if let Some(entered_tx) = self.entered_tx.lock().expect("entered lock").take() {
+                    let _ = entered_tx.send(());
+                }
+                let _ = self.release_rx.lock().expect("release lock").recv();
+                Ok(())
+            }
+        }
+
+        let paths = test_paths();
+        let message_id = AtmMessageId::new();
+        let client = Arc::new(RecordingClient::default());
+        client
+            .rows
+            .lock()
+            .expect("rows lock")
+            .push(unread_row(message_id));
+        client
+            .messages
+            .lock()
+            .expect("messages lock")
+            .insert(message_id, unread_message(message_id));
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::channel();
+        let injector = Arc::new(BlockingInjector {
+            entered_tx: Mutex::new(Some(entered_tx)),
+            release_rx: Mutex::new(release_rx),
         });
-        let stream = LocalSocketStream::connect(
-            protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"),
-        )
-        .expect("connect");
-        let client = Arc::new(ReconnectValidationFailureClient {
-            unregister_calls: Mutex::new(Vec::new()),
-        });
+        let (stop_tx, stop_rx) = mpsc::channel();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
-            team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
-            session_id: AdvisorySessionId::new("session-1").expect("session"),
-            state: AdvisorySessionState::Registered,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Polling,
         }));
-        let (_stop_tx, stop_rx) = mpsc::channel();
-        let mut ctx = LiveReceiveLoopContext {
-            client: Arc::clone(&client) as Arc<dyn GraftSessionClient>,
-            registration_request: registration_request(),
-            advisory_stream: ActiveAdvisoryStream {
-                stream,
-                request_id: protocol::next_request_id(),
-            },
-            limit: AdvisoryBatchLimit::new(8).expect("limit"),
-            reconnect_backoff: Duration::from_millis(1),
-            snapshot,
-            injector: Arc::new(NoopInjector),
+        let ctx = ReceiveLoopContext {
+            client,
+            options: session_options(&paths),
+            home_dir: paths.home_dir.clone(),
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
             stop_rx,
         };
 
-        let error = reconnect_live_receive_loop(
-            &mut ctx,
-            AtmError::daemon_unavailable("stream read failed"),
-            Duration::from_millis(1),
-        )
-        .expect_err("invalid batch limit must fail after cleanup");
-
-        assert!(error.is_validation());
-        assert_eq!(
-            client
-                .unregister_calls
-                .lock()
-                .expect("unregister calls")
-                .len(),
-            1
+        let join = std::thread::spawn(move || run_receive_loop(ctx));
+        entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("injector entered");
+        wait_until(
+            "graft receive-loop degraded state after blocked injector",
+            || {
+                read_snapshot(&snapshot)
+                    .map(|state| state.state == GraftSessionState::Degraded)
+                    .unwrap_or(false)
+            },
         );
-        server.join().expect("join server");
+        stop_tx.send(()).expect("stop");
+        release_tx.send(()).expect("release injector");
+        join.join().expect("join").expect("receive loop");
+
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            GraftSessionState::Degraded
+        );
     }
 }

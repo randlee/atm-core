@@ -136,15 +136,19 @@ impl TeamsCommand {
 impl AddMemberCommand {
     fn run(self, atm_home_dir: PathBuf) -> Result<()> {
         let json = self.json;
-        let member_home_dir = match self.home_dir.clone() {
-            Some(path) => path,
-            None => std::env::current_dir()?,
-        };
+        let member_home_dir = self.resolve_member_home_dir()?;
         let request = self.build_request(atm_home_dir, member_home_dir)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
         output::print_add_member_result(&outcome, json)
+    }
+
+    fn resolve_member_home_dir(&self) -> Result<PathBuf> {
+        match &self.home_dir {
+            Some(path) => Ok(path.clone()),
+            None => Ok(home::command_invocation_dir()?),
+        }
     }
 
     fn build_request(
@@ -230,6 +234,7 @@ mod tests {
 
     use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
     use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_runtime_test_support::open_sqlite_boundary;
@@ -255,7 +260,7 @@ mod tests {
 
     impl CwdGuard {
         fn change_to(path: &std::path::Path) -> Self {
-            let original = std::env::current_dir().expect("current dir");
+            let original = home::command_invocation_dir().expect("current dir");
             std::env::set_current_dir(path).expect("set current dir");
             Self { original }
         }
@@ -438,6 +443,27 @@ mod tests {
         assert_eq!(request.atm_home_dir.as_ref(), atm_home_dir.as_path());
         assert_eq!(request.member_home_dir.as_ref(), member_home_dir.as_path());
         assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn add_member_defaults_member_home_dir_to_command_invocation_dir() {
+        let fixture = Fixture::new();
+        let command = AddMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: "new-member".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            home_dir: None,
+            pane_id: None,
+            json: false,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            let member_home_dir = command.resolve_member_home_dir().expect("member home dir");
+            let current_dir = home::command_invocation_dir().expect("current dir");
+            assert_eq!(member_home_dir, current_dir);
+        });
     }
 
     #[test]

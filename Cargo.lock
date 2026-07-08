@@ -38,7 +38,6 @@ dependencies = [
  "libc",
  "parking_lot",
  "same-file",
- "sc-observability-types",
  "serde",
  "serde_json",
  "serial_test",
@@ -182,7 +181,6 @@ version = "1.2.3"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-client",
- "interprocess",
  "serde_json",
  "tempfile",
  "tracing",

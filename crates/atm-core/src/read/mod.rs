@@ -418,24 +418,30 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
     )?;
     let metadata_rows =
         load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
-    let (_updated_counts, updated_selected) =
+    let (updated_counts, _updated_selected) =
         selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
-    let updated_selected = updated_selected.into_iter().take(1).collect::<Vec<_>>();
-    let output_message = output_messages_from_metadata_selection(
-        runtime,
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-        &metadata_rows,
-        &updated_selected,
-        query.message_id_filter,
-    )?
-    .into_iter()
-    .next();
+    let output_message = selection
+        .selected
+        .first()
+        .cloned()
+        .map(|selected_message| {
+            output_messages_from_metadata_selection(
+                runtime,
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                &metadata_rows,
+                &[selected_message],
+                selected_message_id,
+            )
+            .map(|mut messages| messages.pop())
+        })
+        .transpose()?
+        .flatten();
     Ok(ReadDisplayState {
         mutation_applied,
         output_message,
-        bucket_counts: selection.bucket_counts,
+        bucket_counts: updated_counts,
         selected_message_id,
         match_count,
         timed_out: selection.timed_out,
@@ -517,7 +523,7 @@ fn message_key_for_classified(
             "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
         )
     })?;
-    boundary::MessageKey::new(format!("atm:{message_id}"))
+    Ok(boundary::MessageKey::from(message_id))
 }
 
 fn load_checked_read_metadata(
@@ -548,7 +554,13 @@ fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
         .iter()
         .cloned()
         .map(|selected_message| {
-            let message_key = message_key_for_classified(&selected_message)?;
+            let message_key = selected_message
+                .envelope
+                .message_id
+                .and_then(|message_id| row_by_id.get(&message_id))
+                .map(|row| row.message_key.clone())
+                .map(Ok)
+                .unwrap_or_else(|| message_key_for_classified(&selected_message))?;
             let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?
             else {
                 return Err(AtmError::validation(format!(

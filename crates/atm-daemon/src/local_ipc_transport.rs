@@ -40,7 +40,10 @@ use shutdown::{
     write_shutdown_response,
 };
 
-const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+// Same-host ATM traffic is unary request/response, so this cap only needs to
+// comfortably exceed realistic single-host caller fan-out while still bounding
+// per-connection worker threads and shutdown drain pressure.
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
@@ -146,7 +149,13 @@ impl SocketEndpointGuard {
 impl Drop for SocketEndpointGuard {
     fn drop(&mut self) {
         if let Err(error) = self.unpublish() {
-            tracing::warn!(%error, "daemon local IPC endpoint cleanup failed during drop");
+            tracing::warn!(
+                subsystem = "local_ipc_transport",
+                action = "endpoint_drop_cleanup",
+                outcome = "failed",
+                %error,
+                "daemon local IPC endpoint cleanup failed during drop"
+            );
         }
     }
 }
@@ -289,6 +298,30 @@ impl PreparedRuntimeServer {
             LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
         let ownership =
             HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    #[cfg(test)]
+    fn bind_with_observability_and_home_for_test(
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
+        let lifecycle_control =
+            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
+        let ownership = HostOwnershipAdapter::new_with_observability(host_ownership_observability)
+            .acquire_at_home_for_test(host_home_dir)?;
+        Self::bind_after_install(endpoint_path, observability, lifecycle_control, ownership)
+    }
+
+    fn bind_after_install(
+        endpoint_path: PathBuf,
+        observability: SubsystemObservability,
+        lifecycle_control: LifecycleControlSourceAdapter,
+        ownership: HostOwnershipGuard,
+    ) -> Result<Self, AtmError> {
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
@@ -486,7 +519,7 @@ where
         #[cfg(test)]
         accept_error_inject,
     };
-    let serve_error = run_accept_loop(scope, &mut accept_context, &reload_runtime_view)?;
+    let serve_error = capture_serve_error(scope, &mut accept_context, &reload_runtime_view);
     let shutdown_error = finalize_serve_loop(
         &begin_shutdown,
         &finalize_shutdown,
@@ -501,6 +534,20 @@ where
         lifecycle_waiter,
     );
     finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+fn capture_serve_error<'scope, ReloadRuntimeView>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    accept_context: &mut AcceptLoopContext<'_>,
+    reload_runtime_view: &ReloadRuntimeView,
+) -> Option<AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    match run_accept_loop(scope, accept_context, reload_runtime_view) {
+        Ok(serve_error) => serve_error,
+        Err(error) => Some(error),
+    }
 }
 
 fn spawn_lifecycle_waiter<'scope, 'env>(
@@ -729,6 +776,9 @@ where
             tracing::info!("bounded lifecycle-control-triggered config/roster reload applied");
         }
         Err(error) => tracing::warn!(
+            subsystem = "local_ipc_transport",
+            action = "reload_runtime_view",
+            outcome = "rejected",
             error_code = %error.code,
             error_message = %error.message,
             "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
@@ -758,11 +808,12 @@ fn handle_shutdown_probe(
                 TERMINATE_REJECTION_GRACE_DEADLINE,
             ) {
                 tracing::warn!(
-                    %error,
                     subsystem = "local_ipc_transport",
                     action = "shutdown_probe_wake",
+                    outcome = "failed",
                     deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
                     path = %endpoint_path.display(),
+                    %error,
                     "failed to schedule delayed listener wake during shutdown probe"
                 );
                 let _ = wake_listener(endpoint_path);
@@ -819,15 +870,36 @@ fn spawn_connection_worker<'scope>(
         .spawn_scoped(scope, move || {
             let _active = active;
             let result = catch_unwind(AssertUnwindSafe(|| {
-                handle_connection(stream, dispatcher, force_shutdown.as_ref(), registry, codec)
+                handle_connection(
+                    stream,
+                    dispatcher,
+                    force_shutdown.as_ref(),
+                    registry,
+                    codec,
+                )
             }));
             match result {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => {
-                    tracing::warn!(%error, "daemon local IPC connection handling failed");
+                    #[cfg(test)]
+                    eprintln!("daemon local IPC connection handling failed: {error}");
+                    tracing::warn!(
+                        subsystem = "local_ipc_transport",
+                        action = "connection_worker",
+                        outcome = "failed",
+                        %error,
+                        "daemon local IPC connection handling failed"
+                    );
                 }
                 Err(_) => {
+                    #[cfg(test)]
+                    eprintln!(
+                        "daemon local IPC connection worker panicked; transport thread recovered"
+                    );
                     tracing::warn!(
+                        subsystem = "local_ipc_transport",
+                        action = "connection_worker",
+                        outcome = "panic",
                         "daemon local IPC connection worker panicked; the transport thread recovered and continued shutdown accounting"
                     );
                 }
@@ -888,6 +960,21 @@ impl LocalIpcServerTransportAdapter {
             self.lifecycle_observability.clone(),
         )
     }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_runtime_at_socket_path_for_home(
+        &self,
+        endpoint_path: PathBuf,
+        host_home_dir: &std::path::Path,
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        PreparedRuntimeServer::bind_with_observability_and_home_for_test(
+            endpoint_path,
+            host_home_dir,
+            self.observability.clone(),
+            self.host_ownership_observability.clone(),
+            self.lifecycle_observability.clone(),
+        )
+    }
 }
 
 impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
@@ -928,6 +1015,8 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
+    #[cfg(windows)]
+    use tempfile::TempDir;
     #[cfg(unix)]
     use tempfile::TempDir;
 
@@ -945,14 +1034,6 @@ mod tests {
             request: RequestEnvelope,
         ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for test: {request:?}");
-        }
-
-        fn dispatch_advisory_stream(
-            &self,
-            request: atm_core::graft::AdvisoryStreamRequest,
-            _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
-        ) -> Result<(), atm_core::error::AtmError> {
-            panic!("intentional dispatcher panic for advisory stream test: {request:?}");
         }
     }
 
@@ -981,6 +1062,24 @@ mod tests {
         assert_eq!(
             result,
             LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prepare_local_ipc_endpoint_rejects_logical_parent_that_is_a_file() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&parent_file, "x").expect("parent file");
+        let endpoint = parent_file.join("daemon.sock");
+
+        let error = prepare_local_ipc_endpoint(&endpoint).expect_err("prepare endpoint");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            error
+                .to_string()
+                .contains("failed to create daemon local IPC directory")
         );
     }
 

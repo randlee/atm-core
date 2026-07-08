@@ -5,20 +5,23 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use atm_core::ack::AckRequest;
+use atm_core::boundary::PostSendHookEvent;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AckActivationMode, AgentName, ReadSelection, TeamName};
-use atm_graft::{Event, GraftClient, GraftSession, GraftSessionOptions, HostNudgeInjector};
+use atm_graft::{
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+};
 use serde_json::json;
 
 #[derive(Debug)]
 struct RecordingInjector {
-    nudges: Mutex<Vec<Event>>,
+    nudges: Mutex<Vec<PostSendHookEvent>>,
     delivered_tx: mpsc::Sender<()>,
 }
 
 impl RecordingInjector {
-    fn first_nudge(&self) -> Option<Event> {
+    fn first_nudge(&self) -> Option<PostSendHookEvent> {
         self.nudges.lock().expect("nudges lock").first().cloned()
     }
 
@@ -28,7 +31,7 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: Event) -> Result<(), atm_core::error::AtmError> {
+    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
         self.nudges.lock().expect("nudges lock").push(nudge);
         let _ = self.delivered_tx.send(());
         Ok(())
@@ -126,9 +129,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let activation_snapshot = session.snapshot()?;
-    if activation_snapshot.state != atm_core::graft::AdvisorySessionState::Registered {
+    if activation_snapshot.state != GraftSessionState::Polling {
         return Err(io::Error::other(format!(
-            "expected registered graft session, found {:?}",
+            "expected polling graft session, found {:?}",
             activation_snapshot.state
         ))
         .into());
@@ -147,10 +150,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let nudge = injector
         .first_nudge()
         .ok_or_else(|| io::Error::other("graft injector delivered no nudge payload"))?;
-    if nudge.from != args.expected_sender {
+    if nudge.sender != args.expected_sender {
         return Err(io::Error::other(format!(
             "expected nudge sender {}, found {}",
-            args.expected_sender, nudge.from
+            args.expected_sender, nudge.sender
         ))
         .into());
     }
@@ -232,15 +235,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         serde_json::to_string_pretty(&json!({
             "status": "passed",
-            "session_state_before_close": activation_snapshot.state,
+            "session_state_before_close": format!("{:?}", activation_snapshot.state),
             "nudge_count": injector.count(),
-            "nudge_message_id": nudge.message_id,
-            "nudge_from": nudge.from,
-            "nudge_text": nudge.message.as_str(),
-            "read_selected_message_id": read_selected_message_id,
-            "ack_message_id": ack_outcome.message_id,
-            "ack_reply_message_id": ack_outcome.reply_message_id,
-            "follow_up_message_id": follow_up_outcome.message_id,
+            "injected_nudge": {
+                "sender": nudge.sender.to_string(),
+                "sender_team": nudge.sender_team.to_string(),
+                "recipient": nudge.recipient.to_string(),
+                "recipient_team": nudge.recipient_team.to_string(),
+                "message_id": nudge.message_id.to_string(),
+                "message": nudge.message,
+                "requires_ack": nudge.requires_ack,
+                "is_ack": nudge.is_ack,
+                "task_id": nudge.task_id.map(|task_id| task_id.to_string()),
+            },
+            "read_selected_message_id": read_selected_message_id.to_string(),
+            "ack_message_id": ack_outcome.message_id.to_string(),
+            "ack_reply_message_id": ack_outcome.reply_message_id.to_string(),
+            "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );
 

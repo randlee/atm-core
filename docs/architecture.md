@@ -1014,6 +1014,17 @@ Each list row contains:
 - `mutation_applied`
 - bucket_counts
 
+Read-mutation output invariants:
+- when `mutation_applied = true` and a selected message is present, that
+  message and `selected_message_id` must identify the same durable message
+- read-side mutation may mark the selected message `read = true`, but it must
+  still return that same message in the payload instead of re-running unread
+  selection and swapping in a different unread message
+- `bucket_counts` must describe the post-mutation mailbox state produced by
+  that command execution
+- ack-side mutation remains separate; only `atm ack` clears
+  `pending_ack_at` and sets `acknowledged_at`
+
 Queue-inspection architectural rules:
 - default `atm list` must stay bounded by query behavior rather than
   materializing full mailbox history and truncating it at render time
@@ -1610,9 +1621,14 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
-- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- the default ATM-owned retained log file is
+  `{ATM_HOME}/.atm/logs/atm.log.jsonl`
 - `ATM_LOG_DIR` overrides the exact retained log directory
-- retained log path ownership is host-scoped and independent of `ATM_HOME`
+- without `ATM_LOG_DIR`, the retained log path is derived from the accepted
+  `ATM_HOME` root for the active installation
+- invocation directory is not a daemon/socket/database selector; it only
+  drives workspace config discovery after `ATM_HOME` resolves the canonical
+  host runtime root
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version

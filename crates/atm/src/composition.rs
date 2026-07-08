@@ -4,6 +4,7 @@
 )]
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -12,11 +13,8 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::graft::{
-    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
-};
+use atm_core::graft::AtmGraftClient;
+use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
@@ -30,7 +28,8 @@ use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
+    resolve_daemon_local_ipc_endpoint_from_home, try_connect as daemon_try_connect,
     unexpected_response,
 };
 #[cfg(test)]
@@ -80,6 +79,76 @@ impl ReceiveCommandEntryPoint {
     pub(crate) const fn new() -> Self {
         Self
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CliBootstrapError {
+    AtmHomeUnresolved {
+        command: &'static str,
+    },
+    RuntimeRootInvalid {
+        command: &'static str,
+        atm_home: PathBuf,
+        invocation_dir: PathBuf,
+    },
+    RuntimeBootstrapRefused {
+        command: &'static str,
+        atm_home: PathBuf,
+        daemon_endpoint: PathBuf,
+    },
+}
+
+impl CliBootstrapError {
+    fn into_atm_error(self) -> AtmError {
+        match self {
+            Self::AtmHomeUnresolved { command } => AtmError::atm_home_unresolved(format!(
+                "failed to resolve ATM_HOME before bootstrapping `atm {command}`"
+            )),
+            Self::RuntimeRootInvalid {
+                command,
+                atm_home,
+                invocation_dir,
+            } => AtmError::runtime_root_invalid(format!(
+                "invalid runtime root for `atm {command}`: atm_home={} invocation_dir={}",
+                atm_home.display(),
+                invocation_dir.display()
+            )),
+            Self::RuntimeBootstrapRefused {
+                command,
+                atm_home,
+                daemon_endpoint,
+            } => AtmError::runtime_bootstrap_refused(format!(
+                "refused bootstrap for `atm {command}` because daemon endpoint {} does not match the canonical ATM_HOME root {}",
+                daemon_endpoint.display(),
+                atm_home.display()
+            )),
+        }
+    }
+}
+
+pub(crate) fn resolve_command_runtime_context(
+    command: &'static str,
+) -> Result<(PathBuf, PathBuf), AtmError> {
+    let invocation_dir = home::command_invocation_dir().inspect_err(|error| {
+        log_runtime_root_failure(command, error);
+    })?;
+    let atm_home = home::atm_home().map_err(|source| {
+        let error = CliBootstrapError::AtmHomeUnresolved { command }
+            .into_atm_error()
+            .with_source(source);
+        log_runtime_root_failure(command, &error);
+        error
+    })?;
+    Ok((atm_home, invocation_dir))
+}
+
+fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
+    tracing::error!(
+        command,
+        error_code = %error.code.as_str(),
+        error = %error,
+        "raw cli runtime-root failure"
+    );
 }
 
 #[derive(Debug)]
@@ -338,51 +407,51 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn register_graft_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryRegister(request))? {
-            ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
-            other => Err(unexpected_response("graft register", other)),
-        }
-    }
-
-    pub(crate) fn unregister_graft_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryUnregister(request))? {
-            ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
-            other => Err(unexpected_response("graft unregister", other)),
-        }
-    }
-
-    pub(crate) fn fetch_graft_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryFetch(request))? {
-            ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
-            other => Err(unexpected_response("graft fetch", other)),
-        }
-    }
-
-    pub(crate) fn drain_graft_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryDrain(request))? {
-            ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
-            other => Err(unexpected_response("graft drain", other)),
-        }
-    }
-
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
+        invocation_dir: &Path,
+        atm_home: &Path,
     ) -> Result<Self, AtmError> {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
+        let canonical_endpoint =
+            resolve_daemon_local_ipc_endpoint_from_home(atm_home).map_err(|source| {
+                let error = CliBootstrapError::RuntimeRootInvalid {
+                    command,
+                    atm_home: atm_home.to_path_buf(),
+                    invocation_dir: invocation_dir.to_path_buf(),
+                }
+                .into_atm_error()
+                .with_source(source);
+                log_runtime_root_failure(command, &error);
+                error
+            })?;
+        let endpoint =
+            if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+                let overridden = resolve_daemon_local_ipc_endpoint().map_err(|source| {
+                    let error = CliBootstrapError::RuntimeRootInvalid {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        invocation_dir: invocation_dir.to_path_buf(),
+                    }
+                    .into_atm_error()
+                    .with_source(source);
+                    log_runtime_root_failure(command, &error);
+                    error
+                })?;
+                if overridden.as_ref() != canonical_endpoint.as_ref() {
+                    let error = CliBootstrapError::RuntimeBootstrapRefused {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        daemon_endpoint: overridden.as_ref().to_path_buf(),
+                    }
+                    .into_atm_error();
+                    log_runtime_root_failure(command, &error);
+                    return Err(error);
+                }
+                overridden
+            } else {
+                canonical_endpoint
+            };
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
@@ -492,40 +561,17 @@ impl AtmGraftClient for CliComposition<'_> {
     }
 }
 
-impl AdvisorySessionPort for CliComposition<'_> {
-    fn register_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        CliComposition::register_graft_session(self, request)
-    }
-
-    fn unregister_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        CliComposition::unregister_graft_session(self, request)
-    }
-
-    fn fetch_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        CliComposition::fetch_graft_nudges(self, request)
-    }
-
-    fn drain_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        CliComposition::drain_graft_nudges(self, request)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::ffi::OsString;
     use std::fs;
+    use std::io;
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt;
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
@@ -558,13 +604,77 @@ mod tests {
     use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
+    use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
         LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
-        open_sqlite_boundary,
+        open_sqlite_boundary, resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
+
+    struct CwdGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = atm_core::home::command_invocation_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).expect("restore current dir");
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct SharedLogBuffer(Arc<Mutex<Vec<u8>>>);
+
+    struct SharedLogWriter(SharedLogBuffer);
+
+    impl<'a> MakeWriter<'a> for SharedLogBuffer {
+        type Writer = SharedLogWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            SharedLogWriter(self.clone())
+        }
+    }
+
+    impl Write for SharedLogWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0
+                .0
+                .lock()
+                .expect("log buffer lock")
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl SharedLogBuffer {
+        fn contents(&self) -> String {
+            String::from_utf8(self.0.lock().expect("log buffer lock").clone()).expect("utf8 logs")
+        }
+    }
+
+    fn capture_runtime_root_logs<T>(f: impl FnOnce() -> T) -> (T, String) {
+        let buffer = SharedLogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(buffer.clone())
+            .finish();
+        let result = tracing::subscriber::with_default(subscriber, f);
+        (result, buffer.contents())
+    }
 
     struct LoopbackFixture {
         _env_guard: EnvGuard,
@@ -735,7 +845,7 @@ mod tests {
 
             for (index, message) in messages.iter().enumerate() {
                 let message_key = if let Some(message_id) = message.message_id {
-                    boundary::MessageKey::new(format!("atm:{message_id}")).expect("message key")
+                    boundary::MessageKey::from(message_id)
                 } else {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
@@ -1265,32 +1375,30 @@ mod tests {
     }
 
     #[test]
-    fn launch_gate_is_host_wide_across_different_atm_home_roots() {
+    fn launch_gate_isolation_tracks_the_explicit_atm_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
-        let user_home = tempdir.path().join("user-home");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
-        let first_atm_home = user_home.join("workspace-a");
-        let second_atm_home = user_home.join("workspace-b");
-        let first_socket = first_atm_home.join(".atm").join("daemon.sock");
-        let second_socket = second_atm_home.join(".atm").join("daemon.sock");
+        let first_atm_home = tempdir.path().join("workspace-a");
+        let second_atm_home = tempdir.path().join("workspace-b");
+        let first_runtime_dir = atm_core::home::host_runtime_dir_from_home(&first_atm_home);
+        let second_runtime_dir = atm_core::home::host_runtime_dir_from_home(&second_atm_home);
 
         let first =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(first_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("first acquire");
         assert!(first.is_some());
         let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(second_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("second acquire");
         assert!(
-            second.is_none(),
-            "different ATM_HOME roots must share one launch gate"
+            second.is_some(),
+            "different ATM_HOME roots must not share one launch gate"
         );
-        assert_ne!(first_socket, second_socket);
         drop(first);
+        drop(second);
     }
 
     #[test]
-    fn host_runtime_lock_path_ignores_atm_home() {
+    fn host_runtime_lock_path_follows_the_explicit_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = atm_core::home::host_runtime_lock_path_from_home(
             tempdir.path(),
@@ -1305,6 +1413,144 @@ mod tests {
                 .join("daemon")
                 .join("launch.lock")
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let workspace_a = tempdir.path().join("workspace-a");
+        let workspace_b = tempdir.path().join("workspace-b");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&workspace_a).expect("workspace a");
+        std::fs::create_dir_all(&workspace_b).expect("workspace b");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+        ]);
+
+        let (home_a, invocation_a) = {
+            let _cwd = CwdGuard::change_to(&workspace_a);
+            resolve_command_runtime_context("send").expect("workspace a context")
+        };
+        let (home_b, invocation_b) = {
+            let _cwd = CwdGuard::change_to(&workspace_b);
+            resolve_command_runtime_context("send").expect("workspace b context")
+        };
+        let canonical_atm_home = std::fs::canonicalize(&atm_home).expect("canonical atm home");
+        let canonical_workspace_a =
+            std::fs::canonicalize(&workspace_a).expect("canonical workspace a");
+        let canonical_workspace_b =
+            std::fs::canonicalize(&workspace_b).expect("canonical workspace b");
+        assert_eq!(
+            std::fs::canonicalize(&home_a).expect("canonical home a"),
+            canonical_atm_home
+        );
+        assert_eq!(
+            std::fs::canonicalize(&home_b).expect("canonical home b"),
+            canonical_atm_home
+        );
+        assert_eq!(
+            std::fs::canonicalize(&invocation_a).expect("canonical invocation a"),
+            canonical_workspace_a
+        );
+        assert_eq!(
+            std::fs::canonicalize(&invocation_b).expect("canonical invocation b"),
+            canonical_workspace_b
+        );
+        assert_eq!(
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_a)
+                .expect("workspace a daemon endpoint")
+                .as_ref(),
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_b)
+                .expect("workspace b daemon endpoint")
+                .as_ref()
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reports_atm_home_unresolved_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
+        let (result, logs) = {
+            let _cwd = CwdGuard::change_to(&workspace);
+            capture_runtime_root_logs(|| resolve_command_runtime_context("send"))
+        };
+
+        let error = result.expect_err("missing ATM_HOME/home should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_HOME_UNRESOLVED"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(env)]
+    fn bootstrap_reports_runtime_root_invalid_for_non_utf8_socket_override_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let invocation_dir = tempdir.path().join("workspace");
+        let invalid_atm_home = std::path::PathBuf::from(OsString::from_vec(vec![0xff, 0xfe, b'a']));
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let observability = CliObservability::fallback();
+
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap("send", &observability, &invocation_dir, &invalid_atm_home)
+        });
+        let error = result.expect_err("non-utf8 ATM_HOME should fail bootstrap");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeRootInvalid
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_ROOT_INVALID"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn bootstrap_refuses_conflicting_daemon_socket_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let invocation_dir = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            (
+                "ATM_DAEMON_SOCKET",
+                Some(
+                    tempdir
+                        .path()
+                        .join("other.sock")
+                        .to_str()
+                        .expect("utf8 socket"),
+                ),
+            ),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let observability = CliObservability::fallback();
+
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap("send", &observability, &invocation_dir, &atm_home)
+        });
+        let error = result.expect_err("conflicting daemon socket override should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeBootstrapRefused
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_BOOTSTRAP_REFUSED"));
     }
 
     #[test]

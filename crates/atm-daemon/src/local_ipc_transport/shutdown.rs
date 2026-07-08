@@ -1,5 +1,5 @@
 use super::*;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::fs;
 use std::time::Instant;
 
@@ -134,8 +134,28 @@ pub(super) fn prepare_local_ipc_endpoint(
 
 #[cfg(not(unix))]
 pub(super) fn prepare_local_ipc_endpoint(
-    _endpoint_path: &Path,
+    endpoint_path: &Path,
 ) -> Result<LocalIpcEndpointPreparation, AtmError> {
+    #[cfg(windows)]
+    {
+        const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
+
+        let raw = endpoint_path.to_string_lossy();
+        if !raw.starts_with(WINDOWS_PIPE_PREFIX)
+            && let Some(parent) = endpoint_path.parent()
+        {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon local IPC directory at {}",
+                    parent.display()
+                ))
+                .with_recovery(
+                    "Grant write access to the daemon socket parent directory or choose a writable ATM_HOME before retrying.",
+                )
+                .with_source(source)
+            })?;
+        }
+    }
     Ok(LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared)
 }
 

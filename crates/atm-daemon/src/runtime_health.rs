@@ -5,19 +5,14 @@ use std::time::Duration;
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_graft_port,
-    boundary,
+    boundary::{self, PostSendHookEvent},
     clear::clear_mail,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
         DoctorStatus, DoctorSummary,
     },
-    error::AtmError,
-    graft::{
-        AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-        AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-        AdvisoryStreamRequest,
-    },
+    error::{AtmError, AtmErrorKind},
+    error_codes::AtmErrorCode,
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -29,7 +24,6 @@ use atm_core::{
 };
 
 use crate::AtmHomeDir;
-use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
@@ -51,6 +45,41 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
+
+#[derive(Debug, Clone, Copy)]
+struct UnavailableGraftPostSendPort;
+
+impl boundary::sealed::Sealed for UnavailableGraftPostSendPort {}
+
+impl boundary::GraftPostSendPort for UnavailableGraftPostSendPort {
+    fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        tracing::warn!(
+            subsystem = "runtime_health",
+            action = "graft_post_send",
+            outcome = "unavailable",
+            recipient = %event.recipient,
+            recipient_team = %event.recipient_team,
+            message_id = %event.message_id,
+            "daemon no longer owns graft advisory runtime; direct graft post-send delivery is unavailable until the receiver-owned path is restored"
+        );
+        Err(
+            AtmError::new_with_code(
+                AtmErrorCode::PostSendGraftUnavailable,
+                AtmErrorKind::Validation,
+                format!(
+                    "recipient {}@{} has no active graft receiver path",
+                    event.recipient, event.recipient_team
+                ),
+            )
+            .with_recovery(
+                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
+            ),
+        )
+    }
+}
+
+const GRAFT_POST_SEND_PORT: UnavailableGraftPostSendPort = UnavailableGraftPostSendPort;
+
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
@@ -63,7 +92,6 @@ pub(crate) struct DaemonRequestDispatcher {
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
-    advisory_runtime: AdvisoryRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -82,7 +110,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
             )
-            .field("advisory_runtime", &"AdvisoryRuntime")
             .finish()
     }
 }
@@ -318,10 +345,6 @@ impl DaemonRequestDispatcher {
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
     ) -> Self {
-        let advisory_runtime_observability = SubsystemObservability::new(
-            DaemonSubsystem::AdvisoryRuntime,
-            Arc::clone(&observability),
-        );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
@@ -352,10 +375,12 @@ impl DaemonRequestDispatcher {
             roster_store: Some(roster_store),
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
-            advisory_runtime: AdvisoryRuntime::new_with_observability(
-                advisory_runtime_observability,
-            ),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn home_dir_for_test(&self) -> &std::path::Path {
+        self.home_dir.as_path()
     }
 }
 
@@ -389,7 +414,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                     request,
                     self.observability.as_ref(),
                     &self.service_runtime,
-                    &self.advisory_runtime,
+                    &GRAFT_POST_SEND_PORT,
                 )?;
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
@@ -399,7 +424,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                         request,
                         self.observability.as_ref(),
                         &self.service_runtime,
-                        &self.advisory_runtime,
+                        &GRAFT_POST_SEND_PORT,
                     )?,
                 )))
             }
@@ -418,38 +443,10 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                 query,
                 self.observability.as_ref(),
             )?)),
-            RequestEnvelope::Doctor(query) => {
-                Ok(ResponseEnvelope::Doctor(Box::new(
-                    self.project_doctor_report(query)?,
-                )))
-            }
-            RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
-                self.register_advisory_session(request)?,
-            )),
-            RequestEnvelope::AdvisoryUnregister(request) => Ok(ResponseEnvelope::AdvisoryUnregister(
-                self.unregister_advisory_session(request)?,
-            )),
-            RequestEnvelope::AdvisoryFetch(request) => Ok(ResponseEnvelope::AdvisoryFetch(
-                self.fetch_advisory_events(request)?,
-            )),
-            RequestEnvelope::AdvisoryDrain(request) => Ok(ResponseEnvelope::AdvisoryDrain(
-                self.drain_advisory_events(request)?,
-            )),
-            RequestEnvelope::AdvisoryStream(_) => Err(AtmError::validation(
-                "advisory stream requests require the same-host streaming transport path",
-            )
-            .with_recovery(
-                "Open the dedicated same-host advisory stream connection instead of routing advisory delivery through unary request dispatch.",
-            )),
+            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
+                self.project_doctor_report(query)?,
+            ))),
         }
-    }
-
-    fn dispatch_advisory_stream(
-        &self,
-        request: AdvisoryStreamRequest,
-        sink: &mut dyn boundary::AdvisoryStreamSink,
-    ) -> Result<(), AtmError> {
-        self.advisory_runtime.stream_nudges(request, sink)
     }
 }
 
@@ -562,34 +559,6 @@ impl DaemonRequestDispatcher {
         Ok(self
             .status_cache
             .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
-    }
-
-    fn register_advisory_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        self.advisory_runtime.register_session(request)
-    }
-
-    fn unregister_advisory_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        self.advisory_runtime.unregister_session(request)
-    }
-
-    fn fetch_advisory_events(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        self.advisory_runtime.fetch_nudges(request)
-    }
-
-    fn drain_advisory_events(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        self.advisory_runtime.drain_nudges(request)
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
@@ -761,15 +730,14 @@ impl DaemonRequestDispatcher {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
                     %error,
                     "failed to hydrate test runtime status cache from runtime-bound roster state"
                 );
             }
         }
-        let advisory_runtime_observability = crate::SubsystemObservability::new(
-            crate::DaemonSubsystem::AdvisoryRuntime,
-            std::sync::Arc::clone(&runtime_observability),
-        );
         let runtime_health_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::RuntimeHealth,
             std::sync::Arc::clone(&runtime_observability),
@@ -784,9 +752,6 @@ impl DaemonRequestDispatcher {
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
-            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
-                advisory_runtime_observability,
-            ),
         }
     }
 }
