@@ -72,8 +72,9 @@ Thin-client extension rule:
 - embedded same-host graft session traffic may reuse the same frame shape, but
   its request/response DTO family is intentionally private implementation
   detail inside `atm-daemon` / `atm-graft`
-- `atm-graft` therefore uses the shared unary packet family for send/read/ack
-  and a separate graft-local same-host contract for advisory/session traffic
+- `atm-graft` therefore uses the shared unary packet family for send/read/ack,
+  while any receiver-local polling or nudge handling stays implementation-
+  private above that shared contract
 
 UDP is not an accepted transport for ATM daemon request/response messaging in
 the retained product surface.
@@ -110,11 +111,8 @@ Rule:
 ATM daemon transport is a framed, connection-oriented, request/response
 protocol.
 
-This document defines two related contracts:
+This document defines one accepted contract:
 - the shared ATM unary protocol
-- the graft-local same-host advisory/session extension that reuses the same
-  frame shape with receiver-private implementation DTOs that are not part of
-  the accepted shared boundary surface
 
 Phase S baseline transport shape:
 - one logical request
@@ -412,15 +410,11 @@ The graft session surface reuses the ATM frame header from Section 5, but it is
 not part of the shared `atm-core::protocol::{RequestEnvelope, ResponseEnvelope}`
 family.
 
-Ownership:
-- any surviving packet kinds, DTOs, and frame helpers are private
-  implementation detail compiled into `atm-daemon` / `atm-graft`, not an
-  accepted shared crate boundary
-- daemon dispatch lives behind the daemon-owned `GraftRequestDispatcher` seam
-- `atm-graft` consumes this extension through its private advisory transport,
-  not through shared `ClientTransport`
+No separate graft-local advisory/session packet family is accepted on the
+retained line. Receiver-local graft behavior must build on the shared unary
+contract instead of introducing a second same-host protocol family.
 
-Current graft-local packet kinds:
+Historical graft-local packet kinds:
 - requests
   - `0x0008` `advisory_register_request`
   - `0x0009` `advisory_unregister_request`
@@ -717,7 +711,6 @@ Required ownership split:
   - framed read/write helpers
 - `atm-daemon-client`
   - shared unary `RpcEnvelope` wrapper
-  - graft-local same-host advisory/session frame helpers and DTOs
 - `atm-daemon`
   - local IPC server adapter
   - remote peer transport adapter

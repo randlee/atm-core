@@ -7,11 +7,6 @@ owned by `atm-daemon-client`.
 from `atm` and `atm-graft` without creating a Rust dependency on
 `atm-daemon`.
 
-The package now also owns the graft-local same-host advisory/session wire
-contract consumed privately by `atm-daemon` and `atm-graft`. That private seam
-reuses the shared frame header but does not re-enter the public
-`atm-core::protocol` enums.
-
 ## DaemonBootstrapClient
 
 Canonical machine-readable boundary source:
@@ -33,9 +28,6 @@ Rules:
 - `atm-daemon-client` may own shared same-host connection-setup helpers such as
   `try_connect`, `exchange`, and `unexpected_response` when those helpers are
   extracted to keep `atm` and `atm-graft` aligned
-- `atm-daemon` may depend on `atm-daemon-client` for the graft-local same-host
-  advisory/session frame contract, but that does not grant `atm-daemon-client`
-  ownership of daemon runtime behavior
 - `atm-daemon-client` must not own daemon request-dispatch semantics or other
   request/response business wiring beyond those shared connection-setup helpers
 - `atm-daemon-client` must not depend on `atm-daemon` or
@@ -59,8 +51,9 @@ Rules:
 - protocol v1 may still carry `RequestEnvelope` / `ResponseEnvelope` values
   inside `RpcEnvelope.body`, but new message or roster body clones must not be
   introduced under that wrapper
-- graft-only advisory/session local IPC is intentionally outside `RpcEnvelope`
-  and is owned separately by `atm_daemon_client::graft_rpc`
+- graft-only advisory/session local IPC is not an accepted
+  `atm-daemon-client` boundary surface and must not be reintroduced under
+  `RpcEnvelope`
 - `atm-daemon-client` must not depend on `atm-storage-rusqlite` or any
   retired backend crate
 - backend-specific persistence concerns stay below the storage seam and must not
