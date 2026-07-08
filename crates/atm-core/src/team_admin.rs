@@ -687,13 +687,15 @@ mod tests {
     #[serial(team_config_write_env)]
     fn update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
+        write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
         roster_store.seed_team(
-            "atm-dev",
+            TEST_TEAM,
             vec![
-                roster_member("atm-dev", "team-lead"),
-                roster_member("atm-dev", "arch-ctm"),
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                // RULE-009 justified: this fixture must prove the accepted
+                // baseline repair for the real retained arch-ctm member row.
+                roster_member(TEST_TEAM, "arch-ctm"),
             ],
         );
 
@@ -701,10 +703,10 @@ mod tests {
             &roster_store,
             tempdir.path(),
             UpdateMemberRequest {
-                caller_identity: "team-lead".parse().expect("caller"),
-                caller_team: "atm-dev".parse().expect("team"),
-                team: "atm-dev".parse().expect("team"),
-                member: MemberName("team-lead".parse().expect("member")),
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(ROLE_TEAM_LEAD.parse().expect("member")),
                 home_dir: None,
                 harness: None,
                 agent_type: None,
@@ -718,9 +720,9 @@ mod tests {
             &roster_store,
             tempdir.path(),
             UpdateMemberRequest {
-                caller_identity: "team-lead".parse().expect("caller"),
-                caller_team: "atm-dev".parse().expect("team"),
-                team: "atm-dev".parse().expect("team"),
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 member: MemberName("arch-ctm".parse().expect("member")),
                 home_dir: None,
                 harness: None,
@@ -732,11 +734,11 @@ mod tests {
         .expect("repair arch-ctm pane");
 
         let roster = roster_store
-            .load_roster(&"atm-dev".parse().expect("team"))
+            .load_roster(&TEST_TEAM.parse().expect("team"))
             .expect("load roster");
         let team_lead = roster
             .iter()
-            .find(|member| member.agent_name.as_str() == "team-lead")
+            .find(|member| member.agent_name.as_str() == ROLE_TEAM_LEAD)
             .expect("team-lead");
         let arch_ctm = roster
             .iter()
@@ -745,7 +747,7 @@ mod tests {
         assert_eq!(team_lead.recipient_pane_id.as_deref(), Some("%0"));
         assert_eq!(arch_ctm.recipient_pane_id.as_deref(), Some("%1"));
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig = serde_json::from_slice(
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
@@ -753,7 +755,7 @@ mod tests {
         let projected_team_lead = config
             .members
             .iter()
-            .find(|member| member.name == "team-lead")
+            .find(|member| member.name == ROLE_TEAM_LEAD)
             .expect("projected team-lead");
         let projected_arch_ctm = config
             .members

@@ -72,8 +72,9 @@ Thin-client extension rule:
 - embedded same-host graft session traffic may reuse the same frame shape, but
   its request/response DTO family is intentionally private implementation
   detail inside `atm-daemon` / `atm-graft`
-- `atm-graft` therefore uses the shared unary packet family for send/read/ack
-  and a separate graft-local same-host contract for advisory/session traffic
+- `atm-graft` therefore uses the shared unary packet family for send/read/ack,
+  while any receiver-local polling or nudge handling stays implementation-
+  private above that shared contract
 
 UDP is not an accepted transport for ATM daemon request/response messaging in
 the retained product surface.
@@ -110,11 +111,8 @@ Rule:
 ATM daemon transport is a framed, connection-oriented, request/response
 protocol.
 
-This document defines two related contracts:
+This document defines one accepted contract:
 - the shared ATM unary protocol
-- the graft-local same-host advisory/session extension that reuses the same
-  frame shape with receiver-private implementation DTOs that are not part of
-  the accepted shared boundary surface
 
 Phase S baseline transport shape:
 - one logical request
@@ -406,21 +404,18 @@ The current protocol-layer envelope mapping is:
 - `ResponseEnvelope::Error(...)`
   - `error_response`
 
-### 7.2.1 Graft-Local Same-Host Advisory Extension
+### 7.2.1 Historical Graft-Local Same-Host Advisory Extension (Removed)
 
-The graft session surface reuses the ATM frame header from Section 5, but it is
-not part of the shared `atm-core::protocol::{RequestEnvelope, ResponseEnvelope}`
-family.
+This removed graft-local packet family reused the ATM frame header from Section
+5, but it was never part of the shared
+`atm-core::protocol::{RequestEnvelope, ResponseEnvelope}` family.
 
-Ownership:
-- any surviving packet kinds, DTOs, and frame helpers are private
-  implementation detail compiled into `atm-daemon` / `atm-graft`, not an
-  accepted shared crate boundary
-- daemon dispatch lives behind the daemon-owned `GraftRequestDispatcher` seam
-- `atm-graft` consumes this extension through its private advisory transport,
-  not through shared `ClientTransport`
+This section is retained only to identify deleted packet kinds. No separate
+graft-local advisory/session packet family is accepted on the retained line.
+Receiver-local graft behavior must build on the shared unary contract instead
+of introducing a second same-host protocol family.
 
-Current graft-local packet kinds:
+Historical graft-local packet kinds:
 - requests
   - `0x0008` `advisory_register_request`
   - `0x0009` `advisory_unregister_request`
@@ -437,12 +432,13 @@ Current graft-local packet kinds:
   - `0x1ffe` `graft_error_response`
 
 Rules:
-- this extension is same-host only
-- it must not leak into cross-host daemon transport or the shared `atm-core`
-  protocol enums
-- unary graft requests still follow one request / one response
-- `advisory_stream_request` opens one request followed by zero or more
-  `advisory_stream_response` frames on that dedicated connection
+- this historical extension was same-host only
+- it was never allowed to leak into cross-host daemon transport or the shared
+  `atm-core` protocol enums
+- the retained runtime no longer permits unary graft requests or live
+  advisory-stream framing on this deleted protocol family
+- any receiver-local graft polling or nudge handling must remain above the
+  shared unary ATM contract instead of reviving these packet kinds
 
 ### 7.3 DTOs That Are Not Current Public Packet Kinds
 
@@ -492,12 +488,17 @@ Success-family pairing rules:
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
 
-Graft-local same-host pairing rules:
+Historical-only graft advisory pairing rules retained for migration record:
 - `advisory_register_request -> advisory_register_response | graft_error_response`
 - `advisory_unregister_request -> advisory_unregister_response | graft_error_response`
 - `advisory_fetch_request -> advisory_fetch_response | graft_error_response`
 - `advisory_drain_request -> advisory_drain_response | graft_error_response`
 - `advisory_stream_request -> advisory_stream_response* | graft_error_response`
+
+These packet families are no longer active after the AD.15/AD.16 graft reset.
+The live graft implementation now uses a private same-host request/reply lane
+between `atm-daemon` and `atm-graft` rather than shared advisory register,
+fetch/drain, or stream packet kinds.
 
 ### 8.1.1 One-Request-Per-Connection Rule
 
@@ -717,7 +718,6 @@ Required ownership split:
   - framed read/write helpers
 - `atm-daemon-client`
   - shared unary `RpcEnvelope` wrapper
-  - graft-local same-host advisory/session frame helpers and DTOs
 - `atm-daemon`
   - local IPC server adapter
   - remote peer transport adapter

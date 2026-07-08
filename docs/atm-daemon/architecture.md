@@ -670,6 +670,9 @@ The daemon must use explicit, small resource ceilings.
 
 Required caps:
 - max concurrent accepted connections: `64`
+  - rationale: same-host ATM traffic is unary request/response, so `64`
+    comfortably exceeds realistic single-host caller fan-out while still
+    bounding per-connection worker threads and shutdown drain pressure
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
 - bounded remote retry queue depth: `256`

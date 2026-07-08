@@ -120,8 +120,8 @@ Purpose:
 Notes:
 - Transport-specific listeners should not embed request-family logic.
 - Shared dispatch through this boundary is limited to the public ATM unary
-  protocol surface. Graft-private advisory/session dispatch stays on the
-  daemon-owned `GraftRequestDispatcher` seam and must not leak back into
+  protocol surface. Graft-private receiver behavior must stay behind
+  receiver-local `atm-graft` implementation and must not leak back into
   `atm-core`.
 
 ## MailStore
@@ -377,11 +377,12 @@ Notes:
   - `atm-core` still decides whether graft-backed post-send applies
   - `atm-core` still logs failures and constructs sender-visible warnings
   - the port only attempts one bounded graft-side delivery request
+- daemon-owned advisory runtime glue remains retired
 - the accepted out-of-owner implementation is
   `atm_daemon::runtime_health::DaemonGraftPostSendPort`, which resolves the
   authoritative recipient `home_dir`, opens the receiver-owned same-host
   graft socket, sends one `PostSendHookEvent`, waits for one bounded reply,
-  and closes the connection.
+  and closes the connection
 - this boundary must not expand into generic notification routing, mailbox
   compatibility append, tmux delivery, or local process spawning.
 

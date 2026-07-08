@@ -12,7 +12,7 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RBP-F001/s18/1> ;
@@ -20,7 +20,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RBP-F001/s20/1> ;
   triage:openOn <urn:atm:triage:worktree/pAD-s18/0c8b7d5b> ;
   triage:openOn <urn:atm:triage:worktree/pAD-s19/f5e8732f> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s20/5ac7f11b> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s20/aa353a70> ;
   triage:promoteTo <urn:atm:triage:worktree/pAD-s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-RBP-F001/s18/1>
@@ -72,10 +72,10 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 414 ;
   triage:snippet "invocation_dir: &Path," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:headSha "5ac7f11b" ;
+  triage:headSha "aa353a70" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-RBP-F001/s20/2>
@@ -83,10 +83,10 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 415 ;
   triage:snippet "atm_home: &Path," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:headSha "5ac7f11b" ;
+  triage:headSha "aa353a70" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s20/5ac7f11b> .
 
 <urn:atm:triage:worktree/pAD-s13/222c57da>
@@ -142,8 +142,19 @@
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:headSha "5ac7f11b" ;
-  triage:orderIndex 20 .
+  triage:headSha "aa353a70" ;
+  triage:orderIndex 20 ;
+  triage:status "fixed" ;
+  triage:closureEvidence "QA re-verification on aa353a70 confirmed bootstrap() uses InvocationDir and AtmHomePath at declaration and call sites (composition.rs:129-150,435-442), eliminating the bare-Path transposition risk." .
+
+<urn:atm:triage:worktree/pAD-s20/aa353a70>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "aa353a70" ;
+  triage:orderIndex 20 ;
+  triage:status "fixed" ;
+  triage:closureEvidence "QA re-verification on aa353a70 confirmed bootstrap() uses InvocationDir and AtmHomePath at declaration and call sites (composition.rs:129-150,435-442), eliminating the bare-Path transposition risk." .
 
 <urn:atm:triage:worktree/integrate-phase-AD/876241aa>
   a triage:WorktreeSnapshot ;
