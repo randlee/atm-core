@@ -43,6 +43,12 @@ pub mod log;
 pub(crate) mod mailbox;
 /// Internal model-registry plumbing reserved for follow-on work.
 pub(crate) mod model_registry;
+/// Crate-private re-export seam for retained shared observability vocabulary.
+pub(crate) mod observability_types {
+    pub(crate) use sc_observability_types::{
+        ActionName, ErrorCode, Level, OutcomeLabel, ServiceName,
+    };
+}
 /// Observability adapter traits and event payload types.
 pub mod observability;
 /// Internal atomic persistence helpers for shared mutable state files.

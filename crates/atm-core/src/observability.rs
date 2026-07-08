@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use sc_observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -10,6 +9,7 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 

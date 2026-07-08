@@ -684,6 +684,87 @@ mod tests {
     }
 
     #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), "atm-dev");
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            "atm-dev",
+            vec![
+                roster_member("atm-dev", "team-lead"),
+                roster_member("atm-dev", "arch-ctm"),
+            ],
+        );
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: "team-lead".parse().expect("caller"),
+                caller_team: "atm-dev".parse().expect("team"),
+                team: "atm-dev".parse().expect("team"),
+                member: MemberName("team-lead".parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
+            },
+        )
+        .expect("repair team-lead pane");
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: "team-lead".parse().expect("caller"),
+                caller_team: "atm-dev".parse().expect("team"),
+                team: "atm-dev".parse().expect("team"),
+                member: MemberName("arch-ctm".parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
+            },
+        )
+        .expect("repair arch-ctm pane");
+
+        let roster = roster_store
+            .load_roster(&"atm-dev".parse().expect("team"))
+            .expect("load roster");
+        let team_lead = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == "team-lead")
+            .expect("team-lead");
+        let arch_ctm = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == "arch-ctm")
+            .expect("arch-ctm");
+        assert_eq!(team_lead.recipient_pane_id.as_deref(), Some("%0"));
+        assert_eq!(arch_ctm.recipient_pane_id.as_deref(), Some("%1"));
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        let projected_team_lead = config
+            .members
+            .iter()
+            .find(|member| member.name == "team-lead")
+            .expect("projected team-lead");
+        let projected_arch_ctm = config
+            .members
+            .iter()
+            .find(|member| member.name == "arch-ctm")
+            .expect("projected arch-ctm");
+        assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
+        assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
+    }
+
+    #[test]
     fn update_member_rejects_caller_team_mismatch_before_mutation() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
