@@ -42,7 +42,7 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
-  triage:headSha "cafcacd5" ;
+  triage:headSha "97779227262cf3f9a19c1a9b1c56d0a804ae7f97" ;
   triage:occursIn <urn:atm:triage:worktree/pAD-s16/cafcacd5> .
 
 <urn:atm:triage:occurrence/AD15-RSH-CONST-001/pAD-s17/1>
@@ -74,7 +74,7 @@
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
-  triage:headSha "cafcacd5" ;
+  triage:headSha "97779227262cf3f9a19c1a9b1c56d0a804ae7f97" ;
   triage:orderIndex 2 ;
   triage:status "fixed" ;
   triage:closureEvidence "MAX_CONCURRENT_CONNECTIONS rationale is now documented in docs/atm-daemon/architecture.md and mirrored by the retained code comment; AD16 fix round also aligned protocol-icd historical advisory framing." .
