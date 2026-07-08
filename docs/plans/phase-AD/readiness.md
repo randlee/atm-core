@@ -37,7 +37,7 @@ Record the accepted closure state for Phase AD:
 | `AD.6` governance | `boundaries/atm-core/post-send-hook-emitter.toml` | authoritative boundary record for `PostSendHookEmitter` |
 | `AD.6` governance | `docs/atm-core/boundaries.md` | inventory entry for `PostSendHookEmitter` |
 | `AD.8` governance | `boundaries/atm-core/graft-post-send-port.toml` | authoritative boundary record for `GraftPostSendPort` |
-| `AD.8` governance | `docs/atm-core/boundaries.md` | inventory entry for `GraftPostSendPort` and its allowlisted daemon implementation |
+| `AD.8` governance | `docs/atm-core/boundaries.md` | inventory entry for `GraftPostSendPort` and its receiver-owned implementation contract |
 
 ## Phase Exit Criteria
 

@@ -14,8 +14,8 @@ Canonical machine-readable boundary source:
 Purpose:
 - consume the shared thin-client daemon request boundary owned by `atm-core`
 - consume the shared same-host bootstrap seam owned by `atm-daemon-client`
-- provide concrete embedded same-host client behavior for `send`, `read`, and
-  `ack`
+- provide concrete embedded same-host client behavior for `send`, `read`,
+  `ack`, and `list`
 
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
@@ -29,20 +29,19 @@ Rules:
 
 Purpose:
 - own the concrete `GraftSession` lifecycle used by an embedded host CLI
-- keep one persistent receive thread and one open dedicated daemon
-  advisory-stream connection for nudges while the session is active
-- queue received nudges until the host consumes them and fire a host wake/event
-  callback on arrival
+- keep one receiver-local poll thread active while the session is enabled
+- translate durable unread messages into host-consumable `PostSendHookEvent`
+  values
 
 Rules:
 - `atm-graft` must not own daemon queue state, direct SQLite access, or direct
   inbox-JSONL access
-- automatic between-tool-call nudge injection belongs to this consumer layer,
-  but daemon-owned queue state remains outside it
-- reconnect and shutdown behavior are owned here rather than in daemon-private
-  runtime code
-- production embedded delivery must come from the live advisory-stream
-  connection; poll/drain alone is not sufficient
+- receiver-local state is limited to lifecycle state plus the transient
+  delivered-id set needed to avoid reinjecting the same unread message
+- automatic between-tool-call nudge injection belongs to this consumer layer
+- session runtime code must use the shared unary ATM protocol only
+- no daemon-owned advisory registration, fetch/drain, or stream/session
+  protocol may cross this boundary
 
 ## Host Injection Consumer
 
@@ -53,4 +52,5 @@ Purpose:
 Rules:
 - the host executable owns the final insertion point
 - `atm-graft` must drive that path automatically once nudges arrive
+- the injected payload type is `atm_core::boundary::PostSendHookEvent`
 - external terminal automation is not an accepted production delivery path
