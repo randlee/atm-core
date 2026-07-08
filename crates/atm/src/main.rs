@@ -889,7 +889,13 @@ fn level_for_outcome(outcome: &str) -> Level {
     ) {
         return Level::Debug;
     }
-    standard_level_for_outcome(outcome)
+    match standard_level_for_outcome(outcome) {
+        atm_core::observability::Level::Trace => Level::Trace,
+        atm_core::observability::Level::Debug => Level::Debug,
+        atm_core::observability::Level::Info => Level::Info,
+        atm_core::observability::Level::Warn => Level::Warn,
+        atm_core::observability::Level::Error => Level::Error,
+    }
 }
 
 fn map_query_error(source: QueryError) -> AtmError {

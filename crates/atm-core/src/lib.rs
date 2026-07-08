@@ -45,8 +45,6 @@ pub(crate) mod mailbox;
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.
 pub mod observability;
-/// Crate-private shared observability vocabulary seam.
-pub(crate) mod observability_types;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
 /// Hidden process-liveness helpers shared across lock implementations.

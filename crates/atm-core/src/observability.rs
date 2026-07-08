@@ -1,5 +1,6 @@
 //! ATM-owned observability boundary and projected log/health types.
 
+use std::fmt;
 use std::path::PathBuf;
 
 use serde::de::Error as DeError;
@@ -9,9 +10,114 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
-use crate::observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ActionName(String);
+
+impl ActionName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("action", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ActionName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct OutcomeLabel(String);
+
+impl OutcomeLabel {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("outcome", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for OutcomeLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ServiceName(String);
+
+impl ServiceName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("service", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ServiceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ErrorCode(String);
+
+impl ErrorCode {
+    pub fn new_owned(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("diagnostic code", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum Level {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+fn validate_observability_name(
+    kind: &'static str,
+    value: impl Into<String>,
+) -> Result<String, AtmError> {
+    let value = value.into();
+    if value.trim().is_empty() {
+        return Err(
+            AtmError::validation(format!("ATM observability {kind} must not be empty"))
+                .with_recovery(format!(
+                    "Provide a non-empty ATM observability {kind} before retrying."
+                )),
+        );
+    }
+    Ok(value)
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
@@ -40,15 +146,11 @@ pub fn outcome_label(value: &'static str) -> OutcomeLabel {
 }
 
 pub fn service_name(value: impl Into<String>) -> Result<ServiceName, AtmError> {
-    ServiceName::new(value.into()).map_err(|source| {
-        AtmError::validation("ATM observability service name is invalid")
-            .with_recovery("Provide a valid ATM-owned observability service name before retrying.")
-            .with_source(source)
-    })
+    ServiceName::new(value)
 }
 
 pub fn diagnostic_code(value: impl Into<String>) -> Result<ErrorCode, AtmError> {
-    Ok(ErrorCode::new_owned(value))
+    ErrorCode::new_owned(value)
 }
 
 pub fn standard_level_for_outcome(outcome: &str) -> Level {
