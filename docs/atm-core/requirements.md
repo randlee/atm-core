@@ -191,13 +191,10 @@ Initial crate requirement IDs:
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
-  Any earlier graft-specific contract intent is superseded by
-  the shared unary `AtmGraftClient` contract for send/read/ack. Any surviving
-  same-host graft advisory/session transport remains implementation-private to
-  `atm-daemon` / `atm-graft`, rather than an `atm-core` requirement. The
-  generic session identifier name reserved for the thin-client line remains
-  `AdvisorySessionId`; later advisory/session work must reuse that name rather
-  than reviving `GraftSessionId`.
+  Any earlier graft-specific contract intent is superseded by the shared unary
+  `AtmGraftClient` contract for send/read/ack. No dedicated graft
+  advisory/session transport remains an `atm-core` requirement on the accepted
+  line.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport.
   The shared protocol surface is limited to the retained unary ATM command
@@ -343,11 +340,6 @@ Required `atm-core` crate rules:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - `atm-core` framed transport helpers must delimit packets explicitly rather
   than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary

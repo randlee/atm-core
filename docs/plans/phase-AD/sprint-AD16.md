@@ -1,7 +1,7 @@
 ---
 id: AD.16
 title: Thin Graft Receiver Reset
-status: planned
+status: complete
 branch: feature/pAD-s16-thin-graft-receiver-reset
 worktree: ../atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset
 target: integrate/phase-AD

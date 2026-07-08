@@ -5,7 +5,7 @@ name = "GraftPostSendPort"
 
 [public]
 trait = "GraftPostSendPort"
-notes = "sealed graft-backed post-send advisory handoff contract landed in Phase AD AD.8; the accepted out-of-owner implementation lives in atm-daemon advisory runtime glue"
+notes = "sealed graft-backed post-send handoff contract landed in Phase AD AD.8; receiver-owned implementations may satisfy it, but daemon-owned advisory runtime glue is retired"
 
 [implementation]
 visibility = "trait_only"
@@ -43,4 +43,4 @@ review_gates = ["no_process_spawn_substitution", "no_notification_sink_substitut
 
 [status]
 state = "active"
-notes = ["Phase AD AD.8 established the canonical graft-backed post-send delivery port.", "The accepted out-of-owner implementation is atm_daemon::advisory_runtime::AdvisoryRuntime."]
+notes = ["Phase AD AD.8 established the canonical graft-backed post-send delivery port.", "The current accepted runtime keeps daemon-owned advisory runtime deleted; receiver-owned implementations may satisfy this port while the daemon fallback remains an unavailable sentinel."]
