@@ -28,6 +28,7 @@ from lint_common import print_report
 from lint_common import relative_log_path
 from lint_common import render_workspace_crate_table
 from lint_common import rust_file_test_scope
+from lint_common import strip_negated_cfg_segments
 from lint_common import workspace_crates
 from lint_common import workspace_manifest_paths
 from lint_common import workspace_target_args
@@ -275,6 +276,38 @@ version = "0.1.0"
             rust_file_test_scope(Path("scripts/tool.py"), ["print('hi')"]),
             [False],
         )
+
+    def test_strip_negated_cfg_segments_removes_negated_test_tokens(self) -> None:
+        self.assertEqual(strip_negated_cfg_segments("not(test)"), " ")
+        self.assertEqual(
+            strip_negated_cfg_segments('any(not(test), feature = "test-utils")'),
+            'any( , feature = "test-utils")',
+        )
+        self.assertEqual(
+            strip_negated_cfg_segments('all(unix, not(any(test, feature = "test-utils")))'),
+            "all(unix,  )",
+        )
+
+    def test_classify_rust_test_scope_ignores_cfg_not_test_after_cfg_test_field(self) -> None:
+        lines = [
+            "struct TailArgs {",
+            "    poll_interval_ms: u64,",
+            "    #[cfg(test)]",
+            "    max_polls: Option<usize>,",
+            "}",
+            "",
+            "impl TailArgs {",
+            "    #[cfg(not(test))]",
+            "    fn run(self) {",
+            "        thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));",
+            "    }",
+            "}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope[:5], [False, False, True, True, False])
+        self.assertEqual(scope[7:], [False, False, False, False, False])
 
     def test_iter_string_literal_contents_handles_escaped_and_raw_literals(self) -> None:
         line = 'let a = "hello"; let b = r#"raw value"#;'

@@ -335,11 +335,40 @@ def is_code_line(line: str) -> bool:
     return not is_comment_or_empty(line)
 
 
+def strip_negated_cfg_segments(body: str) -> str:
+    result: list[str] = []
+    index = 0
+    length = len(body)
+
+    while index < length:
+        if body.startswith("not", index):
+            probe = index + 3
+            while probe < length and body[probe].isspace():
+                probe += 1
+            if probe < length and body[probe] == "(":
+                depth = 1
+                probe += 1
+                while probe < length and depth > 0:
+                    if body[probe] == "(":
+                        depth += 1
+                    elif body[probe] == ")":
+                        depth -= 1
+                    probe += 1
+                result.append(" ")
+                index = probe
+                continue
+
+        result.append(body[index])
+        index += 1
+
+    return "".join(result)
+
+
 def is_rust_test_cfg_attribute(line: str) -> bool:
     match = CFG_ATTRIBUTE_RE.match(line.strip())
     if match is None:
         return False
-    return TEST_TOKEN_RE.search(match.group("body")) is not None
+    return TEST_TOKEN_RE.search(strip_negated_cfg_segments(match.group("body"))) is not None
 
 
 def classify_rust_test_scope(
