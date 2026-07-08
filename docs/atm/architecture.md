@@ -123,8 +123,11 @@ Follow-up work:
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
 - `atm` owns the shipped built-in `internal-nudge` command, the six bounded
-  template bodies, and team-scoped SQLite-backed built-in template override
-  lookup.
+  template bodies, direct placeholder substitution for those templates, and
+  the final built-in sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- `atm` may consume a team-scoped built-in template override body only through
+  the storage-neutral upstream contract accepted for Phase `AD`; it must not
+  perform direct SQLite lookup itself.
 - `atm` owns `TmuxNudgeSink`, including the current tmux-injection sequence:
   paste rendered text, send `Enter`, wait about `250ms` to `300ms`, then send
   a second `Enter`; the exact delay remains implementation-tunable but the

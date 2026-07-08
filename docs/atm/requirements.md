@@ -132,17 +132,23 @@ Required rules:
   - `acknowledge_task`
 - `atm` owns direct placeholder substitution for those templates; no Jinja or
   conditional template language is allowed on the built-in path
-- `atm` owns host-scoped, team-keyed SQLite-backed template override lookup
-  for those six template bodies
+- `atm` owns the six built-in default template bodies, but any team-scoped
+  override lookup for those bodies must cross the storage-neutral
+  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  rather than performing direct SQLite access in the CLI crate
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
-  - host-scoped SQLite-backed team override row for the selected template kind
+  - resolved team-scoped override body returned through the upstream
+    `NudgeTemplateOverrideStore` contract for the selected template kind
   - built-in product default template body for that kind
 - any unset override case must fall back to the built-in product default body
   for that exact template kind
 - the default built-in acknowledge template bodies are:
   - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>`
   - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`
+- the built-in path must not access SQLite directly; the first concrete
+  host-scoped override storage remains `atm-storage-rusqlite` implementation
+  detail behind the accepted `atm-core` contract
 
 ## 4. Command Ownership
 

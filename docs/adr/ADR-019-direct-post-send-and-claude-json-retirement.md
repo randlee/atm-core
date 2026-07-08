@@ -84,6 +84,10 @@ The accepted model is:
   - `delivery_task_ack`
   - `acknowledge`
   - `acknowledge_task`
+- any team-scoped built-in template override lookup must cross the accepted
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; neither `atm` nor `atm-core` may perform direct
+  SQLite lookup in the emitter path
 - emission failure is logged and surfaced as a sender-visible warning
 - `atm read` reads durable ATM state only
 

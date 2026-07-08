@@ -34,6 +34,8 @@ target: integrate/phase-AD
 - `docs/atm-core/architecture.md`
 - `docs/atm/requirements.md`
 - `docs/atm/architecture.md`
+- `docs/atm-graft/requirements.md`
+- `docs/atm-graft/architecture.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/sprint-AD22.md`
@@ -79,6 +81,8 @@ with these invariants:
   marked explicit local override path
 - repo-local nudge scripts are either deleted or marked compatibility-only with
   no ambiguity that they are not the default shipped path
+- if any residual graft-facing nudge docs remain after `AD.21`, this sprint
+  closes them without reopening sink-private receiver behavior
 
 ## This Sprint Does Not Close
 

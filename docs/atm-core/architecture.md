@@ -569,6 +569,10 @@ Architectural rules:
 - `atm-core` owns one canonical post-send event model carrying sender/team,
   message id, description, task id, ack flags, and authoritative
   `recipient_pane_id` when known
+- any team-scoped built-in template override lookup must cross a
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  only and must not grow SQLite lookup behavior
 - `atm-core` does not own built-in XML template bodies, template override
   storage, tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:

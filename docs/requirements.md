@@ -899,11 +899,12 @@ Post-send-hook rules:
   - `<atm kind="ack" from="..." message-id="..."/>`
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - teams may override any subset of those six built-in template bodies through
-  host-scoped, team-keyed SQLite-backed ATM-managed override rows; any unset
-  case falls back to the product default body for that case
+  host-scoped, team-keyed ATM-managed override rows resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract; any unset case falls
+  back to the product default body for that case
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
-  - host-scoped SQLite-backed team override row for the selected template kind
+  - resolved team override row for the selected template kind
   - built-in product default template body for that kind
 - example payload:
   ```json
@@ -3534,7 +3535,8 @@ mail correctness.
   - the shipped default post-send path is the built-in `atm internal-nudge`
     implementation
   - teams may override any subset of the six built-in nudge template bodies
-    through host-scoped, team-keyed SQLite-backed ATM-managed override rows
+    through host-scoped, team-keyed ATM-managed override rows resolved through
+    the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
   - post-send emission must not redefine send success after persistence
 

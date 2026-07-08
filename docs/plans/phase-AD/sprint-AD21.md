@@ -23,6 +23,7 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
+- `boundaries/atm-core/nudge-template-override-store.toml`
 - `crates/atm-core/src/send/hook.rs`
 - `crates/atm-core/src/config/mod.rs`
 - `crates/atm-core/src/config/types.rs`
@@ -37,10 +38,13 @@ target: integrate/phase-AD
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
 - `docs/atm/requirements.md`
 - `docs/atm/architecture.md`
 - `docs/atm-graft/requirements.md`
 - `docs/atm-graft/architecture.md`
+- `docs/atm-rusqlite/requirements.md`
+- `docs/atm-rusqlite/architecture.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
@@ -77,10 +81,19 @@ pub struct BuiltInNudgeTemplateSet {
     pub acknowledge_task: String,
 }
 
+pub trait NudgeTemplateOverrideStore: sealed::Sealed {
+    fn load_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError>;
+}
+
 pub struct TeamNudgeTemplateOverrideRow {
     pub team_name: TeamName,
     pub kind: BuiltInNudgeTemplateKind,
     pub template_body: String,
+    pub updated_at: OffsetDateTime,
 }
 ```
 
@@ -99,9 +112,18 @@ The accepted built-in rendering contract after this sprint is:
   empty strings depending on the message family
 - the shipped built-in path is the hidden/internal `atm internal-nudge`
   subcommand rather than a repo-local Python or shell script
+- built-in template bodies and bounded placeholder substitution remain owned by
+  `atm`, not `atm-core`
+- any team-scoped override lookup must cross the storage-neutral
+  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  and upstream of `atm internal-nudge`; neither `atm-core` nor `atm` may
+  perform direct SQLite I/O for this lookup
 - `atm internal-nudge` must dispatch to exactly one concrete sink:
   - `TmuxNudgeSink` for local tmux-backed recipients
   - `GraftNudgeSink` for graft-backed recipients
+- this sprint consumes the existing `TmuxNudgeSink` and `GraftNudgeSink`
+  ownership lines only; it does not redesign sink-private mechanics beyond the
+  already accepted built-in template and dispatch contract
 - `TmuxNudgeSink` must preserve the current operational tmux-injection pattern:
   paste the rendered nudge text, send `Enter`, wait about `250ms` to `300ms`,
   then send a second `Enter`; the exact delay stays implementation-tunable but
@@ -159,9 +181,34 @@ The accepted default XML templates are:
 The accepted precedence order after this sprint is:
 
 1. matching external `[[atm.post_send_hooks]]` command
-2. host-scoped SQLite-backed built-in template override row for the active team
-   and selected template kind
+2. resolved built-in template override row for the active team and selected
+   template kind returned through `NudgeTemplateOverrideStore`
 3. built-in product default template for that template kind
+
+The first concrete override-store shape for this phase is:
+
+```rust
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: OffsetDateTime,
+}
+```
+
+with the planned SQLite storage contract owned by `atm-storage-rusqlite`:
+
+- table: `team_nudge_template_overrides`
+- columns:
+  - `team_name TEXT NOT NULL`
+  - `template_kind TEXT NOT NULL`
+  - `template_body TEXT NOT NULL`
+  - `updated_at TEXT NOT NULL`
+- primary key: `(team_name, template_kind)`
+- migration reference: extend
+  `crates/atm-storage-rusqlite/src/shared_db.rs::DB_MIGRATIONS` with the
+  additive `team_nudge_template_overrides` schema step during `AD.21`
+- owning storage crate: `atm-storage-rusqlite`
 
 ## Paths To Delete
 
@@ -180,9 +227,10 @@ The accepted precedence order after this sprint is:
   still wins when a matching rule is configured
 - the built-in path selects one of the six accepted template kinds and renders
   it through fixed placeholder substitution only
-- host-scoped, team-keyed SQLite-backed template override rows can replace any
-  subset of the six built-in templates without requiring repo-local Python
-  script distribution
+- host-scoped, team-keyed template override rows stored by
+  `atm-storage-rusqlite` and resolved through `NudgeTemplateOverrideStore`
+  can replace any subset of the six built-in templates without requiring
+  repo-local Python script distribution
 - the built-in path resolves exactly one concrete sink after rendering:
   `TmuxNudgeSink` or `GraftNudgeSink`
 - the accepted docs describe the exact six-template contract, the placeholder
@@ -190,6 +238,13 @@ The accepted precedence order after this sprint is:
 - built-in `acknowledge` and `acknowledge_task` defaults are intentionally
   minimal and do not repeat delivery-only context such as description, extra
   action text, console hints, or delivery-oriented body text
+- the accepted docs state explicitly that external `[[atm.post_send_hooks]]`
+  consumers remain supported and that the retained payload guarantees
+  `description`, preserves string-valued `task_id` semantics, and leaves `to`
+  optional/compatibility-only
+- the accepted docs state explicitly that `AD.21` closes the graft-architecture
+  drift for built-in nudge ownership; `AD.22` may reference those docs but does
+  not reopen sink or receiver-mechanics design
 
 ## This Sprint Does Not Close
 
@@ -216,8 +271,8 @@ The accepted precedence order after this sprint is:
 - targeted precedence coverage proves:
   - matching external `[[atm.post_send_hooks]]` rules still override the
     built-in path
-  - host-scoped, team-keyed SQLite-backed built-in template override rows
-    replace only the addressed template kinds
+  - host-scoped, team-keyed built-in template override rows loaded through
+    `NudgeTemplateOverrideStore` replace only the addressed template kinds
   - any unset template kind falls back to the product default body for that
     kind
 - targeted rendering coverage proves the default built-in acknowledge templates

@@ -539,6 +539,10 @@ Required caller-context rules:
 - `atm-core` owns canonical post-send event construction, but it must not own
   built-in XML template storage, placeholder substitution policy, or sink-local
   transport behavior
+- any team-scoped built-in template override lookup must cross a dedicated
+  storage-neutral `NudgeTemplateOverrideStore` boundary before
+  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  inside the emitter path
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

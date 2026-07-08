@@ -303,13 +303,17 @@ not true:
 
 - `atm-graft` has no Rust dependency on `atm-daemon`
 - `atm-graft` has no direct SQLite or inbox-JSONL access
-- the daemon remains the sole owner of pending-nudge queue state
-- the hook/poll nudge path uses the same daemon API contract as the embedded
-  session path
+- any receiver-private buffering or idle wakeup state stays inside
+  `atm-graft`; the daemon owns post-send emission, not graft-private pending
+  queue mechanics
+- the hook/push nudge path uses the same documented post-send event family as
+  any embedded receive path and must not require a separate advisory
+  register/fetch/drain surface
 - embedded mode includes one required receive task/thread and automatic
   between-tool-call nudge injection
-- embedded mode keeps one persistent daemon connection for nudges and signals
-  the host when new nudges arrive while it is idle
+- embedded mode may use request/response wakeups or another thin
+  receiver-private mechanism; the architecture must not require one persistent
+  shared daemon connection for nudge delivery
 - production graft delivery does not rely on `tmux send-keys` or equivalent
   external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded

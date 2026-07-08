@@ -151,6 +151,9 @@ The governing rules are:
   emission failure
 - the shipped default post-send path is the built-in `atm internal-nudge`
   command
+- one concrete 1.2.3 release root cause was that `cargo publish` did not ship
+  `scripts/atm-nudge.py` or `scripts/atm-nudge.sh`, so any default path that
+  still depended on repo-local scripts could not work from an installed binary
 - the built-in renderer is bounded to exactly six named template kinds:
   - `delivery`
   - `delivery_ack`
@@ -287,6 +290,7 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
+    pub description: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
@@ -320,6 +324,15 @@ Required runtime meaning:
     by both local-tmux and graft emitters; earlier sprints may reference the
     warning behavior, but they must not invent competing codes for the same
     failure class
+- external post-send compatibility:
+  - `ATM_POST_SEND.description` is guaranteed on the retained line
+  - `ATM_POST_SEND.task_id` remains present as a string contract for external
+    hooks and may be empty when no task is associated
+  - optional `to` remains compatibility-only and must not become required for
+    the built-in shipped nudge path
+  - repo-local `[[atm.post_send_hooks]]` consumers stay supported; any
+    dogfood script updates needed for the tightened payload contract land in
+    `AD.22`
 - read:
   - load from durable state only
 

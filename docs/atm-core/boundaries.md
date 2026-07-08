@@ -176,6 +176,24 @@ Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
   diagnosis into daemon or CLI code.
 
+## NudgeTemplateOverrideStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/nudge-template-override-store.toml](../../boundaries/atm-core/nudge-template-override-store.toml)
+
+Purpose:
+- Own the storage-neutral lookup contract for team-scoped built-in nudge
+  template override rows.
+
+Notes:
+- This boundary exists specifically so built-in nudge override lookup resolves
+  upstream of `PostSendHookEmitter`.
+- `atm-core` owns the contract and selection semantics, but does not own the
+  concrete SQLite table or any direct SQLite calls.
+- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- `atm` remains the owner of the six built-in product template bodies and the
+  bounded placeholder substitution/rendering policy.
+
 ## Phase AA Runtime Composition Adjuncts
 
 Purpose:

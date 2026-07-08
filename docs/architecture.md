@@ -2598,6 +2598,10 @@ Architectural rules:
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`
+- any team-scoped built-in template override row must be resolved through the
+  storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
+  emitter/render path runs; `atm` and `atm-core` must not perform direct
+  SQLite lookup for this feature
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning
