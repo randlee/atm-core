@@ -93,6 +93,35 @@ through `AD.20` are not optional cleanup; they are required to reach the
 accepted post-send, message-identity, graft, raw CLI runtime-root, and
 read-output consistency architecture.
 
+## Phase-End Follow-Up Review Blockers
+
+Two independent phase-end reviews on `integrate/phase-AD @ 477c3cef` found
+that the accepted line is still not release-ready even after `AD.22`.
+
+The authoritative follow-up blockers are:
+
+- the accepted post-send boundary artifacts claim `PostSendHookEmitter` /
+  `GraftPostSendPort` are the live seams, but the reviewed implementation still
+  bypasses them on the production send path
+- mixed-success external hook execution still collapses into incorrect
+  sender-visible behavior because matched/succeeded/failed outcomes are not
+  tracked distinctly
+- built-in template override rows still hide a fourth, undocumented state
+  where an empty string disables built-in nudge with no supported reset path
+- built-in template override resolution still happens inside
+  `atm internal-nudge` instead of upstream of the renderer/delivery step
+- `atm-graft` still carries a real timing race in test mode because host nudge
+  injection uses a shortened `#[cfg(test)]` deadline rather than deterministic
+  readiness
+- the accepted line still lacks one authoritative smoke/service-hardening lane
+  that proves the repaired post-send matrix and the remaining Windows daemon
+  depth cases together
+
+`Phase AD` therefore extends again with a follow-up line. `AD.25` through
+`AD.29` are release-blocking closure sprints for these phase-end findings.
+`AD.23` remains reserved outside this worktree, and `AD.24` is the sibling
+smoke-harness planning slot consumed by `AD.29` rather than renumbered here.
+
 ## Design Rules
 
 Phase `AD` is corrective simplification, not a feature-expansion line.
@@ -397,9 +426,11 @@ Phase `AD` orchestration rule:
   sprint, merge the full predecessor chain before starting new work on the
   current sprint
 - sprint branches must merge forward numerically:
-  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20 -> AD.21 -> AD.22`
+  - `AD.1 -> AD.2 -> AD.3 -> AD.4 -> AD.5 -> AD.6 -> AD.7 -> AD.8 -> AD.9 -> AD.10 -> AD.11 -> AD.12 -> AD.13 -> AD.14 -> AD.15 -> AD.16 -> AD.17 -> AD.18 -> AD.19 -> AD.20 -> AD.21 -> AD.22 -> AD.25 -> AD.26 -> AD.27 -> AD.28 -> AD.29`
 - do not stop downstream development waiting for prior sprint QA to pass
 - do not run pairwise cross-merges between unrelated `AD` sprint branches
+- `AD.24` is planned in a sibling smoke-test worktree and is consumed by
+  `AD.29`; do not renumber or alias it inside this follow-up line
 
 1. [AD.1 Caller Context Ownership Restore](./sprint-AD1.md)
 2. [AD.2 Obsolete Config Identity Removal And Doctor Contract Repair](./sprint-AD2.md)
@@ -423,6 +454,11 @@ Phase `AD` orchestration rule:
 20. [AD.20 Read Body-Search Metadata Consistency Repair](./sprint-AD20.md)
 21. [AD.21 Built-In Post-Send Nudge And Six-Template Override Surface](./sprint-AD21.md)
 22. [AD.22 Nudge Routing State Ownership And Dogfood Transition Cleanup](./sprint-AD22.md)
+23. [AD.25 Built-In Nudge Override Lifecycle And Reset Semantics](./sprint-AD25.md)
+24. [AD.26 Post-Send Boundary Wiring And Hook Accounting Repair](./sprint-AD26.md)
+25. [AD.27 Upstream Built-In Template Resolution Extraction](./sprint-AD27.md)
+26. [AD.28 `atm-graft` Host-Nudge Deadline Race Hardening](./sprint-AD28.md)
+27. [AD.29 Phase AD Post-Send Smoke And Windows Daemon Depth](./sprint-AD29.md)
 
 ## Phase Exit Criteria
 
@@ -452,12 +488,27 @@ Phase `AD` closes only when:
 - the accepted built-in nudge path supports the six named template cases from
   `AD.21`, and template override precedence is explicit rather than implicit
   script sprawl
+- built-in template override lifecycle is explicit:
+  - non-empty override rows replace the product default
+  - explicit disable is distinct from explicit reset-to-default
+  - empty-string rows are rejected rather than interpreted implicitly
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning
+- post-send hook accounting tracks matched/succeeded/failed execution
+  distinctly and does not erase successful emission because another matching
+  rule warned or failed
 - `PostSendHookEmitter` has a machine-readable boundary TOML plus a matching
   `docs/atm-core/boundaries.md` inventory entry, and `AD.11` readiness/lint
   checks fail closed if either record is missing
+- `PostSendHookEmitter` and `GraftPostSendPort` are both live runtime seams on
+  the accepted implementation path rather than dead governance records around a
+  subprocess bypass
+- the accepted send path no longer uses `std::process::Command` subprocess
+  spawn as the production tmux/graft post-send delivery mechanism
+- built-in template override resolution happens upstream of
+  `atm internal-nudge`; the renderer/delivery layer does not reopen runtime
+  bootstrap composition to re-query override storage
 - `ReconcileRuntime`, watched-file import, and daemon reconcile notification
   behavior are removed from the accepted line
 - daemon notification queue/worker delivery is removed; any retained
@@ -490,6 +541,15 @@ Phase `AD` closes only when:
 - smoke and doctor coverage prove the repaired behavior on the accepted line
 - command-matrix coverage proves the repaired caller-context behavior on the
   full retained ATM command surface
+- one authoritative Phase AD smoke/service-hardening lane proves:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback
+  - override reset-to-default
+  - override disable behavior when that state is retained
+- Windows daemon integration coverage includes the remaining post-restore local
+  IPC depth cases for dispatcher panic during shutdown, accept-error injection,
+  and post-terminate connection rejection
 - Windows `atm-daemon` CI coverage is restored on the accepted line and the
   Windows daemon lane is green; targeted manual regression evidence alone is
   not sufficient for Phase `AD` closure while that lane stays disabled
