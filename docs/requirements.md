@@ -432,12 +432,20 @@ Path resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
+Invocation directory is not a daemon/socket/database selector. It is only a
+workspace config discovery input after `ATM_HOME` resolves the canonical host
+runtime root.
+
 Required canonical paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`
 - `{ATM_HOME}/.claude/teams/{team}`
 - `{ATM_HOME}/.claude/teams/{team}/config.json`
 - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
+- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
+- `{ATM_HOME}/.atm/daemon/launch.lock`
+- `{ATM_HOME}/.atm/db/mail.db`
+- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
 - `{ATM_HOME}/.config/atm/config.toml`
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`

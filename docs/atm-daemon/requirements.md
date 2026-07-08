@@ -366,12 +366,15 @@ Requirement IDs:
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
-- singleton enforcement is host-wide rather than socket-path-local; changing
-  `ATM_HOME`, socket path, or test working directory must not create a legal
-  second daemon
-- the host-wide ownership mechanism uses stable permanent lock-file paths under
-  `~/.atm/daemon/` rather than lock-file creation/deletion as the ownership
-  signal:
+- singleton enforcement is installation-wide rather than socket-path-local;
+  changing the socket path or test working directory must not create a legal
+  second daemon inside one accepted `ATM_HOME`
+- invocation directory is not a daemon/socket/database selector; daemon
+  singleton, socket, and durable-store roots are derived from the accepted
+  `ATM_HOME` runtime root only
+- the ownership mechanism uses stable permanent lock-file paths under
+  `{ATM_HOME}/.atm/daemon/` rather than lock-file creation/deletion as the
+  ownership signal:
   - `launch.lock`
   - `owner.lock`
 - the cross-platform locking foundation is one whole-file exclusive-lock
@@ -385,9 +388,9 @@ Required runtime rules:
 - owner-visible metadata is the lock-file contents while the exclusive lock is
   held, not the mere existence of the lock file path
 - owner-record contents use the documented `pid[:token]` format
-- supported singleton deployment assumes `~/.atm/daemon/` is on a local
-  filesystem with working host-local advisory lock semantics; NFS or other
-  network-mounted roots are not supported singleton configurations
+- supported singleton deployment assumes `{ATM_HOME}/.atm/daemon/` is on a
+  local filesystem with working host-local advisory lock semantics; NFS or
+  other network-mounted roots are not supported singleton configurations
 - daemon startup is blocked by at least two runtime guard layers:
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is

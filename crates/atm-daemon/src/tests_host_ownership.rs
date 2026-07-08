@@ -69,20 +69,15 @@ fn write_stale_owner_record(_lock_path: &std::path::Path, file: &mut std::fs::Fi
 }
 
 #[test]
-fn daemon_host_runtime_lock_path_ignores_atm_home() {
+fn daemon_host_runtime_lock_path_follows_the_explicit_home_root() {
     let tempdir = TempDir::new().expect("tempdir");
-    let user_home = tempdir.path().join("user-home");
     let atm_home = tempdir.path().join("workspace").join(".atm-home");
     let path =
-        atm_core::home::host_runtime_lock_path_from_home(&user_home, HOST_RUNTIME_OWNER_LOCK_FILE);
+        atm_core::home::host_runtime_lock_path_from_home(&atm_home, HOST_RUNTIME_OWNER_LOCK_FILE);
 
     assert_eq!(
         path,
-        user_home.join(".atm").join("daemon").join("owner.lock")
-    );
-    assert!(
-        !path.starts_with(&atm_home),
-        "daemon singleton lock must remain OS-home scoped"
+        atm_home.join(".atm").join("daemon").join("owner.lock")
     );
 }
 

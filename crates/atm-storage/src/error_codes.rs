@@ -19,6 +19,7 @@ impl std::error::Error for UnknownAtmErrorCode {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AtmErrorCode {
     ConfigHomeUnavailable,
+    AtmHomeUnresolved,
     ConfigParseFailed,
     ConfigRetiredHookMembersKey,
     ConfigRetiredLegacyHookKeys,
@@ -30,6 +31,8 @@ pub enum AtmErrorCode {
     MemberAlreadyExists,
     MemberNotFound,
     DaemonUnavailable,
+    RuntimeRootInvalid,
+    RuntimeBootstrapRefused,
     DaemonMayHaveExecuted,
     DaemonLifecycleWedge,
     DaemonLaunchGateRejected,
@@ -108,6 +111,7 @@ impl AtmErrorCode {
     fn config_or_identity_str(self) -> Option<&'static str> {
         Some(match self {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
+            Self::AtmHomeUnresolved => "ATM_HOME_UNRESOLVED",
             Self::ConfigParseFailed => "ATM_CONFIG_PARSE_FAILED",
             Self::ConfigRetiredHookMembersKey => "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY",
             Self::ConfigRetiredLegacyHookKeys => "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS",
@@ -125,6 +129,8 @@ impl AtmErrorCode {
     fn daemon_or_address_str(self) -> Option<&'static str> {
         Some(match self {
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
+            Self::RuntimeRootInvalid => "ATM_RUNTIME_ROOT_INVALID",
+            Self::RuntimeBootstrapRefused => "ATM_RUNTIME_BOOTSTRAP_REFUSED",
             Self::DaemonMayHaveExecuted => "ATM_DAEMON_MAY_HAVE_EXECUTED",
             Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
             Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
@@ -229,6 +235,7 @@ fn parse_known_error_code(value: &str) -> Option<AtmErrorCode> {
 fn parse_config_or_identity_code(value: &str) -> Option<AtmErrorCode> {
     Some(match value {
         "ATM_CONFIG_HOME_UNAVAILABLE" => AtmErrorCode::ConfigHomeUnavailable,
+        "ATM_HOME_UNRESOLVED" => AtmErrorCode::AtmHomeUnresolved,
         "ATM_CONFIG_PARSE_FAILED" => AtmErrorCode::ConfigParseFailed,
         "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY" => AtmErrorCode::ConfigRetiredHookMembersKey,
         "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS" => AtmErrorCode::ConfigRetiredLegacyHookKeys,
@@ -246,6 +253,8 @@ fn parse_config_or_identity_code(value: &str) -> Option<AtmErrorCode> {
 fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
     Some(match value {
         "ATM_DAEMON_UNAVAILABLE" => AtmErrorCode::DaemonUnavailable,
+        "ATM_RUNTIME_ROOT_INVALID" => AtmErrorCode::RuntimeRootInvalid,
+        "ATM_RUNTIME_BOOTSTRAP_REFUSED" => AtmErrorCode::RuntimeBootstrapRefused,
         "ATM_DAEMON_MAY_HAVE_EXECUTED" => AtmErrorCode::DaemonMayHaveExecuted,
         "ATM_DAEMON_LIFECYCLE_WEDGE" => AtmErrorCode::DaemonLifecycleWedge,
         "ATM_DAEMON_LAUNCH_GATE_REJECTED" => AtmErrorCode::DaemonLaunchGateRejected,

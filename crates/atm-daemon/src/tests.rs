@@ -40,13 +40,13 @@ use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 
-const TEST_TEAM: &str = "test-team";
+pub(crate) const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
     TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
 }
 
-fn install_retained_runtime_factory() {
+pub(crate) fn install_retained_runtime_factory() {
     install_sqlite_retained_runtime_factory();
 }
 
@@ -334,7 +334,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .expect("replace roster");
 }
 
-fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
+pub(crate) fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
     std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
     let config = TeamConfig {

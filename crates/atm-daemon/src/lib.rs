@@ -38,6 +38,8 @@ mod tests_lifecycle;
 #[cfg(test)]
 mod tests_post_send_graft_warning;
 #[cfg(test)]
+mod tests_runtime_root;
+#[cfg(test)]
 mod worker_support;
 
 use std::path::PathBuf;

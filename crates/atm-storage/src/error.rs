@@ -149,6 +149,17 @@ impl AtmError {
         .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
     }
 
+    pub fn atm_home_unresolved(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::AtmHomeUnresolved,
+            AtmErrorKind::Config,
+            message,
+        )
+        .with_recovery(
+            "Set ATM_HOME or ensure the OS home directory can be resolved before retrying the ATM command.",
+        )
+    }
+
     pub fn config(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::Config, message).with_recovery(
             "Check the active ATM configuration, runtime wiring, and local path settings before retrying.",
@@ -224,6 +235,28 @@ impl AtmError {
         )
         .with_recovery(
             "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying.",
+        )
+    }
+
+    pub fn runtime_root_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::RuntimeRootInvalid,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Repair ATM_HOME, the derived daemon/socket/database root, or the active working directory before retrying the ATM command.",
+        )
+    }
+
+    pub fn runtime_bootstrap_refused(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::RuntimeBootstrapRefused,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Clear the conflicting daemon runtime override or repair the canonical ATM runtime root before retrying the ATM command.",
         )
     }
 

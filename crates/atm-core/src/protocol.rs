@@ -91,6 +91,7 @@ impl ProtocolErrorEnvelope {
 const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
     match code {
         AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
@@ -103,6 +104,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
         AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::RuntimeRootInvalid
+        | AtmErrorCode::RuntimeBootstrapRefused
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
@@ -362,7 +365,7 @@ pub fn request_from_frame_payload(
         | MessageKind::ClearRequest => {
             let value = serde_json::from_slice::<serde_json::Value>(&frame.bytes)
                 .map_err(AtmError::from)?;
-            validate_required_caller_context_fields(&value)?;
+            validate_required_caller_context_fields(frame.message_kind, &value)?;
             serde_json::from_value(value).map_err(AtmError::from)?
         }
         _ => serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?,
@@ -370,15 +373,55 @@ pub fn request_from_frame_payload(
     Ok((frame.request_id, request))
 }
 
-fn validate_required_caller_context_fields(value: &serde_json::Value) -> Result<(), AtmError> {
-    let object = value.as_object().ok_or_else(|| {
+fn validate_required_caller_context_fields(
+    message_kind: MessageKind,
+    value: &serde_json::Value,
+) -> Result<(), AtmError> {
+    let envelope = value.as_object().ok_or_else(|| {
         AtmError::caller_context_request_invalid(
             "daemon request payload must be a JSON object with caller_identity and caller_team",
         )
     })?;
-    parse_required_caller_identity(object)?;
-    parse_required_caller_team(object)?;
+    let payload = caller_context_payload_object(message_kind, envelope)?;
+    parse_required_caller_identity(payload)?;
+    parse_required_caller_team(payload)?;
     Ok(())
+}
+
+fn caller_context_payload_object(
+    message_kind: MessageKind,
+    envelope: &serde_json::Map<String, serde_json::Value>,
+) -> Result<&serde_json::Map<String, serde_json::Value>, AtmError> {
+    match message_kind {
+        MessageKind::SendComposeRequest => nested_payload_object(envelope, &["Send", "Compose"]),
+        MessageKind::SendAcknowledgeRequest => {
+            nested_payload_object(envelope, &["Send", "Acknowledge"])
+        }
+        MessageKind::ListRequest => nested_payload_object(envelope, &["List"]),
+        MessageKind::ReceiveRequest => nested_payload_object(envelope, &["Receive"]),
+        MessageKind::ClearRequest => nested_payload_object(envelope, &["Clear"]),
+        _ => unreachable!("caller-context validation only runs for caller-owned request kinds"),
+    }
+}
+
+fn nested_payload_object<'a>(
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    path: &[&str],
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, AtmError> {
+    let mut current = object;
+    for key in path {
+        let next = current.get(*key).ok_or_else(|| {
+            AtmError::caller_context_request_invalid(format!(
+                "daemon request payload is missing `{key}` envelope field"
+            ))
+        })?;
+        current = next.as_object().ok_or_else(|| {
+            AtmError::caller_context_request_invalid(format!(
+                "daemon request `{key}` envelope field must be a JSON object"
+            ))
+        })?;
+    }
+    Ok(current)
 }
 
 fn parse_required_caller_identity(
@@ -619,14 +662,23 @@ pub fn read_bounded_stream(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the host-scoped ATM runtime root cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM runtime root cannot be resolved.
 pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
     if let Some(path) = env::var_os("ATM_DAEMON_SOCKET").filter(|value| !value.is_empty()) {
         return Ok(platform_local_ipc_endpoint_path(PathBuf::from(path)));
     }
-    Ok(platform_local_ipc_endpoint_path(
-        home::host_runtime_dir()?.join("atm-daemon.sock"),
-    ))
+    Ok(daemon_socket_path_from_home(&home::atm_home()?))
+}
+
+/// Resolve the canonical daemon socket path for one accepted ATM home root.
+pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
+    platform_local_ipc_endpoint_path(
+        home::host_runtime_dir_from_home(home_dir).join(daemon_socket_file_name()),
+    )
+}
+
+fn daemon_socket_file_name() -> &'static str {
+    concat!("atm", "-daemon", ".sock")
 }
 
 /// Resolve the active local IPC name for the ATM request transport.
@@ -845,15 +897,23 @@ pub struct ReconcileResult {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::{
         HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
         RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
         RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        daemon_socket_file_name, daemon_socket_path, daemon_socket_path_from_home, next_request_id,
+        platform_local_ipc_endpoint_path, request_from_frame_payload, request_to_frame_payload,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::list::ListQuery;
+    use crate::send::{SendMessageSource, SendRequest};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
+    use serial_test::serial;
+    use tempfile::TempDir;
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {
@@ -935,6 +995,34 @@ mod tests {
     }
 
     #[test]
+    fn daemon_socket_path_from_home_uses_atm_home_runtime_subtree() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let logical_endpoint =
+            crate::home::host_runtime_dir_from_home(tempdir.path()).join(daemon_socket_file_name());
+
+        assert_eq!(
+            daemon_socket_path_from_home(tempdir.path()),
+            platform_local_ipc_endpoint_path(logical_endpoint)
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn daemon_socket_path_uses_atm_home_when_present() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("ATM_DAEMON_SOCKET", None),
+        ]);
+
+        assert_eq!(
+            daemon_socket_path().expect("daemon socket path"),
+            daemon_socket_path_from_home(&atm_home)
+        );
+    }
+
+    #[test]
     fn protocol_error_envelope_preserves_remote_delivery_outcome_unknown_recovery() {
         let error = AtmError::remote_delivery_outcome_unknown(
             "remote peer delivery outcome is unknown and replay persistence failed",
@@ -960,5 +1048,69 @@ mod tests {
 
         assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
         assert!(round_trip.is_agent_not_found());
+    }
+
+    #[test]
+    fn request_from_frame_payload_accepts_nested_send_caller_context() {
+        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
+            SendRequest::new(
+                PathBuf::from("/tmp/atm-home"),
+                PathBuf::from("/tmp/workspace"),
+                AgentName::from_validated(TEST_SENDER),
+                "recipient@test-team",
+                TeamName::from_validated(TEST_TEAM),
+                SendMessageSource::Inline("hello".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
+        ));
+
+        let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
+        let (_request_id, decoded) =
+            request_from_frame_payload(frame).expect("decode nested send request");
+
+        match decoded {
+            RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request)) => {
+                assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
+                assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+            }
+            other => panic!("expected send request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn request_from_frame_payload_accepts_nested_list_caller_context() {
+        let request = RequestEnvelope::List(
+            ListQuery::new(
+                PathBuf::from("/tmp/atm-home"),
+                PathBuf::from("/tmp/workspace"),
+                AgentName::from_validated(TEST_SENDER),
+                Some("recipient@test-team"),
+                TeamName::from_validated(TEST_TEAM),
+                ReadSelection::Unread,
+                false,
+                Some(25),
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("list query"),
+        );
+
+        let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
+        let (_request_id, decoded) =
+            request_from_frame_payload(frame).expect("decode nested list request");
+
+        match decoded {
+            RequestEnvelope::List(query) => {
+                assert_eq!(query.caller_identity.as_str(), TEST_SENDER);
+                assert_eq!(query.caller_team.as_str(), TEST_TEAM);
+            }
+            other => panic!("expected list request, got {other:?}"),
+        }
     }
 }

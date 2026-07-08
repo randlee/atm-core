@@ -254,8 +254,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
     the fact
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
-- daemon retained-log reporting must use the host-scoped ATM log contract:
-  `~/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR` when overridden.
+- daemon retained-log reporting must use the accepted-`ATM_HOME` ATM log
+  contract: `{ATM_HOME}/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR`
+  when overridden.
 - daemon health/reporting must not point retained-log status at `.local/share`,
   `~/logs`, `~/.claude/logs`, or other non-ATM-owned defaults.
 - the default retained daemon logging baseline must keep:
@@ -333,14 +334,14 @@ Architectural rule:
   - a daemon-side startup gate before serving state
   - a repository lint/CI gate that prevents ordinary tests from designing
     around the runtime invariant
-- no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
-  exception to the singleton rule
-- the host-wide ownership root is `~/.atm/daemon/` derived from the OS user
-  home, not from `ATM_HOME` or the serving socket path
+- no alternate socket path or test-only helper is an exception to the
+  singleton rule inside one accepted `ATM_HOME` installation
+- the ownership root is `{ATM_HOME}/.atm/daemon/` derived from the accepted
+  `ATM_HOME`, not from the invocation directory or serving socket path
 - client-side launch admission uses the stable lock file
-  `~/.atm/daemon/launch.lock`
+  `{ATM_HOME}/.atm/daemon/launch.lock`
 - daemon-side serving admission uses the stable lock file
-  `~/.atm/daemon/owner.lock`
+  `{ATM_HOME}/.atm/daemon/owner.lock`
 - Phase S host ownership uses one cross-platform whole-file exclusive-lock
   contract on those stable file paths rather than lock-file creation/deletion
   as the ownership signal
@@ -354,8 +355,9 @@ Architectural rule:
 - owner-visible metadata is the lock-file contents in documented
   `pid[:token]` form while the exclusive lock is held
 - lock files must live on a local filesystem with working host-local advisory
-  lock semantics; network-mounted or NFS-backed `~/.atm/daemon/` roots are not
-  a supported singleton deployment configuration
+  lock semantics; network-mounted or NFS-backed
+  `{ATM_HOME}/.atm/daemon/` roots are not a supported singleton deployment
+  configuration
 - if an exclusive lock on `owner.lock` can be acquired, startup may inspect
   and replace stale owner metadata under that held lock; if recovery cannot
   safely claim the same lock path, startup must fail with

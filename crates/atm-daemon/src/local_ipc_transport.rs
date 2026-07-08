@@ -881,6 +881,8 @@ fn spawn_connection_worker<'scope>(
             match result {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => {
+                    #[cfg(test)]
+                    eprintln!("daemon local IPC connection handling failed: {error}");
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
                         action = "connection_worker",
@@ -890,6 +892,10 @@ fn spawn_connection_worker<'scope>(
                     );
                 }
                 Err(_) => {
+                    #[cfg(test)]
+                    eprintln!(
+                        "daemon local IPC connection worker panicked; transport thread recovered"
+                    );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
                         action = "connection_worker",

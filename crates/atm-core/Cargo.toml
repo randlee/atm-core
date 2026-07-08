@@ -30,7 +30,6 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 fs2 = "0.4"
 same-file = "1"
-sc-observability-types.workspace = true
 parking_lot = "0.12"
 ulid.workspace = true
 

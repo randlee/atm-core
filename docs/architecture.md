@@ -1606,9 +1606,14 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
-- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- the default ATM-owned retained log file is
+  `{ATM_HOME}/.atm/logs/atm.log.jsonl`
 - `ATM_LOG_DIR` overrides the exact retained log directory
-- retained log path ownership is host-scoped and independent of `ATM_HOME`
+- without `ATM_LOG_DIR`, the retained log path is derived from the accepted
+  `ATM_HOME` root for the active installation
+- invocation directory is not a daemon/socket/database selector; it only
+  drives workspace config discovery after `ATM_HOME` resolves the canonical
+  host runtime root
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version

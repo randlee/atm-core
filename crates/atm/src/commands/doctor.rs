@@ -2,11 +2,10 @@ use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
 use atm_core::doctor::{self, DoctorQuery};
-use atm_core::home;
 use atm_runtime::assemble_default_runtime;
 use clap::Args;
 
-use crate::composition::CliComposition;
+use crate::composition::{CliComposition, resolve_command_runtime_context};
 
 #[derive(Debug, Args)]
 /// Run ATM health and configuration diagnostics.
@@ -25,8 +24,7 @@ impl DoctorCommand {
     // appears.
     /// Execute the `atm doctor` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("doctor")?;
         let json = self.json;
         let report = self.execute(observability, home_dir, current_dir)?;
 
@@ -79,7 +77,12 @@ impl DoctorCommand {
         .map_err(anyhow::Error::from)?;
         let query = self.build_query(home_dir, current_dir)?;
 
-        match CliComposition::bootstrap("doctor", observability) {
+        match CliComposition::bootstrap(
+            "doctor",
+            observability,
+            &query.current_dir,
+            &query.home_dir,
+        ) {
             Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
             Err(_) => Ok(local_report),
         }

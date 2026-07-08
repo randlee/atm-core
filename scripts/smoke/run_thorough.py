@@ -554,6 +554,14 @@ THOROUGH_ROWS = [
         ],
         pass_note="the explicit atm-daemon CI lane remains present and the Windows skip guard is absent",
     ),
+    SuiteRowSpec(
+        id="AD18-RUNTIME-ROOT-001",
+        flow="shared-host raw CLI bootstrap reuses a single daemon and keeps runtime state under the accepted ATM_HOME root",
+        commands=[
+            [sys.executable, "scripts/smoke/run_thorough_shared_host.py"],
+        ],
+        pass_note="shared-host smoke proves multi-workspace raw CLI bootstrap reuses one daemon, preserves team isolation, and keeps runtime ownership under the accepted ATM_HOME root",
+    ),
 ]
 
 
