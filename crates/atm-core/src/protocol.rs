@@ -17,12 +17,6 @@ use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
-use crate::graft::{
-    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-    AdvisoryStreamRequest, AdvisoryStreamResponse,
-};
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{ReadOutcome, ReadQuery};
@@ -52,11 +46,6 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
-    AdvisoryRegister(AdvisorySessionRegistrationRequest),
-    AdvisoryUnregister(AdvisorySessionUnregistrationRequest),
-    AdvisoryFetch(AdvisoryFetchRequest),
-    AdvisoryDrain(AdvisoryDrainRequest),
-    AdvisoryStream(AdvisoryStreamRequest),
 }
 
 /// Shared protocol response envelope.
@@ -68,11 +57,6 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
-    AdvisoryRegister(AdvisorySessionRegistrationResponse),
-    AdvisoryUnregister(AdvisorySessionUnregistrationResponse),
-    AdvisoryFetch(AdvisoryFetchResponse),
-    AdvisoryDrain(AdvisoryDrainResponse),
-    AdvisoryStream(AdvisoryStreamResponse),
     Error(ProtocolErrorEnvelope),
 }
 
@@ -234,11 +218,6 @@ pub enum MessageKind {
     ReceiveRequest = 0x0005,
     ClearRequest = 0x0006,
     DoctorRequest = 0x0007,
-    AdvisoryRegisterRequest = 0x0008,
-    AdvisoryUnregisterRequest = 0x0009,
-    AdvisoryFetchRequest = 0x000a,
-    AdvisoryDrainRequest = 0x000b,
-    AdvisoryStreamRequest = 0x000c,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
@@ -246,11 +225,6 @@ pub enum MessageKind {
     ReceiveResponse = 0x1005,
     ClearResponse = 0x1006,
     DoctorResponse = 0x1007,
-    AdvisoryRegisterResponse = 0x1008,
-    AdvisoryUnregisterResponse = 0x1009,
-    AdvisoryFetchResponse = 0x100a,
-    AdvisoryDrainResponse = 0x100b,
-    AdvisoryStreamResponse = 0x100c,
     ErrorResponse = 0x1fff,
 }
 
@@ -269,11 +243,6 @@ impl MessageKind {
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
-                | Self::AdvisoryRegisterRequest
-                | Self::AdvisoryUnregisterRequest
-                | Self::AdvisoryFetchRequest
-                | Self::AdvisoryDrainRequest
-                | Self::AdvisoryStreamRequest
         )
     }
 
@@ -294,11 +263,6 @@ impl TryFrom<u16> for MessageKind {
             0x0005 => Self::ReceiveRequest,
             0x0006 => Self::ClearRequest,
             0x0007 => Self::DoctorRequest,
-            0x0008 => Self::AdvisoryRegisterRequest,
-            0x0009 => Self::AdvisoryUnregisterRequest,
-            0x000a => Self::AdvisoryFetchRequest,
-            0x000b => Self::AdvisoryDrainRequest,
-            0x000c => Self::AdvisoryStreamRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
@@ -306,11 +270,6 @@ impl TryFrom<u16> for MessageKind {
             0x1005 => Self::ReceiveResponse,
             0x1006 => Self::ClearResponse,
             0x1007 => Self::DoctorResponse,
-            0x1008 => Self::AdvisoryRegisterResponse,
-            0x1009 => Self::AdvisoryUnregisterResponse,
-            0x100a => Self::AdvisoryFetchResponse,
-            0x100b => Self::AdvisoryDrainResponse,
-            0x100c => Self::AdvisoryStreamResponse,
             0x1fff => Self::ErrorResponse,
             _ => {
                 return Err(AtmError::validation(format!(
@@ -609,11 +568,6 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
         RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
         RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
-        RequestEnvelope::AdvisoryRegister(_) => MessageKind::AdvisoryRegisterRequest,
-        RequestEnvelope::AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterRequest,
-        RequestEnvelope::AdvisoryFetch(_) => MessageKind::AdvisoryFetchRequest,
-        RequestEnvelope::AdvisoryDrain(_) => MessageKind::AdvisoryDrainRequest,
-        RequestEnvelope::AdvisoryStream(_) => MessageKind::AdvisoryStreamRequest,
     }
 }
 
@@ -628,11 +582,6 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
         ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
         ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,
-        ResponseEnvelope::AdvisoryRegister(_) => MessageKind::AdvisoryRegisterResponse,
-        ResponseEnvelope::AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterResponse,
-        ResponseEnvelope::AdvisoryFetch(_) => MessageKind::AdvisoryFetchResponse,
-        ResponseEnvelope::AdvisoryDrain(_) => MessageKind::AdvisoryDrainResponse,
-        ResponseEnvelope::AdvisoryStream(_) => MessageKind::AdvisoryStreamResponse,
         ResponseEnvelope::Error(_) => MessageKind::ErrorResponse,
     }
 }

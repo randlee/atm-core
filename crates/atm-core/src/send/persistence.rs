@@ -156,7 +156,7 @@ fn mirror_message_to_store(
     let Some(message_id) = envelope.message_id else {
         return Ok(());
     };
-    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
+    let message_key = boundary::MessageKey::from(message_id);
     runtime.persist_message_record(boundary::Message {
         team: team.clone(),
         agent: agent.clone(),

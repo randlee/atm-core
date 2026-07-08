@@ -8,7 +8,9 @@ use atm_core::ack::AckRequest;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AckActivationMode, AgentName, ReadSelection, TeamName};
-use atm_graft::{Event, GraftClient, GraftSession, GraftSessionOptions, HostNudgeInjector};
+use atm_graft::{
+    AdvisorySessionState, Event, GraftClient, GraftSession, GraftSessionOptions, HostNudgeInjector,
+};
 use serde_json::json;
 
 #[derive(Debug)]
@@ -126,7 +128,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let activation_snapshot = session.snapshot()?;
-    if activation_snapshot.state != atm_core::graft::AdvisorySessionState::Registered {
+    if activation_snapshot.state != AdvisorySessionState::Registered {
         return Err(io::Error::other(format!(
             "expected registered graft session, found {:?}",
             activation_snapshot.state

@@ -36,6 +36,7 @@ The crate-local machine-readable boundary inventory lives in:
 - daemon singleton/runtime lifecycle
 - concrete socket transport
 - direct agent-process notification transport
+- graft-private same-host advisory/session IPC contracts
 
 ## 3. Requirement Namespace
 
@@ -159,8 +160,10 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, protocol, transport, config ingress, direct post-send emission,
-  advisory transport, and status-source calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, config ingress, direct post-send emission, and
+  status-source calls. Shared `atm-core` boundaries must not absorb
+  graft-private same-host advisory/session transport concerns. Satisfies the
+  subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
   Phase-Z follow-on note: repository-local lint must also be able to reject
   direct command-entry retained-runtime acquisition in `atm teams`,
@@ -189,18 +192,24 @@ Initial crate requirement IDs:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
   Any earlier graft-specific contract intent is superseded by
-  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
-  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
-  requirement.
-  The generic session identifier name reserved for the thin-client line is
-  `AdvisorySessionId`; later advisory/session work must build on that
-  generic core-owned name rather than reviving `GraftSessionId`.
+  the shared unary `AtmGraftClient` contract for send/read/ack. Any surviving
+  same-host graft advisory/session transport remains implementation-private to
+  `atm-daemon` / `atm-graft`, rather than an `atm-core` requirement. The
+  generic session identifier name reserved for the thin-client line remains
+  `AdvisorySessionId`; later advisory/session work must reuse that name rather
+  than reviving `GraftSessionId`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
-  used by client transport, server transport, and in-process test transport. Satisfies:
+  used by client transport, server transport, and in-process test transport.
+  The shared protocol surface is limited to the retained unary ATM command
+  families and must not grow graft-only advisory/session packets. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
   `ServerTransport` contracts plus route-selection semantics between local and
-  cross-host daemon paths. Satisfies:
+  cross-host daemon paths. Graft-private same-host session registration,
+  queue inspection, and live advisory delivery must stay behind
+  receiver-private `atm-graft` / `atm-daemon` implementation seams instead of
+  this shared boundary.
+  Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
   retry semantics exposed at service boundaries. Satisfies:

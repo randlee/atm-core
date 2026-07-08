@@ -90,14 +90,6 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
-
-    fn dispatch_advisory_stream(
-        &self,
-        _request: atm_core::graft::AdvisoryStreamRequest,
-        _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
-    ) -> Result<(), atm_core::error::AtmError> {
-        panic!("unexpected advisory stream request in DoctorOnlyDispatcher");
-    }
 }
 
 pub(crate) fn sqlite_runtime_assembly_for_test(db_path: &std::path::Path) -> RuntimeAssembly {

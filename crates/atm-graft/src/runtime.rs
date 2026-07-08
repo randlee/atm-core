@@ -4,19 +4,27 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 
+use crate::graft_rpc;
+use crate::graft_rpc::ResponseEnvelope;
+use crate::graft_rpc::{AdvisoryDrainResponse, AdvisorySessionId, AdvisoryStreamResponse};
 use atm_core::GraftConfig;
-use atm_core::error::AtmError;
-use atm_core::graft::{
-    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisorySessionPort,
-    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse, AdvisorySessionState,
-    AdvisorySessionUnregistrationRequest, AdvisoryStreamRequest,
-};
-use atm_core::protocol::{self, ResponseEnvelope};
+use atm_core::error::{AtmError, AtmErrorKind};
 
 use crate::transport::ActiveAdvisoryStream;
-use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
+use crate::{
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisorySessionPort,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse, AdvisorySessionState,
+    AdvisorySessionUnregistrationRequest, AdvisoryStreamRequest, GraftObservability,
+    GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
+};
 
 const MAX_LIVE_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);
+
+type ReceiveLoopJoinHelper = (
+    Receiver<Result<(), AtmError>>,
+    JoinHandle<()>,
+    std::thread::ThreadId,
+);
 
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
     let config = atm_core::load_atm_config(workspace_root)?;
@@ -30,7 +38,11 @@ pub(crate) fn read_snapshot(
         .read()
         .map(|snapshot| snapshot.clone())
         .map_err(|_| {
-            AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
+            AtmError::new(
+                AtmErrorKind::Internal,
+                "graft session snapshot lock poisoned",
+            )
+            .with_recovery(
                 "Restart the embedding host before retrying graft session lifecycle operations.",
             )
         })
@@ -41,7 +53,11 @@ fn write_snapshot(
     state: AdvisorySessionState,
 ) -> Result<(), AtmError> {
     let mut snapshot = snapshot.write().map_err(|_| {
-        AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
+        AtmError::new(
+            AtmErrorKind::Internal,
+            "graft session snapshot lock poisoned",
+        )
+        .with_recovery(
             "Restart the embedding host before retrying graft session lifecycle operations.",
         )
     })?;
@@ -97,7 +113,7 @@ pub(crate) fn register_session_with_validated_batch_limit(
 
 pub(crate) fn cleanup_registered_session_after_error(
     client: &dyn AdvisorySessionPort,
-    session_id: &atm_core::graft::AdvisorySessionId,
+    session_id: &crate::AdvisorySessionId,
     failed_step: &str,
     original_error: AtmError,
 ) -> AtmError {
@@ -121,70 +137,97 @@ pub(crate) fn cleanup_registered_session_after_error(
 pub(crate) fn join_receive_loop_with_deadline(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
+    let (result_rx, join_helper, join_helper_thread_id) =
+        spawn_receive_loop_join_helper(join_handle)?;
+    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
+        Ok(result) => finish_join_receive_loop(join_helper, result),
+        Err(RecvTimeoutError::Timeout) => {
+            Err(join_receive_loop_timeout_error(join_helper_thread_id))
+        }
+        Err(RecvTimeoutError::Disconnected) => handle_join_helper_disconnect(join_helper),
+    }
+}
+
+fn spawn_receive_loop_join_helper(
+    join_handle: JoinHandle<Result<(), AtmError>>,
+) -> Result<ReceiveLoopJoinHelper, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     let join_helper = thread::Builder::new()
         .name("atm-graft-receive-loop-join".to_string())
         .spawn(move || {
-            let result = match join_handle.join() {
-                Ok(result) => result,
-                Err(_) => Err(AtmError::daemon_unavailable("graft receive loop panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )),
-            };
+            let result = join_handle
+                .join()
+                .unwrap_or_else(|_| Err(receive_loop_panic_error()));
             let _ = result_tx.send(result);
         })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
-                .with_source(source)
-                .with_recovery(
-                    "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
-                )
-        })?;
+        .map_err(join_helper_spawn_error)?;
     let join_helper_thread_id = join_helper.thread().id();
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
-        Ok(result) => {
-            join_helper.join().map_err(|_| {
-                AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )
-            })?;
-            result
-        }
-        Err(RecvTimeoutError::Timeout) => {
-            tracing::debug!(
-                timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
-                thread_id = ?join_helper_thread_id,
-                "graft receive-loop join timed out; helper left detached after deadline"
-            );
-            Err(AtmError::daemon_unavailable(format!(
-                "graft receive loop shutdown exceeded the {:?} join deadline",
-                RECEIVE_LOOP_JOIN_DEADLINE
-            ))
-            .with_recovery(
-                "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
-            ))
-        }
-        Err(RecvTimeoutError::Disconnected) => join_helper.join().map_or_else(
-            |_| {
-                Err(
-                    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-                        .with_recovery(
-                            "Restart the embedding host and atm-daemon before retrying graft mode.",
-                        ),
-                )
-            },
-            |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Restart the embedding host and atm-daemon before retrying graft mode.",
-                ))
-            },
+    Ok((result_rx, join_helper, join_helper_thread_id))
+}
+
+fn finish_join_receive_loop(
+    join_helper: JoinHandle<()>,
+    result: Result<(), AtmError>,
+) -> Result<(), AtmError> {
+    join_helper.join().map_err(|_| join_helper_panic_error())?;
+    result
+}
+
+fn handle_join_helper_disconnect(join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+    join_helper.join().map_or_else(
+        |_| Err(join_helper_panic_error()),
+        |_| Err(join_helper_disconnect_error()),
+    )
+}
+
+fn receive_loop_panic_error() -> AtmError {
+    AtmError::new(AtmErrorKind::Internal, "graft receive loop panicked")
+        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_spawn_error(source: io::Error) -> AtmError {
+    AtmError::new(
+        AtmErrorKind::Internal,
+        "failed to spawn graft receive-loop join helper",
+    )
+    .with_source(source)
+    .with_recovery(
+        "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
+    )
+}
+
+fn join_helper_panic_error() -> AtmError {
+    AtmError::new(
+        AtmErrorKind::Internal,
+        "graft receive-loop join helper panicked",
+    )
+    .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_helper_disconnect_error() -> AtmError {
+    AtmError::new(
+        AtmErrorKind::Internal,
+        "graft receive-loop join helper disconnected unexpectedly",
+    )
+    .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
+}
+
+fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId) -> AtmError {
+    tracing::debug!(
+        timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
+        thread_id = ?join_helper_thread_id,
+        "graft receive-loop join timed out; helper left detached after deadline"
+    );
+    AtmError::new(
+        AtmErrorKind::Timeout,
+        format!(
+            "graft receive loop shutdown exceeded the {:?} join deadline",
+            RECEIVE_LOOP_JOIN_DEADLINE
         ),
-    }
+    )
+    .with_recovery(
+        "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
+    )
 }
 
 pub(crate) struct ReceiveLoopContext {
@@ -231,7 +274,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
             return close_live_receive_loop(&ctx);
         }
 
-        let frame = match protocol::read_frame(
+        let frame = match graft_rpc::read_frame(
             &mut ctx.advisory_stream.stream,
             "failed to read graft advisory-stream frame",
             "graft advisory-stream frame exceeded the maximum supported size",
@@ -246,12 +289,20 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
                 continue;
             }
         };
-        let (response_id, response) = protocol::response_from_frame_payload(frame)?;
+        let (response_id, response) = graft_rpc::response_from_raw_parts(
+            frame.request_id,
+            frame.message_kind.code(),
+            frame.flags,
+            frame.bytes,
+        )?;
         if response_id != ctx.advisory_stream.request_id {
-            return Err(AtmError::daemon_unavailable(format!(
-                "advisory stream response request_id {} did not match request_id {}",
-                response_id, ctx.advisory_stream.request_id
-            ))
+            return Err(AtmError::new(
+                AtmErrorKind::Internal,
+                format!(
+                    "advisory stream response request_id {} did not match request_id {}",
+                    response_id, ctx.advisory_stream.request_id
+                ),
+            )
             .with_recovery(
                 "Align the embedding host, atm-graft, and atm-daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
             ));
@@ -273,7 +324,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
 
 fn should_stop_receive_loop(
     ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
+    session_id: &AdvisorySessionId,
 ) -> Result<bool, AtmError> {
     match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
         Ok(()) => {
@@ -299,8 +350,8 @@ fn should_stop_receive_loop(
 
 fn handle_drain_response(
     ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
-    response: atm_core::graft::AdvisoryDrainResponse,
+    session_id: &AdvisorySessionId,
+    response: AdvisoryDrainResponse,
 ) -> Result<(), AtmError> {
     ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
     for nudge in response.nudges {
@@ -312,7 +363,7 @@ fn handle_drain_response(
 
 fn handle_drain_failure(
     ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
+    session_id: &AdvisorySessionId,
     error: AtmError,
 ) -> Result<(), AtmError> {
     set_session_state(
@@ -328,7 +379,7 @@ fn handle_drain_failure(
 
 fn attempt_receive_loop_reregistration(
     ctx: &ReceiveLoopContext,
-    session_id: &atm_core::graft::AdvisorySessionId,
+    session_id: &AdvisorySessionId,
 ) -> Result<(), AtmError> {
     match register_session_with_validated_batch_limit(
         &*ctx.client,
@@ -441,7 +492,7 @@ fn reregister_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmE
 
 fn handle_live_advisory_batch(
     ctx: &LiveReceiveLoopContext,
-    batch: atm_core::graft::AdvisoryStreamResponse,
+    batch: AdvisoryStreamResponse,
 ) -> Result<std::time::Duration, AtmError> {
     ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
     for nudge in batch.nudges {
@@ -454,7 +505,7 @@ fn handle_live_advisory_batch(
 
 fn unregister_session_and_close(
     client: &dyn AdvisorySessionPort,
-    session_id: &atm_core::graft::AdvisorySessionId,
+    session_id: &AdvisorySessionId,
     snapshot: &Arc<RwLock<SessionSnapshot>>,
     observability: &dyn GraftObservability,
 ) -> Result<(), AtmError> {
@@ -498,14 +549,8 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::ack::{AckOutcome, AckRequest};
-    use atm_core::error::AtmError;
-    use atm_core::graft::{
-        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
-        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySessionId, AdvisorySessionPort,
-        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-        AdvisorySessionState, AdvisorySessionUnregistrationRequest,
-        AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AtmGraftClient,
-    };
+    use atm_core::error::{AtmError, AtmErrorKind};
+    use atm_core::graft::AtmGraftClient;
     use atm_core::protocol;
     use atm_core::read::{ReadOutcome, ReadQuery};
     use atm_core::send::{SendOutcome, SendRequest};
@@ -519,8 +564,12 @@ mod tests {
         read_snapshot, reconnect_live_receive_loop, register_session_with_validated_batch_limit,
     };
     use crate::{
-        GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot,
-        transport::ActiveAdvisoryStream,
+        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySessionId, AdvisorySessionPort,
+        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+        AdvisorySessionState, AdvisorySessionUnregistrationRequest,
+        AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, GraftObservability,
+        GraftSessionClient, HostNudgeInjector, SessionSnapshot, transport::ActiveAdvisoryStream,
     };
 
     #[derive(Debug, Clone, Copy)]
@@ -603,9 +652,10 @@ mod tests {
                     session_id: request.session_id,
                     closed: false,
                 }),
-                UnregisterBehavior::Error => {
-                    Err(AtmError::daemon_unavailable("simulated unregister failure"))
-                }
+                UnregisterBehavior::Error => Err(AtmError::new(
+                    AtmErrorKind::Internal,
+                    "simulated unregister failure",
+                )),
             }
         }
 
@@ -731,7 +781,7 @@ mod tests {
         );
         let source = error.source.as_ref().expect("cleanup source").to_string();
         assert!(source.contains("simulated unregister failure"));
-        assert!(source.contains("atm-daemon binary is installed"));
+        assert!(!source.contains("atm-daemon binary is installed"));
         assert_eq!(
             client
                 .unregister_calls
@@ -857,7 +907,8 @@ mod tests {
             &self,
             _request: AdvisoryStreamRequest,
         ) -> Result<ActiveAdvisoryStream, AtmError> {
-            Err(AtmError::daemon_unavailable(
+            Err(AtmError::new(
+                AtmErrorKind::Internal,
                 "simulated advisory-stream reopen failure",
             ))
         }
@@ -893,7 +944,10 @@ mod tests {
             registration_request: registration_request(),
             advisory_stream: ActiveAdvisoryStream {
                 stream,
-                request_id: protocol::next_request_id(),
+                request_id: atm_daemon_client::RequestId::new(
+                    protocol::next_request_id().into_inner(),
+                )
+                .expect("request id"),
             },
             limit: AdvisoryBatchLimit::new(8).expect("limit"),
             reconnect_backoff: Duration::from_millis(1),
@@ -905,7 +959,7 @@ mod tests {
 
         let error = reconnect_live_receive_loop(
             &mut ctx,
-            AtmError::daemon_unavailable("stream read failed"),
+            AtmError::new(AtmErrorKind::Internal, "stream read failed"),
             Duration::from_millis(1),
         )
         .expect_err("stream reopen should fail");
@@ -1027,7 +1081,10 @@ mod tests {
             registration_request: registration_request(),
             advisory_stream: ActiveAdvisoryStream {
                 stream,
-                request_id: protocol::next_request_id(),
+                request_id: atm_daemon_client::RequestId::new(
+                    protocol::next_request_id().into_inner(),
+                )
+                .expect("request id"),
             },
             limit: AdvisoryBatchLimit::new(8).expect("limit"),
             reconnect_backoff: Duration::from_millis(1),
@@ -1039,7 +1096,7 @@ mod tests {
 
         let error = reconnect_live_receive_loop(
             &mut ctx,
-            AtmError::daemon_unavailable("stream read failed"),
+            AtmError::new(AtmErrorKind::Internal, "stream read failed"),
             Duration::from_millis(1),
         )
         .expect_err("invalid batch limit must fail after cleanup");

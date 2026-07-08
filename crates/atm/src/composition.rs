@@ -12,11 +12,7 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::graft::{
-    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
-};
+use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
@@ -338,46 +334,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn register_graft_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryRegister(request))? {
-            ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
-            other => Err(unexpected_response("graft register", other)),
-        }
-    }
-
-    pub(crate) fn unregister_graft_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryUnregister(request))? {
-            ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
-            other => Err(unexpected_response("graft unregister", other)),
-        }
-    }
-
-    pub(crate) fn fetch_graft_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryFetch(request))? {
-            ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
-            other => Err(unexpected_response("graft fetch", other)),
-        }
-    }
-
-    pub(crate) fn drain_graft_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryDrain(request))? {
-            ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
-            other => Err(unexpected_response("graft drain", other)),
-        }
-    }
-
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
@@ -489,36 +445,6 @@ impl AtmGraftClient for CliComposition<'_> {
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
         CliComposition::ack(self, request)
-    }
-}
-
-impl AdvisorySessionPort for CliComposition<'_> {
-    fn register_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        CliComposition::register_graft_session(self, request)
-    }
-
-    fn unregister_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        CliComposition::unregister_graft_session(self, request)
-    }
-
-    fn fetch_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        CliComposition::fetch_graft_nudges(self, request)
-    }
-
-    fn drain_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        CliComposition::drain_graft_nudges(self, request)
     }
 }
 
@@ -735,7 +661,7 @@ mod tests {
 
             for (index, message) in messages.iter().enumerate() {
                 let message_key = if let Some(message_id) = message.message_id {
-                    boundary::MessageKey::new(format!("atm:{message_id}")).expect("message key")
+                    boundary::MessageKey::from(message_id)
                 } else {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };

@@ -29,17 +29,15 @@ Notes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
-  - typed advisory-session envelopes for:
-    - register
-    - unregister
-    - fetch
-    - drain
-    - live advisory stream
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
     `atm doctor`; after `AA.3` it carries daemon-owned runtime state only and
     no store-specific readiness fields
+- Graft-only advisory/session envelopes are intentionally not part of this
+  shared protocol family. Any surviving same-host graft advisory/session DTOs
+  are private implementation detail inside `atm-daemon` / `atm-graft`, not an
+  `atm-core` or `atm-daemon-client` boundary contract.
 - `atm-runtime-test-support` is an allowed workspace-local dependent for the
   retained-runtime test harness seam; it is not a production consumer
   boundary.
@@ -58,12 +56,11 @@ Notes:
   and receive.
 - Thin clients must use this shared boundary and must not take a dependency on
   `atm-daemon` internals.
-- `atm-graft` now lands as one such thin client crate and is expected to stay
-  on this boundary plus the shared ATM envelopes rather than on any daemon-
-  private request family.
+- `atm-graft` uses this boundary for unary send/read/ack only.
 - Long-lived advisory registration, fetch/drain inspection, and live advisory
-  stream traffic are part of this shared boundary family rather than a
-  plugin-private daemon API.
+  stream traffic are intentionally outside this shared boundary and must stay
+  behind receiver-private implementation inside `atm-graft`, with no shared
+  `atm-daemon-client` contract reintroduced for that traffic.
 
 ## WatchEventSource
 
@@ -122,6 +119,10 @@ Purpose:
 
 Notes:
 - Transport-specific listeners should not embed request-family logic.
+- Shared dispatch through this boundary is limited to the public ATM unary
+  protocol surface. Graft-private advisory/session dispatch stays on the
+  daemon-owned `GraftRequestDispatcher` seam and must not leak back into
+  `atm-core`.
 
 ## MailStore
 

@@ -6,24 +6,26 @@ use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use atm_core::PostSendHookEvent;
-use atm_core::boundary;
-use atm_core::error::AtmError;
-use atm_core::graft::{
+use crate::graft_rpc::{
     AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent, AdvisoryFetchRequest,
     AdvisoryFetchResponse, AdvisoryMessage, AdvisorySessionId, AdvisorySessionRegistrationRequest,
     AdvisorySessionRegistrationResponse, AdvisorySessionUnregistrationRequest,
     AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
+    ResponseEnvelope,
 };
-use atm_core::protocol::ResponseEnvelope;
+use atm_core::PostSendHookEvent;
+use atm_core::error::AtmError;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
+use crate::GraftStreamSink;
 use crate::SubsystemObservability;
 use crate::daemon_runtime_observability::DaemonEvent;
+use crate::local_ipc_transport::MAX_CONCURRENT_CONNECTIONS;
 
-const MAX_ADVISORY_SESSIONS: usize = 128;
+const RESERVED_UNARY_CONNECTION_SLOTS: usize = 16;
+const MAX_ADVISORY_SESSIONS: usize = MAX_CONCURRENT_CONNECTIONS - RESERVED_UNARY_CONNECTION_SLOTS;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
 const ADVISORY_SESSION_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
 const ADVISORY_SESSION_IDLE_TTL: Duration = Duration::from_secs(30);
@@ -349,7 +351,7 @@ impl AdvisoryRuntime {
     pub(crate) fn stream_nudges(
         &self,
         request: AdvisoryStreamRequest,
-        sink: &mut dyn boundary::AdvisoryStreamSink,
+        sink: &mut dyn GraftStreamSink,
     ) -> Result<(), AtmError> {
         let drain_request = AdvisoryDrainRequest {
             session_id: request.registration.session_id.clone(),
@@ -430,7 +432,7 @@ impl AdvisoryRuntime {
 
     fn enqueue_nudge_for_session(
         &self,
-        session_id: &atm_core::graft::AdvisorySessionId,
+        session_id: &AdvisorySessionId,
         session: &mut RegisteredAdvisorySession,
         event: &PostSendHookEvent,
         nudge: &AdvisoryEvent,
@@ -455,7 +457,7 @@ impl AdvisoryRuntime {
 
     fn emit_queue_overflow_event(
         &self,
-        session_id: &atm_core::graft::AdvisorySessionId,
+        session_id: &AdvisorySessionId,
         dropped_count: usize,
         post_send: &PostSendHookEvent,
     ) {
@@ -681,16 +683,17 @@ mod tests {
     use std::time::Duration;
 
     use super::AdvisoryRuntime;
-    use atm_core::PostSendHookEvent;
-    use atm_core::boundary::{self, GraftPostSendPort};
-    use atm_core::error::AtmError;
-    use atm_core::error_codes::AtmErrorCode;
-    use atm_core::graft::{
+    use crate::GraftStreamSink;
+    use crate::graft_rpc::ResponseEnvelope;
+    use crate::graft_rpc::{
         AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
         AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
         AdvisoryStreamRequest, AdvisoryStreamResponse,
     };
-    use atm_core::protocol::ResponseEnvelope;
+    use atm_core::PostSendHookEvent;
+    use atm_core::boundary::GraftPostSendPort;
+    use atm_core::error::AtmError;
+    use atm_core::error_codes::AtmErrorCode;
     use atm_core::types::IsoTimestamp;
 
     fn registration_request() -> AdvisorySessionRegistrationRequest {
@@ -815,7 +818,7 @@ mod tests {
         batch_tx: mpsc::Sender<AdvisoryStreamResponse>,
     }
 
-    impl boundary::AdvisoryStreamSink for NotifyingStreamSink {
+    impl GraftStreamSink for NotifyingStreamSink {
         fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
             match response {
                 ResponseEnvelope::AdvisoryStream(batch) => self

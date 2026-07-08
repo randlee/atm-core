@@ -68,11 +68,12 @@ They must not differ in:
 - protocol failure meaning
 
 Thin-client extension rule:
-- if long-lived registration or advisory-notification traffic is added for
-  embedded/plugin clients, it must remain part of this shared ICD family
-  rather than forming a daemon-private plugin protocol.
-- Phase U.8 lands `atm-graft` on the existing shared unary packet family only;
-  there are no graft-private packet kinds in the accepted U.8 transport line.
+- the shared ATM protocol ends at the retained unary ATM command family
+- embedded same-host graft session traffic may reuse the same frame shape, but
+  its request/response DTO family is intentionally private implementation
+  detail inside `atm-daemon` / `atm-graft`
+- `atm-graft` therefore uses the shared unary packet family for send/read/ack
+  and a separate graft-local same-host contract for advisory/session traffic
 
 UDP is not an accepted transport for ATM daemon request/response messaging in
 the retained product surface.
@@ -82,18 +83,13 @@ the retained product surface.
 The current Phase S daemon packet family is intentionally smaller than the full
 retained CLI command surface.
 
-Daemon packet families that this ICD must cover:
+Shared daemon packet families that this ICD must cover:
 - send compose
 - send acknowledge
 - receive
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
 
 Retained product workflows that are not daemon request/response packets in the
 current Phase S line:
@@ -113,6 +109,12 @@ Rule:
 
 ATM daemon transport is a framed, connection-oriented, request/response
 protocol.
+
+This document defines two related contracts:
+- the shared ATM unary protocol
+- the graft-local same-host advisory/session extension that reuses the same
+  frame shape with receiver-private implementation DTOs that are not part of
+  the accepted shared boundary surface
 
 Phase S baseline transport shape:
 - one logical request
@@ -233,7 +235,7 @@ payload decode.
 
 Phase S packet families:
 
-### 6.1 Request Packet Kinds
+### 6.1 Shared Unary Request Packet Kinds
 
 - `0x0001` `send_compose_request`
 - `0x0002` `send_acknowledge_request`
@@ -242,13 +244,8 @@ Phase S packet families:
 - `0x0005` `receive_request`
 - `0x0006` `clear_request`
 - `0x0007` `doctor_request`
-- `0x0008` `advisory_register_request`
-- `0x0009` `advisory_unregister_request`
-- `0x000a` `advisory_fetch_request`
-- `0x000b` `advisory_drain_request`
-- `0x000c` `advisory_stream_request`
 
-### 6.2 Success Response Packet Kinds
+### 6.2 Shared Unary Success Response Packet Kinds
 
 - `0x1001` `send_sent_response`
 - `0x1002` `send_acknowledged_response`
@@ -257,11 +254,6 @@ Phase S packet families:
 - `0x1005` `receive_response`
 - `0x1006` `clear_response`
 - `0x1007` `doctor_response`
-- `0x1008` `advisory_register_response`
-- `0x1009` `advisory_unregister_response`
-- `0x100a` `advisory_fetch_response`
-- `0x100b` `advisory_drain_response`
-- `0x100c` `advisory_stream_response`
 
 ### 6.3 Error Packet Kind
 
@@ -289,11 +281,6 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
 | `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
 | `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
-| `0x0008` | `advisory_register_request` | embedded host session registration | shared advisory-session registration |
-| `0x0009` | `advisory_unregister_request` | embedded host session shutdown | shared advisory-session unregistration |
-| `0x000a` | `advisory_fetch_request` | companion debug/CLI advisory inspection | optional bounded advisory fetch |
-| `0x000b` | `advisory_drain_request` | companion debug/CLI advisory inspection | optional bounded advisory drain |
-| `0x000c` | `advisory_stream_request` | embedded host live advisory delivery | dedicated same-host advisory stream |
 | `0x1001` | `send_sent_response` | response to `atm send` | success response |
 | `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
@@ -301,11 +288,6 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x1005` | `receive_response` | response to `atm read` | success response |
 | `0x1006` | `clear_response` | response to `atm clear` | success response |
 | `0x1007` | `doctor_response` | response to `atm doctor` | success response |
-| `0x1008` | `advisory_register_response` | response to advisory register | success response |
-| `0x1009` | `advisory_unregister_response` | response to advisory unregister | success response |
-| `0x100a` | `advisory_fetch_response` | response to advisory fetch | success response |
-| `0x100b` | `advisory_drain_response` | response to advisory drain | success response |
-| `0x100c` | `advisory_stream_response` | response to advisory stream | success response |
 | `0x1fff` | `error_response` | typed service failure | may answer any request kind |
 
 Current non-packet retained workflows:
@@ -339,8 +321,9 @@ Phase AC transport-envelope note:
 - canonical message and roster bodies are expected to converge on
   `atm-storage` shared structs rather than transport-local clones
 
-Current request/response payload ownership maps to the shared envelope family
-and the concrete Rust DTO types in `crates/atm-core/src/protocol.rs`.
+Current shared unary request/response payload ownership maps to the shared
+envelope family and the concrete Rust DTO types in
+`crates/atm-core/src/protocol.rs`.
 
 Field-authority rule:
 - the Rust DTO definitions in `crates/atm-core/src/protocol.rs` are the field-
@@ -360,11 +343,6 @@ Field-authority rule:
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
-| `advisory_register_request` | `AdvisorySessionRegistrationRequest` | `RequestEnvelope::AdvisoryRegister(...)` |
-| `advisory_unregister_request` | `AdvisorySessionUnregistrationRequest` | `RequestEnvelope::AdvisoryUnregister(...)` |
-| `advisory_fetch_request` | `AdvisoryFetchRequest` | `RequestEnvelope::AdvisoryFetch(...)` |
-| `advisory_drain_request` | `AdvisoryDrainRequest` | `RequestEnvelope::AdvisoryDrain(...)` |
-| `advisory_stream_request` | `AdvisoryStreamRequest` | `RequestEnvelope::AdvisoryStream(...)` |
 | `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
 | `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
@@ -372,11 +350,6 @@ Field-authority rule:
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
-| `advisory_register_response` | `AdvisorySessionRegistrationResponse` | `ResponseEnvelope::AdvisoryRegister(...)` |
-| `advisory_unregister_response` | `AdvisorySessionUnregistrationResponse` | `ResponseEnvelope::AdvisoryUnregister(...)` |
-| `advisory_fetch_response` | `AdvisoryFetchResponse` | `ResponseEnvelope::AdvisoryFetch(...)` |
-| `advisory_drain_response` | `AdvisoryDrainResponse` | `ResponseEnvelope::AdvisoryDrain(...)` |
-| `advisory_stream_response` | `AdvisoryStreamResponse` | `ResponseEnvelope::AdvisoryStream(...)` |
 | `error_response` | `ProtocolErrorEnvelope` | `ResponseEnvelope::Error(...)` |
 
 ### 7.1.1 DTO Definition References
@@ -389,22 +362,12 @@ The current packet payload DTO definitions live in:
   - `ReadQuery`
   - `ClearQuery`
   - `DoctorQuery`
-  - `AdvisorySessionRegistrationRequest`
-  - `AdvisorySessionUnregistrationRequest`
-  - `AdvisoryFetchRequest`
-  - `AdvisoryDrainRequest`
-  - `AdvisoryStreamRequest`
   - `SendOutcome`
   - `AckOutcome`
   - `TeamMemberHeartbeatResponse`
   - `ReadOutcome`
   - `ClearOutcome`
   - `DoctorReport`
-  - `AdvisorySessionRegistrationResponse`
-  - `AdvisorySessionUnregistrationResponse`
-  - `AdvisoryFetchResponse`
-  - `AdvisoryDrainResponse`
-  - `AdvisoryStreamResponse`
   - `ProtocolErrorEnvelope`
 
 ### 7.2 Current Shared Envelope Mapping
@@ -425,16 +388,6 @@ The current protocol-layer envelope mapping is:
   - `clear_request`
 - `RequestEnvelope::Doctor(...)`
   - `doctor_request`
-- `RequestEnvelope::AdvisoryRegister(...)`
-  - `advisory_register_request`
-- `RequestEnvelope::AdvisoryUnregister(...)`
-  - `advisory_unregister_request`
-- `RequestEnvelope::AdvisoryFetch(...)`
-  - `advisory_fetch_request`
-- `RequestEnvelope::AdvisoryDrain(...)`
-  - `advisory_drain_request`
-- `RequestEnvelope::AdvisoryStream(...)`
-  - `advisory_stream_request`
 
 - `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))`
   - `send_sent_response`
@@ -450,18 +403,46 @@ The current protocol-layer envelope mapping is:
   - `clear_response`
 - `ResponseEnvelope::Doctor(...)`
   - `doctor_response`
-- `ResponseEnvelope::AdvisoryRegister(...)`
-  - `advisory_register_response`
-- `ResponseEnvelope::AdvisoryUnregister(...)`
-  - `advisory_unregister_response`
-- `ResponseEnvelope::AdvisoryFetch(...)`
-  - `advisory_fetch_response`
-- `ResponseEnvelope::AdvisoryDrain(...)`
-  - `advisory_drain_response`
-- `ResponseEnvelope::AdvisoryStream(...)`
-  - `advisory_stream_response`
 - `ResponseEnvelope::Error(...)`
   - `error_response`
+
+### 7.2.1 Graft-Local Same-Host Advisory Extension
+
+The graft session surface reuses the ATM frame header from Section 5, but it is
+not part of the shared `atm-core::protocol::{RequestEnvelope, ResponseEnvelope}`
+family.
+
+Ownership:
+- any surviving packet kinds, DTOs, and frame helpers are private
+  implementation detail compiled into `atm-daemon` / `atm-graft`, not an
+  accepted shared crate boundary
+- daemon dispatch lives behind the daemon-owned `GraftRequestDispatcher` seam
+- `atm-graft` consumes this extension through its private advisory transport,
+  not through shared `ClientTransport`
+
+Current graft-local packet kinds:
+- requests
+  - `0x0008` `advisory_register_request`
+  - `0x0009` `advisory_unregister_request`
+  - `0x000a` `advisory_fetch_request`
+  - `0x000b` `advisory_drain_request`
+  - `0x000c` `advisory_stream_request`
+- responses
+  - `0x1008` `advisory_register_response`
+  - `0x1009` `advisory_unregister_response`
+  - `0x100a` `advisory_fetch_response`
+  - `0x100b` `advisory_drain_response`
+  - `0x100c` `advisory_stream_response`
+- graft-local error
+  - `0x1ffe` `graft_error_response`
+
+Rules:
+- this extension is same-host only
+- it must not leak into cross-host daemon transport or the shared `atm-core`
+  protocol enums
+- unary graft requests still follow one request / one response
+- `advisory_stream_request` opens one request followed by zero or more
+  `advisory_stream_response` frames on that dedicated connection
 
 ### 7.3 DTOs That Are Not Current Public Packet Kinds
 
@@ -510,18 +491,13 @@ Success-family pairing rules:
 - `receive_request -> receive_response | error_response`
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
-- `advisory_register_request -> advisory_register_response | error_response`
-- `advisory_unregister_request -> advisory_unregister_response | error_response`
-- `advisory_fetch_request -> advisory_fetch_response | error_response`
-- `advisory_drain_request -> advisory_drain_response | error_response`
-- `advisory_stream_request -> advisory_stream_response* | error_response`
 
-`advisory_stream_request` special rule:
-- it opens a dedicated same-host streaming connection
-- that connection may emit multiple `advisory_stream_response` frames over its
-  lifetime
-- the stream still uses the shared ATM frame and packet-kind registry
-- unary transports must reject `advisory_stream_request` with a typed error
+Graft-local same-host pairing rules:
+- `advisory_register_request -> advisory_register_response | graft_error_response`
+- `advisory_unregister_request -> advisory_unregister_response | graft_error_response`
+- `advisory_fetch_request -> advisory_fetch_response | graft_error_response`
+- `advisory_drain_request -> advisory_drain_response | graft_error_response`
+- `advisory_stream_request -> advisory_stream_response* | graft_error_response`
 
 ### 8.1.1 One-Request-Per-Connection Rule
 
@@ -540,8 +516,10 @@ Required behavior:
 
 Same-host local IPC must:
 - use the shared ATM frame contract
-- use the same request/response packet kinds as remote transport
-- return typed ATM error responses through the same packet family
+- use the same shared unary request/response packet kinds as remote transport
+- return typed ATM error responses through the shared unary packet family
+- keep any graft-local extension traffic on the separate
+  private `atm-daemon` / `atm-graft` implementation path
 
 Same-host local IPC must not:
 - invent a local-only header
@@ -737,6 +715,9 @@ Required ownership split:
   - packet-kind registry
   - payload DTOs
   - framed read/write helpers
+- `atm-daemon-client`
+  - shared unary `RpcEnvelope` wrapper
+  - graft-local same-host advisory/session frame helpers and DTOs
 - `atm-daemon`
   - local IPC server adapter
   - remote peer transport adapter

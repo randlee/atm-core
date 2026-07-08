@@ -138,6 +138,7 @@ version = "1.2.3"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
+ "atm-daemon-client",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
@@ -146,6 +147,7 @@ dependencies = [
  "interprocess",
  "sc-observability",
  "sc-observability-types",
+ "serde",
  "serde_json",
  "serial_test",
  "signal-hook",
@@ -183,6 +185,7 @@ dependencies = [
  "agent-team-mail-core",
  "atm-daemon-client",
  "interprocess",
+ "serde",
  "serde_json",
  "tempfile",
  "tracing",

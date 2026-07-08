@@ -2,6 +2,13 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use crate::graft_rpc::{
+    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest, RequestEnvelope as GraftRequestEnvelope,
+    ResponseEnvelope as GraftResponseEnvelope,
+};
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_graft_port,
@@ -12,12 +19,6 @@ use atm_core::{
         DoctorStatus, DoctorSummary,
     },
     error::AtmError,
-    graft::{
-        AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-        AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
-        AdvisoryStreamRequest,
-    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -37,6 +38,7 @@ use crate::daemon_runtime_observability::{
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
+use crate::{GraftRequestDispatcher, GraftStreamSink};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
@@ -418,36 +420,46 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                 query,
                 self.observability.as_ref(),
             )?)),
-            RequestEnvelope::Doctor(query) => {
-                Ok(ResponseEnvelope::Doctor(Box::new(
-                    self.project_doctor_report(query)?,
-                )))
-            }
-            RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
-                self.register_advisory_session(request)?,
-            )),
-            RequestEnvelope::AdvisoryUnregister(request) => Ok(ResponseEnvelope::AdvisoryUnregister(
-                self.unregister_advisory_session(request)?,
-            )),
-            RequestEnvelope::AdvisoryFetch(request) => Ok(ResponseEnvelope::AdvisoryFetch(
-                self.fetch_advisory_events(request)?,
-            )),
-            RequestEnvelope::AdvisoryDrain(request) => Ok(ResponseEnvelope::AdvisoryDrain(
-                self.drain_advisory_events(request)?,
-            )),
-            RequestEnvelope::AdvisoryStream(_) => Err(AtmError::validation(
-                "advisory stream requests require the same-host streaming transport path",
+            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
+                self.project_doctor_report(query)?,
+            ))),
+        }
+    }
+}
+
+impl GraftRequestDispatcher for DaemonRequestDispatcher {
+    fn dispatch_graft(
+        &self,
+        request: GraftRequestEnvelope,
+    ) -> Result<GraftResponseEnvelope, AtmError> {
+        match request {
+            GraftRequestEnvelope::AdvisoryRegister(request) => Ok(
+                GraftResponseEnvelope::AdvisoryRegister(self.register_advisory_session(request)?),
+            ),
+            GraftRequestEnvelope::AdvisoryUnregister(request) => Ok(
+                GraftResponseEnvelope::AdvisoryUnregister(
+                    self.unregister_advisory_session(request)?,
+                ),
+            ),
+            GraftRequestEnvelope::AdvisoryFetch(request) => Ok(
+                GraftResponseEnvelope::AdvisoryFetch(self.fetch_advisory_events(request)?),
+            ),
+            GraftRequestEnvelope::AdvisoryDrain(request) => Ok(
+                GraftResponseEnvelope::AdvisoryDrain(self.drain_advisory_events(request)?),
+            ),
+            GraftRequestEnvelope::AdvisoryStream(_) => Err(AtmError::validation(
+                "graft advisory stream requests must use the dedicated streaming transport path",
             )
             .with_recovery(
-                "Open the dedicated same-host advisory stream connection instead of routing advisory delivery through unary request dispatch.",
+                "Open the dedicated same-host graft advisory stream connection instead of routing stream delivery through unary request dispatch.",
             )),
         }
     }
 
-    fn dispatch_advisory_stream(
+    fn dispatch_graft_stream(
         &self,
         request: AdvisoryStreamRequest,
-        sink: &mut dyn boundary::AdvisoryStreamSink,
+        sink: &mut dyn GraftStreamSink,
     ) -> Result<(), AtmError> {
         self.advisory_runtime.stream_nudges(request, sink)
     }
@@ -761,6 +773,9 @@ impl DaemonRequestDispatcher {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
                     %error,
                     "failed to hydrate test runtime status cache from runtime-bound roster state"
                 );

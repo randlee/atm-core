@@ -16,7 +16,6 @@ constructor = "public"
 roots = [
   "atm::composition::LocalIpcClientTransportAdapter::round_trip",
   "atm_graft::transport::round_trip",
-  "atm_graft::transport::open_advisory_stream",
 ]
 
 [ownership]
@@ -32,7 +31,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-graft"]
+allowed_dependents = ["atm", "atm-daemon", "atm-graft"]
 allowed_dependencies = ["atm-storage"]
 forbidden_edges = [
   "atm-daemon-client -> atm-storage-rusqlite",
@@ -66,5 +65,6 @@ review_gates = [
 state = "active"
 notes = [
   "AC.5 makes atm-daemon-client the owner of the generic transport envelope while canonical message and roster bodies come from atm-storage",
-  "the current wire format still encodes RequestEnvelope and ResponseEnvelope inside RpcEnvelope body bytes for protocol v1",
+  "the current wire format still encodes only the shared unary RequestEnvelope and ResponseEnvelope bodies inside RpcEnvelope for protocol v1",
+  "graft-only advisory/session traffic is outside RpcEnvelope and is not part of any accepted atm-daemon-client boundary surface",
 ]

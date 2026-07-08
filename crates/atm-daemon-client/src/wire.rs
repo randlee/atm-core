@@ -61,11 +61,6 @@ pub enum MessageKind {
     ReceiveRequest = 0x0005,
     ClearRequest = 0x0006,
     DoctorRequest = 0x0007,
-    AdvisoryRegisterRequest = 0x0008,
-    AdvisoryUnregisterRequest = 0x0009,
-    AdvisoryFetchRequest = 0x000a,
-    AdvisoryDrainRequest = 0x000b,
-    AdvisoryStreamRequest = 0x000c,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
@@ -73,11 +68,6 @@ pub enum MessageKind {
     ReceiveResponse = 0x1005,
     ClearResponse = 0x1006,
     DoctorResponse = 0x1007,
-    AdvisoryRegisterResponse = 0x1008,
-    AdvisoryUnregisterResponse = 0x1009,
-    AdvisoryFetchResponse = 0x100a,
-    AdvisoryDrainResponse = 0x100b,
-    AdvisoryStreamResponse = 0x100c,
     ErrorResponse = 0x1fff,
 }
 
@@ -96,11 +86,6 @@ impl MessageKind {
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
-                | Self::AdvisoryRegisterRequest
-                | Self::AdvisoryUnregisterRequest
-                | Self::AdvisoryFetchRequest
-                | Self::AdvisoryDrainRequest
-                | Self::AdvisoryStreamRequest
         )
     }
 
@@ -121,11 +106,6 @@ impl TryFrom<u16> for MessageKind {
             0x0005 => Ok(Self::ReceiveRequest),
             0x0006 => Ok(Self::ClearRequest),
             0x0007 => Ok(Self::DoctorRequest),
-            0x0008 => Ok(Self::AdvisoryRegisterRequest),
-            0x0009 => Ok(Self::AdvisoryUnregisterRequest),
-            0x000a => Ok(Self::AdvisoryFetchRequest),
-            0x000b => Ok(Self::AdvisoryDrainRequest),
-            0x000c => Ok(Self::AdvisoryStreamRequest),
             0x1001 => Ok(Self::SendSentResponse),
             0x1002 => Ok(Self::SendAcknowledgedResponse),
             0x1003 => Ok(Self::HeartbeatResponse),
@@ -133,11 +113,6 @@ impl TryFrom<u16> for MessageKind {
             0x1005 => Ok(Self::ReceiveResponse),
             0x1006 => Ok(Self::ClearResponse),
             0x1007 => Ok(Self::DoctorResponse),
-            0x1008 => Ok(Self::AdvisoryRegisterResponse),
-            0x1009 => Ok(Self::AdvisoryUnregisterResponse),
-            0x100a => Ok(Self::AdvisoryFetchResponse),
-            0x100b => Ok(Self::AdvisoryDrainResponse),
-            0x100c => Ok(Self::AdvisoryStreamResponse),
             0x1fff => Ok(Self::ErrorResponse),
             other => Err(AtmError::validation(format!(
                 "unsupported ATM daemon message kind 0x{other:04x}"
@@ -397,11 +372,6 @@ fn message_kind_for_request(request: &RequestEnvelope) -> MessageKind {
         Receive(_) => MessageKind::ReceiveRequest,
         Clear(_) => MessageKind::ClearRequest,
         Doctor(_) => MessageKind::DoctorRequest,
-        AdvisoryRegister(_) => MessageKind::AdvisoryRegisterRequest,
-        AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterRequest,
-        AdvisoryFetch(_) => MessageKind::AdvisoryFetchRequest,
-        AdvisoryDrain(_) => MessageKind::AdvisoryDrainRequest,
-        AdvisoryStream(_) => MessageKind::AdvisoryStreamRequest,
     }
 }
 
@@ -418,11 +388,6 @@ fn message_kind_for_response(response: &ResponseEnvelope) -> MessageKind {
         Receive(_) => MessageKind::ReceiveResponse,
         Clear(_) => MessageKind::ClearResponse,
         Doctor(_) => MessageKind::DoctorResponse,
-        AdvisoryRegister(_) => MessageKind::AdvisoryRegisterResponse,
-        AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterResponse,
-        AdvisoryFetch(_) => MessageKind::AdvisoryFetchResponse,
-        AdvisoryDrain(_) => MessageKind::AdvisoryDrainResponse,
-        AdvisoryStream(_) => MessageKind::AdvisoryStreamResponse,
         Error(_) => MessageKind::ErrorResponse,
     }
 }

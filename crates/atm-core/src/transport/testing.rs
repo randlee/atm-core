@@ -93,13 +93,6 @@ impl ClientTransport for LoopbackClientTransport {
                 doctor::run_doctor(query, self.observability.as_ref())
                     .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
-            RequestEnvelope::AdvisoryRegister(_)
-            | RequestEnvelope::AdvisoryUnregister(_)
-            | RequestEnvelope::AdvisoryFetch(_)
-            | RequestEnvelope::AdvisoryDrain(_)
-            | RequestEnvelope::AdvisoryStream(_) => Err(AtmError::daemon_unavailable(
-                "loopback graft transport is not wired outside the daemon runtime",
-            )),
         }
     }
 }

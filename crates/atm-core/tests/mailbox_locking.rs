@@ -787,8 +787,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
 
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
+    let logical_message_key = atm_core::boundary::MessageKey::from(logical_message_id).into_inner();
     assert!(
-        workflow["messages"][format!("atm:{logical_message_id}")]
+        workflow["messages"][logical_message_key]
             .as_object()
             .is_some(),
         "workflow entry missing for ULID-authored message: {workflow:?}"
@@ -1158,8 +1159,7 @@ impl Fixture {
 
         for (index, message) in messages.iter().enumerate() {
             let message_key = if let Some(message_id) = message.message_id {
-                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
-                    .expect("message key")
+                atm_core::boundary::MessageKey::from(message_id)
             } else {
                 atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
                     .expect("message key")
@@ -1251,7 +1251,7 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
 fn message_workflow_key(message: &InboxMessage) -> String {
     message
         .message_id
-        .map(|message_id| format!("atm:{message_id}"))
+        .map(|message_id| atm_core::boundary::MessageKey::from(message_id).into_inner())
         .expect("message id")
 }
 
