@@ -364,10 +364,42 @@ Notes:
   - constructing sender-visible warnings on emission failure
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
+- the accepted `AD.25` through `AD.30` follow-up line keeps that attempt-only
+  ownership explicit:
+  - caller-owned send/ack code resolves matching external hooks, built-in
+    fallback eligibility, and the concrete built-in recipient target before
+    invoking this boundary
+  - this boundary does not reopen config lookup, team override lookup, or
+    recipient-capability policy selection
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter
   is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
+
+## GraftPostSendPort
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
+
+
+Purpose:
+- Owns the graft-specific built-in recipient handoff used after caller-owned
+  send/ack logic has already selected graft as the concrete post-send target.
+
+Notes:
+- this boundary is a receiver-specific leaf handoff, not a second policy layer
+- caller-owned send/ack logic and `PostSendHookEmitter` remain responsible for:
+  - deciding whether a built-in graft nudge should be attempted at all
+  - matching external hooks
+  - deciding when built-in fallback is legal
+  - constructing warnings/log records from typed success/failure
+- this boundary must not own or reintroduce:
+  - daemon-owned graft session registration
+  - daemon-owned per-session nudge queues
+  - shared advisory stream packet families
+  - fetch/drain/register/unregister semantics on the accepted line
+- only graft-backed built-in delivery details live here; shared ATM request,
+  persistence, and caller-context semantics stay out of scope.
 
 ## NotificationSink
 

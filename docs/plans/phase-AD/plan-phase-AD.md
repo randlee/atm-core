@@ -116,11 +116,44 @@ The authoritative follow-up blockers are:
 - the accepted line still lacks one authoritative smoke/service-hardening lane
   that proves the repaired post-send matrix and the remaining Windows daemon
   depth cases together
+- four closure-artifact obligations from earlier AD execution still need one
+  named owner on the accepted phase-close path:
+  - `AD9-BLANKPANE-001`
+  - the phase-AD triage sweep ledger under `.triage/phase-AD/`
+  - `ERRDOC-001`
+  - the release-facing `CHANGELOG.md` entry covering the `AD.13` through
+    `AD.30` corrective line
 
 `Phase AD` therefore extends again with a follow-up line. `AD.25` through
 `AD.30` are release-blocking closure sprints for these phase-end findings.
 `AD.23` remains reserved outside this worktree, and `AD.24` is the sibling
 smoke-harness planning slot consumed by `AD.29` rather than renumbered here.
+
+## Follow-Up Closure Artifact Ownership
+
+The `AD.25` through `AD.30` follow-up line splits technical-fix ownership from
+phase-close artifact ownership where needed so every lingering review item has
+one explicit home:
+
+| Item | Technical owner | Closure-artifact owner | Tracking artifact |
+| --- | --- | --- | --- |
+| `RULE-001` direct `sc_observability_types` imports in `runtime_sqlite_observer.rs` and `test_observability.rs` | `AD.26` | `AD.26` | `docs/plans/phase-AD/sprint-AD26.md` |
+| `AD9-BLANKPANE-001` validated-on-entry blank pane drift for `team-lead` / `arch-ctm` | `AD.9` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
+| `ERRDOC-001` member/team-admin error-code closure evidence | `AD.9` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
+| historical `FTQ-001` env-race record reconciliation | accepted-line code fix predates this follow-up | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
+| phase-AD triage sweep ledger | `AD.30` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` |
+| release-facing `CHANGELOG.md` entry for `AD.13` through `AD.30` | `AD.30` | `AD.30` | `CHANGELOG.md` plus `docs/plans/phase-AD/readiness.md` |
+| final phase-close verdict artifact | `AD.30` | `AD.30` | `docs/plans/phase-AD/readiness.md` |
+
+Notes:
+
+- `AD.29` feeds the authoritative post-send smoke evidence into the final
+  closure record, but `AD.30` is the only sprint allowed to author the
+  phase-close verdict in `docs/plans/phase-AD/readiness.md`.
+- `FTQ-001` is a historical phase-`Xb` discovery record. If the accepted line
+  keeps that historical TTL open as snapshot provenance, `AD.30` must record
+  the reason explicitly in the readiness/direct-fix artifacts so the code fix
+  and the historical ledger are not left silently inconsistent.
 
 ## Design Rules
 
@@ -243,6 +276,15 @@ The governing rules are:
 - every sprint that changes accepted requirements, ADRs, protocol docs, or
   boundary inventories must list those exact documents in its `Exact Targets`
   so review does not depend on downstream prompt reconstruction
+
+- the accepted post-send seam remains attempt-only:
+  - caller-owned send/ack logic resolves matching external hooks, built-in
+    fallback eligibility, and the concrete recipient target before invoking
+    `PostSendHookEmitter`
+  - `PostSendHookEmitter` performs the built-in recipient emission attempt only
+    and reports typed success/failure back to the caller-owned send/ack path
+  - `GraftPostSendPort` is the receiver-specific leaf handoff used only when
+    the chosen built-in target is graft-backed
 
 ## Scope Rules
 
@@ -505,6 +547,9 @@ Phase `AD` closes only when:
 - `PostSendHookEmitter` and `GraftPostSendPort` are both live runtime seams on
   the accepted implementation path rather than dead governance records around a
   subprocess bypass
+- caller-owned send/ack logic keeps external-hook matching, built-in fallback
+  selection, and warning/log policy outside `PostSendHookEmitter`; the emitter
+  remains an attempt-only built-in delivery seam
 - the accepted send path no longer uses `std::process::Command` subprocess
   spawn as the production tmux/graft post-send delivery mechanism
 - built-in template override resolution happens upstream of
@@ -548,6 +593,12 @@ Phase `AD` closes only when:
   - built-in fallback
   - override reset-to-default
   - override disable behavior when that state is retained
+- `docs/plans/phase-AD/readiness.md` exists on the accepted line and is the
+  sole authoritative closeout artifact for the `AD.25` through `AD.30`
+  follow-up line
+- `.triage/phase-AD/direct-fix-track.md` exists on the accepted line and names
+  the closure-artifact owner for the non-code obligations surfaced during plan
+  review
 - the Windows daemon integration-depth gap from `RSH-AD-END-001` is closed in
   its own sprint and no longer relies on Unix-only local IPC depth coverage
 - Windows daemon integration coverage includes the remaining post-restore local

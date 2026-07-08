@@ -712,6 +712,10 @@ Acceptance:
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
 - readiness is valid only if `AD.1` through `AD.11`, `AD.12` through
   `AD.22`, and `AD.25` through `AD.30` all pass on the accepted line
+- `AD.30` is the sole sprint allowed to author the final
+  `docs/plans/phase-AD/readiness.md` verdict, incorporating smoke evidence from
+  `AD.29`, Windows daemon-depth evidence from `AD.30`, and the direct-fix
+  closure ledger in `.triage/phase-AD/direct-fix-track.md`
 - `AD.24` is reserved in the sibling smoke-test planning worktree and is
   consumed by `AD.29`; its harness scope must not be duplicated in the
   follow-up line

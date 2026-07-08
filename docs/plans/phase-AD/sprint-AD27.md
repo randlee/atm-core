@@ -19,6 +19,11 @@ target: integrate/phase-AD
 - `AD.26` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 
+`AD.26` is a functional dependency, not just merge order: upstream extraction
+is only review-safe after the accepted line already uses live
+`PostSendHookEmitter` / `GraftPostSendPort` seams and the remaining
+`ADR-019-EXC-AD26-001` exception is isolated to template-resolution lookup.
+
 ## Exact Targets
 
 - `crates/atm-core/src/send/hook.rs`
@@ -70,6 +75,8 @@ Required ownership after this sprint:
   - SQLite/bootstrap lookup
   - team-row resolution
   - override/default precedence decisions
+- `AD.27` closes the named interim exception `ADR-019-EXC-AD26-001` by moving
+  the last built-in override lookup upstream of `PostSendHookEmitter`
 
 ## Paths To Delete
 
@@ -88,6 +95,8 @@ Required ownership after this sprint:
 - docs state clearly which layer owns precedence and which layer only renders
 - bootstrap composition seams removed from `internal_nudge.rs` are not
   reintroduced through another hidden helper
+- `ADR-019-EXC-AD26-001` is removed from the accepted line rather than carried
+  forward as a permanent caveat
 
 ## This Sprint Does Not Close
 

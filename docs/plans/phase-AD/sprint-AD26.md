@@ -25,13 +25,21 @@ target: integrate/phase-AD
   - ATM message `01KX1MTJE596JE8SC2766V0Q10` from `arch-ctm`,
     `2026-07-08`, subject `PHASE-AD-END-REVIEW complete`
 
+`AD.25` is a functional dependency, not just merge order: this sprint cannot
+wire mixed-success hook accounting correctly until the accepted override store
+has explicit override/disable/clear semantics instead of the hidden empty-row
+state.
+
 ## Exact Targets
 
 - `boundaries/atm-core/post-send-hook-emitter.toml`
 - `boundaries/atm-core/graft-post-send-port.toml`
 - `crates/atm-core/src/boundary/mod.rs`
 - `crates/atm-core/src/send/hook.rs`
+- `crates/atm-daemon/src/daemon_runtime_observability.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_sqlite_observer.rs`
+- `crates/atm-daemon/src/test_observability.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
 - `crates/atm-daemon/src/tests.rs`
@@ -42,6 +50,7 @@ target: integrate/phase-AD
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/observability.md`
 - `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
@@ -67,15 +76,52 @@ The accepted accounting shape after this sprint is:
 
 ```rust
 pub struct HookExecutionSummary {
-    pub matched_rules: usize,
-    pub succeeded_rules: usize,
-    pub failed_rules: usize,
+    matched_rules: usize,
+    succeeded_rules: usize,
+    failed_rules: usize,
+}
+
+impl HookExecutionSummary {
+    pub fn new(
+        matched_rules: usize,
+        succeeded_rules: usize,
+        failed_rules: usize,
+    ) -> Result<Self, AtmError>;
+
+    pub fn matched_rules(&self) -> usize;
+    pub fn succeeded_rules(&self) -> usize;
+    pub fn failed_rules(&self) -> usize;
 }
 
 pub enum PostSendEmissionPath {
     ExternalHook,
     LocalTmux,
     GraftPort,
+}
+
+pub enum PostSendBuiltInTarget {
+    LocalTmux(LocalTmuxNudgeTarget),
+    Graft(GraftNudgeTarget),
+}
+
+pub struct BuiltInPostSendDispatch {
+    pub event: PostSendHookEvent,
+    pub target: PostSendBuiltInTarget,
+}
+
+pub trait GraftPostSendPort: sealed::Sealed + Send + Sync {
+    fn deliver_post_send(
+        &self,
+        event: &PostSendHookEvent,
+        target: &GraftNudgeTarget,
+    ) -> Result<(), AtmError>;
+}
+
+pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
+    fn emit_post_send(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Result<PostSendEmissionPath, AtmError>;
 }
 
 pub enum PostSendEmissionOutcome {
@@ -89,22 +135,21 @@ pub enum PostSendEmissionOutcome {
         warning: WarningEntry,
     },
 }
-
-pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
-    fn emit_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        config: Option<&AtmConfig>,
-        delivery_snapshot: &DeliveryRecipientSnapshot,
-        graft_port: Option<&dyn GraftPostSendPort>,
-    ) -> Result<PostSendEmissionOutcome, AtmError>;
-}
 ```
 
 Required runtime meaning after this sprint:
 
+- caller-owned send/ack logic stays responsible for:
+  - deciding whether the recipient exposes post-send capability
+  - matching and executing external hook rules in config order
+  - deciding whether built-in fallback is legal after external-hook matching
+  - constructing the concrete built-in recipient target before invoking
+    `PostSendHookEmitter`
+  - constructing sender-visible warnings and appending log records from the
+    typed result
 - graft-backed delivery attempts call `graft_port.deliver_post_send(...)`
-  directly on the accepted send/ack runtime path
+  directly on the accepted send/ack runtime path after the caller-owned send
+  logic selects a graft-backed built-in target
 - local tmux-backed delivery stays behind the accepted emitter seam and does
   not use `std::process::Command` subprocess spawn from
   `crates/atm-core/src/send/hook.rs`
@@ -117,10 +162,39 @@ Required runtime meaning after this sprint:
   emission outcome
 - notification log append occurs on any real successful emission, even when a
   sibling matching hook also failed
+- `HookExecutionSummary::new(...)` must reject any state where
+  `succeeded_rules + failed_rules > matched_rules`; raw field mutation is not
+  an accepted implementation path
+- `PostSendEmissionOutcome::Failed.warning` must reuse one of the stable
+  `AD.6` warning/error codes rather than inventing a new generic failure code:
+  - `ATM_POST_SEND_PANE_MISSING`
+  - `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+  - `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+- `runtime_sqlite_observer.rs` and `test_observability.rs` must stop importing
+  `sc_observability_types::{ActionName, OutcomeLabel}` directly and instead
+  route those alias types through the accepted
+  `DaemonRuntimeObservability` seam so `RULE-001` is closed in the same sprint
+  that repairs the live post-send runtime seam
+- `LocalTmuxNudgeTarget` reuses the roster-backed pane-routing target shape
+  already accepted in `AD.22`; it must not fall back to `.atm.toml` pane
+  lookup
+- `GraftNudgeTarget` is intentionally thin and identifies only the receiver the
+  graft sink must wake; it must not grow session-registration, advisory-stream,
+  or queue-drain fields
 
 `atm internal-nudge` may remain temporarily as a thin renderer/delivery helper,
 but it is no longer allowed to be the production boundary bypass on the send
 path. `AD.27` owns the remaining extraction cleanup around that helper.
+
+`ADR-019` interim exception handling for this sprint is explicit:
+
+- `AD.26` closes the dead-seam problem by making `PostSendHookEmitter` and
+  `GraftPostSendPort` live on the production path
+- `AD.26` does **not** claim to close the separate
+  "override lookup upstream of `PostSendHookEmitter`" clause from `ADR-019`
+- that single remaining exception is tracked as `ADR-019-EXC-AD26-001` and
+  must be closed by `AD.27`
 
 ## Paths To Delete
 
@@ -132,6 +206,9 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   implementation still bypasses it
 - mixed-success accounting that treats “matched with one success and one
   failure” as no emission
+- direct `sc_observability_types::{ActionName, OutcomeLabel}` imports in
+  `crates/atm-daemon/src/runtime_sqlite_observer.rs` and
+  `crates/atm-daemon/src/test_observability.rs`
 
 ## Deliverables
 
@@ -144,6 +221,9 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
   than the previous all-or-nothing warning vector shortcut
 - boundary TOMLs, boundary inventory docs, readiness criteria, and runtime code
   all describe the same mechanism
+- the accepted runtime observability helpers close `RULE-001` by routing
+  `ActionName` / `OutcomeLabel` through `DaemonRuntimeObservability` rather
+  than direct daemon helper imports
 
 ## This Sprint Does Not Close
 
@@ -151,19 +231,29 @@ path. `AD.27` owns the remaining extraction cleanup around that helper.
 - upstream movement of template resolution out of `atm internal-nudge`
 - the `atm-graft` timing race
 - the phase-end smoke/service-hardening lane
+- `ADR-019-EXC-AD26-001`, the temporary allowance that built-in override
+  lookup is still extracted by `AD.27`
 
 ## Acceptance Criteria
 
+- `rg 'emit_post_send\\(' crates --glob '!**/tests.rs'` shows a live
+  production call path for `PostSendHookEmitter` itself, not only a trait
+  definition or a test-only caller
 - `rg 'deliver_post_send\\(' crates` shows a live production call path, not
   only trait definition or tests
 - `rg 'std::process::Command' crates/atm-core/src/send/hook.rs` returns no
   accepted send-path subprocess bypass
+- targeted validation proves `HookExecutionSummary::new(...)` rejects invalid
+  accounting states where successes plus failures exceed matches
 - targeted tests prove:
   - matched hook success + sibling hook failure still logs successful emission
   - total external-hook failure returns sender-visible warning
   - zero matching hooks still trigger the built-in path
   - graft-backed delivery goes through the graft port rather than subprocess
     bypass
+- targeted daemon-observability validation proves
+  `runtime_sqlite_observer.rs` and `test_observability.rs` no longer import
+  `sc_observability_types::{ActionName, OutcomeLabel}` directly
 - `boundaries/atm-core/post-send-hook-emitter.toml`,
   `boundaries/atm-core/graft-post-send-port.toml`,
   `docs/atm-core/boundaries.md`, `docs/plans/phase-AD/plan-phase-AD.md`, and

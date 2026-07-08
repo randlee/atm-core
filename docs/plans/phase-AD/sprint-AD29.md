@@ -11,9 +11,9 @@ target: integrate/phase-AD
 
 ## Goal
 
-- close the phase-end proof gap with one authoritative smoke/service-hardening
-  lane that demonstrates the repaired post-send matrix and the remaining
-  Windows daemon integration depth cases on the same accepted evidence line
+- close the phase-end post-send proof gap with one authoritative
+  smoke/service-hardening lane for the repaired post-send matrix only; the
+  separate Windows daemon integration-depth evidence remains `AD.30` scope
 
 ## Hard Dependencies
 
@@ -75,8 +75,8 @@ The accepted smoke ownership after this sprint is:
 
 - one authoritative Phase AD smoke matrix proves the repaired post-send states
   end-to-end
-- readiness evidence cites the accepted smoke/service-hardening lane directly
-  instead of scattering proof across unrelated PR notes
+- readiness evidence authored later by `AD.30` cites the accepted smoke lane
+  directly instead of scattering proof across unrelated PR notes
 - docs distinguish clearly between shared smoke harness ownership (`AD.24`) and
   Phase AD closure-case ownership (`AD.29`)
 
@@ -92,8 +92,8 @@ The accepted smoke ownership after this sprint is:
 
 - the authoritative smoke lane passes with evidence for all five Phase AD
   post-send cases
-- readiness docs point to one accepted smoke/service-hardening evidence line
-  for final closure
+- `AD.30` can cite one accepted smoke/service-hardening evidence line for
+  final closure without duplicating harness logic or reopening this sprint
 - no duplicated smoke scope remains between `AD.24` and `AD.29`
 
 ## Required Validation

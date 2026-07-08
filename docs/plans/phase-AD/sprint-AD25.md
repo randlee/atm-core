@@ -17,7 +17,9 @@ target: integrate/phase-AD
 
 ## Hard Dependencies
 
-- `AD.22` complete
+- accepted `AD.22` baseline already merged into `integrate/phase-AD` by
+  `PR #490` / merge commit `477c3cef`; this sprint depends on that accepted
+  baseline rather than on changing `sprint-AD22.md` frontmatter
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - review provenance:
   - ATM message `01KX1P4D0SEZXWW90VW2F7FF27` from `quality-mgr`,
@@ -111,6 +113,17 @@ The accepted CLI surface after this sprint is:
 - `atm teams disable-nudge-template --team <team> --kind <kind>`
 - `atm teams clear-nudge-template --team <team> --kind <kind>`
 
+Empty-body rejection is one shared contract, not three competing ones:
+
+- stable variant: `EmptyNudgeTemplateBody`
+- stable code: `ATM_NUDGE_TEMPLATE_BODY_EMPTY`
+- emitted by:
+  - CLI argument validation for `atm teams set-nudge-template`
+  - `team_admin` request validation before store mutation
+  - store-side defensive validation if a caller bypasses the earlier layers
+- recovery: provide a non-empty template body, or use the explicit disable or
+  clear/reset command instead of an empty string
+
 ## Paths To Delete
 
 - any interpretation of `template_body == ""` as an implicit disable signal
@@ -133,6 +146,9 @@ The accepted CLI surface after this sprint is:
   - override row => explicit replacement body
 - docs define the full lifecycle and the precedence rules with no hidden
   fourth state
+- all three enforcement points reuse the same
+  `EmptyNudgeTemplateBody` / `ATM_NUDGE_TEMPLATE_BODY_EMPTY` contract rather
+  than inventing layer-specific empty-body errors
 
 ## This Sprint Does Not Close
 
@@ -149,6 +165,8 @@ The accepted CLI surface after this sprint is:
   - clear/reset to product default
 - targeted tests prove empty-string override bodies are rejected before they can
   persist
+- targeted tests prove CLI, `team_admin`, and store defensive validation all
+  surface `EmptyNudgeTemplateBody` / `ATM_NUDGE_TEMPLATE_BODY_EMPTY`
 - docs state unambiguously that reset-to-default is row deletion, not empty
   string persistence
 - the accepted CLI/admin workflow no longer requires direct database mutation
