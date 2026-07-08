@@ -1243,7 +1243,7 @@ mod tests {
         #[cfg(windows)]
         fs::write(
             &atm_path,
-            "@echo off\r\n> \"%ATM_TEST_CAPTURE%\" echo %1|%ATM_INTERNAL_NUDGE_SINK%|%ATM_POST_SEND%\r\nexit /b 0\r\n",
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_CAPTURE%\" echo %1^|!ATM_INTERNAL_NUDGE_SINK!^|!ATM_POST_SEND!\r\nexit /b 0\r\n",
         )
         .expect("write atm shim");
         #[cfg(not(windows))]
@@ -1328,7 +1328,7 @@ mod tests {
         #[cfg(windows)]
         fs::write(
             &hook_path,
-            "@echo off\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo %ATM_POST_SEND%\r\nexit /b 0\r\n",
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo !ATM_POST_SEND!\r\nexit /b 0\r\n",
         )
         .expect("write hook shim");
         #[cfg(not(windows))]
@@ -1369,6 +1369,7 @@ mod tests {
                 Some(built_in_capture_value.as_str()),
             ),
             ("ATM_HOME", tempdir.path().to_str()),
+            ("ATM_CONFIG_HOME", tempdir.path().to_str()),
             ("HOME", tempdir.path().to_str()),
             (ATM_PROGRAM_ENV, Some(atm_bin.as_str())),
         ]);
