@@ -1,7 +1,7 @@
 ---
 id: AD.20-win
 title: Native Windows Execution For AD.20
-status: planned
+status: completed
 branch: feature/pAD-s20-read-body-search-metadata-consistency-repair
 worktree: ../atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair
 target: integrate/phase-AD
@@ -76,3 +76,56 @@ target: integrate/phase-AD
 7. Re-run the failed validation plus the full original validation set.
 8. Push the branch and report the final commit hash, validation results, and
    any CI evidence.
+
+## Windows Execution Report
+
+- Date: 2026-07-07
+- Host: native Windows
+- Branch: `feature/pAD-s20-read-body-search-metadata-consistency-repair`
+- Worktree:
+  `F:\github\atm-core-worktrees\feature\pAD-s20-read-body-search-metadata-consistency-repair`
+- Merge-forward: pulled AD.20 remote tip, merged
+  `origin/feature/pAD-s19-read-mutation-output-consistency-repair`, and
+  resolved conflicts before rerunning the full AD.20 validation set.
+- Windows fix-forward commit:
+  `86ea667cafe0c5cedb19a2d7dfd266dfea7d4fc7`
+- CI evidence: pending remote CI after push.
+
+### Findings And Fixes
+
+- Resolved AD.19-to-AD.20 merge conflicts while preserving AD.20's
+  metadata-backed body-search implementation. `read/mod.rs` keeps AD.20's
+  `load_durable_metadata_message` path, which reloads via the durable metadata
+  row key.
+- Restored AD.20's typed core observability labels after the merge tried to
+  roll back those fields to strings. Updated the remaining Windows-visible
+  test fixtures and assertions to use typed `ServiceName` values.
+- Kept the fallible AD.20 maintenance timestamp projection in CLI and daemon
+  observability instead of the older infallible AD.19 mapper.
+- Combined runtime-root documentation wording so the accepted `ATM_HOME` root
+  remains authoritative for daemon socket, lock, database, and retained-log
+  paths while the invocation directory is only used for workspace config
+  discovery.
+
+### Validation Results
+
+- `cargo test -p agent-team-mail-core --test mailbox_locking
+  read_contains_matches_summary_only_and_body_only_on_store_backed_path --
+  --exact` passed.
+- `cargo test -p agent-team-mail-core --test mailbox_locking
+  list_contains_matches_body_only_on_store_backed_path -- --exact` passed.
+- `cargo test -p agent-team-mail-core
+  read::tests::metadata_backed_read_contains_fetches_durable_body_when_summary_misses`
+  passed.
+- `cargo test -p agent-team-mail-core
+  list::tests::metadata_backed_contains_fetches_durable_body_only_for_surviving_summary_miss_rows`
+  passed.
+- `cargo test --workspace` passed.
+- `cargo clippy --workspace -- -D warnings` passed.
+- `python .just/run_lint.py all` passed. `python` was used for native Windows
+  execution because the Windows `python3` launcher resolves to a different
+  interpreter on this host.
+- `just test` passed.
+- `just smoke normal` passed and updated `reports/smoke/smoke.md` with the
+  AD.20 smoke row.
+- `git diff --check` passed.

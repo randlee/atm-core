@@ -10,6 +10,7 @@ use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 #[cfg(unix)]
 use atm_core::error::AtmErrorCode;
+use atm_core::list::{ListQuery, list_mail};
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
@@ -848,6 +849,117 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
     assert!(message.envelope.read);
     assert!(message.envelope.pending_ack_at.is_none());
     assert!(message.envelope.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn read_contains_matches_summary_only_and_body_only_on_store_backed_path() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let summary_match_id = AtmMessageId::new();
+    let body_match_id = AtmMessageId::new();
+    let now = Utc::now();
+    let mut summary_match = unread_message_at(
+        TEAM_LEAD,
+        "durable body without the term",
+        summary_match_id,
+        now - chrono::Duration::seconds(5),
+    );
+    summary_match.summary = Some("summary needle".to_string());
+    let mut body_match = unread_message_at(TEAM_LEAD, "durable body needle", body_match_id, now);
+    body_match.summary = Some("summary miss".to_string());
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[summary_match, body_match]);
+
+    let summary_query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        AckActivationMode::ReadOnly,
+        None,
+        None,
+        None,
+        None,
+        Some("summary needle"),
+        None,
+    )
+    .expect("summary query");
+    let summary_outcome = read_mail(summary_query, &observability).expect("summary outcome");
+    assert_eq!(summary_outcome.selected_message_id, Some(summary_match_id));
+    assert_eq!(
+        summary_outcome
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(summary_match_id)
+    );
+
+    let body_query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        AckActivationMode::ReadOnly,
+        None,
+        None,
+        None,
+        None,
+        Some("body needle"),
+        None,
+    )
+    .expect("body query");
+    let body_outcome = read_mail(body_query, &observability).expect("body outcome");
+    assert_eq!(body_outcome.selected_message_id, Some(body_match_id));
+    assert_eq!(
+        body_outcome
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("durable body needle")
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn list_contains_matches_body_only_on_store_backed_path() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    let mut body_match = unread_message(TEAM_LEAD, "body only needle", message_id);
+    body_match.summary = Some("summary miss".to_string());
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[body_match]);
+
+    let outcome = list_mail(
+        ListQuery::new(
+            fixture.tempdir.path().to_path_buf(),
+            fixture.tempdir.path().to_path_buf(),
+            PRIMARY_AGENT.parse().expect("caller"),
+            None,
+            PRIMARY_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Some("only needle"),
+        )
+        .expect("list query"),
+        &observability,
+    )
+    .expect("list outcome");
+
+    assert_eq!(outcome.count, 1);
+    assert_eq!(outcome.rows[0].message_id, Some(message_id));
+    assert_eq!(outcome.rows[0].summary, "summary miss");
 }
 
 #[test]

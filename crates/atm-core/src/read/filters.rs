@@ -1,6 +1,27 @@
 use crate::read::ClassifiedMessage;
 use crate::types::{AgentName, DisplayBucket, IsoTimestamp, ReadSelection, TaskId};
 
+#[cfg(test)]
+pub(crate) fn normalized_contains_needle(contains: Option<&str>) -> Option<String> {
+    contains
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_ascii_lowercase)
+}
+
+pub(crate) fn text_contains_needle(text: Option<&str>, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    text.is_some_and(|value| {
+        value
+            .as_bytes()
+            .windows(needle.len())
+            .any(|window| window.eq_ignore_ascii_case(needle))
+    })
+}
+
 pub fn apply_sender_filter(
     messages: Vec<ClassifiedMessage>,
     sender: Option<&AgentName>,
@@ -40,27 +61,19 @@ pub fn apply_task_filter(
     }
 }
 
+#[cfg(test)]
 pub fn apply_contains_filter(
     messages: Vec<ClassifiedMessage>,
     contains: Option<&str>,
 ) -> Vec<ClassifiedMessage> {
-    match contains.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(needle) => {
-            let needle = needle.to_ascii_lowercase();
-            messages
-                .into_iter()
-                .filter(|message| {
-                    message
-                        .envelope
-                        .summary
-                        .as_deref()
-                        .unwrap_or_default()
-                        .to_ascii_lowercase()
-                        .contains(&needle)
-                        || message.envelope.text.to_ascii_lowercase().contains(&needle)
-                })
-                .collect()
-        }
+    match normalized_contains_needle(contains) {
+        Some(needle) => messages
+            .into_iter()
+            .filter(|message| {
+                text_contains_needle(message.envelope.summary.as_deref(), &needle)
+                    || text_contains_needle(Some(message.envelope.text.as_str()), &needle)
+            })
+            .collect(),
         None => messages,
     }
 }

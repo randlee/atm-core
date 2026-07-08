@@ -5,7 +5,9 @@ use atm_core::doctor::{self, DoctorQuery};
 use atm_runtime::assemble_default_runtime;
 use clap::Args;
 
-use crate::composition::{CliComposition, resolve_command_runtime_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 
 #[derive(Debug, Args)]
 /// Run ATM health and configuration diagnostics.
@@ -80,8 +82,8 @@ impl DoctorCommand {
         match CliComposition::bootstrap(
             "doctor",
             observability,
-            &query.current_dir,
-            &query.home_dir,
+            InvocationDir::new(&query.current_dir),
+            AtmHomePath::new(&query.home_dir),
         ) {
             Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
             Err(_) => Ok(local_report),

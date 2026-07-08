@@ -264,7 +264,9 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
-    use crate::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{
+        EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
+    };
     use crate::types::{AgentName, TeamName};
 
     const MAX_MEMBER_METADATA_FIELD_LEN: usize =
@@ -681,6 +683,89 @@ mod tests {
             projected_member.home_dir.as_path(),
             PathBuf::from("/repo/worktree").as_path()
         );
+    }
+
+    #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                // This fixture must prove the accepted pane-repair flow for a
+                // non-lead roster member on the retained line.
+                roster_member(TEST_TEAM, TEST_ARCH_CTM),
+            ],
+        );
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(ROLE_TEAM_LEAD.parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
+            },
+        )
+        .expect("repair team-lead pane");
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_ARCH_CTM.parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
+            },
+        )
+        .expect("repair secondary member pane");
+
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        let team_lead = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == ROLE_TEAM_LEAD)
+            .expect("lead member");
+        let arch_ctm = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == TEST_ARCH_CTM)
+            .expect("arch fixture member");
+        assert_eq!(team_lead.recipient_pane_id.as_deref(), Some("%0"));
+        assert_eq!(arch_ctm.recipient_pane_id.as_deref(), Some("%1"));
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        let projected_team_lead = config
+            .members
+            .iter()
+            .find(|member| member.name == ROLE_TEAM_LEAD)
+            .expect("projected lead member");
+        let projected_arch_ctm = config
+            .members
+            .iter()
+            .find(|member| member.name == TEST_ARCH_CTM)
+            .expect("projected arch fixture member");
+        assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
+        assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
     }
 
     #[test]

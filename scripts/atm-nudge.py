@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-"""atm-nudge.py [--pane <id>] <recipient> [<message>]
+"""OBSOLETE Phase AD helper retained only for manual troubleshooting.
 
-Post-send hook for ATM: nudge a named agent's tmux pane after successful send.
+atm-nudge.py [--pane <id>] <recipient> [<message>]
+
+This script is no longer a live post-send hook. Production `.atm.toml`
+post-send wiring routes through `scripts/atm-nudge.sh`, which requires
+authoritative pane metadata in `ATM_POST_SEND` and does not use `.atm.toml`
+pane routing truth.
+
+Legacy helper: nudge a named agent's tmux pane after successful send.
 
 Normal mode:
   atm-nudge.py <recipient>
@@ -238,7 +245,9 @@ def read_pane_from_roster(
 
 
 def read_pane_from_toml(recipient: str, team: str) -> PaneLookup:
-    """Read a fallback pane from the repo-local .atm.toml."""
+    """Read a legacy fallback pane from the repo-local .atm.toml."""
+    # Phase AD obsolete fallback: live production post-send routing must use
+    # authoritative roster / ATM_POST_SEND pane data rather than `.atm.toml`.
     if tomllib is None:
         return PaneLookup(
             None,

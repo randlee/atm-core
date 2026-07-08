@@ -1,7 +1,7 @@
 ---
 id: AD.20
 title: Read Body-Search Metadata Consistency Repair
-status: planned
+status: complete
 branch: feature/pAD-s20-read-body-search-metadata-consistency-repair
 worktree: ../atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair
 target: integrate/phase-AD

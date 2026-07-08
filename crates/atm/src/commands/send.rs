@@ -8,7 +8,9 @@ use clap::Args;
 use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
-use crate::composition::{CliComposition, resolve_command_runtime_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -58,8 +60,12 @@ impl SendCommand {
         let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
         let json = self.json;
         let request = self.build_request(home_dir.clone(), current_dir.clone())?;
-        let composition =
-            CliComposition::bootstrap("send", observability, &current_dir, &home_dir)?;
+        let composition = CliComposition::bootstrap(
+            "send",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.send(request)?;
 
         output::print_send_result(&outcome, json)

@@ -108,7 +108,7 @@ pub trait StatusSource: sealed::Sealed {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct PostSendHookEvent {
     pub sender: AgentName,
     pub sender_team: TeamName,

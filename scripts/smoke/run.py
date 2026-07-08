@@ -571,6 +571,53 @@ NORMAL_ROWS = FAST_ROWS + [
         ],
         pass_note="read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact",
     ),
+    SuiteRowSpec(
+        id="AD20-READ-CONTAINS-001",
+        flow="metadata-backed contains stays full-body correct while keeping durable-body reload bounded",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "read_contains_matches_summary_only_and_body_only_on_store_backed_path",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "--test",
+                "mailbox_locking",
+                "list_contains_matches_body_only_on_store_backed_path",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "read::tests::metadata_backed_read_contains_fetches_durable_body_when_summary_misses",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "list::tests::metadata_backed_contains_fetches_durable_body_only_for_surviving_summary_miss_rows",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="metadata-backed contains stays full-body correct and only reloads durable body for surviving summary-miss candidates",
+    ),
 ]
 
 

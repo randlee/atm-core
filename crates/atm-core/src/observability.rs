@@ -1,5 +1,6 @@
 //! ATM-owned observability boundary and projected log/health types.
 
+use std::fmt;
 use std::path::PathBuf;
 
 use serde::de::Error as DeError;
@@ -12,11 +13,117 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ActionName(String);
+
+impl ActionName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("action", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ActionName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct OutcomeLabel(String);
+
+impl OutcomeLabel {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("outcome", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for OutcomeLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ServiceName(String);
+
+impl ServiceName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("service", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ServiceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ErrorCode(String);
+
+impl ErrorCode {
+    pub fn new_owned(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self(validate_observability_name("diagnostic code", value)?))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum Level {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+fn validate_observability_name(
+    kind: &'static str,
+    value: impl Into<String>,
+) -> Result<String, AtmError> {
+    let value = value.into();
+    if value.trim().is_empty() {
+        return Err(
+            AtmError::validation(format!("ATM observability {kind} must not be empty"))
+                .with_recovery(format!(
+                    "Provide a non-empty ATM observability {kind} before retrying."
+                )),
+        );
+    }
+    Ok(value)
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
-    pub action: String,
-    pub outcome: String,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
@@ -28,54 +135,36 @@ pub struct CommandEvent {
     pub error_message: Option<String>,
 }
 
-fn validate_observability_label(kind: &str, value: &str) -> Result<(), AtmError> {
-    if value.trim().is_empty() {
-        return Err(
-            AtmError::validation(format!("ATM observability {kind} must not be empty"))
-                .with_recovery(
-                    "Provide a non-empty ATM-owned observability label before retrying.",
-                ),
-        );
-    }
-    Ok(())
+pub fn action_name(value: &'static str) -> ActionName {
+    ActionName::new(value)
+        .expect("ATM observability action literals must be valid ActionName values")
 }
 
-pub fn action_name(value: &'static str) -> String {
-    validate_observability_label("action", value)
-        .expect("ATM observability action literals must be non-empty");
-    value.to_string()
+pub fn outcome_label(value: &'static str) -> OutcomeLabel {
+    OutcomeLabel::new(value)
+        .expect("ATM observability outcome literals must be valid OutcomeLabel values")
 }
 
-pub fn outcome_label(value: &'static str) -> String {
-    validate_observability_label("outcome", value)
-        .expect("ATM observability outcome literals must be non-empty");
-    value.to_string()
+pub fn service_name(value: impl Into<String>) -> Result<ServiceName, AtmError> {
+    ServiceName::new(value)
 }
 
-pub fn service_name(value: impl Into<String>) -> Result<String, AtmError> {
-    let value = value.into();
-    validate_observability_label("service", &value)?;
-    Ok(value)
+pub fn diagnostic_code(value: impl Into<String>) -> Result<ErrorCode, AtmError> {
+    ErrorCode::new_owned(value)
 }
 
-pub fn diagnostic_code(value: impl Into<String>) -> Result<String, AtmError> {
-    let value = value.into();
-    validate_observability_label("diagnostic code", &value)?;
-    Ok(value)
-}
-
-pub fn standard_level_for_outcome(outcome: &str) -> LogLevelFilter {
+pub fn standard_level_for_outcome(outcome: &str) -> Level {
     match outcome {
-        "ok" | "sent" | "dry_run" => LogLevelFilter::Info,
-        "timeout" => LogLevelFilter::Warn,
-        "error" | "failed" => LogLevelFilter::Error,
+        "ok" | "sent" | "dry_run" => Level::Info,
+        "timeout" => Level::Warn,
+        "error" | "failed" => Level::Error,
         other => {
             warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,
                 outcome = other,
                 "unknown ATM command outcome for observability level"
             );
-            LogLevelFilter::Warn
+            Level::Warn
         }
     }
 }
@@ -420,7 +509,7 @@ pub struct AtmLogQuery {
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
-    pub service: String,
+    pub service: ServiceName,
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
@@ -443,14 +532,8 @@ pub enum AtmObservabilityHealthState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmObservabilityDiagnostic {
-    pub code: Option<String>,
+    pub code: Option<ErrorCode>,
     pub message: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RetainedSinkFaultMode {
-    Degraded,
-    Unavailable,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -467,6 +550,12 @@ pub struct AtmMaintenanceHealthReport {
     pub rotated_files_total: u64,
     pub pruned_files_total: u64,
     pub last_pass_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedSinkFaultMode {
+    Degraded,
+    Unavailable,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

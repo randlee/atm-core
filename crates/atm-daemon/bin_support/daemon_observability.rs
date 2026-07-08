@@ -934,11 +934,10 @@ fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary
-            .code
-            .map(|code| diagnostic_code(code.as_str().to_string()))
-            .transpose()
-            .expect("shared diagnostic codes must project into ATM diagnostics"),
+        code: summary.code.map(|code| {
+            diagnostic_code(code.as_str().to_string())
+                .expect("shared diagnostic codes must be non-empty")
+        }),
         message: summary.message,
     }
 }
