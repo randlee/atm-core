@@ -284,6 +284,10 @@ Notes:
   - typed heartbeat request routing
   - durable pid continuity checks through the SQLite boundary assembly
   - daemon-backed doctor health projection over runtime status
+  - direct post-send emission that may surface typed sender warnings when a
+    receiver-owned graft path is unavailable
+- The dispatcher must not own graft session registration, pending nudge
+  queues, fetch/drain inspection, or any client-specific receive loop.
 - `R.20` planning treats this as an overgrown adapter surface. The follow-on
   cleanup sprint must split dispatcher shell concerns from runtime-status,
   heartbeat-continuity, and doctor-projection helpers without changing the

@@ -18,7 +18,6 @@ use interprocess::local_socket::{
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
-use crate::graft_dispatch::GraftRequestDispatcher;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
@@ -221,7 +220,6 @@ struct AcceptLoopContext<'a> {
     codec: &'a JsonAtmProtocolCodec,
     observability: &'a SubsystemObservability,
     dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
-    graft_dispatcher: Option<&'a Arc<dyn GraftRequestDispatcher + Send + Sync>>,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
@@ -247,7 +245,6 @@ struct ServeRuntimeScopeContext<
 > {
     listener: &'a LocalSocketListener,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    graft_dispatcher: Option<Arc<dyn GraftRequestDispatcher + Send + Sync>>,
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
@@ -353,7 +350,6 @@ impl PreparedRuntimeServer {
     >(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        graft_dispatcher: Option<Arc<dyn GraftRequestDispatcher + Send + Sync>>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -362,7 +358,7 @@ impl PreparedRuntimeServer {
         FinalizeShutdown: Fn(),
         PublishReady: Fn() -> Result<(), AtmError>,
     {
-        self.serve_with_deadlines_and_accept_probe(dispatcher, graft_dispatcher, hooks)
+        self.serve_with_deadlines_and_accept_probe(dispatcher, hooks)
     }
 
     fn serve_with_deadlines_and_accept_probe<
@@ -373,7 +369,6 @@ impl PreparedRuntimeServer {
     >(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        graft_dispatcher: Option<Arc<dyn GraftRequestDispatcher + Send + Sync>>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -407,7 +402,6 @@ impl PreparedRuntimeServer {
         let serve_context = ServeRuntimeScopeContext {
             listener: &listener,
             dispatcher,
-            graft_dispatcher,
             endpoint_path: &endpoint_path,
             #[cfg(test)]
             accept_error_inject: &mut accept_error_inject,
@@ -456,7 +450,6 @@ where
     let ServeRuntimeScopeContext {
         listener,
         dispatcher,
-        graft_dispatcher,
         endpoint_path,
         #[cfg(test)]
         accept_error_inject,
@@ -493,7 +486,6 @@ where
         codec: &codec,
         observability: &observability,
         dispatcher: &dispatcher,
-        graft_dispatcher: graft_dispatcher.as_ref(),
         signals: signals.as_ref(),
         shutdown_beacon: shutdown_beacon.as_ref(),
         endpoint_path,
@@ -714,7 +706,6 @@ where
         scope,
         stream,
         context.dispatcher,
-        context.graft_dispatcher,
         context.force_shutdown,
         context.registry,
         context.codec.clone(),
@@ -839,14 +830,12 @@ fn spawn_connection_worker<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     stream: LocalSocketStream,
     dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
-    graft_dispatcher: Option<&Arc<dyn GraftRequestDispatcher + Send + Sync>>,
     force_shutdown: &Arc<AtomicBool>,
     registry: &Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
 ) -> Result<(), AtmError> {
     let active = registry.register();
     let dispatcher = Arc::clone(dispatcher);
-    let graft_dispatcher = graft_dispatcher.cloned();
     let force_shutdown = Arc::clone(force_shutdown);
     let registry = Arc::clone(registry);
     thread::Builder::new()
@@ -857,7 +846,6 @@ fn spawn_connection_worker<'scope>(
                 handle_connection(
                     stream,
                     dispatcher,
-                    graft_dispatcher,
                     force_shutdown.as_ref(),
                     registry,
                     codec,
@@ -1055,7 +1043,6 @@ mod tests {
             // the production SLO values documented for the real daemon runtime.
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                None,
                 RuntimeServeHooks {
                     endpoint_guard,
                     graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
@@ -1113,7 +1100,6 @@ mod tests {
             // the production SLO values documented for the real daemon runtime.
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                None,
                 RuntimeServeHooks {
                     endpoint_guard,
                     graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
@@ -1206,7 +1192,6 @@ mod tests {
         let join = std::thread::spawn(move || {
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                None,
                 RuntimeServeHooks {
                     endpoint_guard,
                     graceful_drain_deadline: TEST_GRACEFUL_DRAIN_DEADLINE,
