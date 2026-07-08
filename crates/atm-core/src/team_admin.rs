@@ -264,7 +264,9 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
-    use crate::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{
+        EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
+    };
     use crate::types::{AgentName, TeamName};
 
     const MAX_MEMBER_METADATA_FIELD_LEN: usize =
@@ -695,7 +697,7 @@ mod tests {
                 roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
                 // RULE-009 justified: this fixture must prove the accepted
                 // baseline repair for the real retained arch-ctm member row.
-                roster_member(TEST_TEAM, "arch-ctm"),
+                roster_member(TEST_TEAM, TEST_ARCH_CTM),
             ],
         );
 
@@ -723,7 +725,7 @@ mod tests {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
-                member: MemberName("arch-ctm".parse().expect("member")),
+                member: MemberName(TEST_ARCH_CTM.parse().expect("member")),
                 home_dir: None,
                 harness: None,
                 agent_type: None,
@@ -739,11 +741,11 @@ mod tests {
         let team_lead = roster
             .iter()
             .find(|member| member.agent_name.as_str() == ROLE_TEAM_LEAD)
-            .expect("team-lead");
+            .expect("lead member");
         let arch_ctm = roster
             .iter()
-            .find(|member| member.agent_name.as_str() == "arch-ctm")
-            .expect("arch-ctm");
+            .find(|member| member.agent_name.as_str() == TEST_ARCH_CTM)
+            .expect("arch fixture member");
         assert_eq!(team_lead.recipient_pane_id.as_deref(), Some("%0"));
         assert_eq!(arch_ctm.recipient_pane_id.as_deref(), Some("%1"));
 
@@ -756,12 +758,12 @@ mod tests {
             .members
             .iter()
             .find(|member| member.name == ROLE_TEAM_LEAD)
-            .expect("projected team-lead");
+            .expect("projected lead member");
         let projected_arch_ctm = config
             .members
             .iter()
-            .find(|member| member.name == "arch-ctm")
-            .expect("projected arch-ctm");
+            .find(|member| member.name == TEST_ARCH_CTM)
+            .expect("projected arch fixture member");
         assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
         assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
     }
