@@ -12,69 +12,139 @@
   triage:severity "Blocking" ;
   triage:repeatable true ;
   triage:sweepScope "docs/requirements.md, docs/architecture.md, docs/atm-core/requirements.md, docs/atm-core/architecture.md, docs/atm-daemon/requirements.md" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:highestOpenBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:promoteToBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAD-s18-read-body-search-metadata-consistency-repair" ;
+  triage:promoteToBranch "feature/pAD-s18-read-body-search-metadata-consistency-repair" ;
+  triage:triagedAt "2026-07-07T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s18/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s18/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s18/5> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/1> ;
-  triage:openOn <urn:atm:triage:worktree/s20/5ac7f11b> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20/5ac7f11b> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-DOC-001/s20/5> ;
+  triage:closureNote "Fixed on s20 (verified: all 6 docs now contain invocation-dir statement). Incomplete on s18-s19 (docs/requirements.md and docs/atm-core/architecture.md missing the statement). Open on integrate/phase-AD (statement absent from all docs)." .
 
-<urn:atm:triage:occurrence/AD18-DOC-001/s20/1>
+<urn:atm:triage:occurrence/AD18-DOC-001/s18/1>
   a triage:Occurrence ;
   triage:file "docs/requirements.md" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
-  triage:headSha "5ac7f11b" ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
   triage:missingFrom true ;
   triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s18/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:missingFrom false ;
+  triage:description "Statement present at line 1614-1616" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s18/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:missingFrom false ;
+  triage:description "Statement present at line 137-139" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s18/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:missingFrom true ;
+  triage:description "Required statement missing from this doc" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s18/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:missingFrom false ;
+  triage:description "Statement present at line 372-374" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-DOC-001/s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:missingFrom false ;
+  triage:description "Required statement now present at line 435-437" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-DOC-001/s20/2>
   a triage:Occurrence ;
   triage:file "docs/architecture.md" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:headSha "5ac7f11b" ;
-  triage:missingFrom true ;
-  triage:description "Required statement missing from this doc" ;
+  triage:missingFrom false ;
+  triage:description "Statement present" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-DOC-001/s20/3>
   a triage:Occurrence ;
   triage:file "docs/atm-core/requirements.md" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:headSha "5ac7f11b" ;
-  triage:missingFrom true ;
-  triage:description "Required statement missing from this doc" ;
+  triage:missingFrom false ;
+  triage:description "Statement present" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-DOC-001/s20/4>
   a triage:Occurrence ;
   triage:file "docs/atm-core/architecture.md" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:headSha "5ac7f11b" ;
-  triage:missingFrom true ;
-  triage:description "Required statement missing from this doc" ;
+  triage:missingFrom false ;
+  triage:description "Statement now present at line 11-13" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
 
 <urn:atm:triage:occurrence/AD18-DOC-001/s20/5>
   a triage:Occurrence ;
   triage:file "docs/atm-daemon/requirements.md" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:headSha "5ac7f11b" ;
-  triage:missingFrom true ;
-  triage:description "Required statement missing from this doc" ;
+  triage:missingFrom false ;
+  triage:description "Statement present" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:worktree/s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 .
 
 <urn:atm:triage:worktree/s20/5ac7f11b>
   a triage:WorktreeSnapshot ;

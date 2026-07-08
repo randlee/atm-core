@@ -12,26 +12,23 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-07T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-SMOKE-001/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-SMOKE-001/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-SMOKE-001/s20/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD18-SMOKE-001/integrate/1> ;
-  triage:openOn <urn:atm:triage:worktree/s18/0c8b7d5b> ;
-  triage:openOn <urn:atm:triage:worktree/s19/f5e8732f> ;
-  triage:openOn <urn:atm:triage:worktree/s20/5ac7f11b> ;
-  triage:openOn <urn:atm:triage:worktree/integrate/876241aa> ;
-  triage:promoteTo <urn:atm:triage:worktree/s18/0c8b7d5b> .
+  triage:highestFixedBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:closureNote "Fixed on s18-s20 (verified: composition.rs:1426 has resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees test; scripts/smoke/run.py:513-543 have multi-worktree test specs). Open on integrate/phase-AD (test not merged in; resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees missing)." .
 
 <urn:atm:triage:occurrence/AD18-SMOKE-001/s18/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/" ;
   triage:line 0 ;
   triage:snippet "multi-worktree ATM_HOME canonicalization smoke/regression test suite" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
   triage:headSha "0c8b7d5b" ;
   triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
@@ -41,8 +38,8 @@
   triage:file "scripts/smoke/" ;
   triage:line 0 ;
   triage:snippet "multi-worktree ATM_HOME canonicalization smoke/regression test suite" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
   triage:headSha "f5e8732f" ;
   triage:occursIn <urn:atm:triage:worktree/s19/f5e8732f> .
@@ -52,8 +49,8 @@
   triage:file "scripts/smoke/" ;
   triage:line 0 ;
   triage:snippet "multi-worktree ATM_HOME canonicalization smoke/regression test suite" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
   triage:headSha "5ac7f11b" ;
   triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
@@ -67,42 +64,8 @@
   triage:closed false ;
   triage:branch "integrate/phase-AD" ;
   triage:headSha "876241aa" ;
+  triage:upstreamNotMerged true ;
   triage:occursIn <urn:atm:triage:worktree/integrate/876241aa> .
-
-<urn:atm:triage:worktree/s13/222c57da>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
-  triage:headSha "222c57da" ;
-  triage:orderIndex 13 .
-
-<urn:atm:triage:worktree/s14/3af451b0>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
-  triage:headSha "3af451b0" ;
-  triage:orderIndex 14 .
-
-<urn:atm:triage:worktree/s15/0ab5d105>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
-  triage:headSha "0ab5d105" ;
-  triage:orderIndex 15 .
-
-<urn:atm:triage:worktree/s16/c4653158>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
-  triage:headSha "c4653158" ;
-  triage:orderIndex 16 .
-
-<urn:atm:triage:worktree/s17/0996fd33>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
-  triage:headSha "0996fd33" ;
-  triage:orderIndex 17 .
 
 <urn:atm:triage:worktree/s18/0c8b7d5b>
   a triage:WorktreeSnapshot ;
