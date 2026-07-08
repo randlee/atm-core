@@ -695,8 +695,8 @@ mod tests {
             TEST_TEAM,
             vec![
                 roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
-                // RULE-009 justified: this fixture must prove the accepted
-                // baseline repair for the real retained arch-ctm member row.
+                // This fixture must prove the accepted pane-repair flow for a
+                // non-lead roster member on the retained line.
                 roster_member(TEST_TEAM, TEST_ARCH_CTM),
             ],
         );
@@ -733,7 +733,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
             },
         )
-        .expect("repair arch-ctm pane");
+        .expect("repair secondary member pane");
 
         let roster = roster_store
             .load_roster(&TEST_TEAM.parse().expect("team"))

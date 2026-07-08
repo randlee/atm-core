@@ -17,6 +17,8 @@ LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 STRING_LITERAL_RE = re.compile(
     r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
 )
+CFG_ATTRIBUTE_RE = re.compile(r"^#(?P<inner>!)?\[cfg\((?P<body>.*)\)\]$")
+TEST_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])test(?![A-Za-z0-9_])")
 
 
 @dataclass(frozen=True)
@@ -333,6 +335,13 @@ def is_code_line(line: str) -> bool:
     return not is_comment_or_empty(line)
 
 
+def is_rust_test_cfg_attribute(line: str) -> bool:
+    match = CFG_ATTRIBUTE_RE.match(line.strip())
+    if match is None:
+        return False
+    return TEST_TOKEN_RE.search(match.group("body")) is not None
+
+
 def classify_rust_test_scope(
     lines: list[str],
     *,
@@ -340,7 +349,10 @@ def classify_rust_test_scope(
 ) -> list[bool]:
     if treat_all_lines_as_test:
         return [True] * len(lines)
-    if any(line.strip() == "#![cfg(test)]" for line in lines):
+    if any(
+        stripped.startswith("#![") and is_rust_test_cfg_attribute(stripped)
+        for stripped in (line.strip() for line in lines)
+    ):
         return [True] * len(lines)
 
     scope: list[bool] = []
@@ -352,7 +364,7 @@ def classify_rust_test_scope(
     for line in lines:
         stripped = line.strip()
 
-        if "#[cfg(test)]" in stripped:
+        if stripped.startswith("#[") and is_rust_test_cfg_attribute(stripped):
             cfg_test_pending = True
             cfg_test_attribute_active = True
             scope.append(True)

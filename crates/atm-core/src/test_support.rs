@@ -1,3 +1,5 @@
+#![cfg(any(test, feature = "test-utils"))]
+
 #[cfg(any(test, feature = "test-utils"))]
 use std::ffi::{OsStr, OsString};
 #[cfg(any(test, feature = "test-utils"))]
@@ -12,7 +14,7 @@ pub const TEST_RECIPIENT: &str = "recipient";
 pub const TEST_QA: &str = "qa-a";
 pub const TEST_QA_AGENT: &str = TEST_QA;
 pub use crate::roles::ROLE_TEAM_LEAD;
-pub const TEST_ARCH_CTM: &str = "arch-ctm";
+pub const TEST_ARCH_CTM: &str = "test-arch-member";
 pub const TEST_LEAD: &str = "test-lead";
 pub const TEST_DAEMON: &str = "daemon";
 pub const TEST_ORIGIN: &str = "host-a";

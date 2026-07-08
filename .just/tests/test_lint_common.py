@@ -236,6 +236,29 @@ version = "0.1.0"
         self.assertEqual(scope[:3], [False, False, False])
         self.assertEqual(scope[3:], [True, True, True, True, True, True, True])
 
+    def test_classify_rust_test_scope_marks_cfg_any_test_utils_items(self) -> None:
+        lines = [
+            "pub fn production() {}",
+            '#[cfg(any(test, feature = "test-utils"))]',
+            'pub const TEST_ARCH_CTM: &str = "arch-ctm";',
+            "pub fn still_production() {}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope, [False, True, True, False])
+
+    def test_classify_rust_test_scope_marks_inner_cfg_any_test_file(self) -> None:
+        lines = [
+            '#![cfg(any(test, feature = "test-utils"))]',
+            'pub const TEST_ARCH_CTM: &str = "arch-ctm";',
+            "pub fn helper() {}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope, [True, True, True])
+
     def test_rust_file_test_scope_marks_tests_and_src_paths(self) -> None:
         src_lines = ["pub fn production() {}", "#[cfg(test)]", "mod tests {", "}"]
         tests_lines = ["#[test]", "fn ok() {}"]

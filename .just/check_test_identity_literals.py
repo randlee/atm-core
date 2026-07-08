@@ -92,9 +92,11 @@ def collect_identity_violations(
                 )
                 continue
 
+            handled_literals: set[str] = set()
             for literal, allowed_paths in production_canonical_literals.items():
                 if literal not in literal_contents:
                     continue
+                handled_literals.add(literal)
                 if rel_path.as_posix() in allowed_paths:
                     continue
                 violations.append(
@@ -103,6 +105,17 @@ def collect_identity_violations(
                         line_number=line_number,
                         line=line.strip(),
                         kind="production_scope_canonical_literal",
+                    )
+                )
+            for literal in forbidden_literals:
+                if literal not in literal_contents or literal in handled_literals:
+                    continue
+                violations.append(
+                    IdentityViolation(
+                        path=rel_path.as_posix(),
+                        line_number=line_number,
+                        line=line.strip(),
+                        kind="production_scope_forbidden_literal",
                     )
                 )
                 break
