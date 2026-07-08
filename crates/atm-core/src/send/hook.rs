@@ -932,13 +932,15 @@ mod tests {
     use super::{
         ATM_PROGRAM_ENV, BuiltInNudgeSinkTarget, HookCancellationToken,
         POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, emit_built_in_nudge,
-        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
-        hook_result_log_level, load_post_send_config_for_sender, parse_post_send_hook_result,
-        sender_config_root,
+        emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
+        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
+        parse_post_send_hook_result, sender_config_root,
     };
     use crate::boundary::{PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind};
     use crate::config::AtmConfig;
-    use crate::config::types::HookRecipient;
+    use crate::config::types::{HookRecipient, PostSendHookRule};
+    use crate::delivery_plan::LogicalMessage;
+    use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
     #[allow(
@@ -946,7 +948,8 @@ mod tests {
         reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
     )]
     use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-    use crate::schema::{HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
+    use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
+    use crate::send::ResolvedRecipient;
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -1203,6 +1206,31 @@ mod tests {
         }
     }
 
+    fn logical_message(text: &str) -> LogicalMessage {
+        LogicalMessage::new(
+            InboxMessage {
+                from: AgentName::from_validated(TEST_SENDER),
+                text: text.to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TeamName::from_validated("test-team")),
+                summary: Some(text.to_string()),
+                message_id: Some(AtmMessageId::new()),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+            false,
+            false,
+        )
+        .expect("logical message")
+    }
+
     #[test]
     #[serial_test::serial(env)]
     fn built_in_nudge_fallback_invokes_hidden_cli_with_sink_and_payload() {
@@ -1281,5 +1309,104 @@ mod tests {
         .expect_err("nonzero exit must fail");
 
         assert!(error.message.contains("exited unsuccessfully"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn external_post_send_hook_takes_precedence_over_built_in_nudge() {
+        let tempdir = tempdir().expect("tempdir");
+        let hook_capture = tempdir.path().join("hook-capture.txt");
+        let built_in_capture = tempdir.path().join("built-in-capture.txt");
+        #[cfg(windows)]
+        let hook_path = tempdir.path().join("hook.cmd");
+        #[cfg(not(windows))]
+        let hook_path = tempdir.path().join("hook");
+        #[cfg(windows)]
+        let atm_path = tempdir.path().join("atm.cmd");
+        #[cfg(not(windows))]
+        let atm_path = tempdir.path().join("atm");
+        #[cfg(windows)]
+        fs::write(
+            &hook_path,
+            "@echo off\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo %ATM_POST_SEND%\r\nexit /b 0\r\n",
+        )
+        .expect("write hook shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &hook_path,
+            "#!/bin/sh\nprintf '%s\\n' \"$ATM_POST_SEND\" > \"$ATM_TEST_HOOK_CAPTURE\"\nexit 0\n",
+        )
+        .expect("write hook shim");
+        #[cfg(windows)]
+        fs::write(
+            &atm_path,
+            "@echo off\r\n> \"%ATM_TEST_BUILT_IN_CAPTURE%\" echo invoked\r\nexit /b 0\r\n",
+        )
+        .expect("write atm shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &atm_path,
+            "#!/bin/sh\nprintf 'invoked\\n' > \"$ATM_TEST_BUILT_IN_CAPTURE\"\nexit 0\n",
+        )
+        .expect("write atm shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [&hook_path, &atm_path] {
+                let mut perms = fs::metadata(path).expect("metadata").permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(path, perms).expect("chmod");
+            }
+        }
+
+        let hook_capture_value = hook_capture.display().to_string();
+        let built_in_capture_value = built_in_capture.display().to_string();
+        let atm_bin = atm_path.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("ATM_TEST_HOOK_CAPTURE", Some(hook_capture_value.as_str())),
+            (
+                "ATM_TEST_BUILT_IN_CAPTURE",
+                Some(built_in_capture_value.as_str()),
+            ),
+            ("ATM_HOME", tempdir.path().to_str()),
+            ("HOME", tempdir.path().to_str()),
+            (ATM_PROGRAM_ENV, Some(atm_bin.as_str())),
+        ]);
+
+        let config = AtmConfig {
+            config_root: tempdir.path().to_path_buf(),
+            post_send_hooks: vec![PostSendHookRule {
+                recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                command: vec![hook_path.display().to_string()],
+            }],
+            ..Default::default()
+        };
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &mut warnings,
+            Some(&config),
+            None,
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        let captured = fs::read_to_string(&hook_capture).expect("hook capture");
+        assert!(captured.contains("\"description\":\"hello\""));
+        assert!(!built_in_capture.exists());
     }
 }

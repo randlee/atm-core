@@ -160,7 +160,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
                 atm_home.clone(),
                 workspace_dir.clone(),
                 "qa-a".parse().expect("caller"),
-                "team-lead@test-team",
+                &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
                 TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline("please ack".to_string()),
                 None,

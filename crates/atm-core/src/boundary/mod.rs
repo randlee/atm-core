@@ -136,6 +136,17 @@ pub enum BuiltInNudgeTemplateKind {
 }
 
 impl BuiltInNudgeTemplateKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Delivery => "delivery",
+            Self::DeliveryAck => "delivery_ack",
+            Self::DeliveryTask => "delivery_task",
+            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Acknowledge => "acknowledge",
+            Self::AcknowledgeTask => "acknowledge_task",
+        }
+    }
+
     pub fn from_post_send_event(event: &PostSendHookEvent) -> Self {
         match (event.is_ack, event.task_id.is_some(), event.requires_ack) {
             (true, true, _) => Self::AcknowledgeTask,
@@ -144,6 +155,33 @@ impl BuiltInNudgeTemplateKind {
             (false, true, false) => Self::DeliveryTask,
             (false, false, true) => Self::DeliveryAck,
             (false, false, false) => Self::Delivery,
+        }
+    }
+}
+
+impl std::fmt::Display for BuiltInNudgeTemplateKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for BuiltInNudgeTemplateKind {
+    type Err = crate::error::AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "delivery" => Ok(Self::Delivery),
+            "delivery_ack" => Ok(Self::DeliveryAck),
+            "delivery_task" => Ok(Self::DeliveryTask),
+            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
+            "acknowledge" => Ok(Self::Acknowledge),
+            "acknowledge_task" => Ok(Self::AcknowledgeTask),
+            other => Err(crate::error::AtmError::validation(format!(
+                "unsupported built-in nudge template kind `{other}`"
+            ))
+            .with_recovery(
+                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
+            )),
         }
     }
 }

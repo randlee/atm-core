@@ -37,8 +37,9 @@ impl InternalNudgeCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
         let kind = BuiltInNudgeTemplateKind::from_post_send_event(&input.event);
-        let template = load_override_body(&input.event.recipient_team, kind)?
-            .unwrap_or_else(|| default_template(kind).to_string());
+        let Some(template) = resolve_template_body(&input.event.recipient_team, kind)? else {
+            return Ok(());
+        };
         let rendered = render_template(&template, &input.render_values())?;
         match input.sink_target {
             NudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &rendered)?,
@@ -179,6 +180,17 @@ fn load_override_body(
             .map(|row: TeamNudgeTemplateOverrideRow| row.template_body))
     })
     .map_err(Into::into)
+}
+
+fn resolve_template_body(
+    team: &atm_core::types::TeamName,
+    kind: BuiltInNudgeTemplateKind,
+) -> Result<Option<String>> {
+    match load_override_body(team, kind)? {
+        Some(template) if template.is_empty() => Ok(None),
+        Some(template) => Ok(Some(template)),
+        None => Ok(Some(default_template(kind).to_string())),
+    }
 }
 
 fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
@@ -456,6 +468,7 @@ mod tests {
     use super::{
         ATM_POST_SEND_ENV, INTERNAL_NUDGE_SINK_ENV, InternalNudgeInput, NudgeSinkTarget,
         TMUX_DOUBLE_ENTER_DELAY, TMUX_PROGRAM_ENV, default_template, render_template,
+        resolve_template_body,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -526,14 +539,14 @@ mod tests {
         let rendered = render_template(
             "<atm from=\"{{from}}\" task-id=\"{{task_id}}\">{{description}}</atm>",
             &InternalNudgeInput {
-                from: "team-lead@atm-dev".to_string(),
+                from: format!("{TEST_LEAD}@{TEST_TEAM}"),
                 event: base_event(),
                 sink_target: NudgeSinkTarget::Tmux,
             }
             .render_values(),
         )
         .expect("render");
-        assert!(rendered.contains("team-lead@atm-dev"));
+        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("review failing smoke lane"));
         assert!(rendered.contains("task-id=\"\""));
     }
@@ -627,5 +640,62 @@ mod tests {
         let logged = fs::read_to_string(&tmux_log).expect("tmux log");
         assert_eq!(logged.matches("Enter").count(), 2);
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn empty_override_body_skips_built_in_nudge_delivery() {
+        let tempdir = tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        fs::create_dir_all(&home_dir).expect("home");
+        let team = TEST_TEAM.parse().expect("team");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(home_dir.to_str().expect("utf8"))),
+            ("HOME", Some(home_dir.to_str().expect("utf8"))),
+        ]);
+
+        atm_daemon_bootstrap::with_default_nudge_template_override_store(|override_store| {
+            override_store.save_template_override(&team, BuiltInNudgeTemplateKind::Delivery, "")?;
+            Ok(())
+        })
+        .expect("save override");
+
+        let template =
+            resolve_template_body(&team, BuiltInNudgeTemplateKind::Delivery).expect("resolve");
+        assert!(template.is_none());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn override_row_only_applies_to_selected_template_kind() {
+        let tempdir = tempdir().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        fs::create_dir_all(&home_dir).expect("home");
+        let team = TEST_TEAM.parse().expect("team");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(home_dir.to_str().expect("utf8"))),
+            ("HOME", Some(home_dir.to_str().expect("utf8"))),
+        ]);
+
+        atm_daemon_bootstrap::with_default_nudge_template_override_store(|override_store| {
+            override_store.save_template_override(
+                &team,
+                BuiltInNudgeTemplateKind::DeliveryAck,
+                "<atm kind=\"override\"/>",
+            )?;
+            Ok(())
+        })
+        .expect("save override");
+
+        let overridden = resolve_template_body(&team, BuiltInNudgeTemplateKind::DeliveryAck)
+            .expect("resolve ack override");
+        let fallback = resolve_template_body(&team, BuiltInNudgeTemplateKind::Delivery)
+            .expect("resolve delivery fallback");
+
+        assert_eq!(overridden.as_deref(), Some("<atm kind=\"override\"/>"));
+        assert_eq!(
+            fallback.as_deref(),
+            Some(default_template(BuiltInNudgeTemplateKind::Delivery))
+        );
     }
 }
