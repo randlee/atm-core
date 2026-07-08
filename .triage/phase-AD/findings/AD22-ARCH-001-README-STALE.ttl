@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD22-ARCH-001-README-STALE>
+  a triage:Finding ;
+  triage:findingId "AD22-ARCH-001-README-STALE" ;
+  triage:title "README.md still documents old post_send_hooks path as the standard example" ;
+  triage:description "arch-qa found README.md:156 (\"## Post-Send Hook\" section) still documents [[atm.post_send_hooks]] -> scripts/atm-nudge.sh as the example/standard post-send configuration, with no mention that `atm internal-nudge` is the shipped default, and no compatibility-only disclaimer. This directly contradicts this sprint's own \"Paths To Delete\" requirement. docs/architecture.md and plan-phase-AD.md were correctly updated; README.md (the most user-visible entry point) was missed. Related non-blocking finding also confirmed: scripts/atm-nudge.py docstring still claims \"Production .atm.toml post-send wiring routes through scripts/atm-nudge.sh\" -- stale/contradictory, include as a secondary occurrence if found." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/3> ;
+  triage:openOn <urn:atm:triage:worktree/s21/66fcea4b> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 163 ;
+  triage:snippet "command = [\"scripts/atm-nudge.sh\", \"team-lead\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/66fcea4b> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/2>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 167 ;
+  triage:snippet "command = [\"scripts/atm-nudge.sh\", \"arch-ctm\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/66fcea4b> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s21/3>
+  a triage:Occurrence ;
+  triage:file "scripts/atm-nudge.py" ;
+  triage:line 7 ;
+  triage:snippet "post-send wiring routes through `scripts/atm-nudge.sh`, which requires" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/66fcea4b> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 163 ;
+  triage:snippet "command = [\"scripts/atm-nudge.sh\", \"team-lead\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/2>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 167 ;
+  triage:snippet "command = [\"scripts/atm-nudge.sh\", \"arch-ctm\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-001-README-STALE/s22/3>
+  a triage:Occurrence ;
+  triage:file "scripts/atm-nudge.py" ;
+  triage:line 7 ;
+  triage:snippet "post-send wiring routes through `scripts/atm-nudge.sh`, which requires" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:worktree/s21/66fcea4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 2 .
