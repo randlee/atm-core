@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-PRECEDENCE-UNTESTED>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-PRECEDENCE-UNTESTED" ;
+  triage:title "Nudge template precedence rules lack regression test coverage" ;
+  triage:description "In internal_nudge.rs:172-186 and hook.rs:93-118 on feature/pAD-s21-built-in-nudge-hardening (AD.21), the sprint doc's Acceptance Criteria require regression tests proving (a) external post_send_hooks still wins over the built-in path, and (b) an override row replaces only its addressed template kind while other kinds fall back to default. Neither test exists. The same missing tests propagate through feature/pAD-s22-built-in-nudge-hardening-part2 (AD.22), which depends on AD.21 completion." ;
+  triage:category "blocking" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21/14d348eb> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 93 ;
+  triage:snippet "let hook_matched = config.is_some_and(|loaded| { ... if !hook_matched && let Some(target) = built_in_nudge_sink_target(delivery_snapshot)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "14d348eb" ;
+  triage:note "Missing test: external post_send_hooks precedence over built-in path" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/14d348eb> .
+
+<urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 172 ;
+  triage:snippet "fn load_override_body(team: &atm_core::types::TeamName, kind: BuiltInNudgeTemplateKind) -> Result<Option<String>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "14d348eb" ;
+  triage:note "Missing test: override rows replace only addressed template kind, others fall back to default" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/14d348eb> .
+
+<urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 93 ;
+  triage:snippet "let hook_matched = config.is_some_and(|loaded| { ... if !hook_matched && let Some(target) = built_in_nudge_sink_target(delivery_snapshot)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:note "Propagated from AD.21: missing test: external post_send_hooks precedence over built-in path" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/BLOCKING-PRECEDENCE-UNTESTED/s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 172 ;
+  triage:snippet "fn load_override_body(team: &atm_core::types::TeamName, kind: BuiltInNudgeTemplateKind) -> Result<Option<String>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:note "Propagated from AD.21: missing test: override rows replace only addressed template kind, others fall back to default" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:worktree/s21/14d348eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "14d348eb" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 22 .

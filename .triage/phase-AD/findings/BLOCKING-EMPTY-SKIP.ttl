@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-EMPTY-SKIP>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-EMPTY-SKIP" ;
+  triage:title "Empty-string team override not skipped" ;
+  triage:description "In internal_nudge.rs:40-47, an empty-string team override for a nudge template renders as \"\" and is still sent via tmux (with double-Enter) instead of being skipped entirely. This was a pre-flagged blocking acceptance criterion for AD.21 and remains unimplemented and untested." ;
+  triage:category "logic-gap" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T15:32:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-EMPTY-SKIP/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-EMPTY-SKIP/s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21/7543fa72> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/BLOCKING-EMPTY-SKIP/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 40 ;
+  triage:snippet "let template = load_override_body(&input.event.recipient_team, kind)?.unwrap_or_else(|| default_template(kind).to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/7543fa72> .
+
+<urn:atm:triage:occurrence/BLOCKING-EMPTY-SKIP/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 40 ;
+  triage:snippet "let template = load_override_body(&input.event.recipient_team, kind)?.unwrap_or_else(|| default_template(kind).to_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:worktree/s21/7543fa72>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 22 .

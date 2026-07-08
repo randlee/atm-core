@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-NO-WRITE-PATH>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-NO-WRITE-PATH" ;
+  triage:title "NudgeTemplateOverrideStore has no write/save method or CLI surface" ;
+  triage:description "In nudge_template_override_store.rs, the NudgeTemplateOverrideStore trait only exposes load_template_override() for reads. There is no write, save, create, or update method on the trait. The boundary is incomplete. Production code cannot create or update nudge template override rows; only raw SQL in tests can insert them. This makes the deliverable operationally unusable." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-NO-WRITE-PATH/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-NO-WRITE-PATH/s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21/7543fa7> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561a> .
+
+<urn:atm:triage:occurrence/BLOCKING-NO-WRITE-PATH/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/store.rs" ;
+  triage:line 236 ;
+  triage:snippet "pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync { fn load_template_override(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa7298dfc6eeb8ac071e4190a9259d19fea2" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/7543fa7> .
+
+<urn:atm:triage:occurrence/BLOCKING-NO-WRITE-PATH/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/store.rs" ;
+  triage:line 236 ;
+  triage:snippet "pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync { fn load_template_override(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aaa9a93bee185ecd471c5b9123538ee418" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561a> .
+
+<urn:atm:triage:worktree/s21/7543fa7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa7298dfc6eeb8ac071e4190a9259d19fea2" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/4db561a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aaa9a93bee185ecd471c5b9123538ee418" ;
+  triage:orderIndex 2 .
