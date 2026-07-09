@@ -109,8 +109,10 @@ This ADR remains acceptable only while all of the following stay true:
 
 - `atm-daemon-bootstrap` and `atm` consume the storage-neutral override-store
   contract rather than bypassing it
-- `atm::commands::internal_nudge` remains a legitimate contract consumer and
-  is not re-added to the forbidden reference list
+- `atm` remains an allowed dependent because team-admin commands such as
+  `atm teams set-nudge-template` consume the contract; retained
+  `atm::commands::internal_nudge` helper code is no longer a direct contract
+  consumer
 - the dependency shape continues to match the retained `RosterStore`
   precedent rather than drifting into broader boundary leakage
 

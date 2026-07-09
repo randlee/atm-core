@@ -11,8 +11,9 @@ target: integrate/phase-AD
 
 ## Goal
 
-- move built-in template resolution fully upstream of `atm internal-nudge` so
-  the retained helper only renders and delivers a pre-resolved template choice
+- move built-in template resolution fully upstream of any retained helper path
+  so the live production emitter stays in-process and any retained
+  `atm internal-nudge` helper consumes only pre-resolved template input
 
 ## Hard Dependencies
 
@@ -61,8 +62,9 @@ pub struct InternalNudgeEnvelope {
 
 Required ownership after this sprint:
 
-- override/default/disabled resolution happens before `atm internal-nudge`
-  runs or before its renderer helpers are called in-process
+- override/default/disabled resolution happens before any retained
+  `atm internal-nudge` helper runs and before the live production emitter is
+  asked to deliver a built-in nudge
 - `crates/atm/src/commands/internal_nudge.rs` does not import
   `with_default_nudge_template_override_store`
 - `atm internal-nudge` receives the exact template body to render, including
@@ -76,8 +78,9 @@ Required ownership after this sprint:
   - team-row resolution
   - override/default precedence decisions
 - `AD.27` closes the named interim exception `ADR-019-EXC-AD26-001` by moving
-  the last built-in override lookup upstream of `PostSendHookEmitter`
-  using the resolved `ATM_INTERNAL_NUDGE` envelope
+  the last built-in override lookup upstream of `PostSendHookEmitter`; any
+  retained `ATM_INTERNAL_NUDGE` envelope is now helper-only rather than the
+  live production fallback path
 
 ## Paths To Delete
 
@@ -92,7 +95,10 @@ Required ownership after this sprint:
 
 - template override resolution is upstream of the renderer on the accepted
   built-in nudge path
-- `atm internal-nudge` becomes a pure render/deliver helper over resolved input
+- the shipped production built-in path remains in-process inside the accepted
+  emitter/runtime line
+- any retained `atm internal-nudge` helper becomes a pure render/deliver
+  helper over resolved input
 - docs state clearly which layer owns precedence and which layer only renders
 - bootstrap composition seams removed from `internal_nudge.rs` are not
   reintroduced through another hidden helper
