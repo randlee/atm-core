@@ -24,7 +24,7 @@
   triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
   triage:openOn <urn:atm:triage:worktree/s26/2c7b3c1a> ;
   triage:openOn <urn:atm:triage:worktree/s28/75df80a8> ;
-  triage:promoteTo <urn:atm:triage:worktree/s25/acb7ab6b> .
+  triage:promoteTo <urn:atm:triage:worktree/s26/2c7b3c1a> .
 
 <urn:atm:triage:occurrence/ARCH-001/s25/line22>
   a triage:Occurrence ;
