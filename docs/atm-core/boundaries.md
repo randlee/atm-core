@@ -412,37 +412,6 @@ Notes:
 
 ## GraftPostSendPort
 
-Planned machine-readable boundary source:
-- `AD.26` creates `boundaries/atm-core/graft-post-send-port.toml` when the
-  accepted runtime actually routes graft-backed built-in post-send delivery
-  through that seam.
-- the planning branch does not install the TOML record early, because boundary
-  lint treats new records as live enforcement and the accepted line still
-  contains the advisory-session references that `AD.26` is explicitly tasked
-  to remove.
-
-
-Purpose:
-- Owns the graft-specific built-in recipient handoff used after caller-owned
-  send/ack logic has already selected graft as the concrete post-send target.
-
-Notes:
-- this boundary is a receiver-specific leaf handoff, not a second policy layer
-- caller-owned send/ack logic and `PostSendHookEmitter` remain responsible for:
-  - deciding whether a built-in graft nudge should be attempted at all
-  - matching external hooks
-  - deciding when built-in fallback is legal
-  - constructing warnings/log records from typed success/failure
-- this boundary must not own or reintroduce:
-  - daemon-owned graft session registration
-  - daemon-owned per-session nudge queues
-  - shared advisory stream packet families
-  - fetch/drain/register/unregister semantics on the accepted line
-- only graft-backed built-in delivery details live here; shared ATM request,
-  persistence, and caller-context semantics stay out of scope.
-
-## GraftPostSendPort
-
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
 
@@ -458,7 +427,7 @@ Notes:
   - `atm-core` still logs failures and constructs sender-visible warnings
   - the port only attempts the graft-side advisory delivery
 - the accepted out-of-owner implementation is
-  `atm_daemon::advisory_runtime::AdvisoryRuntime`.
+  `atm_daemon::runtime_health::DaemonGraftPostSendPort`.
 - this boundary must not expand into generic notification routing, mailbox
   compatibility append, tmux delivery, or local process spawning.
 
