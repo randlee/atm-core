@@ -49,6 +49,8 @@ const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
+    "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 // Test hooks keep shutdown deadlines short so the transport suite verifies
 // drain/cancel behavior without waiting on production-scale timing.
 #[cfg(all(test, unix))]
@@ -649,12 +651,22 @@ fn prepare_accept_iteration<ReloadRuntimeView>(
 where
     ReloadRuntimeView: Fn() -> Result<(), AtmError>,
 {
-    if let Err(error) = context.registry.reap_finished_dispatches() {
-        return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
-            context.lifecycle_control,
-            context.shutdown_beacon,
-            error,
-        ))));
+    let reap_summary = match context.registry.reap_finished_dispatches() {
+        Ok(summary) => summary,
+        Err(error) => {
+            return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
+                context.lifecycle_control,
+                context.shutdown_beacon,
+                error,
+            ))));
+        }
+    };
+    if reap_summary.recovered_panics > 0 {
+        context.observability.emit_or_warn(
+            "dispatch_worker",
+            "panic_recovered",
+            DISPATCH_PANIC_RECOVERED_MESSAGE,
+        );
     }
     if let Some(error) = take_accept_error(
         context.signals,
@@ -891,6 +903,7 @@ fn spawn_connection_worker<'scope>(
                     force_shutdown.as_ref(),
                     registry,
                     codec,
+                    &observability,
                 )
             }));
             match result {
