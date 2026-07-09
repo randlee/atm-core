@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RSH-004-005>
+  a triage:Finding ;
+  triage:findingId "AD28-RSH-004-005" ;
+  triage:title "Per-call bounded-helper-thread pattern (introduced by AD28-FIX-1) leaks unbounded/uncancellable threads and lacks tracing on the timeout/disconnect branch" ;
+  triage:description "AD28-FIX-1 replaced the single fixed worker (which caused RSH-001/RSH-002) with a per-call bounded-helper-thread pattern for host-nudge injection. The caller's wait on each call is correctly bounded via HOST_NUDGE_INJECTION_DEADLINE, but the underlying spawned OS thread itself has no bound or cancellation -- if a host callback hangs permanently, the caller times out and returns correctly, but the underlying thread is never reaped, leaking one thread per hung call under sustained/repeated hangs. Additionally, the default no-op observability path emits no structured tracing when this specific timeout/disconnect branch is hit, making the condition invisible in production without a custom observer." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-graft/src/runtime.rs, crates/atm-graft/src/nudge_sink.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T18:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/4> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> .
+
+<urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 139 ;
+  triage:snippet "thread::Builder::new().name(\"atm-graft-host-nudge\".to_string()).spawn(move || { let result = injector.inject_nudge(&event); if result_tx.send(result).is_err() { tracing::debug!(...); } })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "ef7e9f8b" ;
+  triage:description "Per-call spawned thread in BoundedHostNudgeInjector::inject_nudge with no join/cancellation" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> .
+
+<urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 162 ;
+  triage:snippet "Err(RecvTimeoutError::Timeout) => Err(AtmError::new(AtmErrorKind::Timeout, format!(\"graft host nudge injection exceeded the {:?} delivery deadline\", HOST_NUDGE_INJECTION_DEADLINE)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "ef7e9f8b" ;
+  triage:description "Missing structured tracing on timeout/disconnect branch of BoundedHostNudgeInjector::inject_nudge (only debug log if thread sends after timeout)" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> .
+
+<urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 376 ;
+  triage:snippet "thread::Builder::new().name(\"graft-listener-wake-connect\".to_string()).spawn(move || { let _ = result_tx.send(LocalSocketStream::connect(name)); })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "ef7e9f8b" ;
+  triage:description "Per-call spawned thread in wake_graft_receiver_listener with no join/cancellation" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> .
+
+<urn:atm:triage:occurrence/AD28-RSH-004-005/pAD-s28/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 388 ;
+  triage:snippet "match result_rx.recv_timeout(LISTENER_WAKE_CONNECT_DEADLINE) { ... } else { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "ef7e9f8b" ;
+  triage:description "Missing structured tracing on timeout/disconnect branch in wake_graft_receiver_listener" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/ef7e9f8b> .
+
+<urn:atm:triage:worktree/pAD-s28/ef7e9f8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "ef7e9f8b" ;
+  triage:orderIndex 0 .
