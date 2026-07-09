@@ -128,9 +128,10 @@ Follow-up work:
 - the accepted built-in template catalog and placeholder renderer are shared
   helper semantics supplied through `atm-core`; `atm` must not fork that
   catalog or reintroduce a second selection path
-- `atm internal-nudge` consumes one resolved envelope from
-  `ATM_INTERNAL_NUDGE`; it renders and delivers only and must not reopen
-  `NudgeTemplateOverrideStore`, SQLite, or runtime bootstrap composition.
+- retained `atm internal-nudge` helper invocations consume one resolved
+  envelope from `ATM_INTERNAL_NUDGE`; they render and deliver only and must
+  not reopen `NudgeTemplateOverrideStore`, SQLite, or runtime bootstrap
+  composition.
 - `atm` may consume a team-scoped built-in template override body only through
   the storage-neutral upstream contract accepted for Phase `AD`; it must not
   perform direct SQLite lookup itself.
