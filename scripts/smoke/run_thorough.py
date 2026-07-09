@@ -5,7 +5,6 @@ import argparse
 import sys
 
 from phase_ad_suite import SuiteRowSpec, run_suite
-from run_thorough_graft import graft_commands
 
 
 POST_SEND_ROWS = [
@@ -530,7 +529,35 @@ THOROUGH_ROWS = [
     SuiteRowSpec(
         id="AD11-GRAFT-001",
         flow="graft-backed post-send uses a direct same-host receiver socket with typed warning fallback",
-        commands=graft_commands(),
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_send_delivers_direct_graft_nudge_without_warning",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable",
+                "--",
+                "--exact",
+            ],
+        ],
         pass_note="the graft-backed emission seam performs one bounded same-host receiver delivery attempt and still surfaces typed sender warnings when the receiver path is unavailable",
     ),
     SuiteRowSpec(
