@@ -72,7 +72,7 @@ pub trait HostNudgeInjector: Send + Sync {
     ///
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
-    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError>;
+    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError>;
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
@@ -535,7 +535,7 @@ mod tests {
     struct NoopInjector;
 
     impl HostNudgeInjector for NoopInjector {
-        fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
             Ok(())
         }
     }
