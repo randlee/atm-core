@@ -1,0 +1,162 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001-CLAP-LONG>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-CLAP-LONG" ;
+  triage:title "SetNudgeTemplateCommand/DisableNudgeTemplateCommand/ClearNudgeTemplateCommand missing #[arg(long)] on team/kind fields" ;
+  triage:description "AD25-QA-2 verdict (req-qa) found crates/atm/src/commands/teams.rs declares SetNudgeTemplateCommand, DisableNudgeTemplateCommand (s25 only), and ClearNudgeTemplateCommand (s25 only) with team and kind as String fields without #[arg(long)] attributes. This causes clap to treat them as positional arguments, contradicting sprint-AD25.md documented `--team <team> --kind <kind>` flag syntax. Finding predates AD25-QA-2, was not promoted in that round, and teams.rs was not modified by that fix round." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s25/282009> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/32742f> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/336832> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/2e7b5d> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s29/885585> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/4d86e0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/4d86e0> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 98 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974ae2426ad2e021660bf26fdacc79704cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s25/282009> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 110 ;
+  triage:snippet "struct DisableNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974ae2426ad2e021660bf26fdacc79704cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s25/282009> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 119 ;
+  triage:snippet "struct ClearNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974ae2426ad2e021660bf26fdacc79704cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s25/282009> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 95 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7ac694de15ccdcb98ba639837766bf5005" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/32742f> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 95 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226b586b7bdc6ba26788963c229cf11e390" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/336832> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 95 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e983aff8036ada76a042690f7219f6efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/2e7b5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 95 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576df89c6db52adf1dcc8f39fbc34a4f6f9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s29/885585> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-CLAP-LONG/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 95 ;
+  triage:snippet "struct SetNudgeTemplateCommand { team: String, kind: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024f36e084d8bd6c49bc0701609ead3b150" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/4d86e0> .
+
+<urn:atm:triage:worktree/pAD-s25/282009>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974ae2426ad2e021660bf26fdacc79704cd" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/32742f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7ac694de15ccdcb98ba639837766bf5005" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/336832>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226b586b7bdc6ba26788963c229cf11e390" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/2e7b5d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e983aff8036ada76a042690f7219f6efe" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/885585>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576df89c6db52adf1dcc8f39fbc34a4f6f9" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/4d86e0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024f36e084d8bd6c49bc0701609ead3b150" ;
+  triage:orderIndex 30 .
