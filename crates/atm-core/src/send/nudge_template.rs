@@ -105,7 +105,8 @@ fn render_template(
 mod tests {
     use super::{default_template, render_built_in_nudge, resolve_template_body};
     use crate::boundary::{
-        BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideRow,
+        BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -134,11 +135,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_template_body_treats_empty_override_as_disabled() {
+    fn resolve_template_body_treats_disabled_override_as_disabled() {
         let row = TeamNudgeTemplateOverrideRow {
             team_name: TeamName::from_validated(TEST_TEAM),
             kind: BuiltInNudgeTemplateKind::Delivery,
-            template_body: String::new(),
+            mode: TeamNudgeTemplateOverrideMode::Disabled,
             updated_at: IsoTimestamp::now(),
         };
         assert_eq!(
