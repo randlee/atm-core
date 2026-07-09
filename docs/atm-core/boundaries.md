@@ -387,7 +387,8 @@ Notes:
   - this boundary does not reopen config lookup, team override lookup, or
     recipient-capability policy selection
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter
-  is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
+  is the explicitly allowlisted out-of-owner implementation
+  `atm_daemon::post_send_emitter::DaemonPostSendHookEmitter`.
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
 - AD18/ARCH-004 scope ruling, governed by
