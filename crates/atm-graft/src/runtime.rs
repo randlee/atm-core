@@ -92,16 +92,12 @@ fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
             AtmErrorKind::Internal,
             "graft receiver test readiness was signaled more than once",
         )
-        .with_recovery(
-            "Signal receiver readiness exactly once after the listener is bound.",
-        ),
+        .with_recovery("Signal receiver readiness exactly once after the listener is bound."),
         TrySendError::Disconnected(()) => AtmError::new(
             AtmErrorKind::Internal,
             "graft receiver test readiness latch is unavailable",
         )
-        .with_recovery(
-            "Keep the readiness latch alive until the listener startup path completes.",
-        ),
+        .with_recovery("Keep the readiness latch alive until the listener startup path completes."),
     })
 }
 
@@ -523,10 +519,6 @@ fn apply_receiver_deadline(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::sync::mpsc;
-    use std::sync::{Arc, Mutex, RwLock};
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::{AtmError, AtmErrorKind};
     use atm_core::error_codes::AtmErrorCode;
@@ -539,6 +531,10 @@ mod tests {
     use atm_core::types::{AgentName, TeamName};
     use interprocess::local_socket::Stream as LocalSocketStream;
     use interprocess::local_socket::traits::Stream as _;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex, RwLock};
     use tempfile::TempDir;
 
     use crate::{GraftObservability, HostNudgeInjector};
