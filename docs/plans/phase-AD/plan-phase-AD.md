@@ -197,6 +197,7 @@ The governing rules are:
 - the accepted mandatory caller-context inventory for this rule is:
   - `send`
   - `read`
+  - `peek`
   - `ack`
   - `list`
   - `clear`
@@ -207,6 +208,13 @@ The governing rules are:
   - `teams update-member`
   - `teams backup`
   - `teams restore`
+- `atm peek` is inspection-only, but it is still caller-context resolver
+  required rather than resolver-exempt:
+  - it shares the retained mailbox query surface with `list` / `read`
+  - it may inspect another member with `--as`, so actor/team overrides must be
+    validated through the shared CLI-owned resolver instead of command-local
+    parsing
+  - unlike `doctor`, it is not an identity-free diagnostic exception
 - `atm doctor` is diagnostic-only and must not require caller identity; its
   `--team` override remains optional diagnostic scope, not mandatory caller
   context
@@ -332,11 +340,17 @@ The governing rules are:
 Phase `AD` may:
 
 - fix caller context ownership on the full retained ATM command surface
+- split mailbox inspection from mailbox mutation by introducing `atm peek` as
+  the explicit non-mutating mailbox-inspection command while keeping `atm
+  read` owner-only and mutating
 - make caller identity and caller team transport explicit and required for
   daemon-backed caller-owned commands
 - make local retained command entry points consume the same shared
   caller-context resolver rather than carrying duplicate command-specific
   fallback logic
+- keep one shared caller-context resolver with explicit modes:
+  - owner-only mutation for mutating commands
+  - inspection-mode override resolution for `peek` / `list`
 - preserve diagnostic commands that do not need caller identity; `doctor`
   remains identity-free with optional team scoping
 - simplify the post-send nudge path to one post-commit emission seam
