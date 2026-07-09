@@ -578,6 +578,11 @@ Phase `AD` orchestration rule:
 26. [AD.28 `atm-graft` Host-Nudge Deadline Race Hardening](./sprint-AD28.md)
 27. [AD.29 Phase AD Post-Send Smoke Matrix Closeout](./sprint-AD29.md)
 28. [AD.30 Windows Daemon Integration-Depth Coverage Closeout](./sprint-AD30.md)
+29. [AD.31 Mailbox Peek Surface And Owner-Only Mutation Reset](./sprint-AD31.md)
+30. [AD.32 Durable Ack Intent And Read Semantics Reset](./sprint-AD32.md)
+31. [AD.33 Self-Addressed Send Rejection](./sprint-AD33.md)
+32. [AD.34 Self-Ack Loop Termination And Historical Poison Cleanup](./sprint-AD34.md)
+33. [AD.35 Messaging Protocol And Regression Closeout](./sprint-AD35.md)
 
 ## Phase Exit Criteria
 
@@ -669,9 +674,17 @@ Phase `AD` closes only when:
   - built-in fallback
   - override reset-to-default
   - override disable behavior when that state is retained
-- `docs/plans/phase-AD/readiness.md` exists on the accepted line and is the
-  sole authoritative closeout artifact for the `AD.25` through `AD.30`
+- `docs/plans/phase-AD/readiness.md` exists on the accepted line and remains
+  the sole authoritative closeout artifact for the `AD.25` through `AD.35`
   follow-up line
+- `AD.31` through `AD.35` all pass on the accepted line before `Phase AD`
+  may close
+- `docs/plans/phase-AD/readiness.md` records dual closeout ownership
+  correctly:
+  - `AD.30` authors the Windows/post-send `AD.25` through `AD.30` sub-line
+    closeout record
+  - `AD.35` authors the final Phase `AD` verdict after the messaging
+    follow-up line is complete
 - `.triage/phase-AD/direct-fix-track.md` exists on the accepted line and names
   the closure-artifact owner for the non-code obligations surfaced during plan
   review
