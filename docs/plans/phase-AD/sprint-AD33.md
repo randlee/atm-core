@@ -15,7 +15,10 @@ target: integrate/phase-AD
 
 ## Hard Dependencies
 
-- `AD.32` complete
+- `AD.32` merged forward before implementation starts because both sprint
+  lines touch shared send/read-facing surfaces and would otherwise create
+  avoidable merge conflicts; this is a merge-order dependency, not a
+  functional prerequisite for self-send rejection
 - `docs/plans/phase-AD-followup/plan-atm-messaging-fixes.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - GitHub issue `#498`

@@ -23,6 +23,8 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
+- `crates/atm-storage/src/schema/inbox_message.rs`
+- `crates/atm-storage/src/contract.rs`
 - `crates/atm-core/src/schema/inbox_message.rs`
 - `crates/atm-core/src/types.rs`
 - `crates/atm-core/src/read/mod.rs`
@@ -31,12 +33,15 @@ target: integrate/phase-AD
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/send/persistence.rs`
 - `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/graft.rs`
 - `crates/atm-core/src/threading.rs`
 - `crates/atm-core/src/workflow.rs`
 - `crates/atm-core/src/mailbox/store.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`
 - `crates/atm/src/commands/read.rs`
 - `crates/atm/src/composition.rs`
+- `crates/atm-graft/src/lib.rs`
+- `crates/atm-graft/examples/smoke_same_host.rs`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm/requirements.md`
@@ -44,6 +49,7 @@ target: integrate/phase-AD
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 - `docs/adr/ADR-021-owner-only-message-mutation.md`
+- `docs/adr/ADR-022-durable-ack-intent.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/sprint-AD32.md`
@@ -78,6 +84,9 @@ pub fn derive_ack_requirement(message: &InboxMessage) -> AckRequirementState;
 
 The accepted behavior after this sprint is:
 
+- the canonical durable `InboxMessage` field set lives in
+  `crates/atm-storage/src/schema/inbox_message.rs`; the atm-core schema module
+  remains a re-export/update consequence, not the source of truth
 - `requires_ack` is persisted on every message
 - only send/ack creation paths may set `requires_ack`
 - read and peek must never create ack-required state
@@ -93,6 +102,12 @@ That compatibility rule is intentional because it preserves legitimate
 historical sender-required messages while preventing legacy ack replies from
 re-qualifying as ack-required just because they were displayed.
 
+`derive_ack_requirement` is the sole accepted classifier for durable
+ack-required state after this sprint. The read/render path in
+`crates/atm-core/src/read/mod.rs` and any other mailbox-state presentation code
+must call it instead of reconstructing ack intent ad hoc from
+`pending_ack_at` / `acknowledged_at`.
+
 ## Paths To Delete
 
 - `AckActivationMode::PromoteDisplayedUnread`
@@ -103,11 +118,17 @@ re-qualifying as ack-required just because they were displayed.
 
 ## Deliverables
 
-- `InboxMessage` persists a durable `requires_ack` field
+- the canonical `InboxMessage` in `atm-storage` persists a durable
+  `requires_ack` field, with atm-core's schema re-export updated accordingly
 - read/peek semantics no longer create pending-ack state
 - ack state is derived from sender-owned durable intent plus acknowledgement
   completion, not display-time mutation
 - the accepted compatibility rule for legacy rows is implemented and tested
+- `ReadQuery` / `AckActivationMode` shape changes are carried through the
+  graft boundary and smoke/example call sites so workspace/example builds stay
+  green
+- `ADR-022` records the durable-ack-intent decision separately from
+  `ADR-021`'s owner-only mutation boundary
 
 ## This Sprint Does Not Close
 
@@ -124,6 +145,9 @@ re-qualifying as ack-required just because they were displayed.
 - `atm read` and `atm peek` never create `pending_ack_at`
 - legacy ack replies with `acknowledges_message_id` do not become ack-required
   during compatibility load
+- `cargo test --workspace` is green after the `ReadQuery` /
+  `AckActivationMode` shape change, including the `atm-graft` crate tests and
+  `crates/atm-graft/examples/smoke_same_host.rs`
 
 ## Required Validation
 

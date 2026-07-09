@@ -23,6 +23,8 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
+- `crates/atm-core/src/protocol.rs`
+- `crates/atm-core/src/transport/testing.rs`
 - `crates/atm/src/commands/peek.rs`
 - `crates/atm/src/commands/read.rs`
 - `crates/atm/src/commands/send.rs`
@@ -36,6 +38,8 @@ target: integrate/phase-AD
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm/requirements.md`
@@ -58,12 +62,10 @@ target: integrate/phase-AD
 The accepted CLI/runtime ownership contract after this sprint is:
 
 ```rust
-pub struct PeekQuery {
+pub struct MailboxQueryFields {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
     pub target_address: Option<AgentAddress>,
-    pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
     pub message_id_filter: Option<AtmMessageId>,
@@ -74,21 +76,17 @@ pub struct PeekQuery {
     pub timeout_secs: Option<u64>,
 }
 
+pub struct PeekQuery {
+    pub mailbox: MailboxQueryFields,
+    pub actor_override: Option<AgentName>,
+    pub team_override: Option<TeamName>,
+}
+
 pub struct ReadQuery {
-    pub home_dir: PathBuf,
-    pub current_dir: PathBuf,
+    pub mailbox: MailboxQueryFields,
     pub actor: AgentName,
-    pub target_address: Option<AgentAddress>,
     pub team: TeamName,
-    pub selection_mode: ReadSelection,
-    pub seen_state_filter: bool,
     pub seen_state_update: bool,
-    pub message_id_filter: Option<AtmMessageId>,
-    pub sender_filter: Option<AgentName>,
-    pub timestamp_filter: Option<IsoTimestamp>,
-    pub task_filter: Option<TaskId>,
-    pub contains_filter: Option<String>,
-    pub timeout_secs: Option<u64>,
 }
 
 pub struct AckRequest {
@@ -117,6 +115,18 @@ pub struct SendRequest {
     pub to: AgentAddress,
     // remaining fields omitted
 }
+
+pub enum RequestEnvelope {
+    // existing variants omitted
+    Peek(PeekQuery),
+    Receive(ReadQuery),
+}
+
+pub enum ResponseEnvelope {
+    // existing variants omitted
+    Peek(Box<ReadOutcome>),
+    Receive(Box<ReadOutcome>),
+}
 ```
 
 The accepted operator contract after this sprint is:
@@ -129,6 +139,15 @@ The accepted operator contract after this sprint is:
 - ATM does not implement a special exception for "maybe the actual agent" when
   `ATM_IDENTITY` is unset
 - `atm list` may continue to allow `--as` because it is inspection-only
+- `MailboxQueryFields` is the only accepted shared query-field surface for
+  `PeekQuery` and `ReadQuery`; filter/selection additions must land there so
+  `peek` and `read` cannot drift silently
+- `atm peek` uses the same daemon-backed transport family as `atm read`, with
+  a distinct `RequestEnvelope::Peek` / `ResponseEnvelope::Peek` pair routed
+  through `crates/atm-core/src/protocol.rs`,
+  `crates/atm-daemon/src/runtime_health.rs`,
+  `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`, and the
+  loopback/testing transport instead of bypassing the daemon
 
 ## Paths To Delete
 
@@ -147,6 +166,11 @@ The accepted operator contract after this sprint is:
 - mutating commands no longer accept impersonation
 - the shared identity helpers are split so inspection-only surfaces may still
   resolve `--as`, while mutating surfaces resolve only the actual caller
+- one shared `MailboxQueryFields` surface owns the common filter/selection
+  fields consumed by both `PeekQuery` and `ReadQuery`
+- the daemon protocol and every `RequestEnvelope` dispatch site compile with a
+  distinct non-mutating `Peek` request/response path rather than treating peek
+  as a CLI-only special case
 - requirements, architecture, command docs, and a new ADR define the
   owner-only mutation rule unambiguously
 
@@ -167,6 +191,8 @@ The accepted operator contract after this sprint is:
 - mutating commands fail closed when caller identity/team cannot be resolved
 - docs and help text state clearly that only inspection-only commands may
   impersonate another member
+- daemon-backed, loopback, and direct CLI `peek` paths all compile and route
+  through the distinct non-mutating daemon protocol surface
 
 ## Required Validation
 

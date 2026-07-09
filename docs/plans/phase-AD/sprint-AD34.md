@@ -71,6 +71,10 @@ The accepted behavior after this sprint is:
 - if the ack target is not self-addressed, normal reply behavior continues
 - the output contract explicitly distinguishes "ack succeeded with no reply
   because self-ack was suppressed" from normal reply emission
+- when `reply_disposition == AckReplyDisposition::SuppressedSelfAck`,
+  `reply_text` remains the validated operator-supplied reply body even though
+  no reply message is emitted, so CLI/JSON output can report exactly what was
+  suppressed without fabricating a sent reply
 
 ## Paths To Delete
 
