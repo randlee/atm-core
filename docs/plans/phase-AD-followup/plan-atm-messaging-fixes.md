@@ -99,6 +99,9 @@ The sprint line below is built around these contract decisions:
   `docs/plans/phase-AD/sprint-AD35.md`
 - `docs/plans/phase-AD/plan-phase-AD.md` updated to include the new follow-up
   line
+- `docs/plans/phase-AD/readiness.md` updated so the authoritative readiness
+  artifact reflects the added `AD.31` through `AD.35` closure gate and
+  `AD.35`'s sole-authorship role for the final Phase `AD` verdict
 - `docs/project-plan.md` updated to list the new follow-up sprint line inside
   Phase `AD`
 

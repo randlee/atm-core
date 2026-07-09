@@ -2,15 +2,18 @@
 
 ## Goal
 
-Track the authoritative closeout state for the `AD.25` through `AD.30`
+Track the authoritative closeout state for the `AD.25` through `AD.35`
 follow-up line on top of the already accepted `AD.1` through `AD.22`
 corrective release work.
 
 Authoring ownership:
 
 - `AD.29` supplies the authoritative post-send smoke evidence
-- `AD.30` is the sole sprint allowed to author the final close/not-close
-  verdict in this file
+- `AD.30` is the sole sprint allowed to author the Windows/post-send
+  `AD.25` through `AD.30` sub-line close/not-close record in this file
+- `AD.35` is the sole sprint allowed to author the final Phase `AD`
+  close/not-close verdict in this file after the messaging follow-up line is
+  complete
 
 Companion closure ledger:
 
@@ -25,7 +28,12 @@ Companion closure ledger:
 | `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution` | `../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution` | `ADR-019-EXC-AD26-001` is closed and built-in override lookup is upstream of `PostSendHookEmitter` |
 | `AD.28` | `planned` | `feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | `../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
 | `AD.29` | `planned` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
-| `AD.30` | `planned` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
+| `AD.30` | `planned` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the `AD.25` through `AD.30` sub-line verdict |
+| `AD.31` | `planned` | `feature/pAD-s31-mailbox-peek-and-owner-only-mutation` | `../atm-core-worktrees/feature/pAD-s31-mailbox-peek-and-owner-only-mutation` | mailbox inspection is split from mutation and owner-only mutation becomes the enforced command contract |
+| `AD.32` | `planned` | `feature/pAD-s32-durable-ack-intent-reset` | `../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-reset` | durable `requires_ack` state replaces read-time ack creation and legacy compatibility is explicit |
+| `AD.33` | `planned` | `feature/pAD-s33-self-address-send-rejection` | `../atm-core-worktrees/feature/pAD-s33-self-address-send-rejection` | self-addressed sends are rejected before persistence on every send entry path |
+| `AD.34` | `planned` | `feature/pAD-s34-self-ack-loop-termination` | `../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination` | historical self-addressed poison messages can be acknowledged without emitting replacement replies |
+| `AD.35` | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout` | `../atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout` | the operator protocol/docs/regression matrix close the messaging follow-up line and this readiness file records the final Phase `AD` verdict |
 
 ## Direct-Fix Carry-Forward Ledger
 
@@ -47,6 +55,7 @@ by a new code sprint:
 true:
 
 - `AD.25` through `AD.30` all pass on the accepted line
+- `AD.31` through `AD.35` all pass on the accepted line
 - `docs/plans/phase-AD/readiness.md` exists and records the final verdict on
   the accepted line
 - `.triage/phase-AD/direct-fix-track.md` exists and names the final owner plus
@@ -80,3 +89,5 @@ true:
 - the phase-close artifacts explicitly reconcile the historical `FTQ-001`
   discovery ledger with the accepted-line code fix so that historical
   provenance is not silently inconsistent with the current runtime
+- the final close/not-close verdict in this file is authored only by `AD.35`
+  after the `AD.31` through `AD.35` messaging follow-up line is complete
