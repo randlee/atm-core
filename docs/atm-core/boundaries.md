@@ -397,8 +397,14 @@ Notes:
 
 ## GraftPostSendPort
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
+Planned machine-readable boundary source:
+- `AD.26` creates `boundaries/atm-core/graft-post-send-port.toml` when the
+  accepted runtime actually routes graft-backed built-in post-send delivery
+  through that seam.
+- the planning branch does not install the TOML record early, because boundary
+  lint treats new records as live enforcement and the accepted line still
+  contains the advisory-session references that `AD.26` is explicitly tasked
+  to remove.
 
 
 Purpose:
