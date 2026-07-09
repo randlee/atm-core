@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-QA-006>
+  a triage:Finding ;
+  triage:findingId "AD30-QA-006" ;
+  triage:title "AD.26 branch name inconsistency across docs" ;
+  triage:description "docs/plans/phase-AD/readiness.md:24 vs. docs/project-plan.md:704 -- AD.26 branch name inconsistency across docs (\"rule001-observability-seam-closure\" vs. \"post-send-boundary-wiring-and-accounting\")" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T01:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-006/s25/readiness-24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-006/s25/project-plan-743> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-006/integrate/readiness-24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-006/integrate/project-plan-743> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:fixedOn <urn:atm:triage:worktree/s26/32742f7a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-QA-006/s25/readiness-24>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 24 ;
+  triage:snippet "feature/pAD-s26-post-send-boundary-wiring-and-accounting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-QA-006/s25/project-plan-743>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 743 ;
+  triage:snippet "feature/pAD-s26-post-send-boundary-wiring-and-accounting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-QA-006/integrate/readiness-24>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 24 ;
+  triage:snippet "feature/pAD-s26-post-send-boundary-wiring-and-accounting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/818f7bce> .
+
+<urn:atm:triage:occurrence/AD30-QA-006/integrate/project-plan-743>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 743 ;
+  triage:snippet "feature/pAD-s26-post-send-boundary-wiring-and-accounting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/818f7bce> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate/818f7bce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:orderIndex 7 .
