@@ -69,6 +69,11 @@ This sprint makes the architectural call explicitly:
 - wire both as live runtime seams
 - delete the `std::process::Command` subprocess bypass from the accepted
   send/ack path
+- re-enable machine-readable graft post-send boundary enforcement by creating
+  `boundaries/atm-core/graft-post-send-port.toml` only after this sprint has
+  deleted the still-live advisory-session references that currently fail
+  boundary lint; before `AD.26`, that TOML record must not exist on the
+  accepted line
 
 ADR-019 already fixes the accepted architecture to one direct post-persist
 emitter seam with receiver-specific handoff staying capability-specific, so
