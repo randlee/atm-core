@@ -710,7 +710,8 @@ Deliverables:
   - explicit built-in template override lifecycle/reset semantics
   - real post-send boundary wiring plus mixed-success hook accounting
   - upstream extraction of built-in template resolution out of
-    `atm internal-nudge`
+    `atm internal-nudge`, with the helper reduced to one resolved-envelope
+    render/deliver leaf
   - deterministic `atm-graft` host-nudge race closure
   - one authoritative Phase AD post-send smoke matrix
   - separate Windows daemon integration-depth proof for the remaining local IPC
@@ -740,9 +741,9 @@ Sprint line:
 - `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
 - `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
 - `AD.25` `feature/pAD-s25-built-in-nudge-override-lifecycle`
-- `AD.26` `feature/pAD-s26-post-send-boundary-wiring-and-accounting`
+- `AD.26` `feature/pAD-s26-rule001-observability-seam-closure`
 - `AD.27` `feature/pAD-s27-upstream-built-in-template-resolution`
-- `AD.28` `feature/pAD-s28-graft-host-nudge-deadline-race-hardening`
+- `AD.28` `feature/pAD-s28-atm-graft-timing-independent`
 - `AD.29` `feature/pAD-s29-phase-ad-post-send-smoke-matrix`
 - `AD.30` `feature/pAD-s30-windows-daemon-integration-depth`
 

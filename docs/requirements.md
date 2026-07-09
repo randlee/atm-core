@@ -892,8 +892,10 @@ Post-send-hook rules:
 - Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
-- built-in `atm internal-nudge` must use this same `ATM_POST_SEND` payload
-  contract
+- built-in `atm internal-nudge` must not reuse `ATM_POST_SEND` as its control
+  contract; it consumes a separate resolved `ATM_INTERNAL_NUDGE` envelope
+  carrying the canonical event, sink target, resolved template kind, and
+  resolved template body or explicit disabled state
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject

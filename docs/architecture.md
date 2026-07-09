@@ -1505,9 +1505,11 @@ Current runtime hook-note:
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
-- the shipped built-in `atm internal-nudge` path must consume this same payload
-  contract so ATM does not carry separate external-hook and built-in nudge
-  event shapes
+- external hook commands consume `ATM_POST_SEND`
+- the shipped built-in `atm internal-nudge` path consumes one separate
+  `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
+  resolved template kind, and resolved template body or explicit disabled
+  state
 - retained compatibility helpers must treat committed `.atm.toml` pane ids as
   non-authoritative and use roster/payload pane truth or explicit `--pane`
   only
@@ -2643,7 +2645,8 @@ Architectural rules:
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
-  SQLite lookup for this feature
+  SQLite lookup for this feature, and `atm internal-nudge` must not reopen the
+  lookup after it receives the resolved envelope
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning

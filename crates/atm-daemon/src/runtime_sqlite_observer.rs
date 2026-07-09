@@ -8,10 +8,9 @@ use atm_runtime::RuntimeSqliteOutcome;
 use atm_runtime::{RuntimeSqliteEvent, RuntimeSqliteObserver};
 
 use crate::DaemonSubsystem;
-use crate::daemon_runtime_observability::DaemonRuntimeObservability;
-
-type ActionName = sc_observability_types::ActionName;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
+use crate::daemon_runtime_observability::{
+    DaemonActionName, DaemonOutcomeLabel, DaemonRuntimeObservability,
+};
 
 #[derive(Clone)]
 pub(crate) struct DaemonRuntimeSqliteObserver {
@@ -33,11 +32,11 @@ impl DaemonRuntimeSqliteObserver {
 
 impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
     fn emit_sqlite_event(&self, event: RuntimeSqliteEvent) -> Result<(), AtmError> {
-        let action = ActionName::new(event.action()).map_err(|source| {
+        let action = DaemonActionName::new(event.action()).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
                 .with_source(source)
         })?;
-        let outcome = OutcomeLabel::new(event.outcome().as_str()).map_err(|source| {
+        let outcome = DaemonOutcomeLabel::new(event.outcome().as_str()).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem outcome")
                 .with_source(source)
         })?;

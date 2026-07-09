@@ -23,6 +23,7 @@ mod local_ipc_transport;
 mod local_ipc_wake;
 mod non_claude_outbound_runtime;
 mod peer_transport;
+mod post_send_emitter;
 mod runtime_health;
 mod runtime_sqlite_observer;
 mod runtime_status_cache;

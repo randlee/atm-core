@@ -238,6 +238,26 @@ Architectural rules:
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - task-bearing delivery or acknowledge nudges may carry `task_id`; delivery
   nudges may additionally carry `description`
+- the accepted same-host host-nudge race closure uses deterministic
+  receiver-readiness signaling in the test harness:
+  - tests wait on an explicit ready latch after the receiver listener binds
+  - production and test host-nudge injection share the same bounded delivery
+    deadline
+  - the accepted line must not reintroduce a special shorter `#[cfg(test)]`
+    timeout as a substitute for explicit startup readiness
+- helper-thread fallback is allowed only for operations that may block inside a
+  host callback or local-socket wake call and cannot be force-cancelled by the
+  crate boundary itself
+- those helper-thread fallbacks must therefore bound residual resource growth
+  explicitly instead of pretending cancellation exists:
+  - host nudge injection is capped at `8` in-flight detached helpers per
+    active `GraftSession`
+  - listener wake connect is capped at `2` in-flight detached helpers per
+    process
+  - once the cap is reached, `atm-graft` must fail the next request with a
+    typed ATM error and emit `tracing::warn!` with
+    `subsystem` / `action` / `outcome` fields so repeated hangs are observable
+    without custom host instrumentation
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - the exact transport or callback mechanism used for that handoff is private to

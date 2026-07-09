@@ -2,53 +2,14 @@ use std::fs;
 
 use tempfile::tempdir;
 
-use super::tests::{TestRuntime, install_home_env_with_atm_bin, send_request};
+use super::tests::{RecordingPostSendEmitter, TestRuntime, install_home_env, send_request};
 use crate::delivery_policy::DeliveryHarnessPath;
+use crate::error_codes::AtmErrorCode;
 use crate::observability::NullObservability;
 use crate::protocol::NotificationKind;
 use crate::send::SendCommandOutcome;
 use crate::test_support::TEST_SENDER;
 use crate::types::TeamName;
-
-pub(super) fn write_atm_nudge_shim(
-    path: &std::path::Path,
-    capture_path: &std::path::Path,
-    exit_code: i32,
-) {
-    #[cfg(windows)]
-    fs::write(
-        path,
-        format!(
-            "@echo off\r\n> \"{}\" echo %1^|%ATM_INTERNAL_NUDGE_SINK%^|%ATM_POST_SEND%\r\nexit /b {}\r\n",
-            capture_path.display(),
-            exit_code
-        ),
-    )
-    .expect("write atm shim");
-    #[cfg(not(windows))]
-    fs::write(
-        path,
-        format!(
-            "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$1\" \"$ATM_INTERNAL_NUDGE_SINK\" \"$ATM_POST_SEND\" > \"{}\"\nexit {}\n",
-            capture_path.display(),
-            exit_code
-        ),
-    )
-    .expect("write atm shim");
-    set_executable_permissions(path);
-}
-
-#[cfg(unix)]
-fn set_executable_permissions(path: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-
-    let mut perms = fs::metadata(path).expect("metadata").permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(path, perms).expect("chmod");
-}
-
-#[cfg(not(unix))]
-fn set_executable_permissions(_path: &std::path::Path) {}
 
 #[test]
 fn load_send_alert_state_parse_errors_are_config_errors() {
@@ -69,20 +30,14 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
-    let capture_path = tempdir.path().join("graft-nudge.txt");
-    #[cfg(windows)]
-    let atm_path = tempdir.path().join("atm.cmd");
-    #[cfg(not(windows))]
-    let atm_path = tempdir.path().join("atm");
-    write_atm_nudge_shim(&atm_path, &capture_path, 0);
-    let atm_bin = atm_path.display().to_string();
-    let _env = install_home_env_with_atm_bin(&home_dir, atm_bin.as_str());
+    let _env = install_home_env(&home_dir);
+    let post_send_emitter = RecordingPostSendEmitter::succeed();
 
     let outcome = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &NullObservability,
         &runtime,
-        None,
+        Some(&post_send_emitter),
     )
     .expect("send outcome");
 
@@ -116,11 +71,10 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
         events[0].team.as_ref().map(TeamName::as_str),
         Some("test-team")
     );
-    let captured = fs::read_to_string(&capture_path).expect("capture");
-    assert!(captured.contains("internal-nudge"));
-    assert!(captured.contains("|graft|"));
-    assert!(captured.contains(format!("\"sender\":\"{TEST_SENDER}\"").as_str()));
-    assert!(captured.contains("\"description\":\"hello\""));
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);
+    assert_eq!(emitted[0].event.description, "hello");
 }
 
 #[test]
@@ -129,20 +83,14 @@ fn send_non_claude_warns_when_graft_post_send_delivery_fails() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
-    let capture_path = tempdir.path().join("graft-nudge.txt");
-    #[cfg(windows)]
-    let atm_path = tempdir.path().join("atm.cmd");
-    #[cfg(not(windows))]
-    let atm_path = tempdir.path().join("atm");
-    write_atm_nudge_shim(&atm_path, &capture_path, 7);
-    let atm_bin = atm_path.display().to_string();
-    let _env = install_home_env_with_atm_bin(&home_dir, atm_bin.as_str());
+    let _env = install_home_env(&home_dir);
+    let post_send_emitter = RecordingPostSendEmitter::fail(AtmErrorCode::PostSendGraftUnavailable);
 
     let outcome = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &NullObservability,
         &runtime,
-        None,
+        Some(&post_send_emitter),
     )
     .expect("send outcome");
 

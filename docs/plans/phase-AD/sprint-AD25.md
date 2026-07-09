@@ -109,9 +109,9 @@ The accepted operator model after this sprint is:
 
 The accepted CLI surface after this sprint is:
 
-- `atm teams set-nudge-template --team <team> --kind <kind> --template-body <non-empty>`
-- `atm teams disable-nudge-template --team <team> --kind <kind>`
-- `atm teams clear-nudge-template --team <team> --kind <kind>`
+- `atm teams set-nudge-template <team> <kind> --template-body <non-empty>`
+- `atm teams disable-nudge-template <team> <kind>`
+- `atm teams clear-nudge-template <team> <kind>`
 
 Empty-body rejection is one shared contract, not three competing ones:
 
