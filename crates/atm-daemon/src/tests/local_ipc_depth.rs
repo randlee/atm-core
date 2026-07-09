@@ -22,6 +22,7 @@ use atm_core::test_support::EnvGuard;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+#[cfg(unix)]
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
