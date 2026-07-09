@@ -2648,6 +2648,13 @@ Architectural rules:
   emitter/render path runs; `atm` and `atm-core` must not perform direct
   SQLite lookup for this feature, and any retained `atm internal-nudge`
   helper must not reopen the lookup after it receives resolved input
+- the authoritative Phase AD post-send smoke lane is fixed to five closure
+  cases only:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback across both tmux and graft sinks
+  - override reset-to-default after deleting a prior stored override row
+  - explicit disable behavior when the retained design keeps that state
 - resolved built-in template lifecycle is explicit: no row => product
   default, override row => stored text, disabled row => no emission,
   clear/reset => row deletion

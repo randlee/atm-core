@@ -1,10 +1,10 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-07-07T00:20:49.821580+00:00`
-- binary SHA: `b62ad45999c2ca440960306342c1edd01b23bec9`
-- duration secs: `21.468`
-- summary: `pass=24`, `fail=0`, `skip=0`
+- timestamp: `2026-07-09T16:16:48.802594+00:00`
+- binary SHA: `bc4192a195f5b2f99d6029cfa72c5a146ef58b0a`
+- duration secs: `9.407`
+- summary: `pass=31`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
   that row were executed after the failure
@@ -35,3 +35,10 @@
 | `AD17-READ-001` | read mutation and contains filtering stay self-consistent on the durable store-backed path | `PASS` | read mutation still reports the post-mutation state and contains filtering still sees the durable full-body projection |
 | `AD17-CI-001` | windows CI retains the explicit atm-daemon lane on the accepted line | `PASS` | the explicit atm-daemon CI lane remains present and the Windows skip guard is absent |
 | `AD18-RUNTIME-ROOT-001` | shared-host raw CLI bootstrap reuses a single daemon and keeps runtime state under the accepted ATM_HOME root | `PASS` | shared-host smoke proves multi-workspace raw CLI bootstrap reuses one daemon, preserves team isolation, and keeps runtime ownership under the accepted ATM_HOME root |
+| `AD19-READ-OUTPUT-001` | read mutation returns the message it actually mutated together with post-mutation bucket counts | `PASS` | read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact |
+| `AD20-READ-CONTAINS-001` | metadata-backed contains stays full-body correct while keeping durable-body reload bounded | `PASS` | metadata-backed contains stays full-body correct and only reloads durable body for surviving summary-miss candidates |
+| `AD29-POSTSEND-EXTERNAL-001` | external post-send hook success suppresses built-in fallback while preserving durable send success | `PASS` | external post-send hook success keeps the built-in nudge path inactive while durable send success remains intact |
+| `AD29-POSTSEND-PARTIAL-001` | mixed post-send hook outcomes preserve durable delivery while surfacing sender-visible warnings | `PASS` | mixed hook accounting preserves durable delivery success and retains a sender-visible warning for failed matches |
+| `AD29-POSTSEND-BUILTIN-001` | built-in fallback covers both tmux and graft recipients when no external hook matches | `PASS` | built-in fallback stays honest for both tmux-backed and graft-backed recipients when no external hook matches |
+| `AD29-POSTSEND-RESET-001` | deleting a prior override row restores the built-in default template path | `PASS` | removing a stored override row re-exposes the built-in default template instead of leaving an implicit disabled state behind |
+| `AD29-POSTSEND-DISABLE-001` | explicitly disabled built-in template state skips local post-send delivery cleanly | `PASS` | the explicit disabled-template state becomes a documented no-delivery path instead of an accidental empty-string side effect |

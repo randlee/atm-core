@@ -16,6 +16,15 @@ Companion closure ledger:
 
 - `.triage/phase-AD/direct-fix-track.md`
 
+Current readiness verdict:
+
+- `release verdict: pending AD.30 final close/not-close decision`
+
+Current evidence surfaces:
+
+- normal smoke lane: `reports/smoke/smoke.md`
+- thorough smoke lane: `reports/smoke/smoke-thorough.md`
+
 ## Sprint Status
 
 | Sprint | Status | Branch | Worktree | Closure Gate |
