@@ -454,8 +454,8 @@ Identity-specific policy:
 - after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
-- the built-in helper does not consume `ATM_POST_SEND`; it consumes one
-  resolved `ATM_INTERNAL_NUDGE` envelope carrying:
+- any retained built-in helper does not consume `ATM_POST_SEND`; it consumes
+  one resolved `ATM_INTERNAL_NUDGE` envelope carrying:
   - the canonical post-send event
   - the concrete sink target
   - the resolved template kind
@@ -594,7 +594,8 @@ Architectural rules:
   `PostSendHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
 - any retained built-in CLI helper receives the already-resolved template
-  through `InternalNudgeEnvelope`; it must not reopen runtime/store lookup
+  through `InternalNudgeEnvelope`; the live production path stays in-process,
+  and the helper must not reopen runtime/store lookup
 - that boundary returns an explicit row lifecycle, not hidden control strings:
   no row => product default, override row => stored text, disabled row => no
   emission, clear/reset => row deletion
