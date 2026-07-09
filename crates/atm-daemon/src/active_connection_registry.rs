@@ -36,6 +36,11 @@ enum DispatchPanicHandling {
     Escalate,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DispatchReapSummary {
+    pub(crate) recovered_panics: usize,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ActiveConnectionRegistry {
     // These counters are updated from independent accept, connection, and dispatch threads, so
@@ -125,7 +130,7 @@ impl ActiveConnectionRegistry {
     /// the whole daemon runtime depending on which caller wins the race. A panicked dispatch
     /// worker is logged and otherwise ignored; it has already been removed from the tracked
     /// handle list and cannot be reaped again.
-    pub(crate) fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
+    pub(crate) fn reap_finished_dispatches(&self) -> Result<DispatchReapSummary, AtmError> {
         self.reap_finished_dispatches_with(DispatchPanicHandling::LogAndContinue)
     }
 
@@ -134,14 +139,14 @@ impl ActiveConnectionRegistry {
     /// This is used by the deliberate shutdown drain (via [`Self::join_tracked_dispatches`]),
     /// where a wedged or panicked worker blocking graceful shutdown is legitimately worth
     /// surfacing to the caller.
-    fn reap_finished_dispatches_escalating(&self) -> Result<(), AtmError> {
+    fn reap_finished_dispatches_escalating(&self) -> Result<DispatchReapSummary, AtmError> {
         self.reap_finished_dispatches_with(DispatchPanicHandling::Escalate)
     }
 
     fn reap_finished_dispatches_with(
         &self,
         panic_handling: DispatchPanicHandling,
-    ) -> Result<(), AtmError> {
+    ) -> Result<DispatchReapSummary, AtmError> {
         let finished = {
             let mut handles = self.lock_dispatch_handles()?;
             let mut pending = Vec::with_capacity(handles.len());
@@ -159,11 +164,13 @@ impl ActiveConnectionRegistry {
             *handles = pending;
             finished
         };
+        let mut summary = DispatchReapSummary::default();
         for handle in finished {
             if let Err(error) = join_dispatch_handle(handle) {
                 match panic_handling {
                     DispatchPanicHandling::Escalate => return Err(error),
                     DispatchPanicHandling::LogAndContinue => {
+                        summary.recovered_panics += 1;
                         tracing::warn!(
                             subsystem = "active_connection_registry",
                             action = "reap_finished_dispatches",
@@ -175,11 +182,11 @@ impl ActiveConnectionRegistry {
                 }
             }
         }
-        Ok(())
+        Ok(summary)
     }
 
     pub(crate) fn join_tracked_dispatches(&self, timeout: Duration) -> Result<(), AtmError> {
-        self.reap_finished_dispatches_escalating()?;
+        let _ = self.reap_finished_dispatches_escalating()?;
         let handles = {
             let mut handles = self.lock_dispatch_handles()?;
             std::mem::take(&mut *handles)
@@ -324,9 +331,10 @@ mod tests {
         let registry = Arc::new(ActiveConnectionRegistry::default());
         push_panicking_dispatch_handle(&registry);
 
-        registry
+        let summary = registry
             .reap_finished_dispatches()
             .expect("opportunistic reap must not escalate a dispatch worker panic");
+        assert_eq!(summary.recovered_panics, 1);
         assert_eq!(
             registry
                 .lock_dispatch_handles()

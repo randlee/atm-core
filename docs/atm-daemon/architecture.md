@@ -185,6 +185,15 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - same-host local IPC and cross-host daemon transport must use one shared ATM
   frame header and request/response packet family rather than separate local
   and remote message systems, as defined by `protocol-icd.md`
+- the accepted same-host Windows local-IPC depth contract is fail-fast and
+  unary:
+  - a dispatcher panic during shutdown must record one panic-path failure and
+    complete bounded shutdown without hanging the serve path
+  - an injected listener accept failure must record one accept-path failure and
+    terminate the affected serve path with a typed bounded error; the daemon
+    must not invent retry/backoff behavior for that injected failure contract
+  - a new connection attempt after terminate must fail quickly with a typed
+    shutdown/unavailable outcome rather than hanging on a dead endpoint
 - same-host local IPC endpoint naming and same-user access-control semantics
   must be owned by the local-IPC adapter rather than by callers constructing
   platform-specific socket paths, pipe names, or ACL details

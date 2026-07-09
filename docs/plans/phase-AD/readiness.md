@@ -9,8 +9,8 @@ corrective release work.
 Authoring ownership:
 
 - `AD.29` supplies the authoritative post-send smoke evidence
-- `AD.30` is the sole sprint allowed to author the final close/not-close
-  verdict in this file
+- `AD.30` is the sole sprint allowed to author the `AD.25` through `AD.30`
+  close/not-close verdict in this file
 
 Companion closure ledger:
 
@@ -18,12 +18,17 @@ Companion closure ledger:
 
 Current readiness verdict:
 
-- `release verdict: pending AD.30 final close/not-close decision`
+- `release verdict: AD.25 through AD.30 closeout complete on this branch; the authoritative smoke and Windows daemon-depth evidence are both present.`
 
 Current evidence surfaces:
 
 - normal smoke lane: `reports/smoke/smoke.md`
 - thorough smoke lane: `reports/smoke/smoke-thorough.md`
+- Windows daemon-depth CI lane: GitHub Actions CI run
+  [`29044774805`](https://github.com/randlee/atm-core/actions/runs/29044774805)
+  for commit `77c30bb3` / PR `#497`, with successful `windows-latest`
+  `atm-daemon` coverage for dispatcher panic during shutdown, injected
+  accept-error handling, and post-terminate connection rejection
 
 ## Sprint Status
 
@@ -32,9 +37,9 @@ Current evidence surfaces:
 | `AD.25` | `complete` | `feature/pAD-s25-post-send-hook-emitter-live-wiring` | `../atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring` | override rows expose explicit override, disable, and clear/reset semantics with one stable empty-body error contract |
 | `AD.26` | `complete` | `feature/pAD-s26-rule001-observability-seam-closure` | `../atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure` | `PostSendHookEmitter` and `GraftPostSendPort` are live seams, mixed-success accounting is real, and the `RULE-001` library-internal adapter exception is closed through `ADR-020` plus lint enforcement so only the sanctioned daemon adapter module keeps the direct observability imports |
 | `AD.27` | `complete` | `feature/pAD-s27-upstream-built-in-template-resolution` | `../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution` | `ADR-019-EXC-AD26-001` is closed and built-in override lookup is upstream of `PostSendHookEmitter` |
-| `AD.28` | `planned` | `feature/pAD-s28-atm-graft-timing-independent` | `../atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
-| `AD.29` | `planned` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
-| `AD.30` | `planned` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
+| `AD.28` | `complete` | `feature/pAD-s28-atm-graft-timing-independent` | `../atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
+| `AD.29` | `complete` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
+| `AD.30` | `complete` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
 
 ## Direct-Fix Carry-Forward Ledger
 
@@ -52,7 +57,7 @@ by a new code sprint:
 
 ## Phase Exit Criteria
 
-`Phase AD` follow-up closure is not complete until all of the following are
+`AD.25` through `AD.30` follow-up closure is not complete until all of the following are
 true:
 
 - `AD.25` through `AD.30` all pass on the accepted line
@@ -82,7 +87,8 @@ true:
 - the authoritative Windows daemon depth lane from `AD.30` has recorded
   evidence for:
   - dispatcher panic during shutdown
-  - injected accept-error handling with bounded retry/backoff semantics
+  - injected accept-error handling with one logged failure plus a bounded typed
+    fail-fast exit
   - post-terminate connection rejection
 - `CHANGELOG.md` contains the release-facing entry for the `AD.13` through
   `AD.30` corrective line
