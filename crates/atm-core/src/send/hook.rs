@@ -902,7 +902,8 @@ mod tests {
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
-        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideRow,
+        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
