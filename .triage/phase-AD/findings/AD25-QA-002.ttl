@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD25-QA-002>
+  a triage:Finding ;
+  triage:findingId "AD25-QA-002" ;
+  triage:title "AD.25 branch-name doc conflict between project-plan.md and readiness.md/sprint-AD25.md frontmatter" ;
+  triage:description "req-qa found docs/plans/phase-AD/readiness.md:23 names the AD.25 branch as feature/pAD-s25-built-in-nudge-override-lifecycle, while the actual reviewed/live branch is feature/pAD-s25-post-send-hook-emitter-live-wiring (which matches docs/project-plan.md:742 and sprint-AD25.md frontmatter). AD25-FIX-1 touched project-plan.md/readiness.md for a separate AD30-QA-006 AD.26 branch-name fix but did not reconcile this AD.25-specific row. Pattern is repeatable across other sprint branch-name rows (AD.26, AD.28 also show similar drift)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T01:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD25-QA-002/s25/readiness-23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD25-QA-002/integrate/readiness-23> ;
+  triage:openOn <urn:atm:triage:worktree/s25/28200974> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/ecce3568> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/28200974> .
+
+<urn:atm:triage:occurrence/AD25-QA-002/s25/readiness-23>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 23 ;
+  triage:snippet "feature/pAD-s25-built-in-nudge-override-lifecycle" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/28200974> .
+
+<urn:atm:triage:occurrence/AD25-QA-002/integrate/readiness-23>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 23 ;
+  triage:snippet "feature/pAD-s25-built-in-nudge-override-lifecycle" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ecce3568" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/ecce3568> .
+
+<urn:atm:triage:worktree/s25/28200974>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/ecce3568>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "ecce3568" ;
+  triage:orderIndex 7 .

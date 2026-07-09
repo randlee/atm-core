@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-ARCH-002>
+  a triage:Finding ;
+  triage:findingId "AD30-ARCH-002" ;
+  triage:title "PanicDispatcher forked into duplicate Windows/Unix test modules (RULE-005)" ;
+  triage:description "PanicDispatcher (and its trait impls) is defined twice -- once under #[cfg(unix)] in crates/atm-daemon/src/local_ipc_transport.rs:1050, again under #[cfg(windows)] in the new crates/atm-daemon/src/tests/windows_local_ipc_depth.rs:24. The three new Windows tests are near-line-for-line forks of the existing Unix-only tests rather than one consolidated cross-platform suite. This directly contradicts the sprint's own \"Paths To Delete\" directive (which called for removing the cfg(unix) gating, not forking a parallel Windows copy) and repeats the phase's known duplicate-logic pattern (cf. AD27-DUPLOGIC-001)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-002/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s30/4d86e024> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-002/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/windows_local_ipc_depth.rs" ;
+  triage:line 24 ;
+  triage:snippet "struct PanicDispatcher;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-002/s30/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1050 ;
+  triage:snippet "struct PanicDispatcher; (under #[cfg(unix)])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/4d86e024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:orderIndex 30 .
+
+<urn:atm:triage:worktree/integrate/818f7bce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:orderIndex 999 .

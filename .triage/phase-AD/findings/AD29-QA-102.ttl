@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD29-QA-102>
+  a triage:Finding ;
+  triage:findingId "AD29-QA-102" ;
+  triage:title "Orphaned ad-hoc smoke script violates sprint's own deletion requirement" ;
+  triage:description "scripts/smoke/run_thorough_graft.py:1-68 tests only the graft dispatcher's success/warning path (3 narrow cases) and was never deleted or folded into the new authoritative 5-case matrix. It is not referenced by run.py, run_thorough.py, justfile, or CI. Sprint-AD29's own \"Paths To Delete\" section names exactly this class of ad-hoc single-path smoke check for removal. Directly contradicts the \"one authoritative smoke matrix\" deliverable claim." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "finding" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-QA-102/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/s29/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/s30/88558576> ;
+  triage:promoteTo <urn:atm:triage:worktree/s29/88558576> ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s25/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s26/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s27/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/33683226> .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s28/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s29/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/88558576> .
+
+<urn:atm:triage:occurrence/AD29-QA-102/s30/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_graft.py" ;
+  triage:line 1 ;
+  triage:snippet "#!/usr/bin/env python3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/88558576> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s29/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s30/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 6 .

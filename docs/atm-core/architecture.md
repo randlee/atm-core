@@ -587,6 +587,9 @@ Architectural rules:
   storage-neutral `NudgeTemplateOverrideStore` contract upstream of
   `PostSendHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
+- that boundary returns an explicit row lifecycle, not hidden control strings:
+  no row => product default, override row => stored text, disabled row => no
+  emission, clear/reset => row deletion
 - `atm-core` does not own built-in XML template bodies, template override
   storage, tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:

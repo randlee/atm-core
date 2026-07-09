@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use atm_core::boundary::{
-    BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideRow,
+    BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow,
 };
 use atm_core::error::{AtmError, AtmErrorKind};
 use atm_core::error_codes::AtmErrorCode;
@@ -170,25 +171,27 @@ impl InternalNudgeInput {
     }
 }
 
-fn load_override_body(
+fn load_template_override(
     team: &atm_core::types::TeamName,
     kind: BuiltInNudgeTemplateKind,
-) -> Result<Option<String>> {
-    with_default_nudge_template_override_store(|store| {
-        Ok(store
-            .load_template_override(team, kind)?
-            .map(|row: TeamNudgeTemplateOverrideRow| row.template_body))
-    })
-    .map_err(Into::into)
+) -> Result<Option<TeamNudgeTemplateOverrideRow>> {
+    with_default_nudge_template_override_store(|store| store.load_template_override(team, kind))
+        .map_err(Into::into)
 }
 
 fn resolve_template_body(
     team: &atm_core::types::TeamName,
     kind: BuiltInNudgeTemplateKind,
 ) -> Result<Option<String>> {
-    match load_override_body(team, kind)? {
-        Some(template) if template.is_empty() => Ok(None),
-        Some(template) => Ok(Some(template)),
+    match load_template_override(team, kind)? {
+        Some(TeamNudgeTemplateOverrideRow {
+            mode: TeamNudgeTemplateOverrideMode::Override { template_body },
+            ..
+        }) => Ok(Some(template_body)),
+        Some(TeamNudgeTemplateOverrideRow {
+            mode: TeamNudgeTemplateOverrideMode::Disabled,
+            ..
+        }) => Ok(None),
         None => Ok(Some(default_template(kind).to_string())),
     }
 }
@@ -644,7 +647,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn empty_override_body_skips_built_in_nudge_delivery() {
+    fn disabled_override_row_skips_built_in_nudge_delivery() {
         let tempdir = tempdir().expect("tempdir");
         let home_dir = tempdir.path().join("home");
         fs::create_dir_all(&home_dir).expect("home");
@@ -655,7 +658,7 @@ mod tests {
         ]);
 
         atm_daemon_bootstrap::with_default_nudge_template_override_store(|override_store| {
-            override_store.save_template_override(&team, BuiltInNudgeTemplateKind::Delivery, "")?;
+            override_store.disable_template_override(&team, BuiltInNudgeTemplateKind::Delivery)?;
             Ok(())
         })
         .expect("save override");
