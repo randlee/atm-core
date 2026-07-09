@@ -24,6 +24,11 @@ Current evidence surfaces:
 
 - normal smoke lane: `reports/smoke/smoke.md`
 - thorough smoke lane: `reports/smoke/smoke-thorough.md`
+- Windows daemon-depth CI lane: GitHub Actions CI run
+  [`29044774805`](https://github.com/randlee/atm-core/actions/runs/29044774805)
+  for commit `77c30bb3` / PR `#497`, with successful `windows-latest`
+  `atm-daemon` coverage for dispatcher panic during shutdown, injected
+  accept-error handling, and post-terminate connection rejection
 
 ## Sprint Status
 

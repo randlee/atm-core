@@ -16,7 +16,7 @@
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/pAD-s30/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:occurrence/ATM-QA-101/pAD-s30/1>
   a triage:Occurrence ;
@@ -26,8 +26,8 @@
   triage:status "closed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "75cc3dd9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:finding/ARCH-001-AD30>
   a triage:Finding ;
@@ -45,7 +45,7 @@
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/windows> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/local-ipc-tests> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/windows>
   a triage:Occurrence ;
@@ -55,8 +55,8 @@
   triage:status "closed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "75cc3dd9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/local-ipc-tests>
   a triage:Occurrence ;
@@ -66,8 +66,8 @@
   triage:status "closed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "75cc3dd9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:finding/ARCH-002-AD30>
   a triage:Finding ;
@@ -84,7 +84,7 @@
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AD30/pAD-s30/transport> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:occurrence/ARCH-002-AD30/pAD-s30/transport>
   a triage:Occurrence ;
@@ -94,8 +94,8 @@
   triage:status "closed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "75cc3dd9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:finding/ATM-QA-102-AD30>
   a triage:Finding ;
@@ -111,7 +111,7 @@
   triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:finding/ATM-QA-103-AD30>
   a triage:Finding ;
@@ -127,7 +127,7 @@
   triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
 <urn:atm:triage:finding/ATM-QA-104-AD30>
   a triage:Finding ;
@@ -143,12 +143,12 @@
   triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/75cc3dd9> .
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
 
-<urn:atm:triage:worktree/pAD-s30/75cc3dd9>
+<urn:atm:triage:worktree/pAD-s30/77c30bb3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "75cc3dd9" ;
+  triage:headSha "77c30bb3" ;
   triage:orderIndex 30 ;
   triage:status "open" .
