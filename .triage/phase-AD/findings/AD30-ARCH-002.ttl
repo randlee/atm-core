@@ -27,8 +27,8 @@
   triage:file "crates/atm-daemon/src/tests/windows_local_ipc_depth.rs" ;
   triage:line 24 ;
   triage:snippet "struct PanicDispatcher;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
   triage:headSha "4d86e024" ;
   triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
@@ -38,8 +38,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 1050 ;
   triage:snippet "struct PanicDispatcher; (under #[cfg(unix)])" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
   triage:headSha "4d86e024" ;
   triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
