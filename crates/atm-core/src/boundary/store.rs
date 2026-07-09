@@ -254,6 +254,26 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
         kind: BuiltInNudgeTemplateKind,
         template_body: &str,
     ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the storage-neutral disable operation for one
+    /// team-scoped built-in nudge template override row cannot complete.
+    fn disable_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the storage-neutral clear operation for one
+    /// team-scoped built-in nudge template override row cannot complete.
+    fn clear_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<bool, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
@@ -310,9 +330,32 @@ mod tests {
             Ok(TeamNudgeTemplateOverrideRow {
                 team_name: team.clone(),
                 kind,
-                template_body: template_body.to_string(),
+                mode: crate::boundary::TeamNudgeTemplateOverrideMode::Override {
+                    template_body: template_body.to_string(),
+                },
                 updated_at: crate::types::IsoTimestamp::now(),
             })
+        }
+
+        fn disable_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<TeamNudgeTemplateOverrideRow, AtmError> {
+            Ok(TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: crate::boundary::TeamNudgeTemplateOverrideMode::Disabled,
+                updated_at: crate::types::IsoTimestamp::now(),
+            })
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<bool, AtmError> {
+            Ok(true)
         }
     }
 

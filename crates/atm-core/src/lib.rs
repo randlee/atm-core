@@ -103,7 +103,8 @@ pub use boundary::{
     ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
     RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
     RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
-    TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

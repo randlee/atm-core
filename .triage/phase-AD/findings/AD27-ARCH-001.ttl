@@ -1,0 +1,110 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD27-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "AD27-ARCH-001" ;
+  triage:title "Sprint AD.27 premise does not describe the live production dispatch path" ;
+  triage:description "This sprint's entire premise (moving built-in template resolution upstream of `atm internal-nudge` via a resolved ATM_INTERNAL_NUDGE envelope) does not describe the live production path. crates/atm-core/src/send/hook.rs's build_built_in_dispatch performs override lookup, template resolution, AND full placeholder rendering in-process, handing an already-rendered LocalTmuxNudgeTarget directly to PostSendHookEmitter::emit_post_send. crates/atm-daemon/src/post_send_emitter.rs's DaemonPostSendHookEmitter::emit_post_send delivers via deliver_tmux_nudge directly in-process -- it never constructs an InternalNudgeEnvelope, never sets ATM_INTERNAL_NUDGE, and never subprocess-hands-off to `atm internal-nudge` at all. ATM_INTERNAL_NUDGE appears nowhere else in the workspace outside internal_nudge.rs itself -- the retained helper (crates/atm/src/commands/internal_nudge.rs) is unreachable dead code in production. Despite this, 5+ doc locations edited in this sprint assert the subprocess-handoff-through-resolved-envelope mechanism as the live shipped path." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-ARCH-001/s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s29/f7a4991f> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:highestOpenBranch "pAD-s30" ;
+  triage:highestOpenBranchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:highestOpenBranchSha "5c19cba9" .
+
+<urn:atm:triage:occurrence/AD27-ARCH-001/s27/1>
+  a triage:Occurrence ;
+  triage:description "Documentation claims subprocess-handoff through ATM_INTERNAL_NUDGE envelope for template resolution; actual code performs in-process rendering and direct delivery without envelope or subprocess handoff" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s27" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/33683226> ;
+  triage:affectedFiles (
+    "docs/architecture.md"
+    "docs/atm-core/requirements.md"
+    "docs/atm/architecture.md"
+    "docs/atm-daemon/architecture.md"
+    "docs/requirements.md"
+    "docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md"
+  ) ;
+  triage:involvedSourceFiles (
+    "crates/atm-core/src/send/hook.rs"
+    "crates/atm/src/commands/internal_nudge.rs"
+    "crates/atm-daemon/src/post_send_emitter.rs"
+  ) .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s25" ;
+  triage:branchFull "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 ;
+  triage:state "absent" .
+
+<urn:atm:triage:worktree/pAD-s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s26" ;
+  triage:branchFull "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 26 ;
+  triage:state "absent" .
+
+<urn:atm:triage:worktree/pAD-s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s27" ;
+  triage:branchFull "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 27 ;
+  triage:state "open" .
+
+<urn:atm:triage:worktree/pAD-s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s28" ;
+  triage:branchFull "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 28 ;
+  triage:state "open" .
+
+<urn:atm:triage:worktree/pAD-s29/f7a4991f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s29" ;
+  triage:branchFull "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:orderIndex 29 ;
+  triage:state "open" .
+
+<urn:atm:triage:worktree/pAD-s30/5c19cba9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s30" ;
+  triage:branchFull "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:orderIndex 30 ;
+  triage:state "open" .
+
+<urn:atm:triage:worktree/integrate-phase-AD/c64d5a92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:branchFull "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "c64d5a92" ;
+  triage:orderIndex 999 ;
+  triage:state "absent" .

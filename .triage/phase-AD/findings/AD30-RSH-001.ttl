@@ -1,0 +1,139 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AD30-RSH-001" ;
+  triage:title "Windows fallback read-helper thread not tracked in ActiveConnectionRegistry" ;
+  triage:description "On the Windows fallback path (when the pipe stream doesn't support set_recv_timeout), read_request_frame_with_helper spawns a detached, untracked \"local-ipc-read-helper\" thread that isn't registered with ActiveConnectionRegistry, doesn't participate in drain_active_connections_for_shutdown, and isn't bounded against MAX_CONCURRENT_CONNECTIONS. A stalled/slow client on this platform path leaks one thread+handle indefinitely per connection." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-RSH-001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6> ;
+  triage:openOn <urn:atm:triage:worktree/s26/32742f7> ;
+  triage:openOn <urn:atm:triage:worktree/s27/3368322> ;
+  triage:openOn <urn:atm:triage:worktree/s28/2e7b5d2> ;
+  triage:openOn <urn:atm:triage:worktree/s29/8855857> ;
+  triage:openOn <urn:atm:triage:worktree/s30/4d86e02> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/4d86e02> ;
+  triage:highestOpenBranch "feature/pAD-s30-windows-daemon-integration-depth" .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6> .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7> .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "3368322" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/3368322> .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2> .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "8855857" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/8855857> .
+
+<urn:atm:triage:occurrence/AD30-RSH-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 141 ;
+  triage:snippet "std::thread::Builder::new().name(\"local-ipc-read-helper\".to_string()).spawn(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e02" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/4d86e02> .
+
+<urn:atm:triage:worktree/s25/acb7ab6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/32742f7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/3368322>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "3368322" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/8855857>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "8855857" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/4d86e02>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e02" ;
+  triage:orderIndex 30 .

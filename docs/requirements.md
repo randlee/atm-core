@@ -917,12 +917,18 @@ Post-send-hook rules:
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - teams may override any subset of those six built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
-  storage-neutral `NudgeTemplateOverrideStore` contract; any unset case falls
-  back to the product default body for that case
+  storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
   - resolved team override row for the selected template kind
-  - built-in product default template body for that kind
+  - built-in product default template body for that kind when no row exists
+- template lifecycle is explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion back to product default
+- empty-string template bodies are invalid and must not be used as a hidden
+  disable signal
 - example payload:
   ```json
   {

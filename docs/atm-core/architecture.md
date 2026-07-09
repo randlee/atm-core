@@ -595,9 +595,12 @@ Architectural rules:
   only and must not grow SQLite lookup behavior
 - any retained built-in CLI helper receives the already-resolved template
   through `InternalNudgeEnvelope`; it must not reopen runtime/store lookup
+- that boundary returns an explicit row lifecycle, not hidden control strings:
+  no row => product default, override row => stored text, disabled row => no
+  emission, clear/reset => row deletion
 - `atm-core` owns the shared resolved-template helper for built-in nudges, but
-  it does not own template override storage, tmux injection, or graft
-  host-wakeup mechanics
+  it does not own built-in XML template bodies, template override storage,
+  tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:
   - `TmuxNudgeSink` for local tmux-backed recipients
   - `GraftNudgeSink` for graft-backed recipients

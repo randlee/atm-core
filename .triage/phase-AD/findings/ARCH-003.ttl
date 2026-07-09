@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-003" ;
+  triage:title "Same AD.25 branch-name drift, arch-qa severity read" ;
+  triage:description "arch-qa independently observed the identical fact (readiness.md:23 branch name mismatch vs project-plan.md and reviewed branch) during its ARCH-001/AD30-QA-006 gate-artifact check, but scored it Minor (doc-accuracy drift, non-blocking) rather than Important. This is a dedup-pair with AD25-QA-002: same underlying fact, different severity reads. Recommend team-lead/triage reconcile the severity: both reviewers are pointing at the same doc inconsistency from different angles -- decide whether the merge-gate severity should be Important (req-qa) or Minor (arch-qa), or keep both records but treat as a single fix." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T01:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/s25/readiness-23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/integrate/readiness-23> ;
+  triage:openOn <urn:atm:triage:worktree/s25/28200974> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/ecce3568> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/28200974> ;
+  triage:notes "Dedup-pair with AD25-QA-002: same AD.25 branch-name drift fact; different severity assessments require reconciliation" .
+
+<urn:atm:triage:occurrence/ARCH-003/s25/readiness-23>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 23 ;
+  triage:snippet "feature/pAD-s25-built-in-nudge-override-lifecycle" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/28200974> .
+
+<urn:atm:triage:occurrence/ARCH-003/integrate/readiness-23>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 23 ;
+  triage:snippet "feature/pAD-s25-built-in-nudge-override-lifecycle" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ecce3568" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/ecce3568> .
+
+<urn:atm:triage:worktree/s25/28200974>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "28200974" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/ecce3568>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "ecce3568" ;
+  triage:orderIndex 7 .
