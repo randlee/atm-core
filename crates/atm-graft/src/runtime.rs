@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 #[cfg(test)]
-use std::sync::mpsc::{SyncSender, TrySendError};
+use std::sync::mpsc::TrySendError;
 #[cfg(windows)]
 use std::time::Instant;
 
@@ -195,100 +195,122 @@ impl BoundedHostNudgeInjector {
     }
 
     fn inject_nudge(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
-        let helper_permit = self.helper_budget.try_acquire().ok_or_else(|| {
+        let helper_permit = acquire_host_nudge_helper_permit(&self.helper_budget)?;
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        spawn_host_nudge_helper(
+            Arc::clone(&self.injector),
+            event.clone(),
+            helper_permit,
+            result_tx,
+        )?;
+        receive_host_nudge_result(result_rx, &self.helper_budget)
+    }
+}
+
+fn acquire_host_nudge_helper_permit(
+    helper_budget: &Arc<HelperThreadBudget>,
+) -> Result<HelperThreadPermit, AtmError> {
+    helper_budget.try_acquire().ok_or_else(|| {
+        let error = AtmError::new(
+            AtmErrorKind::Timeout,
+            format!(
+                "graft host nudge helper budget is exhausted at {} in-flight helpers",
+                helper_budget.max_inflight()
+            ),
+        )
+        .with_recovery(
+            "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+        );
+        warn_host_nudge_result("helper_budget_exhausted", &error, helper_budget, None);
+        error
+    })
+}
+
+fn spawn_host_nudge_helper(
+    injector: Arc<dyn HostNudgeInjector>,
+    event: PostSendHookEvent,
+    helper_permit: HelperThreadPermit,
+    result_tx: SyncSender<Result<(), AtmError>>,
+) -> Result<(), AtmError> {
+    thread::Builder::new()
+        .name("atm-graft-host-nudge".to_string())
+        .spawn(move || {
+            let _helper_permit = helper_permit;
+            let result = injector.inject_nudge(&event);
+            if result_tx.send(result).is_err() {
+                tracing::debug!(
+                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
+                    "graft host nudge helper dropped its result because the bounded caller already timed out"
+                );
+            }
+        })
+        .map(|_| ())
+        .map_err(|source| {
+            AtmError::new(
+                AtmErrorKind::Internal,
+                "failed to spawn graft host nudge helper",
+            )
+            .with_source(source)
+            .with_recovery(
+                "Retry graft activation after the embedding host can spawn one bounded nudge helper thread.",
+            )
+        })
+}
+
+fn receive_host_nudge_result(
+    result_rx: Receiver<Result<(), AtmError>>,
+    helper_budget: &Arc<HelperThreadBudget>,
+) -> Result<(), AtmError> {
+    match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+        Ok(result) => result,
+        Err(RecvTimeoutError::Timeout) => {
             let error = AtmError::new(
                 AtmErrorKind::Timeout,
                 format!(
-                    "graft host nudge helper budget is exhausted at {} in-flight helpers",
-                    self.helper_budget.max_inflight()
+                    "graft host nudge injection exceeded the {:?} delivery deadline",
+                    HOST_NUDGE_INJECTION_DEADLINE
                 ),
             )
             .with_recovery(
                 "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
             );
-            tracing::warn!(
-                subsystem = "atm_graft.host_nudge",
-                action = "inject_nudge",
-                outcome = "helper_budget_exhausted",
-                helper_budget_max = self.helper_budget.max_inflight(),
-                helper_budget_inflight = self.helper_budget.inflight(),
-                error_code = %error.code,
-                error_message = %error.message,
-                "graft host nudge helper budget exhausted"
+            warn_host_nudge_result(
+                "timeout",
+                &error,
+                helper_budget,
+                Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis()),
             );
-            error
-        })?;
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
-        let injector = Arc::clone(&self.injector);
-        let event = event.clone();
-        thread::Builder::new()
-            .name("atm-graft-host-nudge".to_string())
-            .spawn(move || {
-                let _helper_permit = helper_permit;
-                let result = injector.inject_nudge(&event);
-                if result_tx.send(result).is_err() {
-                    tracing::debug!(
-                        timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
-                        "graft host nudge helper dropped its result because the bounded caller already timed out"
-                    );
-                }
-            })
-            .map_err(|source| {
-                AtmError::new(
-                    AtmErrorKind::Internal,
-                    "failed to spawn graft host nudge helper",
-                )
-                .with_source(source)
-                .with_recovery(
-                    "Retry graft activation after the embedding host can spawn one bounded nudge helper thread.",
-                )
-            })?;
-        match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
-            Ok(result) => result,
-            Err(RecvTimeoutError::Timeout) => {
-                let error = AtmError::new(
-                    AtmErrorKind::Timeout,
-                    format!(
-                    "graft host nudge injection exceeded the {:?} delivery deadline",
-                    HOST_NUDGE_INJECTION_DEADLINE
-                    ),
-                )
-                .with_recovery(
-                    "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
-                );
-                tracing::warn!(
-                    subsystem = "atm_graft.host_nudge",
-                    action = "inject_nudge",
-                    outcome = "timeout",
-                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
-                    helper_budget_max = self.helper_budget.max_inflight(),
-                    helper_budget_inflight = self.helper_budget.inflight(),
-                    error_code = %error.code,
-                    error_message = %error.message,
-                    "graft host nudge helper timed out"
-                );
-                Err(error)
-            }
-            Err(RecvTimeoutError::Disconnected) => {
-                let error = AtmError::new(
-                    AtmErrorKind::Internal,
-                    "graft host nudge helper disconnected before returning a delivery result",
-                )
-                .with_recovery("Restart the embedding host before retrying graft delivery.");
-                tracing::warn!(
-                    subsystem = "atm_graft.host_nudge",
-                    action = "inject_nudge",
-                    outcome = "disconnected",
-                    helper_budget_max = self.helper_budget.max_inflight(),
-                    helper_budget_inflight = self.helper_budget.inflight(),
-                    error_code = %error.code,
-                    error_message = %error.message,
-                    "graft host nudge helper disconnected unexpectedly"
-                );
-                Err(error)
-            }
+            Err(error)
+        }
+        Err(RecvTimeoutError::Disconnected) => {
+            let error = AtmError::new(
+                AtmErrorKind::Internal,
+                "graft host nudge helper disconnected before returning a delivery result",
+            )
+            .with_recovery("Restart the embedding host before retrying graft delivery.");
+            warn_host_nudge_result("disconnected", &error, helper_budget, None);
+            Err(error)
         }
     }
+}
+
+fn warn_host_nudge_result(
+    outcome: &'static str,
+    error: &AtmError,
+    helper_budget: &Arc<HelperThreadBudget>,
+    timeout_ms: Option<u128>,
+) {
+    tracing::warn!(
+        subsystem = "atm_graft.host_nudge",
+        action = "inject_nudge",
+        outcome,
+        timeout_ms,
+        helper_budget_max = helper_budget.max_inflight(),
+        helper_budget_inflight = helper_budget.inflight(),
+        error_code = %error.code,
+        error_message = %error.message,
+        "graft host nudge helper error"
+    );
 }
 
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
@@ -506,34 +528,54 @@ pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), A
     let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let helper_budget = listener_wake_helper_budget();
-    let helper_permit = helper_budget.try_acquire().ok_or_else(|| {
+    let helper_permit = acquire_listener_wake_helper_permit(endpoint_path, helper_budget)?;
+    spawn_listener_wake_helper(name, helper_permit, result_tx)?;
+    receive_listener_wake_result(result_rx, endpoint_path, helper_budget)
+}
+
+fn acquire_listener_wake_helper_permit(
+    endpoint_path: &Path,
+    helper_budget: &Arc<HelperThreadBudget>,
+) -> Result<HelperThreadPermit, AtmError> {
+    helper_budget.try_acquire().ok_or_else(|| {
         let error = listener_wake_budget_exhausted_error(endpoint_path);
-        tracing::warn!(
-            subsystem = "atm_graft.receiver_loop",
-            action = "wake_graft_receiver_listener",
-            outcome = "helper_budget_exhausted",
-            endpoint = %endpoint_path.display(),
-            helper_budget_max = helper_budget.max_inflight(),
-            helper_budget_inflight = helper_budget.inflight(),
-            error_code = %error.code,
-            error_message = %error.message,
-            "graft listener wake helper budget exhausted"
+        warn_listener_wake_result(
+            "helper_budget_exhausted",
+            endpoint_path,
+            &error,
+            helper_budget,
+            None,
         );
         error
-    })?;
+    })
+}
+
+fn spawn_listener_wake_helper(
+    name: interprocess::local_socket::Name<'static>,
+    helper_permit: HelperThreadPermit,
+    result_tx: SyncSender<std::io::Result<LocalSocketStream>>,
+) -> Result<(), AtmError> {
     thread::Builder::new()
         .name("graft-listener-wake-connect".to_string())
         .spawn(move || {
             let _helper_permit = helper_permit;
             let _ = result_tx.send(LocalSocketStream::connect(name));
         })
+        .map(|_| ())
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn graft listener wake worker")
                 .with_recovery(
                     "Restart the graft-enabled host; the same-host listener wake path could not create its bounded connect helper.",
                 )
                 .with_source(source)
-        })?;
+        })
+}
+
+fn receive_listener_wake_result(
+    result_rx: Receiver<std::io::Result<LocalSocketStream>>,
+    endpoint_path: &Path,
+    helper_budget: &Arc<HelperThreadBudget>,
+) -> Result<(), AtmError> {
     match result_rx.recv_timeout(LISTENER_WAKE_CONNECT_DEADLINE) {
         Ok(Ok(_stream)) => Ok(()),
         Ok(Err(source)) => {
@@ -556,17 +598,12 @@ pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), A
             .with_recovery(
                 "Restart the graft-enabled host; the listener wake connection exceeded the bounded shutdown budget.",
             );
-            tracing::warn!(
-                subsystem = "atm_graft.receiver_loop",
-                action = "wake_graft_receiver_listener",
-                outcome = "timeout",
-                endpoint = %endpoint_path.display(),
-                timeout_ms = LISTENER_WAKE_CONNECT_DEADLINE.as_millis(),
-                helper_budget_max = helper_budget.max_inflight(),
-                helper_budget_inflight = helper_budget.inflight(),
-                error_code = %error.code,
-                error_message = %error.message,
-                "graft listener wake helper timed out"
+            warn_listener_wake_result(
+                "timeout",
+                endpoint_path,
+                &error,
+                helper_budget,
+                Some(LISTENER_WAKE_CONNECT_DEADLINE.as_millis()),
             );
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
@@ -579,21 +616,32 @@ pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), A
             .with_recovery(
                 "Restart the graft-enabled host; the local IPC wake path aborted before it could connect to the listener.",
             );
-            tracing::warn!(
-                subsystem = "atm_graft.receiver_loop",
-                action = "wake_graft_receiver_listener",
-                outcome = "disconnected",
-                endpoint = %endpoint_path.display(),
-                helper_budget_max = helper_budget.max_inflight(),
-                helper_budget_inflight = helper_budget.inflight(),
-                error_code = %error.code,
-                error_message = %error.message,
-                "graft listener wake helper disconnected unexpectedly"
-            );
+            warn_listener_wake_result("disconnected", endpoint_path, &error, helper_budget, None);
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
         }
     }
+}
+
+fn warn_listener_wake_result(
+    outcome: &'static str,
+    endpoint_path: &Path,
+    error: &AtmError,
+    helper_budget: &Arc<HelperThreadBudget>,
+    timeout_ms: Option<u128>,
+) {
+    tracing::warn!(
+        subsystem = "atm_graft.receiver_loop",
+        action = "wake_graft_receiver_listener",
+        outcome,
+        endpoint = %endpoint_path.display(),
+        timeout_ms,
+        helper_budget_max = helper_budget.max_inflight(),
+        helper_budget_inflight = helper_budget.inflight(),
+        error_code = %error.code,
+        error_message = %error.message,
+        "graft listener wake helper error"
+    );
 }
 
 fn stop_requested(stop_rx: &Receiver<()>) -> bool {
