@@ -873,6 +873,22 @@ mod tests {
         ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
             unreachable!("doctor tests do not touch the override-store boundary")
         }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor tests do not touch the override-store boundary")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, AtmError> {
+            unreachable!("doctor tests do not touch the override-store boundary")
+        }
     }
 
     fn roster_store(members: &[&str]) -> TestRosterStore {

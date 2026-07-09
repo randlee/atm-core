@@ -134,6 +134,9 @@ Follow-up work:
 - `atm` may consume a team-scoped built-in template override body only through
   the storage-neutral upstream contract accepted for Phase `AD`; it must not
   perform direct SQLite lookup itself.
+- `atm` resolves built-in template lifecycle through that upstream contract as:
+  no row => product default, override row => stored body, disabled row => no
+  emission, clear/reset => row deletion back to product default.
 - `atm` owns `TmuxNudgeSink`, including the current tmux-injection sequence:
   paste rendered text, send `Enter`, wait about `250ms` to `300ms`, then send
   a second `Enter`; the exact delay remains implementation-tunable but the

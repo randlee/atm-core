@@ -432,6 +432,17 @@ impl AtmError {
         )
     }
 
+    pub fn empty_nudge_template_body() -> Self {
+        Self::new_with_code(
+            AtmErrorCode::EmptyNudgeTemplateBody,
+            AtmErrorKind::Validation,
+            "built-in nudge template body must be non-empty",
+        )
+        .with_recovery(
+            "Provide a non-empty template body, or use the explicit disable or clear nudge-template command instead of an empty string.",
+        )
+    }
+
     pub fn caller_context_request_invalid(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::CallerContextRequestInvalid,

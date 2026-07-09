@@ -2654,6 +2654,9 @@ Architectural rules:
   - built-in fallback across both tmux and graft sinks
   - override reset-to-default after deleting a prior stored override row
   - explicit disable behavior when the retained design keeps that state
+- resolved built-in template lifecycle is explicit: no row => product
+  default, override row => stored text, disabled row => no emission,
+  clear/reset => row deletion
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning

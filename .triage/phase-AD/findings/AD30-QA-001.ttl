@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-QA-001>
+  a triage:Finding ;
+  triage:findingId "AD30-QA-001" ;
+  triage:title "readiness.md authors no phase-AD closure verdict" ;
+  triage:description "docs/plans/phase-AD/readiness.md defines Phase Exit Criteria (lines 44-82) that list what must be true for closure, but the file records no actual CLOSURE VERDICT section stating whether those criteria have been met. Sprint Status table shows AD.25-AD.30 with various statuses (planned/in_progress) but no pass/closed terminal state. No recorded evidence that AD.29 smoke tests completed, and no recorded evidence that AD.30 Windows depth tests completed. Per line 12-13 of readiness.md, only AD.30 is authorized to author this verdict." ;
+  triage:category "AD30-QA" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s25-post-send-hook-emitter-live-wiring/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s26-rule001-observability-seam-closure/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s27-upstream-built-in-template-resolution/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s28-atm-graft-timing-independent/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s29-phase-ad-post-send-smoke-matrix/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/feature/pAD-s30-windows-daemon-integration-depth/4d86e024> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature/pAD-s30-windows-daemon-integration-depth/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s25-post-send-hook-emitter-live-wiring/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s26-rule001-observability-seam-closure/32742f7a> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s27-upstream-built-in-template-resolution/33683226> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s28-atm-graft-timing-independent/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s29-phase-ad-post-send-smoke-matrix/88558576> .
+
+<urn:atm:triage:occurrence/AD30-QA-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "readiness.md records the final verdict on the accepted line (missing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAD-s30-windows-daemon-integration-depth/4d86e024> .
+
+<urn:atm:triage:worktree/feature/pAD-s25-post-send-hook-emitter-live-wiring/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature/pAD-s26-rule001-observability-seam-closure/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature/pAD-s27-upstream-built-in-template-resolution/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature/pAD-s28-atm-graft-timing-independent/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature/pAD-s29-phase-ad-post-send-smoke-matrix/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/feature/pAD-s30-windows-daemon-integration-depth/4d86e024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:orderIndex 6 .

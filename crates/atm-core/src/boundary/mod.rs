@@ -187,11 +187,31 @@ impl std::str::FromStr for BuiltInNudgeTemplateKind {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TeamNudgeTemplateOverrideMode {
+    Override { template_body: String },
+    Disabled,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct TeamNudgeTemplateOverrideRow {
     pub team_name: TeamName,
     pub kind: BuiltInNudgeTemplateKind,
-    pub template_body: String,
+    pub mode: TeamNudgeTemplateOverrideMode,
     pub updated_at: IsoTimestamp,
+}
+
+impl TeamNudgeTemplateOverrideRow {
+    pub fn template_body(&self) -> Option<&str> {
+        match &self.mode {
+            TeamNudgeTemplateOverrideMode::Override { template_body } => Some(template_body),
+            TeamNudgeTemplateOverrideMode::Disabled => None,
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        matches!(self.mode, TeamNudgeTemplateOverrideMode::Disabled)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -301,7 +321,6 @@ pub enum PostSendEmissionOutcome {
         warning: crate::send::WarningEntry,
     },
 }
-
 /// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
 pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
     /// # Errors

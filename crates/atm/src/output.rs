@@ -12,7 +12,8 @@ use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeSta
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
-    AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan,
+    AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
+    DisableNudgeTemplateOverrideOutcome, MembersList, RestoreOutcome, RestorePlan,
     SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
@@ -459,6 +460,43 @@ pub fn print_set_nudge_template_override_result(
         println!(
             "Set nudge template override {} for {} at {}",
             outcome.kind, outcome.team, outcome.updated_at
+        );
+    }
+    Ok(())
+}
+
+/// Print one disable-nudge-template result in human-readable or JSON form.
+pub fn print_disable_nudge_template_override_result(
+    outcome: &DisableNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Disabled nudge template override {} for {} at {}",
+            outcome.kind, outcome.team, outcome.updated_at
+        );
+    }
+    Ok(())
+}
+
+/// Print one clear-nudge-template result in human-readable or JSON form.
+pub fn print_clear_nudge_template_override_result(
+    outcome: &ClearNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        let status = if outcome.cleared {
+            "cleared"
+        } else {
+            "already at product default"
+        };
+        println!(
+            "Clear nudge template override {} for {}: {}",
+            outcome.kind, outcome.team, status
         );
     }
     Ok(())
