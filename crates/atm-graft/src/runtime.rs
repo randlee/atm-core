@@ -22,12 +22,9 @@ use crate::{
     SessionSnapshot,
 };
 
-// The repeated direct-nudge receiver test exercises a real worker thread and
-// local-socket handoff; keeping a tighter test-only deadline than production
-// turns ordinary CI scheduler jitter into a false WaitTimeout.
-#[cfg(test)]
-const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(500);
-#[cfg(not(test))]
+// Production and test both use the same bounded delivery deadline; readiness
+// synchronization must absorb scheduler jitter instead of widening the test
+// contract.
 const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
 // Allow one in-flight handoff while the worker thread is starting or re-arming
 // its blocking recv call. This preserves bounded backpressure without treating
