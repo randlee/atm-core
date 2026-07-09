@@ -178,6 +178,8 @@ The accepted operator contract after this sprint is:
   - `atm read` owner-only mutation
   - `atm send`, `atm read`, `atm ack`, and `atm clear` impersonation flag
     rejection
-- targeted runtime tests proving `peek` leaves `seen_at`, `pending_ack_at`,
-  and `acknowledged_at` unchanged
+- targeted runtime tests proving `peek` leaves per-message `read`,
+  `pending_ack_at`, and `acknowledged_at` unchanged, and does not advance the
+  per-agent seen-state watermark stored by
+  `crates/atm-core/src/read/seen_state.rs`
 - `git diff --check`
