@@ -44,6 +44,7 @@ pub struct RuntimeAssembly {
         Arc<dyn SharedMessageStore + Send + Sync>,
         Arc<dyn SharedRosterStore + Send + Sync>,
     >,
+    pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
@@ -54,6 +55,10 @@ impl fmt::Debug for RuntimeAssembly {
         f.debug_struct("RuntimeAssembly")
             .field("service_runtime", &self.service_runtime)
             .field("storage_backends", &self.storage_backends)
+            .field(
+                "nudge_template_override_store",
+                &"dyn NudgeTemplateOverrideStore",
+            )
             .field("doctor_ports", &self.doctor_ports)
             .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
@@ -106,6 +111,7 @@ fn assemble_sqlite_runtime_at_path(
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
+        sqlite_backend.nudge_template_override_store(),
         non_claude_outbound,
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
@@ -117,6 +123,7 @@ fn assemble_sqlite_runtime_at_path(
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
+        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -144,6 +151,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
+        sqlite_backend.nudge_template_override_store(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
@@ -155,6 +163,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
+        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,

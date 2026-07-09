@@ -802,6 +802,7 @@ mod tests {
     struct TestRosterStore {
         members: Vec<atm_storage::RosterMember>,
     }
+    struct NoopNudgeTemplateOverrideStore;
 
     #[allow(
         deprecated,
@@ -853,6 +854,27 @@ mod tests {
         }
     }
 
+    impl crate::boundary::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+
+    impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor tests do not touch the override-store boundary")
+        }
+    }
+
     fn roster_store(members: &[&str]) -> TestRosterStore {
         TestRosterStore {
             members: members
@@ -875,6 +897,7 @@ mod tests {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(roster_store(members)),
+            Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
     }
@@ -1284,6 +1307,7 @@ mod tests {
             Arc::new(TestRosterStore {
                 members: vec![roster_member],
             }),
+            Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         );
 
