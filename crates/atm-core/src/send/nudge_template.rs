@@ -108,14 +108,15 @@ mod tests {
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideRow,
     };
+    use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 
     fn base_event() -> PostSendHookEvent {
         PostSendHookEvent {
-            sender: AgentName::from_validated("team-lead"),
-            sender_team: TeamName::from_validated("atm-dev"),
-            recipient: AgentName::from_validated("arch-ctm"),
-            recipient_team: TeamName::from_validated("atm-dev"),
+            sender: AgentName::from_validated(TEST_LEAD),
+            sender_team: TeamName::from_validated(TEST_TEAM),
+            recipient: AgentName::from_validated(TEST_ARCH_CTM),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,
@@ -136,7 +137,7 @@ mod tests {
     #[test]
     fn resolve_template_body_treats_empty_override_as_disabled() {
         let row = TeamNudgeTemplateOverrideRow {
-            team_name: TeamName::from_validated("atm-dev"),
+            team_name: TeamName::from_validated(TEST_TEAM),
             kind: BuiltInNudgeTemplateKind::Delivery,
             template_body: String::new(),
             updated_at: IsoTimestamp::now(),
@@ -151,11 +152,11 @@ mod tests {
     fn render_built_in_nudge_populates_placeholders() {
         let rendered = render_built_in_nudge(
             &base_event(),
-            "team-lead@atm-dev",
+            &format!("{TEST_LEAD}@{TEST_TEAM}"),
             default_template(BuiltInNudgeTemplateKind::DeliveryTaskAck),
         )
         .expect("rendered template");
-        assert!(rendered.contains("team-lead@atm-dev"));
+        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
     }
 }
