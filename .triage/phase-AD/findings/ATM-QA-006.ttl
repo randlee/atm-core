@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006" ;
+  triage:title "sprint-AD26.md frontmatter status not updated to complete" ;
+  triage:description "docs/plans/phase-AD/sprint-AD26.md:4 and docs/plans/phase-AD/readiness.md:24 -- sprint doc frontmatter status is still in_progress, not complete, at reviewed commit 4dbd5ba8. readiness.md is internally consistent but the merge gate itself is unmet. Fix: update both to complete once all other findings in this round are resolved (this is a closing-step item, do last)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-08T22:07:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/AD26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/AD26/2> ;
+  triage:openOn <urn:atm:triage:worktree/AD26/4dbd5ba8> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-006/AD26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD26.md" ;
+  triage:line 4 ;
+  triage:snippet "status: in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-006/AD26/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 24 ;
+  triage:snippet "AD.26 | in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD26/4dbd5ba8> .
+
+<urn:atm:triage:worktree/AD26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .

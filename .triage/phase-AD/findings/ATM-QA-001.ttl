@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "sprint-AD25.md documents flag-syntax CLI that doesn't match positional-arg implementation" ;
+  triage:description "docs/plans/phase-AD/sprint-AD25.md:112-114 documents `atm teams set-nudge-template --team <team> --kind <kind> --template-body <body>` (flag syntax). Actual implementation in crates/atm/src/commands/teams.rs:97-125 has `team`/`kind` as positional args (no #[arg(long)]), consistent with existing add-member/update-member convention in the same file." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s26/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/2c7b3c1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s26/2c7b3c1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD25.md" ;
+  triage:line 112 ;
+  triage:snippet "- `atm teams set-nudge-template --team <team> --kind <kind> --template-body <non-empty>`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b9ee7d187d9812017a42839090227feb6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD25.md" ;
+  triage:line 112 ;
+  triage:snippet "- `atm teams set-nudge-template --team <team> --kind <kind> --template-body <non-empty>`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "2c7b3c1a25408de0f963dee7975895cc6f0573d5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/2c7b3c1a> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b9ee7d187d9812017a42839090227feb6" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/2c7b3c1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "2c7b3c1a25408de0f963dee7975895cc6f0573d5" ;
+  triage:orderIndex 26 .

@@ -1,0 +1,133 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-QA-002>
+  a triage:Finding ;
+  triage:findingId "AD30-QA-002" ;
+  triage:title "direct-fix-track.md lacks substantive accepted-line evidence for AD9-BLANKPANE-001/ERRDOC-001 (adjudicated dispute)" ;
+  triage:description "direct-fix-track.md restates the requirement table but does not cite actual accepted-line evidence. Team-lead ruling: since AD.30 is the final phase-closure sprint, the substantive-evidence bar (req-qa's reading) applies, not the literal-presence bar. The file must cite concrete accepted-line evidence (code, tests, or documentation) that closes the specified acceptance criteria." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:category "AD30-QA" ;
+  triage:severity "important" ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-002/s30> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/s29/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/s30/4d86e024> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/4d86e024> ;
+  triage:triageNote "TEAM-LEAD ADJUDICATION: phase-AD is final closure sprint. substantive-evidence bar applies (req-qa interpretation), not literal-presence bar (arch-qa interpretation). direct-fix-track.md must cite concrete accepted-line evidence for: (1) AD9-BLANKPANE-001 fix to tmux_pane_id drift per sprint-AD9.md Acceptance Criteria, (2) ERRDOC-001 documentation of CLI error contract entries (ATM_MEMBER_ALREADY_EXISTS, ATM_MEMBER_NOT_FOUND, ATM_IDENTITY_UNAVAILABLE, ATM_TEAM_UNAVAILABLE, ATM_IDENTITY_INVALID, ATM_TEAM_INVALID) per sprint-AD9.md. Score as Important, not Blocking. Route to fix-track for substantive evidence addition." .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s25>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s26>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s27>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/33683226> .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s28>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s29>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/88558576> .
+
+<urn:atm:triage:occurrence/AD30-QA-002/s30>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AD/direct-fix-track.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:snippet "cite accepted-line evidence that closes...[AD9-BLANKPANE-001, ERRDOC-001]" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/4d86e024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:orderIndex 30 .
