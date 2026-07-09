@@ -14,17 +14,37 @@ pub(crate) struct GraftNudgeSink<'a> {
 
 impl GraftNudgeSink<'_> {
     pub(crate) fn deliver(&self, event: PostSendHookEvent) -> Result<(), ProtocolErrorEnvelope> {
-        match self.injector.inject_nudge(event.clone()) {
+        match self.injector.inject_nudge(&event) {
             Ok(()) => {
-                if let Ok(snapshot) = read_snapshot(self.snapshot) {
-                    self.observability.nudge_delivered(&snapshot, &event);
+                match read_snapshot(self.snapshot) {
+                    Ok(snapshot) => self.observability.nudge_delivered(&snapshot, &event),
+                    Err(error) => tracing::warn!(
+                        subsystem = "atm_graft.nudge_sink",
+                        action = "deliver",
+                        outcome = "snapshot_unavailable",
+                        error_code = %error.code,
+                        error_message = %error.message,
+                        "graft nudge delivery succeeded but the session snapshot could not be read for observability"
+                    ),
                 }
                 Ok(())
             }
             Err(error) => {
-                if let Ok(snapshot) = read_snapshot(self.snapshot) {
-                    self.observability
-                        .session_error(&snapshot, "inject_nudge", &error);
+                match read_snapshot(self.snapshot) {
+                    Ok(snapshot) => {
+                        self.observability
+                            .session_error(&snapshot, "inject_nudge", &error);
+                    }
+                    Err(snapshot_error) => tracing::warn!(
+                        subsystem = "atm_graft.nudge_sink",
+                        action = "deliver",
+                        outcome = "snapshot_unavailable",
+                        error_code = %snapshot_error.code,
+                        error_message = %snapshot_error.message,
+                        delivery_error_code = %error.code,
+                        delivery_error_message = %error.message,
+                        "graft nudge delivery failed and the session snapshot could not be read for observability"
+                    ),
                 }
                 Err(ProtocolErrorEnvelope::from_error(&error))
             }
@@ -49,8 +69,8 @@ mod tests {
     }
 
     impl HostNudgeInjector for RecordingInjector {
-        fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), AtmError> {
-            self.events.lock().expect("events").push(nudge);
+        fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+            self.events.lock().expect("events").push(nudge.clone());
             Ok(())
         }
     }
@@ -58,7 +78,7 @@ mod tests {
     struct FailingInjector;
 
     impl HostNudgeInjector for FailingInjector {
-        fn inject_nudge(&self, _nudge: PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
             Err(AtmError::new(
                 AtmErrorKind::DaemonUnavailable,
                 "synthetic graft receiver unavailable",
