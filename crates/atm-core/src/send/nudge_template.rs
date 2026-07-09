@@ -8,8 +8,7 @@ pub fn resolve_template_body(
     kind: BuiltInNudgeTemplateKind,
 ) -> Option<String> {
     match override_row {
-        Some(row) if row.template_body.is_empty() => None,
-        Some(row) => Some(row.template_body),
+        Some(row) => row.template_body().map(ToOwned::to_owned),
         None => Some(default_template(kind).to_string()),
     }
 }
