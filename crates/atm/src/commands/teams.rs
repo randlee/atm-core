@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{
-    self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult,
+    self, AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
+    DisableNudgeTemplateOverrideRequest, RestoreRequest, RestoreResult,
     SetNudgeTemplateOverrideRequest, UpdateMemberRequest,
 };
 use atm_daemon_bootstrap::with_default_nudge_template_override_store;
@@ -36,6 +37,8 @@ enum TeamsSubcommand {
     AddMember(AddMemberCommand),
     UpdateMember(UpdateMemberCommand),
     SetNudgeTemplate(SetNudgeTemplateCommand),
+    DisableNudgeTemplate(DisableNudgeTemplateCommand),
+    ClearNudgeTemplate(ClearNudgeTemplateCommand),
     Backup(BackupCommand),
     Restore(RestoreCommand),
 }
@@ -93,11 +96,35 @@ struct UpdateMemberCommand {
 
 #[derive(Debug, Args)]
 struct SetNudgeTemplateCommand {
+    #[arg(long)]
     team: String,
+    #[arg(long)]
     kind: String,
 
     #[arg(long = "template-body")]
     template_body: String,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct DisableNudgeTemplateCommand {
+    #[arg(long)]
+    team: String,
+    #[arg(long)]
+    kind: String,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct ClearNudgeTemplateCommand {
+    #[arg(long)]
+    team: String,
+    #[arg(long)]
+    kind: String,
 
     #[arg(long)]
     json: bool,
@@ -143,6 +170,8 @@ impl TeamsCommand {
             Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
             Some(TeamsSubcommand::UpdateMember(command)) => command.run(home_dir, caller_context),
             Some(TeamsSubcommand::SetNudgeTemplate(command)) => command.run(caller_context),
+            Some(TeamsSubcommand::DisableNudgeTemplate(command)) => command.run(caller_context),
+            Some(TeamsSubcommand::ClearNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::Backup(command)) => command.run(home_dir),
             Some(TeamsSubcommand::Restore(command)) => command.run(home_dir),
         }
@@ -224,6 +253,44 @@ impl SetNudgeTemplateCommand {
     }
 }
 
+impl DisableNudgeTemplateCommand {
+    fn run(self, caller_context: CallerContext) -> Result<()> {
+        let json = self.json;
+        let request = self.build_request(caller_context)?;
+        let outcome = with_default_nudge_template_override_store(|override_store| {
+            team_admin::disable_nudge_template_override_with_store(override_store, request)
+        })?;
+        output::print_disable_nudge_template_override_result(&outcome, json)
+    }
+
+    fn build_request(
+        self,
+        caller_context: CallerContext,
+    ) -> Result<DisableNudgeTemplateOverrideRequest> {
+        DisableNudgeTemplateOverrideRequest::new(caller_context.caller_team, &self.team, &self.kind)
+            .map_err(Into::into)
+    }
+}
+
+impl ClearNudgeTemplateCommand {
+    fn run(self, caller_context: CallerContext) -> Result<()> {
+        let json = self.json;
+        let request = self.build_request(caller_context)?;
+        let outcome = with_default_nudge_template_override_store(|override_store| {
+            team_admin::clear_nudge_template_override_with_store(override_store, request)
+        })?;
+        output::print_clear_nudge_template_override_result(&outcome, json)
+    }
+
+    fn build_request(
+        self,
+        caller_context: CallerContext,
+    ) -> Result<ClearNudgeTemplateOverrideRequest> {
+        ClearNudgeTemplateOverrideRequest::new(caller_context.caller_team, &self.team, &self.kind)
+            .map_err(Into::into)
+    }
+}
+
 impl UpdateMemberCommand {
     fn run(self, atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
@@ -283,8 +350,8 @@ mod tests {
 
     use super::TeamsCommand;
     use super::{
-        AddMemberCommand, BackupCommand, RestoreCommand, SetNudgeTemplateCommand, TeamsSubcommand,
-        UpdateMemberCommand,
+        AddMemberCommand, BackupCommand, ClearNudgeTemplateCommand, DisableNudgeTemplateCommand,
+        RestoreCommand, SetNudgeTemplateCommand, TeamsSubcommand, UpdateMemberCommand,
     };
     use crate::commands::caller_context::CallerContext;
     use crate::observability::CliObservability;
@@ -337,6 +404,32 @@ mod tests {
                 template_body: template_body.to_string(),
                 json,
             })),
+            json: false,
+        }
+    }
+
+    fn disable_nudge_template_command(json: bool) -> TeamsCommand {
+        TeamsCommand {
+            command: Some(TeamsSubcommand::DisableNudgeTemplate(
+                DisableNudgeTemplateCommand {
+                    team: TEST_TEAM.to_string(),
+                    kind: "delivery_ack".to_string(),
+                    json,
+                },
+            )),
+            json: false,
+        }
+    }
+
+    fn clear_nudge_template_command(json: bool) -> TeamsCommand {
+        TeamsCommand {
+            command: Some(TeamsSubcommand::ClearNudgeTemplate(
+                ClearNudgeTemplateCommand {
+                    team: TEST_TEAM.to_string(),
+                    kind: "delivery_ack".to_string(),
+                    json,
+                },
+            )),
             json: false,
         }
     }
@@ -493,6 +586,26 @@ mod tests {
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
         assert_eq!(atm_error.code, AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn set_nudge_template_build_request_rejects_empty_template_body_before_core() {
+        let command = SetNudgeTemplateCommand {
+            team: TEST_TEAM.to_string(),
+            kind: "delivery_ack".to_string(),
+            template_body: "   ".to_string(),
+            json: false,
+        };
+
+        let error = command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+            })
+            .expect_err("empty body");
+
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::EmptyNudgeTemplateBody);
     }
 
     #[test]
@@ -729,7 +842,58 @@ mod tests {
             )
             .expect("load override")
             .expect("saved row");
-            assert_eq!(saved.template_body, "<atm/>");
+            assert_eq!(saved.template_body(), Some("<atm/>"));
+            assert!(!saved.is_disabled());
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn disable_nudge_template_executes_through_shared_override_boundary() {
+        let fixture = Fixture::new();
+
+        fixture.with_env_and_cwd(|| {
+            disable_nudge_template_command(true)
+                .run(&CliObservability::fallback())
+                .expect("disable-nudge-template run");
+
+            let saved = atm_daemon_bootstrap::with_default_nudge_template_override_store(
+                |override_store| {
+                    override_store.load_template_override(
+                        &TEST_TEAM.parse().expect("team"),
+                        "delivery_ack".parse().expect("kind"),
+                    )
+                },
+            )
+            .expect("load override")
+            .expect("saved row");
+            assert!(saved.is_disabled());
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn clear_nudge_template_executes_through_shared_override_boundary() {
+        let fixture = Fixture::new();
+
+        fixture.with_env_and_cwd(|| {
+            set_nudge_template_command(true, "<atm/>")
+                .run(&CliObservability::fallback())
+                .expect("set-nudge-template run");
+            clear_nudge_template_command(true)
+                .run(&CliObservability::fallback())
+                .expect("clear-nudge-template run");
+
+            let saved = atm_daemon_bootstrap::with_default_nudge_template_override_store(
+                |override_store| {
+                    override_store.load_template_override(
+                        &TEST_TEAM.parse().expect("team"),
+                        "delivery_ack".parse().expect("kind"),
+                    )
+                },
+            )
+            .expect("load override");
+            assert!(saved.is_none());
         });
     }
 

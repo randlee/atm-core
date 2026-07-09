@@ -2644,6 +2644,9 @@ Architectural rules:
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
   SQLite lookup for this feature
+- resolved built-in template lifecycle is explicit: no row => product
+  default, override row => stored text, disabled row => no emission,
+  clear/reset => row deletion
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning

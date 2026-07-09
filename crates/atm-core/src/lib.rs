@@ -101,8 +101,8 @@ pub use boundary::{
     PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
     RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
     RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
-    StatusSource, TaskState, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    StatusSource, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
