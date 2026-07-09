@@ -25,7 +25,7 @@ Companion closure ledger:
 | `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution` | `../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution` | `ADR-019-EXC-AD26-001` is closed and built-in override lookup is upstream of `PostSendHookEmitter` |
 | `AD.28` | `planned` | `feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | `../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
 | `AD.29` | `planned` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
-| `AD.30` | `planned` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
+| `AD.30` | `in_progress` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
 
 ## Direct-Fix Carry-Forward Ledger
 
@@ -73,7 +73,8 @@ true:
 - the authoritative Windows daemon depth lane from `AD.30` has recorded
   evidence for:
   - dispatcher panic during shutdown
-  - injected accept-error handling with bounded retry/backoff semantics
+  - injected accept-error handling with one logged failure plus a bounded typed
+    fail-fast exit
   - post-terminate connection rejection
 - `CHANGELOG.md` contains the release-facing entry for the `AD.13` through
   `AD.30` corrective line

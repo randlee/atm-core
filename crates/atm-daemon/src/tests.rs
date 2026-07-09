@@ -9,6 +9,9 @@ use super::{
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
+use crate::test_support::{
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+};
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
@@ -34,12 +37,6 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-#[cfg(windows)]
-use crate::test_support::connect_local_ipc_with_timeout;
-use crate::test_support::{
-    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-};
-
 pub(crate) const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
@@ -59,6 +56,8 @@ impl Drop for ShutdownFinalizerDrainGuard {
 }
 
 mod runtime_root;
+#[cfg(windows)]
+mod windows_local_ipc_depth;
 
 #[test]
 #[serial_test::serial(env)]
@@ -240,76 +239,6 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         .expect("runtime result");
     join.join().expect("join runtime thread");
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
-}
-
-#[cfg(windows)]
-#[test]
-#[serial_test::serial(env)]
-fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let _env = EnvGuard::set_many([
-        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_CONFIG_HOME",
-            Some(tempdir.path().to_str().expect("utf8 config home")),
-        ),
-        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-    ]);
-    let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
-    let runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path)
-        .expect("prepare runtime");
-    let mut runtime = runtime;
-    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
-    let (lifecycle, _reset) = {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-        (lifecycle, reset)
-    };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
-    let (serve_result_tx, serve_result_rx) = mpsc::channel();
-    let (ready_tx, ready_rx) = mpsc::sync_channel(0);
-
-    let join = std::thread::spawn(move || {
-        let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
-            RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: Duration::from_millis(500),
-                force_cancel_deadline: Duration::from_secs(2),
-                begin_shutdown: || Ok(()),
-                reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
-                publish_ready: move || {
-                    ready_tx.send(()).ok();
-                    Ok(())
-                },
-            },
-        );
-        serve_result_tx.send(result).expect("send serve result");
-    });
-
-    let local_ipc_name =
-        atm_core::protocol::daemon_local_ipc_name_from_path(&tempdir.path().join("daemon.sock"))
-            .expect("ipc name");
-    ready_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("daemon ready within deadline");
-    lifecycle.set_terminate_for_test(true);
-
-    serve_result_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("recv serve result")
-        .expect("serve runtime result");
-    join.join().expect("join serve thread");
-    assert!(
-        connect_local_ipc_with_timeout(local_ipc_name, Duration::from_millis(250)).is_err(),
-        "windows same-host runtime should reject new local IPC connections after shutdown",
-    );
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {

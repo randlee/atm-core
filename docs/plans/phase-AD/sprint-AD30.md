@@ -68,10 +68,10 @@ Required runtime/test meaning after this sprint:
   - `AcceptErrorInjection`
     - trigger: the listener injects a typed accept failure while the daemon is
       otherwise healthy
-    - required outcome: the accept loop logs the injected failure, applies the
-      production bounded retry/backoff contract, and either accepts a later
-      connection or reaches clean shutdown within the bounded deadline; it must
-      not spin unboundedly on the failing accept path
+    - required outcome: the accept loop logs the injected failure once and
+      exits the affected serve path with a typed error inside the bounded
+      deadline; it must not spin, busy-retry, or hang on the failing accept
+      path
   - `PostTerminateConnectionRejection`
     - trigger: a client attempts a new connection after the daemon runtime has
       already terminated
@@ -124,8 +124,8 @@ Required runtime/test meaning after this sprint:
 - each restored Windows case has one explicit observable success condition:
   - dispatcher panic during shutdown: bounded shutdown plus one panic-path log
     record, no hang
-  - injected accept-error handling: one logged accept failure plus bounded
-    retry/backoff behavior, no tight spin
+  - injected accept-error handling: one logged accept failure plus one bounded
+    typed failure path, no tight spin and no hang
   - post-terminate connection rejection: fast typed rejection after terminate,
     no late successful connection
 - the repaired Windows tests fail fast and do not rely on manual runner

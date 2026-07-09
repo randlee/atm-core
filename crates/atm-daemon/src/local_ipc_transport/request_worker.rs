@@ -346,7 +346,7 @@ fn write_response(
 
 #[cfg(test)]
 #[cfg_attr(not(unix), allow(dead_code))]
-pub(super) fn install_injected_accept_error_for_test(
+pub(crate) fn install_injected_accept_error_for_test(
     runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
 ) {

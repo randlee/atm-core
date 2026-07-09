@@ -32,8 +32,8 @@ use std::thread;
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 use request_worker::handle_connection;
-#[cfg(all(test, unix))]
-use request_worker::install_injected_accept_error_for_test;
+#[cfg(test)]
+pub(crate) use request_worker::install_injected_accept_error_for_test;
 use shutdown::{
     emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
     prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
@@ -669,6 +669,11 @@ where
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
         let _ = sender.send(());
+        context.observability.emit_or_warn(
+            "accept_loop",
+            "failed",
+            "injected daemon local IPC accept error for test",
+        );
         return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
             context.lifecycle_control,
             context.shutdown_beacon,
@@ -678,15 +683,22 @@ where
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
-        Err(source) => Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
-            context.lifecycle_control,
-            context.shutdown_beacon,
-            AtmError::daemon_unavailable("failed while accepting daemon local IPC connection")
-                .with_recovery(
-                    "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
-                )
-                .with_source(source),
-        )))),
+        Err(source) => {
+            context.observability.emit_or_warn(
+                "accept_loop",
+                "failed",
+                "daemon local IPC listener stopped accepting connections unexpectedly",
+            );
+            Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
+                context.lifecycle_control,
+                context.shutdown_beacon,
+                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection")
+                    .with_recovery(
+                        "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
+                    )
+                    .with_source(source),
+            ))))
+        }
     }
 }
 
@@ -736,6 +748,7 @@ where
         context.force_shutdown,
         context.registry,
         context.codec.clone(),
+        context.observability,
     )?;
     Ok(AcceptLoopOutcome::Continue)
 }
@@ -860,11 +873,13 @@ fn spawn_connection_worker<'scope>(
     force_shutdown: &Arc<AtomicBool>,
     registry: &Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
+    observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     let active = registry.register();
     let dispatcher = Arc::clone(dispatcher);
     let force_shutdown = Arc::clone(force_shutdown);
     let registry = Arc::clone(registry);
+    let observability = observability.clone();
     thread::Builder::new()
         .name("local-ipc-connection-worker".to_string())
         .spawn_scoped(scope, move || {
@@ -883,6 +898,11 @@ fn spawn_connection_worker<'scope>(
                 Ok(Err(error)) => {
                     #[cfg(test)]
                     eprintln!("daemon local IPC connection handling failed: {error}");
+                    observability.emit_or_warn(
+                        "connection_worker",
+                        "failed",
+                        "daemon local IPC connection handling failed",
+                    );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
                         action = "connection_worker",
@@ -895,6 +915,11 @@ fn spawn_connection_worker<'scope>(
                     #[cfg(test)]
                     eprintln!(
                         "daemon local IPC connection worker panicked; transport thread recovered"
+                    );
+                    observability.emit_or_warn(
+                        "connection_worker",
+                        "panic",
+                        "daemon local IPC connection worker panicked; transport thread recovered",
                     );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
