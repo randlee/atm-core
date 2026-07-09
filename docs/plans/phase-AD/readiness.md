@@ -9,8 +9,8 @@ corrective release work.
 Authoring ownership:
 
 - `AD.29` supplies the authoritative post-send smoke evidence
-- `AD.30` is the sole sprint allowed to author the final close/not-close
-  verdict in this file
+- `AD.30` is the sole sprint allowed to author the `AD.25` through `AD.30`
+  close/not-close verdict in this file
 
 Companion closure ledger:
 
@@ -18,7 +18,7 @@ Companion closure ledger:
 
 Current readiness verdict:
 
-- `release verdict: pending CI confirmation for the terminal AD.30 fix round`
+- `release verdict: AD.25 through AD.30 closeout complete on this branch; the authoritative smoke and Windows daemon-depth evidence are both present.`
 
 Current evidence surfaces:
 
@@ -52,7 +52,7 @@ by a new code sprint:
 
 ## Phase Exit Criteria
 
-`Phase AD` follow-up closure is not complete until all of the following are
+`AD.25` through `AD.30` follow-up closure is not complete until all of the following are
 true:
 
 - `AD.25` through `AD.30` all pass on the accepted line
