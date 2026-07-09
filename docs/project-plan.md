@@ -739,7 +739,7 @@ Sprint line:
 - `AD.20` `feature/pAD-s20-read-body-search-metadata-consistency-repair`
 - `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
 - `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
-- `AD.25` `feature/pAD-s25-built-in-nudge-override-lifecycle`
+- `AD.25` `feature/pAD-s25-post-send-hook-emitter-live-wiring`
 - `AD.26` `feature/pAD-s26-post-send-boundary-wiring-and-accounting`
 - `AD.27` `feature/pAD-s27-upstream-built-in-template-resolution`
 - `AD.28` `feature/pAD-s28-graft-host-nudge-deadline-race-hardening`

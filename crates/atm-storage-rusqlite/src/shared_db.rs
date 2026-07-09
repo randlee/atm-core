@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
             'acknowledge',
             'acknowledge_task'
         )),
+    mode TEXT NOT NULL DEFAULT 'override'
+        CHECK(mode IN ('override', 'disabled')),
     template_body TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (team_name, template_kind)
@@ -477,6 +479,7 @@ pub(crate) fn ensure_schema(
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
+    ensure_team_nudge_template_override_columns(connection, target)?;
     Ok(())
 }
 
@@ -560,6 +563,34 @@ fn ensure_team_roster_columns(
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )
+}
+
+fn ensure_team_nudge_template_override_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "team_nudge_template_overrides",
+        "mode",
+        "ALTER TABLE team_nudge_template_overrides ADD COLUMN mode TEXT NOT NULL DEFAULT 'override';",
+    )?;
+    connection
+        .execute(
+            "UPDATE team_nudge_template_overrides
+             SET mode = 'disabled'
+             WHERE mode = 'override' AND template_body = '';",
+            [],
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to normalize legacy empty nudge-template override rows",
+                error,
+            )
+        })?;
+    Ok(())
 }
 
 fn ensure_mail_messages_message_id_compat(

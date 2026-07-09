@@ -1,9 +1,9 @@
 ---
 id: AD.25
 title: Built-In Nudge Override Lifecycle And Reset Semantics
-status: planned
-branch: feature/pAD-s25-built-in-nudge-override-lifecycle
-worktree: ../atm-core-worktrees/feature/pAD-s25-built-in-nudge-override-lifecycle
+status: complete
+branch: feature/pAD-s25-post-send-hook-emitter-live-wiring
+worktree: ../atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring
 target: integrate/phase-AD
 ---
 

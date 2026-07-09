@@ -190,9 +190,14 @@ Notes:
   upstream of `PostSendHookEmitter`.
 - `atm-core` owns the contract and selection semantics, but does not own the
   concrete SQLite table or any direct SQLite calls.
-- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- The first concrete implementation is `atm-storage-rusqlite`.
 - `atm` remains the owner of the six built-in product template bodies and the
   bounded placeholder substitution/rendering policy.
+- Accepted row semantics are explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion
 
 ## Phase AA Runtime Composition Adjuncts
 
