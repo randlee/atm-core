@@ -191,6 +191,10 @@ Notes:
 - `atm-core` owns the contract and selection semantics, but does not own the
   concrete SQLite table or any direct SQLite calls.
 - The first concrete implementation is `atm-storage-rusqlite`.
+- `atm-daemon-bootstrap` and `atm` are accepted compile-bridge dependents on
+  this contract along the Phase AD line; team-lead approved the widening in
+  ATM review as a direct parallel to the already-accepted
+  `RosterStore` precedent, so no separate ADR was required.
 - `atm` remains the owner of the six built-in product template bodies and the
   bounded placeholder substitution/rendering policy.
 - Accepted row semantics are explicit:
@@ -198,6 +202,9 @@ Notes:
   - override row => stored non-empty template body
   - disabled row => no built-in nudge emission
   - clear/reset => row deletion
+- The earlier `atm::commands::internal_nudge` forbidden reference was removed
+  once that same widening was accepted, so the human-readable boundary record
+  matches the machine-readable TOML contract.
 
 ## Phase AA Runtime Composition Adjuncts
 

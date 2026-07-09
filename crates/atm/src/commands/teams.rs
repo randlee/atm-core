@@ -96,7 +96,9 @@ struct UpdateMemberCommand {
 
 #[derive(Debug, Args)]
 struct SetNudgeTemplateCommand {
+    #[arg(long)]
     team: String,
+    #[arg(long)]
     kind: String,
 
     #[arg(long = "template-body")]
@@ -108,7 +110,9 @@ struct SetNudgeTemplateCommand {
 
 #[derive(Debug, Args)]
 struct DisableNudgeTemplateCommand {
+    #[arg(long)]
     team: String,
+    #[arg(long)]
     kind: String,
 
     #[arg(long)]
@@ -117,7 +121,9 @@ struct DisableNudgeTemplateCommand {
 
 #[derive(Debug, Args)]
 struct ClearNudgeTemplateCommand {
+    #[arg(long)]
     team: String,
+    #[arg(long)]
     kind: String,
 
     #[arg(long)]
