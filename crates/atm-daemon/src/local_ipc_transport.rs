@@ -49,6 +49,8 @@ const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
+    "daemon local IPC connection worker panicked; transport thread recovered";
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 // Test hooks keep shutdown deadlines short so the transport suite verifies
@@ -926,13 +928,11 @@ fn spawn_connection_worker<'scope>(
                 }
                 Err(_) => {
                     #[cfg(test)]
-                    eprintln!(
-                        "daemon local IPC connection worker panicked; transport thread recovered"
-                    );
+                    eprintln!("{CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE}");
                     observability.emit_or_warn(
                         "connection_worker",
                         "panic",
-                        "daemon local IPC connection worker panicked; transport thread recovered",
+                        CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
                     );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",

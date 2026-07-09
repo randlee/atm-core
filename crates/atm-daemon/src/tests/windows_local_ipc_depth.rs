@@ -2,7 +2,7 @@ use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_transport::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, LocalIpcServerTransportAdapter, RuntimeServeHooks,
+    CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE, LocalIpcServerTransportAdapter, RuntimeServeHooks,
     install_injected_accept_error_for_test,
 };
 use crate::test_observability::TestDaemonObservability;
@@ -270,7 +270,10 @@ fn windows_local_ipc_dispatch_panic_during_shutdown_finishes_within_deadline() {
         "dispatcher panic shutdown should remain bounded on Windows",
     );
     observability
-        .wait_for_message_contains(DISPATCH_PANIC_RECOVERED_MESSAGE, Duration::from_secs(5))
+        .wait_for_message_contains(
+            CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
+            Duration::from_secs(5),
+        )
         .expect("panic-path recovery should be observable in the retained test log");
     join.join().expect("join serve thread");
 }
