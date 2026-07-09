@@ -204,7 +204,7 @@ mod tests {
     fn qualified_sender_identity_uses_sender_and_team() {
         assert_eq!(
             qualified_sender_identity(&base_event()),
-            "team-lead@atm-dev"
+            format!("{TEST_LEAD}@{TEST_TEAM}")
         );
     }
 
@@ -215,7 +215,7 @@ mod tests {
             default_template(BuiltInNudgeTemplateKind::DeliveryTaskAck),
         )
         .expect("rendered template");
-        assert!(rendered.contains("team-lead@atm-dev"));
+        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
     }
 }
