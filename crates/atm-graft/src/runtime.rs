@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
@@ -31,6 +32,8 @@ use crate::{
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
+const MAX_HOST_NUDGE_HELPERS: usize = 8;
+const MAX_LISTENER_WAKE_HELPERS: usize = 2;
 #[cfg(windows)]
 const GRAFT_RECEIVER_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
@@ -51,6 +54,61 @@ enum LocalIpcDeadlineSupport {
 struct ReceiverDeadlineSupport {
     recv: LocalIpcDeadlineSupport,
     send: LocalIpcDeadlineSupport,
+}
+
+#[derive(Debug)]
+struct HelperThreadBudget {
+    max_inflight: usize,
+    inflight: AtomicUsize,
+}
+
+impl HelperThreadBudget {
+    const fn new(max_inflight: usize) -> Self {
+        Self {
+            max_inflight,
+            inflight: AtomicUsize::new(0),
+        }
+    }
+
+    fn max_inflight(&self) -> usize {
+        self.max_inflight
+    }
+
+    fn inflight(&self) -> usize {
+        self.inflight.load(Ordering::SeqCst)
+    }
+
+    fn try_acquire(self: &Arc<Self>) -> Option<HelperThreadPermit> {
+        let mut current = self.inflight();
+        loop {
+            if current >= self.max_inflight {
+                return None;
+            }
+            match self.inflight.compare_exchange(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => {
+                    return Some(HelperThreadPermit {
+                        budget: Arc::clone(self),
+                    });
+                }
+                Err(observed) => current = observed,
+            }
+        }
+    }
+}
+
+struct HelperThreadPermit {
+    budget: Arc<HelperThreadBudget>,
+}
+
+impl Drop for HelperThreadPermit {
+    fn drop(&mut self) {
+        self.budget.inflight.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 #[cfg(test)]
@@ -119,6 +177,7 @@ fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
 
 struct BoundedHostNudgeInjector {
     injector: Arc<dyn HostNudgeInjector>,
+    helper_budget: Arc<HelperThreadBudget>,
 }
 
 impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
@@ -129,16 +188,43 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
 
 impl BoundedHostNudgeInjector {
     fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Result<Self, AtmError> {
-        Ok(Self { injector })
+        Ok(Self {
+            injector,
+            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
+        })
     }
 
     fn inject_nudge(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        let helper_permit = self.helper_budget.try_acquire().ok_or_else(|| {
+            let error = AtmError::new(
+                AtmErrorKind::Timeout,
+                format!(
+                    "graft host nudge helper budget is exhausted at {} in-flight helpers",
+                    self.helper_budget.max_inflight()
+                ),
+            )
+            .with_recovery(
+                "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+            );
+            tracing::warn!(
+                subsystem = "atm_graft.host_nudge",
+                action = "inject_nudge",
+                outcome = "helper_budget_exhausted",
+                helper_budget_max = self.helper_budget.max_inflight(),
+                helper_budget_inflight = self.helper_budget.inflight(),
+                error_code = %error.code,
+                error_message = %error.message,
+                "graft host nudge helper budget exhausted"
+            );
+            error
+        })?;
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         let injector = Arc::clone(&self.injector);
         let event = event.clone();
         thread::Builder::new()
             .name("atm-graft-host-nudge".to_string())
             .spawn(move || {
+                let _helper_permit = helper_permit;
                 let result = injector.inject_nudge(&event);
                 if result_tx.send(result).is_err() {
                     tracing::debug!(
@@ -159,21 +245,48 @@ impl BoundedHostNudgeInjector {
             })?;
         match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
             Ok(result) => result,
-            Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
-                AtmErrorKind::Timeout,
-                format!(
+            Err(RecvTimeoutError::Timeout) => {
+                let error = AtmError::new(
+                    AtmErrorKind::Timeout,
+                    format!(
                     "graft host nudge injection exceeded the {:?} delivery deadline",
                     HOST_NUDGE_INJECTION_DEADLINE
-                ),
-            )
-            .with_recovery(
-                "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
-            )),
-            Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
-                AtmErrorKind::Internal,
-                "graft host nudge helper disconnected before returning a delivery result",
-            )
-            .with_recovery("Restart the embedding host before retrying graft delivery.")),
+                    ),
+                )
+                .with_recovery(
+                    "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
+                );
+                tracing::warn!(
+                    subsystem = "atm_graft.host_nudge",
+                    action = "inject_nudge",
+                    outcome = "timeout",
+                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
+                    helper_budget_max = self.helper_budget.max_inflight(),
+                    helper_budget_inflight = self.helper_budget.inflight(),
+                    error_code = %error.code,
+                    error_message = %error.message,
+                    "graft host nudge helper timed out"
+                );
+                Err(error)
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                let error = AtmError::new(
+                    AtmErrorKind::Internal,
+                    "graft host nudge helper disconnected before returning a delivery result",
+                )
+                .with_recovery("Restart the embedding host before retrying graft delivery.");
+                tracing::warn!(
+                    subsystem = "atm_graft.host_nudge",
+                    action = "inject_nudge",
+                    outcome = "disconnected",
+                    helper_budget_max = self.helper_budget.max_inflight(),
+                    helper_budget_inflight = self.helper_budget.inflight(),
+                    error_code = %error.code,
+                    error_message = %error.message,
+                    "graft host nudge helper disconnected unexpectedly"
+                );
+                Err(error)
+            }
         }
     }
 }
@@ -341,6 +454,25 @@ fn warn_runtime_error(action: &'static str, endpoint_path: Option<&Path>, error:
     }
 }
 
+fn listener_wake_budget_exhausted_error(endpoint_path: &Path) -> AtmError {
+    let helper_budget = listener_wake_helper_budget();
+    AtmError::daemon_unavailable(format!(
+        "graft listener wake helper budget is exhausted at {} in-flight helpers for {}",
+        helper_budget.max_inflight(),
+        endpoint_path.display()
+    ))
+    .with_recovery(
+        "Restart the graft-enabled host; repeated hung listener wake helpers exhausted the bounded same-host wake budget.",
+    )
+}
+
+fn listener_wake_helper_budget() -> &'static Arc<HelperThreadBudget> {
+    static LISTENER_WAKE_HELPER_BUDGET: std::sync::OnceLock<Arc<HelperThreadBudget>> =
+        std::sync::OnceLock::new();
+    LISTENER_WAKE_HELPER_BUDGET
+        .get_or_init(|| Arc::new(HelperThreadBudget::new(MAX_LISTENER_WAKE_HELPERS)))
+}
+
 pub(crate) struct GraftReceiverLoopContext {
     pub(crate) endpoint_path: PathBuf,
     pub(crate) snapshot: SharedSessionSnapshot,
@@ -373,9 +505,26 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
 pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), AtmError> {
     let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let helper_budget = listener_wake_helper_budget();
+    let helper_permit = helper_budget.try_acquire().ok_or_else(|| {
+        let error = listener_wake_budget_exhausted_error(endpoint_path);
+        tracing::warn!(
+            subsystem = "atm_graft.receiver_loop",
+            action = "wake_graft_receiver_listener",
+            outcome = "helper_budget_exhausted",
+            endpoint = %endpoint_path.display(),
+            helper_budget_max = helper_budget.max_inflight(),
+            helper_budget_inflight = helper_budget.inflight(),
+            error_code = %error.code,
+            error_message = %error.message,
+            "graft listener wake helper budget exhausted"
+        );
+        error
+    })?;
     thread::Builder::new()
         .name("graft-listener-wake-connect".to_string())
         .spawn(move || {
+            let _helper_permit = helper_permit;
             let _ = result_tx.send(LocalSocketStream::connect(name));
         })
         .map_err(|source| {
@@ -407,6 +556,18 @@ pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), A
             .with_recovery(
                 "Restart the graft-enabled host; the listener wake connection exceeded the bounded shutdown budget.",
             );
+            tracing::warn!(
+                subsystem = "atm_graft.receiver_loop",
+                action = "wake_graft_receiver_listener",
+                outcome = "timeout",
+                endpoint = %endpoint_path.display(),
+                timeout_ms = LISTENER_WAKE_CONNECT_DEADLINE.as_millis(),
+                helper_budget_max = helper_budget.max_inflight(),
+                helper_budget_inflight = helper_budget.inflight(),
+                error_code = %error.code,
+                error_message = %error.message,
+                "graft listener wake helper timed out"
+            );
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
         }
@@ -417,6 +578,17 @@ pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), A
             ))
             .with_recovery(
                 "Restart the graft-enabled host; the local IPC wake path aborted before it could connect to the listener.",
+            );
+            tracing::warn!(
+                subsystem = "atm_graft.receiver_loop",
+                action = "wake_graft_receiver_listener",
+                outcome = "disconnected",
+                endpoint = %endpoint_path.display(),
+                helper_budget_max = helper_budget.max_inflight(),
+                helper_budget_inflight = helper_budget.inflight(),
+                error_code = %error.code,
+                error_message = %error.message,
+                "graft listener wake helper disconnected unexpectedly"
             );
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
@@ -761,9 +933,9 @@ mod tests {
 
     use super::{
         BoundedHostNudgeInjector, GraftReceiverLoopContext, HOST_NUDGE_INJECTION_DEADLINE,
-        TestReceiverReadyLatch, apply_receiver_deadline, bind_graft_receiver_listener,
-        join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
-        wake_graft_receiver_listener,
+        MAX_HOST_NUDGE_HELPERS, TestReceiverReadyLatch, apply_receiver_deadline,
+        bind_graft_receiver_listener, join_receive_loop_with_deadline, load_graft_config,
+        read_snapshot, run_graft_receiver_loop, wake_graft_receiver_listener,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -815,6 +987,22 @@ mod tests {
                     .take()
                     .expect("first call gate");
                 gate.recv().expect("release first call");
+            }
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    struct AlwaysBlocksInjector {
+        released: Arc<std::sync::atomic::AtomicBool>,
+        call_count: AtomicUsize,
+    }
+
+    impl HostNudgeInjector for AlwaysBlocksInjector {
+        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            while !self.released.load(Ordering::SeqCst) {
+                std::thread::yield_now();
             }
             Ok(())
         }
@@ -960,6 +1148,43 @@ mod tests {
             .expect("second delivery should use a fresh helper thread");
 
         gate_tx.send(()).expect("release blocked first helper");
+    }
+
+    #[test]
+    fn bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs() {
+        let released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let blocking_injector = Arc::new(AlwaysBlocksInjector {
+            released: Arc::clone(&released),
+            call_count: AtomicUsize::new(0),
+        });
+        let injector = BoundedHostNudgeInjector::spawn(
+            Arc::clone(&blocking_injector) as Arc<dyn HostNudgeInjector>
+        )
+        .expect("spawn bounded injector");
+
+        for _ in 0..MAX_HOST_NUDGE_HELPERS {
+            let error = injector
+                .inject_nudge(&request_event())
+                .expect_err("blocked helper should time out");
+            assert_eq!(error.code, AtmErrorCode::WaitTimeout);
+        }
+
+        let error = injector
+            .inject_nudge(&request_event())
+            .expect_err("helper budget should eventually cap repeated hangs");
+        assert_eq!(error.code, AtmErrorCode::WaitTimeout);
+        assert!(
+            error
+                .message
+                .contains("graft host nudge helper budget is exhausted"),
+            "{error:?}"
+        );
+        assert_eq!(
+            blocking_injector.call_count.load(Ordering::SeqCst),
+            MAX_HOST_NUDGE_HELPERS
+        );
+
+        released.store(true, Ordering::SeqCst);
     }
 
     #[test]
