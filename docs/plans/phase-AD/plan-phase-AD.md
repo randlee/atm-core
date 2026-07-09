@@ -357,6 +357,11 @@ Phase `AD` may:
 - restore a shipped built-in post-send nudge path for normal ATM installs
 - allow bounded built-in nudge template overrides without requiring teams to
   copy repo-local scripts across many repos
+- make built-in nudge override lifecycle explicit with first-class override,
+  disable, and reset-to-default semantics instead of hidden empty-string state
+- make the accepted post-send seams real on the production send/ack path,
+  including mixed-success hook accounting that preserves successful emission
+  even when a sibling matching rule warns or fails
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
 - remove graft-only session registration, fetch/drain, queue, and advisory
@@ -377,6 +382,12 @@ Phase `AD` may:
   `live_cwd`, and log-only startup `launch_cwd` remain
 - remove committed pane-id routing state from repo config and keep live pane
   routing in SQLite roster state plus CLI repair/update flows only
+- add one authoritative end-to-end smoke/service-hardening lane for the
+  repaired Phase AD post-send matrix without duplicating the sibling harness
+  planning scope
+- restore the missing Windows daemon local-IPC integration-depth coverage in
+  CI for dispatcher panic during shutdown, accept-error handling, and
+  post-terminate connection rejection
 - add smoke and doctor coverage required to keep these regressions closed
 
 Phase `AD` must not:
