@@ -859,7 +859,7 @@ Alias rules:
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:
-  `atm internal-nudge`
+  the built-in in-process delivery path
 - `[[atm.post_send_hooks]]` is the supported external override shape for
   post-send behavior
 - each rule binds exactly one `recipient` selector and one `command` argv
@@ -892,8 +892,11 @@ Post-send-hook rules:
 - Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
-- built-in `atm internal-nudge` must use this same `ATM_POST_SEND` payload
-  contract
+- any retained built-in `atm internal-nudge` helper must not reuse
+  `ATM_POST_SEND` as its control contract; it consumes a separate resolved
+  `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
+  resolved template kind, and resolved template body or explicit disabled
+  state
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
@@ -901,7 +904,7 @@ Post-send-hook rules:
 - hook configuration lookup must use the sender's authoritative ATM roster
   `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
-  must still attempt the shipped built-in `atm internal-nudge` path
+  must still attempt the shipped built-in in-process post-send path
 - the built-in shipped nudge path must support exactly six named template
   cases:
   - `delivery`
@@ -1030,8 +1033,8 @@ Retired from the current implementation:
 - match rules only by resolved recipient identity
 - support `recipient = "*"` wildcard matching for all recipients
 - execute all matching post-send-hook rules in config order
-- if no matching external rule exists, execute the built-in `atm internal-nudge`
-  path instead of silently skipping post-send emission
+- if no matching external rule exists, execute the built-in in-process
+  post-send path instead of silently skipping post-send emission
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
@@ -3588,7 +3591,7 @@ mail correctness.
   - `atm ack` persists the reply to durable ATM state
   - after successful persistence, ATM emits post-send behavior only when the
     recipient exposes that capability
-  - the shipped default post-send path is the built-in `atm internal-nudge`
+  - the shipped default post-send path is the built-in in-process
     implementation
   - teams may override any subset of the six built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through

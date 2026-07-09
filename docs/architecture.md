@@ -1505,9 +1505,11 @@ Current runtime hook-note:
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
-- the shipped built-in `atm internal-nudge` path must consume this same payload
-  contract so ATM does not carry separate external-hook and built-in nudge
-  event shapes
+- external hook commands consume `ATM_POST_SEND`
+- any retained built-in `atm internal-nudge` helper consumes one separate
+  `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
+  resolved template kind, and resolved template body or explicit disabled
+  state; the live production built-in path remains in-process
 - retained compatibility helpers must treat committed `.atm.toml` pane ids as
   non-authoritative and use roster/payload pane truth or explicit `--pane`
   only
@@ -2636,14 +2638,16 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
-- the shipped default emitter path is `atm internal-nudge`
+- the shipped default emitter path is the built-in in-process
+  `PostSendHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
-  SQLite lookup for this feature
+  SQLite lookup for this feature, and any retained `atm internal-nudge`
+  helper must not reopen the lookup after it receives resolved input
 - resolved built-in template lifecycle is explicit: no row => product
   default, override row => stored text, disabled row => no emission,
   clear/reset => row deletion

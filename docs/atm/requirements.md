@@ -111,9 +111,10 @@ Initial crate requirement IDs:
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings
 - keeping `atm --help` / `atm send --help` aligned with the active post-send
-  hook and built-in nudge surface; the CLI help references both the shipped
-  `atm internal-nudge` default and the external override semantics, while
-  `atm-core` owns the underlying matching and migration behavior
+  hook and built-in nudge surface; the CLI help references the shipped
+  built-in behavior plus the retained `atm internal-nudge` helper and the
+  external override semantics, while `atm-core` owns the underlying matching
+  and migration behavior
 
 ## 3.1 Built-In Nudge Surface
 
@@ -121,9 +122,12 @@ Requirement ID:
 - `REQ-ATM-NUDGE-001`
 
 Required rules:
-- `atm` owns the shipped built-in post-send implementation as the hidden
-  `atm internal-nudge` subcommand
-- `atm internal-nudge` must select exactly one built-in template kind:
+- `atm` owns the retained hidden `atm internal-nudge` helper surface
+- the shipped built-in post-send implementation stays on the in-process daemon
+  / emitter line
+- `atm internal-nudge`, when invoked, must consume one resolved built-in
+  template envelope
+  carrying exactly one built-in template kind:
   - `delivery`
   - `delivery_ack`
   - `delivery_task`
@@ -132,10 +136,17 @@ Required rules:
   - `acknowledge_task`
 - `atm` owns direct placeholder substitution for those templates; no Jinja or
   conditional template language is allowed on the built-in path
-- `atm` owns the six built-in default template bodies, but any team-scoped
-  override lookup for those bodies must cross the storage-neutral
+- `atm internal-nudge` must read the resolved built-in envelope from
+  `ATM_INTERNAL_NUDGE`; that envelope carries:
+  - the canonical `PostSendHookEvent`
+  - the concrete sink target
+  - the resolved template kind
+  - the resolved template body or explicit disabled state
+- the accepted built-in path is bounded to six default template bodies, but any
+  team-scoped override lookup for those bodies must cross the storage-neutral
   `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
-  rather than performing direct SQLite access in the CLI crate
+  rather than performing direct SQLite access or runtime/store reopening in
+  the CLI crate
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
   - resolved team-scoped template row returned through the upstream

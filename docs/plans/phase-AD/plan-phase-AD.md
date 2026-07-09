@@ -110,8 +110,8 @@ The authoritative follow-up blockers are:
   tracked distinctly
 - built-in template override rows still hide a fourth, undocumented state
   where an empty string disables built-in nudge with no supported reset path
-- built-in template override resolution still happens inside
-  `atm internal-nudge` instead of upstream of the renderer/delivery step
+- built-in template override resolution must stay upstream of both the live
+  renderer/delivery step and any retained helper surface
 - `atm-graft` still carries a real timing race in test mode because host nudge
   injection uses a shortened `#[cfg(test)]` deadline rather than deterministic
   readiness
@@ -213,8 +213,9 @@ The governing rules are:
   delivery-plan abstraction
 - ATM owns post-send emission, emission logging, and sender warnings on
   emission failure
-- the shipped default post-send path is the built-in `atm internal-nudge`
-  command
+- the shipped default post-send path is the built-in in-process daemon-owned
+  render/deliver path; `atm internal-nudge` is retained only as a helper
+  surface
 - one concrete 1.2.3 release root cause was that `cargo publish` did not ship
   `scripts/atm-nudge.py` or `scripts/atm-nudge.sh`, so any default path that
   still depended on repo-local scripts could not work from an installed binary
@@ -447,6 +448,9 @@ Required runtime meaning:
   - `ATM_POST_SEND.description` is guaranteed on the retained line
   - `ATM_POST_SEND.task_id` remains present as a string contract for external
     hooks and may be empty when no task is associated
+  - any retained built-in `atm internal-nudge` helper no longer reuses
+    `ATM_POST_SEND`; it consumes `ATM_INTERNAL_NUDGE` as a resolved helper
+    envelope
   - optional `to` remains compatibility-only and must not become required for
     the built-in shipped nudge path
   - repo-local `[[atm.post_send_hooks]]` consumers stay supported; any
@@ -612,8 +616,8 @@ Phase `AD` closes only when:
   remains an attempt-only built-in delivery seam
 - the accepted send path no longer uses `std::process::Command` subprocess
   spawn as the production tmux/graft post-send delivery mechanism
-- built-in template override resolution happens upstream of
-  `atm internal-nudge`; the renderer/delivery layer does not reopen runtime
+- built-in template override resolution happens upstream of the live
+  renderer/delivery path; any retained helper surface does not reopen runtime
   bootstrap composition to re-query override storage
 - `ReconcileRuntime`, watched-file import, and daemon reconcile notification
   behavior are removed from the accepted line

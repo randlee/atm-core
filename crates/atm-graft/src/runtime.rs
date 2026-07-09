@@ -22,10 +22,14 @@ use crate::{
     SessionSnapshot,
 };
 
-#[cfg(test)]
-const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(50);
-#[cfg(not(test))]
+// Production and test both use the same bounded delivery deadline; readiness
+// synchronization must absorb scheduler jitter instead of widening the test
+// contract.
 const HOST_NUDGE_INJECTION_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
+// Allow one in-flight handoff while the worker thread is starting or re-arming
+// its blocking recv call. This preserves bounded backpressure without treating
+// healthy scheduler jitter as overload.
+const HOST_NUDGE_INJECT_QUEUE_CAPACITY: usize = 1;
 const LISTENER_WAKE_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -52,7 +56,8 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
 
 impl BoundedHostNudgeInjector {
     fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Result<Self, AtmError> {
-        let (request_tx, request_rx) = mpsc::sync_channel::<InjectRequest>(0);
+        let (request_tx, request_rx) =
+            mpsc::sync_channel::<InjectRequest>(HOST_NUDGE_INJECT_QUEUE_CAPACITY);
         thread::Builder::new()
             .name("atm-graft-host-nudge".to_string())
             .spawn(move || {
@@ -511,6 +516,8 @@ mod tests {
 
     impl GraftObservability for NoopObservability {}
 
+    const REPEATED_DIRECT_NUDGE_DELIVERIES: usize = 25;
+
     struct TestPaths {
         _tempdir: TempDir,
         workspace_root: PathBuf,
@@ -636,20 +643,29 @@ mod tests {
             injector.clone() as Arc<dyn HostNudgeInjector>,
         );
 
-        let request = GraftPostSendRequest {
-            event: request_event(),
-        };
-        let mut stream = connect_receiver(&endpoint_path);
-        write_graft_post_send_message(&mut stream, &request, "write request", "oversized request")
+        let mut expected_events = Vec::with_capacity(REPEATED_DIRECT_NUDGE_DELIVERIES);
+        for _ in 0..REPEATED_DIRECT_NUDGE_DELIVERIES {
+            let request = GraftPostSendRequest {
+                event: request_event(),
+            };
+            let expected_event = request.event.clone();
+            let mut stream = connect_receiver(&endpoint_path);
+            write_graft_post_send_message(
+                &mut stream,
+                &request,
+                "write request",
+                "oversized request",
+            )
             .expect("write request");
-        let response: GraftPostSendResponse =
-            read_graft_post_send_message(&mut stream, "read response", "oversized response")
-                .expect("read response");
-
-        assert_eq!(response, GraftPostSendResponse::Delivered);
+            let response: GraftPostSendResponse =
+                read_graft_post_send_message(&mut stream, "read response", "oversized response")
+                    .expect("read response");
+            assert_eq!(response, GraftPostSendResponse::Delivered);
+            expected_events.push(expected_event);
+        }
         let nudges = injector.nudges.lock().expect("nudges lock");
-        assert_eq!(nudges.len(), 1);
-        assert_eq!(nudges[0], request.event);
+        assert_eq!(nudges.len(), REPEATED_DIRECT_NUDGE_DELIVERIES);
+        assert_eq!(&*nudges, &expected_events);
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
             GraftSessionState::Listening

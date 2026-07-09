@@ -709,8 +709,9 @@ Deliverables:
 - follow-up `AD.25` through `AD.30` closure of:
   - explicit built-in template override lifecycle/reset semantics
   - real post-send boundary wiring plus mixed-success hook accounting
-  - upstream extraction of built-in template resolution out of
-    `atm internal-nudge`
+  - upstream extraction of built-in template resolution out of the built-in
+    delivery path, with any retained `atm internal-nudge` helper reduced to a
+    resolved-envelope render/deliver leaf rather than the shipped default
   - deterministic `atm-graft` host-nudge race closure
   - one authoritative Phase AD post-send smoke matrix
   - separate Windows daemon integration-depth proof for the remaining local IPC
