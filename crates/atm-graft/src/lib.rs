@@ -463,6 +463,8 @@ fn spawn_graft_receive_loop(
                 injector,
                 observability: worker_observability,
                 stop_rx,
+                #[cfg(test)]
+                ready_tx: None,
             })
         })
         .map_err(spawn_receive_loop_error)

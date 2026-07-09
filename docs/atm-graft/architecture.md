@@ -238,6 +238,13 @@ Architectural rules:
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - task-bearing delivery or acknowledge nudges may carry `task_id`; delivery
   nudges may additionally carry `description`
+- the accepted same-host host-nudge race closure uses deterministic
+  receiver-readiness signaling in the test harness:
+  - tests wait on an explicit ready latch after the receiver listener binds
+  - production and test host-nudge injection share the same bounded delivery
+    deadline
+  - the accepted line must not reintroduce a special shorter `#[cfg(test)]`
+    timeout as a substitute for explicit startup readiness
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - the exact transport or callback mechanism used for that handoff is private to
