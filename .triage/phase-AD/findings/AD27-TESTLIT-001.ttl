@@ -5,42 +5,43 @@
   a triage:Finding ;
   triage:findingId "AD27-TESTLIT-001" ;
   triage:title "cargo test --workspace is broken -- hardcoded raw production identity literal in two tests" ;
-  triage:description "crates/atm-core/src/send/nudge_template.rs:207 and :218 -- qualified_sender_identity_uses_sender_and_team and render_built_in_nudge_populates_placeholders still hardcode the raw literal \"team-lead@atm-dev\" as an expected value, even though the base_event() fixture (lines 149-162) was correctly migrated to use TEST_LEAD/TEST_TEAM/TEST_ARCH_CTM constants." ;
+  triage:description "crates/atm-core/src/send/nudge_template.rs:207 and :218 -- qualified_sender_identity_uses_sender_and_team and render_built_in_nudge_populates_placeholders hardcoded the raw literal \"team-lead@atm-dev\" as an expected value. Resolved by migrating both to use TEST_LEAD/TEST_TEAM constants (AD29-QA-1 verified 2026-07-09)." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "test-literal" ;
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "repo_wide" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-09T22:30:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s26/32742f7a> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s27/33683226> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s28/2e7b5d2e> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s29/88558576> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s30/88558576> .
 
 <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/nudge_template.rs" ;
   triage:line 207 ;
   triage:snippet "assert_eq!(qualified_sender_identity(&base_event()), \"team-lead@atm-dev\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "5c19cba9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/88558576> .
 
 <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/2>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/nudge_template.rs" ;
   triage:line 218 ;
   triage:snippet "assert!(rendered.contains(\"team-lead@atm-dev\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "5c19cba9" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/88558576> .
 
 <urn:atm:triage:worktree/pAD-s25/acb7ab6b>
   a triage:WorktreeSnapshot ;
@@ -70,18 +71,18 @@
   triage:headSha "2e7b5d2e" ;
   triage:orderIndex 28 .
 
-<urn:atm:triage:worktree/pAD-s29/f7a4991f>
+<urn:atm:triage:worktree/pAD-s29/88558576>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
-  triage:headSha "f7a4991f" ;
+  triage:headSha "88558576" ;
   triage:orderIndex 29 .
 
-<urn:atm:triage:worktree/pAD-s30/5c19cba9>
+<urn:atm:triage:worktree/pAD-s30/88558576>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
-  triage:headSha "5c19cba9" ;
+  triage:headSha "88558576" ;
   triage:orderIndex 30 .
 
 <urn:atm:triage:worktree/integrate/c64d5a92>
