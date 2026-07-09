@@ -1,7 +1,7 @@
 ---
 id: AD.29
 title: Phase AD Post-Send Smoke Matrix Closeout
-status: planned
+status: complete
 branch: feature/pAD-s29-phase-ad-post-send-smoke-matrix
 worktree: ../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix
 target: integrate/phase-AD
@@ -42,17 +42,25 @@ flaky until the host-nudge timing race from `AD.28` is closed.
 
 ## Interfaces To Add Or Modify
 
-The authoritative Phase AD post-send smoke matrix after this sprint is:
+The authoritative Phase AD post-send smoke matrix after this sprint is the
+Python `SuiteRowSpec` row set owned by:
 
-```rust
-pub enum PhaseAdPostSendSmokeCase {
-    ExternalHookSuccess,
-    ExternalHookPartialFailure,
-    BuiltInFallback,
-    OverrideResetToDefault,
-    OverrideDisabled,
-}
-```
+- `scripts/smoke/run.py`
+- `scripts/smoke/run_thorough.py`
+
+The five authoritative Phase AD closure rows are:
+
+- `AD29-POSTSEND-EXTERNAL-001`
+- `AD29-POSTSEND-PARTIAL-001`
+- `AD29-POSTSEND-BUILTIN-001`
+- `AD29-POSTSEND-RESET-001`
+- `AD29-POSTSEND-DISABLE-001`
+
+Each row remains authoritative through:
+
+- a stable row id
+- one or more exact command invocations
+- a pass note recorded into the smoke report output
 
 The accepted smoke ownership after this sprint is:
 
@@ -71,6 +79,8 @@ The accepted smoke ownership after this sprint is:
 
 - ad hoc Phase AD smoke checks that prove only one post-send happy path
 - duplicate smoke-plan scope that belongs to the sibling `AD.24` harness sprint
+- `scripts/smoke/run_thorough_graft.py` deleted after its graft-only checks are
+  folded into the retained authoritative matrix
 
 ## Deliverables
 
