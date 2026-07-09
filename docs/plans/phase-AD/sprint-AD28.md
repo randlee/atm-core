@@ -2,8 +2,8 @@
 id: AD.28
 title: atm-graft Host-Nudge Deadline Race Hardening
 status: planned
-branch: feature/pAD-s28-graft-host-nudge-deadline-race-hardening
-worktree: ../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening
+branch: feature/pAD-s28-atm-graft-timing-independent
+worktree: ../atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent
 target: integrate/phase-AD
 ---
 

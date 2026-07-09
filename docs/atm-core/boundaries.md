@@ -190,9 +190,21 @@ Notes:
   upstream of `PostSendHookEmitter`.
 - `atm-core` owns the contract and selection semantics, but does not own the
   concrete SQLite table or any direct SQLite calls.
-- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- The first concrete implementation is `atm-storage-rusqlite`.
+- `docs/adr/ADR-021-nudge-template-override-store-dependent-widening.md`
+  governs the accepted Phase AD dependent widening that added
+  `atm-daemon-bootstrap` and `atm` as compile-bridge dependents on this
+  contract, mirroring the retained `RosterStore` precedent.
 - `atm` remains the owner of the six built-in product template bodies and the
   bounded placeholder substitution/rendering policy.
+- Accepted row semantics are explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion
+- That same ADR also governs removal of the earlier
+  `atm::commands::internal_nudge` forbidden reference, so the human-readable
+  boundary record matches the machine-readable TOML contract.
 
 ## Phase AA Runtime Composition Adjuncts
 

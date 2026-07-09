@@ -901,7 +901,8 @@ mod tests {
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
-        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideRow,
+        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
@@ -1587,7 +1588,9 @@ mod tests {
         let runtime = HookEmissionRuntime::new(Some(TeamNudgeTemplateOverrideRow {
             team_name: TeamName::from_validated("test-team"),
             kind: BuiltInNudgeTemplateKind::Delivery,
-            template_body: "<ignored/>".to_string(),
+            mode: TeamNudgeTemplateOverrideMode::Override {
+                template_body: "<ignored/>".to_string(),
+            },
             updated_at: IsoTimestamp::now(),
         }));
         let emitter = RecordingEmitter::default();

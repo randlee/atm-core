@@ -1,9 +1,9 @@
 ---
 id: AD.25
 title: Built-In Nudge Override Lifecycle And Reset Semantics
-status: planned
-branch: feature/pAD-s25-built-in-nudge-override-lifecycle
-worktree: ../atm-core-worktrees/feature/pAD-s25-built-in-nudge-override-lifecycle
+status: complete
+branch: feature/pAD-s25-post-send-hook-emitter-live-wiring
+worktree: ../atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring
 target: integrate/phase-AD
 ---
 
@@ -109,9 +109,9 @@ The accepted operator model after this sprint is:
 
 The accepted CLI surface after this sprint is:
 
-- `atm teams set-nudge-template <team> <kind> --template-body <non-empty>`
-- `atm teams disable-nudge-template <team> <kind>`
-- `atm teams clear-nudge-template <team> <kind>`
+- `atm teams set-nudge-template --team <team> --kind <kind> --template-body <non-empty>`
+- `atm teams disable-nudge-template --team <team> --kind <kind>`
+- `atm teams clear-nudge-template --team <team> --kind <kind>`
 
 Empty-body rejection is one shared contract, not three competing ones:
 

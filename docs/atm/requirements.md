@@ -146,11 +146,16 @@ Required rules:
   the CLI crate
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
-  - resolved team-scoped override body returned through the upstream
+  - resolved team-scoped template row returned through the upstream
     `NudgeTemplateOverrideStore` contract for the selected template kind
-  - built-in product default template body for that kind
-- any unset override case must fall back to the built-in product default body
-  for that exact template kind
+  - built-in product default template body for that kind when no row exists
+- resolved row semantics are:
+  - no row => built-in product default
+  - override row => use the stored non-empty template body
+  - disabled row => emit no built-in nudge
+  - clear/reset => delete the row so the next lookup returns product default
+- empty-string template bodies are invalid; operators must use explicit
+  disable or clear commands instead
 - the default built-in acknowledge template bodies are:
   - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>`
   - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`

@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-AD26-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-AD26-002" ;
+  triage:title "docs/atm-core/boundaries.md has duplicate contradictory GraftPostSendPort sections" ;
+  triage:description "docs/atm-core/boundaries.md:401-451 has two duplicate 'GraftPostSendPort' sections: a stale pre-AD.26 'planned' section (now false -- the TOML exists and is live), and a 'canonical' section naming a nonexistent module atm_daemon::advisory_runtime::AdvisoryRuntime as the accepted implementation (zero grep matches workspace-wide), contradicting the actual live atm_daemon::runtime_health::DaemonGraftPostSendPort and contradicting graft-post-send-port.toml's own correct status notes." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "RULE-013" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-002/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/4dbd5ba8> ;
+  triage:openOn <urn:atm:triage:worktree/s27/0c8606f3> ;
+  triage:openOn <urn:atm:triage:worktree/s28/75df80a8> ;
+  triage:openOn <urn:atm:triage:worktree/s29/1d94594b> ;
+  triage:openOn <urn:atm:triage:worktree/s30/1d94594b> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/1d94594b> ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 406 ;
+  triage:snippet "## GraftPostSendPort (lines 406-436: stale planned section)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 401 ;
+  triage:snippet "## GraftPostSendPort (lines 401-431: stale planned section) + lines 432-451: canonical section with incorrect module name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 401 ;
+  triage:snippet "## GraftPostSendPort (lines 401-431: stale planned section) + lines 432-451: canonical section with incorrect module name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 401 ;
+  triage:snippet "## GraftPostSendPort (lines 401-431: stale planned section) + lines 432-451: canonical section with incorrect module name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/75df80a8> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 401 ;
+  triage:snippet "## GraftPostSendPort (lines 401-431: stale planned section) + lines 432-451: canonical section with incorrect module name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/1d94594b> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-002/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 401 ;
+  triage:snippet "## GraftPostSendPort (lines 401-431: stale planned section) + lines 432-451: canonical section with incorrect module name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/1d94594b> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/0c8606f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/75df80a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 30 .

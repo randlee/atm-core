@@ -516,6 +516,11 @@ impl SqliteStorageBackend {
         self.nudge_template_override_store.clone()
     }
 
+    #[cfg(test)]
+    pub(crate) fn shared_db_for_test(&self) -> Arc<SharedDb> {
+        Arc::clone(&self.nudge_template_override_store.db)
+    }
+
     pub fn replace_roster(
         &self,
         team: TeamName,

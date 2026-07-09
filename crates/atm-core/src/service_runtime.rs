@@ -555,6 +555,22 @@ mod tests {
         ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
             unimplemented!("test stub")
         }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
     }
 
     fn message() -> InboxMessage {

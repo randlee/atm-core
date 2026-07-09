@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004" ;
+  triage:title "Missing regression test for total external-hook failure path" ;
+  triage:description "crates/atm-core/src/send/hook.rs:128-146 -- missing required regression test \"total external-hook failure returns sender-visible warning.\" No test configures only-failing hook rule(s) (matched_rules > 0, succeeded_rules == 0) to exercise the PostSendEmissionOutcome::Failed branch; the only failure-adjacent test (mixed_success_hook_accounting_preserves_delivery_and_warning) has one success and exercises Delivered, not Failed." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/0c8606f3> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/75df80a8> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s29/1d94594b> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/1d94594b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/0c8606f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/75df80a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 30 .

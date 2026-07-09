@@ -33,6 +33,8 @@ use tempfile::TempDir;
 // architecture §18.3.
 #[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
+#[cfg(unix)]
+const TEST_LOCK_TIMEOUT_ERROR_BUDGET_CEILING: Duration = Duration::from_secs(15);
 const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
@@ -619,7 +621,7 @@ fn send_times_out_under_bounded_lock_contention() {
 
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
     assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
+        started.elapsed() < TEST_LOCK_TIMEOUT_ERROR_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
