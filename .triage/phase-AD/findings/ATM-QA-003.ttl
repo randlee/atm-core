@@ -4,34 +4,84 @@
 <urn:atm:triage:finding/ATM-QA-003>
   a triage:Finding ;
   triage:findingId "ATM-QA-003" ;
-  triage:title "No CHANGELOG.md entry for ULID-only message identity change" ;
-  triage:description "CHANGELOG.md lacks an entry documenting the ULID-only message identity change for AD.13. Required for release traceability and user-facing changelog." ;
+  triage:title "collect_scb_observability_rule_violations regression breaks 18 pre-existing boundary lint tests" ;
+  triage:description ".just/lint_boundaries.py:592-596 collect_boundary_violations() now unconditionally calls collect_scb_observability_rule_violations, which raises SystemExit if .just/allowlists/scb_observability_allowlist.toml is missing. New SCB-observability tests in .just/tests/test_lint_boundaries.py:447-451 provision that file via a dedicated helper, but 18 pre-existing tests using the shared fixture builder do not. Regression from 30/30 passing at parent commit 2c7b3c1a to 18/30 erroring at 4dbd5ba8. Confirmed independently by req-qa and rust-qa-agent; matches CI's Just lint (pytests gate) failure on all 3 platforms." ;
   triage:phaseId "phase-AD" ;
   triage:triageMode "initial_pass" ;
   triage:category "ATM-QA" ;
-  triage:severity "minor" ;
-  triage:repeatable false ;
-  triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo_wide" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-05T22:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pAD-s13/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+  triage:triagedAt "2026-07-08T22:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pAD-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pAD-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/0c8606f3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s28/75df80a8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
 
-<urn:atm:triage:occurrence/ATM-QA-003/pAD-s13/1>
+<urn:atm:triage:occurrence/ATM-QA-003/pAD-s26/1>
   a triage:Occurrence ;
-  triage:file "CHANGELOG.md" ;
-  triage:line 1 ;
-  triage:snippet "CHANGELOG.md top sections (v1.2.3, v1.2.2, v1.2.1, v1.2.0, v1.1.2, v1.1.1) lack any entry for ULID-only message identity change completed in AD.13" ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1928 ;
+  triage:snippet "violations.extend(collect_scb_observability_rule_violations(repo_root, rust_sources(repo_root)))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
-  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
-  triage:occursIn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
 
-<urn:atm:triage:worktree/pAD-s13/5e30c20f>
+<urn:atm:triage:occurrence/ATM-QA-003/pAD-s27/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1928 ;
+  triage:snippet "violations.extend(collect_scb_observability_rule_violations(repo_root, rust_sources(repo_root)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
-  triage:headSha "5e30c20f4688b544d146040f1a0c593470271e8f" ;
-  triage:orderIndex 999 .
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/0c8606f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/75df80a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 30 .
