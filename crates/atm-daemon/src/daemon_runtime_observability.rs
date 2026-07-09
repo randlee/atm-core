@@ -7,8 +7,8 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
 
-type ActionName = sc_observability_types::ActionName;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
+pub(crate) type DaemonActionName = sc_observability_types::ActionName;
+pub(crate) type DaemonOutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DaemonSubsystem {
@@ -48,8 +48,8 @@ pub enum TeamScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonEvent {
     pub subsystem: DaemonSubsystem,
-    pub action: ActionName,
-    pub outcome: OutcomeLabel,
+    pub action: DaemonActionName,
+    pub outcome: DaemonOutcomeLabel,
     pub team: TeamScope,
     pub agent: Option<AgentName>,
     pub sender: Option<AgentName>,
@@ -62,8 +62,8 @@ pub struct DaemonEvent {
 impl DaemonEvent {
     pub(crate) fn new(
         subsystem: DaemonSubsystem,
-        action: ActionName,
-        outcome: OutcomeLabel,
+        action: DaemonActionName,
+        outcome: DaemonOutcomeLabel,
         detail: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
@@ -109,8 +109,8 @@ pub trait DaemonRuntimeObservability:
     fn emit_subsystem_event(
         &self,
         subsystem: DaemonSubsystem,
-        action: &ActionName,
-        outcome: &OutcomeLabel,
+        action: &DaemonActionName,
+        outcome: &DaemonOutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError>;
@@ -177,9 +177,9 @@ impl SubsystemObservability {
         // explicitly on the returned event instead of relying on logger-held mutable state.
         DaemonEvent::new(
             self.subsystem(),
-            ActionName::new(action)
+            DaemonActionName::new(action)
                 .expect("daemon subsystem action literals must satisfy ActionName validation"),
-            OutcomeLabel::new(outcome)
+            DaemonOutcomeLabel::new(outcome)
                 .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
             detail,
         )

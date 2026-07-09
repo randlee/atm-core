@@ -8,7 +8,7 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
-use crate::boundary::GraftPostSendPort;
+use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -43,6 +43,8 @@ pub(crate) mod hook;
 mod hook_tmux;
 pub(crate) mod input;
 mod missing_config_notice;
+#[doc(hidden)]
+pub mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
@@ -224,13 +226,13 @@ pub fn send_mail_with_runtime(
     send_mail_with_runtime_impl(request, observability, runtime, None)
 }
 
-pub fn send_mail_with_runtime_and_graft_port(
+pub fn send_mail_with_runtime_and_post_send_emitter(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-    graft_port: &dyn GraftPostSendPort,
+    post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, Some(graft_port))
+    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
 fn send_mail_with_runtime_impl<
@@ -239,7 +241,7 @@ fn send_mail_with_runtime_impl<
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    graft_port: Option<&dyn GraftPostSendPort>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
@@ -268,7 +270,7 @@ fn send_mail_with_runtime_impl<
     finalize_send_outcome(
         runtime,
         observability,
-        graft_port,
+        post_send_emitter,
         &request,
         &context,
         &body,
@@ -289,7 +291,7 @@ fn finalize_send_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    graft_port: Option<&dyn GraftPostSendPort>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -321,9 +323,10 @@ fn finalize_send_outcome<
         }
         let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
         hook::emit_post_send_effects(
+            runtime,
             &mut outcome.warnings,
             context.post_send_config.as_ref(),
-            graft_port,
+            post_send_emitter,
             &context.recipient,
             &context.delivery_snapshot,
             &post_send_messages,

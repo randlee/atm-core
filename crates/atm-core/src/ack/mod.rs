@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::boundary::GraftPostSendPort;
+use crate::boundary::PostSendHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
@@ -125,13 +125,13 @@ pub fn ack_mail_with_runtime(
     ack_mail_with_runtime_impl(request, observability, runtime, None)
 }
 
-pub fn ack_mail_with_runtime_and_graft_port(
+pub fn ack_mail_with_runtime_and_post_send_emitter(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-    graft_port: &dyn GraftPostSendPort,
+    post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime, Some(graft_port))
+    ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
 fn ack_mail_with_runtime_impl<
@@ -140,7 +140,7 @@ fn ack_mail_with_runtime_impl<
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    graft_port: Option<&dyn GraftPostSendPort>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
 ) -> Result<AckOutcome, AtmError> {
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
@@ -155,8 +155,9 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team)
-        .and_then(|context| finalize_ack_outcome(runtime, observability, graft_port, context))
+    ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team).and_then(|context| {
+        finalize_ack_outcome(runtime, observability, post_send_emitter, context)
+    })
 }
 
 fn ack_mail_with_runtime_sqlite<
@@ -473,7 +474,7 @@ fn finalize_ack_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    graft_port: Option<&dyn GraftPostSendPort>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     owned: FinalizeAckContextOwned,
 ) -> Result<AckOutcome, AtmError> {
     let context = FinalizeAckContext {
@@ -516,9 +517,10 @@ fn finalize_ack_outcome<
     )?;
     outcome.warnings.extend(execution.warnings);
     crate::send::hook::emit_post_send_effects(
+        runtime,
         &mut outcome.warnings,
         context.post_send_config.as_ref(),
-        graft_port,
+        post_send_emitter,
         &ResolvedRecipient {
             agent: context.reply_target.agent.clone(),
             team: context.reply_target.team.clone(),
@@ -671,7 +673,6 @@ fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
     use std::time::Duration;
@@ -680,8 +681,13 @@ mod tests {
         AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
     };
-    use crate::boundary::{self, MessageKey, NonClaudeOutboundDeliveryRequest};
+    use crate::boundary::{
+        self, BuiltInPostSendDispatch, MessageKey, NonClaudeOutboundDeliveryRequest,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter,
+    };
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
+    use crate::error::AtmErrorKind;
+    use crate::error_codes::AtmErrorCode;
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, InboxMessage, TeamConfig};
@@ -697,6 +703,12 @@ mod tests {
         outbound_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     }
 
+    #[derive(Default)]
+    struct RecordingPostSendEmitter {
+        fail_code: Option<AtmErrorCode>,
+        emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
+    }
+
     impl AckRuntime {
         fn outbound_messages(&self) -> Vec<InboxMessage> {
             self.outbound_deliveries
@@ -708,33 +720,20 @@ mod tests {
         }
     }
 
-    fn write_atm_nudge_shim(path: &Path, capture_path: &Path, exit_code: i32) {
-        #[cfg(windows)]
-        fs::write(
-            path,
-            format!(
-                "@echo off\r\n> \"{}\" echo %1^|%ATM_INTERNAL_NUDGE_SINK%^|%ATM_POST_SEND%\r\nexit /b {}\r\n",
-                capture_path.display(),
-                exit_code
-            ),
-        )
-        .expect("write atm shim");
-        #[cfg(not(windows))]
-        fs::write(
-            path,
-            format!(
-                "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$1\" \"$ATM_INTERNAL_NUDGE_SINK\" \"$ATM_POST_SEND\" > \"{}\"\nexit {}\n",
-                capture_path.display(),
-                exit_code
-            ),
-        )
-        .expect("write atm shim");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(path).expect("metadata").permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(path, perms).expect("chmod");
+    impl RecordingPostSendEmitter {
+        fn succeed() -> Self {
+            Self::default()
+        }
+
+        fn fail(code: AtmErrorCode) -> Self {
+            Self {
+                fail_code: Some(code),
+                emitted: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
+            self.emitted.lock().expect("post-send emitter").clone()
         }
     }
 
@@ -748,8 +747,33 @@ mod tests {
     }
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
+    impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
     impl crate::boundary::sealed::Sealed for AckRosterRuntime {}
+
+    impl PostSendHookEmitter for RecordingPostSendEmitter {
+        fn emit_post_send(
+            &self,
+            dispatch: &BuiltInPostSendDispatch,
+        ) -> Result<PostSendEmissionPath, crate::error::AtmError> {
+            self.emitted
+                .lock()
+                .expect("post-send emitter")
+                .push(dispatch.clone());
+            if let Some(code) = self.fail_code {
+                return Err(crate::error::AtmError::new_with_code(
+                    code,
+                    AtmErrorKind::DaemonUnavailable,
+                    "test ack post-send emitter failure",
+                )
+                .with_recovery("Repair the test ack post-send emitter and retry."));
+            }
+            Ok(match dispatch.target {
+                PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
+                PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
+            })
+        }
+    }
 
     impl RetainedServiceRuntime for AckRuntime {
         fn load_config(
@@ -1285,24 +1309,17 @@ mod tests {
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
-        let capture_path = tempdir.path().join("ack-nudge.txt");
-        #[cfg(windows)]
-        let atm_path = tempdir.path().join("atm.cmd");
-        #[cfg(not(windows))]
-        let atm_path = tempdir.path().join("atm");
-        write_atm_nudge_shim(&atm_path, &capture_path, 0);
-        let atm_bin = atm_path.display().to_string();
+        let post_send_emitter = RecordingPostSendEmitter::succeed();
         let _env = EnvGuard::set_many([
             ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
             ("USERPROFILE", None),
             ("ATM_LOG_DIR", None),
-            ("ATM_TEST_ATM_BIN", Some(atm_bin.as_str())),
         ]);
 
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            None,
+            Some(&post_send_emitter),
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
@@ -1318,11 +1335,11 @@ mod tests {
 
         assert_eq!(outcome.reply_message_id, reply_message_id);
         assert!(outcome.warnings.is_empty());
-        let captured = fs::read_to_string(&capture_path).expect("capture");
-        assert!(captured.contains("internal-nudge"));
-        assert!(captured.contains("|graft|"));
-        assert!(captured.contains("\"is_ack\":true"));
-        assert!(captured.contains(format!("\"recipient\":\"{ROLE_TEAM_LEAD}\"").as_str()));
+        let emitted = post_send_emitter.emitted();
+        assert_eq!(emitted.len(), 1);
+        assert!(emitted[0].event.is_ack);
+        assert_eq!(emitted[0].event.recipient.as_str(), ROLE_TEAM_LEAD);
+        assert!(matches!(emitted[0].target, PostSendBuiltInTarget::Graft(_)));
     }
 
     #[test]
@@ -1378,24 +1395,18 @@ mod tests {
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
-        let capture_path = tempdir.path().join("ack-nudge.txt");
-        #[cfg(windows)]
-        let atm_path = tempdir.path().join("atm.cmd");
-        #[cfg(not(windows))]
-        let atm_path = tempdir.path().join("atm");
-        write_atm_nudge_shim(&atm_path, &capture_path, 7);
-        let atm_bin = atm_path.display().to_string();
+        let post_send_emitter =
+            RecordingPostSendEmitter::fail(AtmErrorCode::PostSendGraftUnavailable);
         let _env = EnvGuard::set_many([
             ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
             ("USERPROFILE", None),
             ("ATM_LOG_DIR", None),
-            ("ATM_TEST_ATM_BIN", Some(atm_bin.as_str())),
         ]);
 
         let outcome = finalize_ack_outcome(
             &runtime,
             &NullObservability,
-            None,
+            Some(&post_send_emitter),
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,

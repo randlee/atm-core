@@ -214,20 +214,114 @@ impl TeamNudgeTemplateOverrideRow {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct LocalTmuxNudgeTarget {
+    pub pane_id: PaneId,
+    pub rendered_nudge: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct GraftNudgeTarget {
+    pub recipient: AgentName,
+    pub recipient_team: TeamName,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum PostSendBuiltInTarget {
+    LocalTmux(LocalTmuxNudgeTarget),
+    Graft(GraftNudgeTarget),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct BuiltInPostSendDispatch {
+    pub event: PostSendHookEvent,
+    pub target: PostSendBuiltInTarget,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PostSendEmissionPath {
+    ExternalHook,
+    LocalTmux,
+    GraftPort,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct HookExecutionSummary {
+    matched_rules: usize,
+    succeeded_rules: usize,
+    failed_rules: usize,
+}
+
+impl HookExecutionSummary {
+    pub fn new(
+        matched_rules: usize,
+        succeeded_rules: usize,
+        failed_rules: usize,
+    ) -> Result<Self, AtmError> {
+        if succeeded_rules + failed_rules > matched_rules {
+            return Err(AtmError::validation(format!(
+                "invalid post-send hook execution summary: succeeded ({succeeded_rules}) + failed ({failed_rules}) exceeds matched ({matched_rules})"
+            ))
+            .with_recovery(
+                "Count each matching post-send hook rule exactly once before constructing hook execution summary state.",
+            ));
+        }
+        Ok(Self {
+            matched_rules,
+            succeeded_rules,
+            failed_rules,
+        })
+    }
+
+    pub const fn matched_rules(&self) -> usize {
+        self.matched_rules
+    }
+
+    pub const fn succeeded_rules(&self) -> usize {
+        self.succeeded_rules
+    }
+
+    pub const fn failed_rules(&self) -> usize {
+        self.failed_rules
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum PostSendEmissionOutcome {
+    NoCapability {
+        hook_summary: HookExecutionSummary,
+    },
+    Delivered {
+        path: PostSendEmissionPath,
+        hook_summary: HookExecutionSummary,
+    },
+    Failed {
+        hook_summary: HookExecutionSummary,
+        warning: crate::send::WarningEntry,
+    },
+}
 /// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
-pub trait PostSendHookEmitter: sealed::Sealed {
+pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
     /// # Errors
     ///
     /// Returns `AtmError` when one direct post-send emission attempt fails
     /// after durable message persistence has already succeeded.
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+    fn emit_post_send(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Result<PostSendEmissionPath, AtmError>;
 }
 
 /// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.
-pub trait GraftPostSendPort: sealed::Sealed {
+pub trait GraftPostSendPort: sealed::Sealed + Send + Sync {
     /// # Errors
     ///
     /// Returns `AtmError` when one graft-backed post-send emission attempt
     /// fails after durable message persistence has already succeeded.
-    fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+    fn deliver_post_send(
+        &self,
+        event: &PostSendHookEvent,
+        target: &GraftNudgeTarget,
+    ) -> Result<(), AtmError>;
 }

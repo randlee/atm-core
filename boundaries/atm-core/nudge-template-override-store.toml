@@ -46,4 +46,4 @@ review_gates = ["no_cli_sqlite_lookup", "no_emitter_side_lookup"]
 
 [status]
 state = "concrete_landed"
-notes = ["AD.21 landed the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows, including the write path consumed by `atm teams set-nudge-template`."]
+notes = ["AD.21 landed the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows, including the write path consumed by `atm teams set-nudge-template` and the read path consumed by `atm internal-nudge` through the boundary."]

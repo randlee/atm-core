@@ -12,13 +12,15 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    NonClaudeOutboundDeliveryRequest, RosterEntry, RosterHarness, RosterMemberKind,
+    BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
+    Message, MessageKey, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
+    PostSendEmissionPath, PostSendHookEmitter, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
+use crate::error_codes::AtmErrorCode;
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
@@ -81,15 +83,6 @@ pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
     ])
 }
 
-pub(super) fn install_home_env_with_atm_bin(home_dir: &Path, atm_bin: &str) -> EnvGuard {
-    EnvGuard::set_many([
-        ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-        ("ATM_LOG_DIR", None),
-        ("ATM_TEST_ATM_BIN", Some(atm_bin)),
-    ])
-}
-
 fn assert_recovered_payload_texts(
     original: &InboxMessage,
     companion: &InboxMessage,
@@ -115,6 +108,31 @@ pub(super) struct TestRuntime {
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
 }
 
+pub(super) struct RecordingPostSendEmitter {
+    fail_code: Option<AtmErrorCode>,
+    emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
+}
+
+impl RecordingPostSendEmitter {
+    pub(super) fn succeed() -> Self {
+        Self {
+            fail_code: None,
+            emitted: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(super) fn fail(code: AtmErrorCode) -> Self {
+        Self {
+            fail_code: Some(code),
+            emitted: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(super) fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
+        self.emitted.lock().expect("post-send emitter lock").clone()
+    }
+}
+
 impl TestRuntime {
     pub(super) fn new(
         commit_error_message: Option<&'static str>,
@@ -132,6 +150,31 @@ impl TestRuntime {
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
+impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
+
+impl PostSendHookEmitter for RecordingPostSendEmitter {
+    fn emit_post_send(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Result<PostSendEmissionPath, AtmError> {
+        self.emitted
+            .lock()
+            .expect("post-send emitter lock")
+            .push(dispatch.clone());
+        if let Some(code) = self.fail_code {
+            return Err(AtmError::new_with_code(
+                code,
+                AtmErrorKind::DaemonUnavailable,
+                "test post-send emitter failure",
+            )
+            .with_recovery("Repair the test post-send emitter and retry."));
+        }
+        Ok(match dispatch.target {
+            PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
+            PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
+        })
+    }
+}
 
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
@@ -648,20 +691,14 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
-    let capture_path = tempdir.path().join("graft-nudge.txt");
-    #[cfg(windows)]
-    let atm_path = tempdir.path().join("atm.cmd");
-    #[cfg(not(windows))]
-    let atm_path = tempdir.path().join("atm");
-    super::graft_warning_tests::write_atm_nudge_shim(&atm_path, &capture_path, 0);
-    let atm_bin = atm_path.display().to_string();
-    let _env = install_home_env_with_atm_bin(&home_dir, atm_bin.as_str());
+    let _env = install_home_env(&home_dir);
+    let post_send_emitter = RecordingPostSendEmitter::succeed();
 
     let outcome = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &observability,
         &runtime,
-        None,
+        Some(&post_send_emitter),
     )
     .expect("send outcome");
 
@@ -671,11 +708,20 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     let events = read_notification_events(&home_dir);
     assert_eq!(events.len(), 1);
     assert_non_claude_sqlite_failure_observability(&observability);
-    let captured = fs::read_to_string(&capture_path).expect("capture");
-    assert!(captured.contains("internal-nudge"));
-    assert!(captured.contains("|graft|"));
-    assert!(captured.contains(format!("\"sender\":\"{TEST_SENDER}\"").as_str()));
-    assert!(!captured.contains("\"sender\":\"atm-system\""));
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);
+    assert!(!emitted[0].event.is_ack);
+    match &emitted[0].target {
+        PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+            recipient,
+            recipient_team,
+        }) => {
+            assert_eq!(recipient.as_str(), "recipient");
+            assert_eq!(recipient_team.as_str(), TEST_TEAM);
+        }
+        other => panic!("expected graft post-send target, got {other:?}"),
+    }
 }
 
 #[test]
