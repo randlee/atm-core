@@ -1,0 +1,145 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD27-DOC-001>
+  a triage:Finding ;
+  triage:findingId "AD27-DOC-001" ;
+  triage:title "readiness.md Sprint Status table still lists AD.27 as planned" ;
+  triage:description "docs/plans/phase-AD/readiness.md Sprint Status table lists AD.27 (and AD.25, AD.28) as `planned` despite their corresponding sprint-ADNN.md frontmatter showing `complete` or `in_progress`" ;
+  triage:category "doc" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DOC-001/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/c64d5a92> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate/c64d5a92> ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/33683226> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/f7a4991f> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/5c19cba9> .
+
+<urn:atm:triage:occurrence/AD27-DOC-001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 25 ;
+  triage:snippet "| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/c64d5a92> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s29/f7a4991f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s30/5c19cba9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate/c64d5a92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "c64d5a92" ;
+  triage:orderIndex 7 .

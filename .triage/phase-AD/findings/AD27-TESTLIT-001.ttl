@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD27-TESTLIT-001>
+  a triage:Finding ;
+  triage:findingId "AD27-TESTLIT-001" ;
+  triage:title "cargo test --workspace is broken -- hardcoded raw production identity literal in two tests" ;
+  triage:description "crates/atm-core/src/send/nudge_template.rs:207 and :218 -- qualified_sender_identity_uses_sender_and_team and render_built_in_nudge_populates_placeholders still hardcode the raw literal \"team-lead@atm-dev\" as an expected value, even though the base_event() fixture (lines 149-162) was correctly migrated to use TEST_LEAD/TEST_TEAM/TEST_ARCH_CTM constants." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-literal" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo_wide" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+
+<urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 207 ;
+  triage:snippet "assert_eq!(qualified_sender_identity(&base_event()), \"team-lead@atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+
+<urn:atm:triage:occurrence/AD27-TESTLIT-001/pAD-s30/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 218 ;
+  triage:snippet "assert!(rendered.contains(\"team-lead@atm-dev\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/f7a4991f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/5c19cba9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:orderIndex 30 .
+
+<urn:atm:triage:worktree/integrate/c64d5a92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "c64d5a92" ;
+  triage:orderIndex 31 .
