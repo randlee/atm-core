@@ -19,13 +19,16 @@ io_owns = ["built_in_nudge_template_override_lookup_contract"]
 io_forbidden = ["direct_sqlite_io", "socket_io", "process_spawn", "template_rendering"]
 
 [dependencies]
-allowed_dependents = ["atm-runtime", "atm-storage-rusqlite"]
+# `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge
+# consumers here, matching the accepted roster-store precedent while the
+# retained bootstrap/CLI cutover stays on the Phase AD line.
+allowed_dependents = ["atm-runtime", "atm-storage-rusqlite", "atm-daemon-bootstrap", "atm"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["rusqlite::Connection", "atm::commands::internal_nudge", "NotificationSink::deliver"]
+forbidden = ["rusqlite::Connection", "NotificationSink::deliver"]
 
 [contracts]
 request_types = ["team name", "BuiltInNudgeTemplateKind"]

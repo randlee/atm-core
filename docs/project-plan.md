@@ -740,7 +740,7 @@ Sprint line:
 - `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
 - `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
 - `AD.25` `feature/pAD-s25-post-send-hook-emitter-live-wiring`
-- `AD.26` `feature/pAD-s26-post-send-boundary-wiring-and-accounting`
+- `AD.26` `feature/pAD-s26-rule001-observability-seam-closure`
 - `AD.27` `feature/pAD-s27-upstream-built-in-template-resolution`
 - `AD.28` `feature/pAD-s28-graft-host-nudge-deadline-race-hardening`
 - `AD.29` `feature/pAD-s29-phase-ad-post-send-smoke-matrix`
