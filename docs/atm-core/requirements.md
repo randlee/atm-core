@@ -531,8 +531,9 @@ Required caller-context rules:
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata
 - if no matching external rule is configured, `atm-core` must still hand off
-  the canonical post-send event to the shipped built-in `atm internal-nudge`
-  path through a resolved `InternalNudgeEnvelope`
+  the canonical post-send event to the shipped built-in in-process delivery
+  path; any retained `atm internal-nudge` helper uses the same resolved event
+  shape through `InternalNudgeEnvelope`
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -559,9 +560,10 @@ Required caller-context rules:
   - clear/reset => delete the row and fall back to product default
 - empty-string template bodies are invalid ATM input and must not be used as a
   hidden disable signal at any layer
-- the built-in helper envelope is separate from the external hook payload:
+- any retained built-in helper envelope is separate from the external hook
+  payload:
   - external hooks receive `ATM_POST_SEND`
-  - built-in `atm internal-nudge` receives `ATM_INTERNAL_NUDGE`
+  - retained `atm internal-nudge` helper receives `ATM_INTERNAL_NUDGE`
   - `ATM_INTERNAL_NUDGE` carries the canonical event, sink target, resolved
     template kind, and resolved template body or explicit disabled state
 - hook failure or timeout is best-effort only and must not roll back a

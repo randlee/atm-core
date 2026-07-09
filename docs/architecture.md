@@ -1506,10 +1506,10 @@ Current runtime hook-note:
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
 - external hook commands consume `ATM_POST_SEND`
-- the shipped built-in `atm internal-nudge` path consumes one separate
+- any retained built-in `atm internal-nudge` helper consumes one separate
   `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
   resolved template kind, and resolved template body or explicit disabled
-  state
+  state; the live production built-in path remains in-process
 - retained compatibility helpers must treat committed `.atm.toml` pane ids as
   non-authoritative and use roster/payload pane truth or explicit `--pane`
   only
@@ -2638,15 +2638,16 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
-- the shipped default emitter path is `atm internal-nudge`
+- the shipped default emitter path is the built-in in-process
+  `PostSendHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
-  SQLite lookup for this feature, and `atm internal-nudge` must not reopen the
-  lookup after it receives the resolved envelope
+  SQLite lookup for this feature, and any retained `atm internal-nudge`
+  helper must not reopen the lookup after it receives resolved input
 - the authoritative Phase AD post-send smoke lane is fixed to five closure
   cases only:
   - external hook success
