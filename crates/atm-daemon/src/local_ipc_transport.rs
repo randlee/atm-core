@@ -1,6 +1,5 @@
 use std::io::Write;
 use std::num::NonZeroU64;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -24,6 +23,7 @@ use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
 
+mod accept_loop;
 mod request_worker;
 mod shutdown;
 
@@ -31,6 +31,10 @@ use std::thread;
 
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
+use accept_loop::{
+    handle_shutdown_probe, maybe_reload_runtime_view, reject_connection_when_capped,
+    spawn_connection_worker, take_accept_error,
+};
 use request_worker::handle_connection;
 #[cfg(test)]
 pub(crate) use request_worker::install_injected_accept_error_for_test;
@@ -767,192 +771,6 @@ where
     Ok(AcceptLoopOutcome::Continue)
 }
 
-fn take_accept_error(
-    signals: &ServeLoopSignals,
-    lifecycle_control: &LifecycleControlSourceAdapter,
-    shutdown_beacon: &ShutdownBeacon,
-) -> Result<Option<AtmError>, AtmError> {
-    match signals.take_accept_error()? {
-        Some(error) => Ok(Some(record_serve_error(
-            lifecycle_control,
-            shutdown_beacon,
-            error,
-        ))),
-        None => Ok(None),
-    }
-}
-
-fn maybe_reload_runtime_view<ReloadRuntimeView>(
-    signals: &ServeLoopSignals,
-    reload_runtime_view: &ReloadRuntimeView,
-    observability: &SubsystemObservability,
-) -> bool
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
-    if !signals.take_reload() {
-        return false;
-    }
-    match reload_runtime_view() {
-        Ok(()) => {
-            observability.emit_or_warn(
-                "reload_runtime_view",
-                "ok",
-                "bounded lifecycle-control-triggered config or roster reload applied",
-            );
-            tracing::info!("bounded lifecycle-control-triggered config/roster reload applied");
-        }
-        Err(error) => tracing::warn!(
-            subsystem = "local_ipc_transport",
-            action = "reload_runtime_view",
-            outcome = "rejected",
-            error_code = %error.code,
-            error_message = %error.message,
-            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
-        ),
-    }
-    true
-}
-
-fn handle_shutdown_probe(
-    stream: &mut LocalSocketStream,
-    lifecycle_control: &LifecycleControlSourceAdapter,
-    shutdown_beacon: &ShutdownBeacon,
-    codec: &JsonAtmProtocolCodec,
-    endpoint_path: &Path,
-    terminate_probe_pending: &mut bool,
-) -> Result<AcceptLoopOutcome, AtmError> {
-    record_shutdown_signal(lifecycle_control, shutdown_beacon);
-    match write_shutdown_response(stream, codec)? {
-        ShutdownResponseOutcome::RejectedRequest => Ok(AcceptLoopOutcome::Break(None)),
-        ShutdownResponseOutcome::NoFrame if *terminate_probe_pending => {
-            Ok(AcceptLoopOutcome::Break(None))
-        }
-        ShutdownResponseOutcome::NoFrame => {
-            *terminate_probe_pending = true;
-            if let Err(error) = schedule_delayed_listener_wake(
-                endpoint_path.to_path_buf(),
-                TERMINATE_REJECTION_GRACE_DEADLINE,
-            ) {
-                tracing::warn!(
-                    subsystem = "local_ipc_transport",
-                    action = "shutdown_probe_wake",
-                    outcome = "failed",
-                    deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
-                    path = %endpoint_path.display(),
-                    %error,
-                    "failed to schedule delayed listener wake during shutdown probe"
-                );
-                let _ = wake_listener(endpoint_path);
-                return Ok(AcceptLoopOutcome::Break(None));
-            }
-            Ok(AcceptLoopOutcome::Continue)
-        }
-    }
-}
-
-fn reject_connection_when_capped(
-    stream: &mut LocalSocketStream,
-    codec: &JsonAtmProtocolCodec,
-    active_connections: usize,
-) -> Result<bool, AtmError> {
-    if active_connections < MAX_CONCURRENT_CONNECTIONS {
-        return Ok(false);
-    }
-    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::daemon_unavailable("daemon connection cap exceeded (max 64 concurrent accepts)")
-            .with_recovery(
-                "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
-            ),
-    ));
-    let frame = codec.response_to_frame(
-        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
-        response,
-    )?;
-    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
-    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let _ = atm_core::protocol::write_frame(
-        stream,
-        &frame,
-        "failed to write daemon rejection response frame",
-    );
-    let _ = stream.flush();
-    Ok(true)
-}
-
-fn spawn_connection_worker<'scope>(
-    scope: &'scope thread::Scope<'scope, '_>,
-    stream: LocalSocketStream,
-    dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
-    force_shutdown: &Arc<AtomicBool>,
-    registry: &Arc<ActiveConnectionRegistry>,
-    codec: JsonAtmProtocolCodec,
-    observability: &SubsystemObservability,
-) -> Result<(), AtmError> {
-    let active = registry.register();
-    let dispatcher = Arc::clone(dispatcher);
-    let force_shutdown = Arc::clone(force_shutdown);
-    let registry = Arc::clone(registry);
-    let observability = observability.clone();
-    thread::Builder::new()
-        .name("local-ipc-connection-worker".to_string())
-        .spawn_scoped(scope, move || {
-            let _active = active;
-            let result = catch_unwind(AssertUnwindSafe(|| {
-                handle_connection(
-                    stream,
-                    dispatcher,
-                    force_shutdown.as_ref(),
-                    registry,
-                    codec,
-                    &observability,
-                )
-            }));
-            match result {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    #[cfg(test)]
-                    eprintln!("daemon local IPC connection handling failed: {error}");
-                    observability.emit_or_warn(
-                        "connection_worker",
-                        "failed",
-                        "daemon local IPC connection handling failed",
-                    );
-                    tracing::warn!(
-                        subsystem = "local_ipc_transport",
-                        action = "connection_worker",
-                        outcome = "failed",
-                        %error,
-                        "daemon local IPC connection handling failed"
-                    );
-                }
-                Err(_) => {
-                    #[cfg(test)]
-                    eprintln!("{CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE}");
-                    observability.emit_or_warn(
-                        "connection_worker",
-                        "panic",
-                        CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
-                    );
-                    tracing::warn!(
-                        subsystem = "local_ipc_transport",
-                        action = "connection_worker",
-                        outcome = "panic",
-                        "daemon local IPC connection worker panicked; the transport thread recovered and continued shutdown accounting"
-                    );
-                }
-            }
-        })
-        .map(|_| ())
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn local IPC connection worker")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can spawn same-host connection workers.",
-                )
-                .with_source(source)
-        })
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct LocalIpcServerTransportAdapter {
     observability: SubsystemObservability,
@@ -1036,7 +854,8 @@ mod tests {
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]
     use crate::test_support::{
-        DoctorOnlyDispatcher, LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready,
+        DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcher,
+        connect_daemon_local_ipc_until_ready,
     };
     #[cfg(unix)]
     use atm_core::boundary::RequestDispatcher;
@@ -1057,23 +876,6 @@ mod tests {
     use tempfile::TempDir;
     #[cfg(unix)]
     use tempfile::TempDir;
-
-    #[cfg(unix)]
-    #[derive(Debug, Default)]
-    struct PanicDispatcher;
-
-    #[cfg(unix)]
-    impl atm_core::boundary::sealed::Sealed for PanicDispatcher {}
-
-    #[cfg(unix)]
-    impl RequestDispatcher for PanicDispatcher {
-        fn dispatch(
-            &self,
-            request: RequestEnvelope,
-        ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-            panic!("intentional dispatcher panic for test: {request:?}");
-        }
-    }
 
     #[cfg(unix)]
     #[test]

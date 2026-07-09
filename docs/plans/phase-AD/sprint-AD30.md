@@ -1,7 +1,7 @@
 ---
 id: AD.30
 title: Windows Daemon Integration-Depth Coverage Closeout
-status: planned
+status: complete
 branch: feature/pAD-s30-windows-daemon-integration-depth
 worktree: ../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth
 target: integrate/phase-AD

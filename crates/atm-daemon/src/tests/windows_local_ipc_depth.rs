@@ -2,13 +2,14 @@ use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_transport::{
-    CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE, LocalIpcServerTransportAdapter, RuntimeServeHooks,
+    DISPATCH_PANIC_RECOVERED_MESSAGE, LocalIpcServerTransportAdapter, RuntimeServeHooks,
     install_injected_accept_error_for_test,
 };
 use crate::test_observability::TestDaemonObservability;
 use crate::test_support::{
-    DoctorOnlyDispatcher, LifecycleFlagResetGuard, configure_test_local_ipc_timeouts,
-    connect_daemon_local_ipc_until_ready, connect_local_ipc_with_timeout,
+    DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcher,
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+    connect_local_ipc_with_timeout,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorQuery;
@@ -20,17 +21,6 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-
-#[derive(Debug, Default)]
-struct PanicDispatcher;
-
-impl atm_core::boundary::sealed::Sealed for PanicDispatcher {}
-
-impl RequestDispatcher for PanicDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        panic!("intentional dispatcher panic for test: {request:?}");
-    }
-}
 
 fn windows_test_observability(atm_home: &std::path::Path) -> Arc<TestDaemonObservability> {
     Arc::new(
@@ -270,10 +260,7 @@ fn windows_local_ipc_dispatch_panic_during_shutdown_finishes_within_deadline() {
         "dispatcher panic shutdown should remain bounded on Windows",
     );
     observability
-        .wait_for_message_contains(
-            CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
-            Duration::from_secs(5),
-        )
+        .wait_for_message_contains(DISPATCH_PANIC_RECOVERED_MESSAGE, Duration::from_secs(5))
         .expect("panic-path recovery should be observable in the retained test log");
     join.join().expect("join serve thread");
 }
