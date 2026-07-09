@@ -130,6 +130,9 @@ Receiver-handoff rule:
 - the daemon may emit one post-send event after durable message commit
 - receiver-specific delivery details stay behind receiver implementations such
   as local tmux and `atm-graft`
+- when the shipped built-in helper is used, it must consume one
+  pre-resolved `ATM_INTERNAL_NUDGE` envelope rather than re-querying template
+  override state from inside daemon-owned code
 - the accepted daemon architecture must not require daemon-owned graft session
   registration, per-session nudge queues, fetch/drain inspection, or a
   dedicated advisory-stream request family

@@ -249,23 +249,22 @@ where
                 None
             }
         };
-        let template_body = nudge_template::resolve_template_body(override_row, kind)?;
-        let from = qualified_sender_identity(&event.sender, Some(&event.sender_team));
-        let rendered_nudge =
-            match nudge_template::render_built_in_nudge(event, &from, &template_body) {
-                Ok(rendered) => rendered,
-                Err(error) => {
-                    warn!(
-                        code = %error.code,
-                        recipient = %event.recipient,
-                        recipient_team = %event.recipient_team,
-                        message_id = %event.message_id,
-                        %error,
-                        "failed to render built-in tmux nudge"
-                    );
-                    return None;
-                }
-            };
+        let template = nudge_template::resolve_template(override_row, kind);
+        let template_body = template.body.as_deref()?;
+        let rendered_nudge = match nudge_template::render_built_in_nudge(event, template_body) {
+            Ok(rendered) => rendered,
+            Err(error) => {
+                warn!(
+                    code = %error.code,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    %error,
+                    "failed to render built-in tmux nudge"
+                );
+                return None;
+            }
+        };
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {

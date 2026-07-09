@@ -112,18 +112,17 @@ The accepted ownership rule around that seam is equally important:
 - `GraftPostSendPort` is the receiver-specific leaf handoff used when the
   chosen built-in target is graft-backed
 
-### Interim execution note for the AD.25-AD.30 follow-up line
+### AD.25-AD.30 closeout note
 
-The accepted architecture above did not change, but the implementation closeout
-sequence is intentionally staged:
+The accepted architecture above stayed fixed while implementation converged:
 
-- `AD.26` makes `PostSendHookEmitter` and `GraftPostSendPort` live on the
-  production send/ack path and removes the subprocess bypass
-- `AD.26` does **not** claim to close the separate upstream-override-resolution
-  clause; that remaining gap is tracked as `ADR-019-EXC-AD26-001`
-- `AD.27` is the required closure sprint for `ADR-019-EXC-AD26-001`
-- no new lookup site may be introduced below `PostSendHookEmitter` while that
-  named interim exception remains open
+- `AD.26` made `PostSendHookEmitter` and `GraftPostSendPort` live on the
+  production send/ack path and removed the subprocess bypass
+- `AD.27` completed the remaining cleanup by moving retained built-in template
+  resolution fully upstream of `atm internal-nudge`
+- the hidden built-in helper now consumes a resolved envelope only; no accepted
+  implementation path is allowed to reopen template-override lookup below
+  `PostSendHookEmitter`
 
 ### 5. Notification logging, if retained, is direct append only
 

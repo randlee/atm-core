@@ -710,7 +710,8 @@ Deliverables:
   - explicit built-in template override lifecycle/reset semantics
   - real post-send boundary wiring plus mixed-success hook accounting
   - upstream extraction of built-in template resolution out of
-    `atm internal-nudge`
+    `atm internal-nudge`, with the helper reduced to one resolved-envelope
+    render/deliver leaf
   - deterministic `atm-graft` host-nudge race closure
   - one authoritative Phase AD post-send smoke matrix
   - separate Windows daemon integration-depth proof for the remaining local IPC

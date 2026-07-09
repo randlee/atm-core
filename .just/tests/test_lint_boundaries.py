@@ -211,6 +211,7 @@ class LintBoundariesTests(unittest.TestCase):
         self.write_scb_retained_support(repo_root)
         self.write_scb_workspace_support(repo_root)
         self.write_scb_singleton_support(repo_root)
+        self.write_scb_observability_support(repo_root)
 
     def write_manifests(
         self,

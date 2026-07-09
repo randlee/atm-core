@@ -447,6 +447,8 @@ Required runtime meaning:
   - `ATM_POST_SEND.description` is guaranteed on the retained line
   - `ATM_POST_SEND.task_id` remains present as a string contract for external
     hooks and may be empty when no task is associated
+  - built-in `atm internal-nudge` no longer reuses `ATM_POST_SEND`; it
+    consumes `ATM_INTERNAL_NUDGE` as the resolved built-in envelope
   - optional `to` remains compatibility-only and must not become required for
     the built-in shipped nudge path
   - repo-local `[[atm.post_send_hooks]]` consumers stay supported; any
