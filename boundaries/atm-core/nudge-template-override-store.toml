@@ -19,13 +19,13 @@ io_owns = ["built_in_nudge_template_override_lookup_contract"]
 io_forbidden = ["direct_sqlite_io", "socket_io", "process_spawn", "template_rendering"]
 
 [dependencies]
-allowed_dependents = ["atm-runtime", "atm-storage-rusqlite"]
+allowed_dependents = ["atm", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["rusqlite::Connection", "atm::commands::internal_nudge", "NotificationSink::deliver"]
+forbidden = ["rusqlite::Connection", "NotificationSink::deliver"]
 
 [contracts]
 request_types = ["team name", "BuiltInNudgeTemplateKind"]
@@ -43,4 +43,4 @@ review_gates = ["no_cli_sqlite_lookup", "no_emitter_side_lookup"]
 
 [status]
 state = "concrete_landed"
-notes = ["AD.21 landed the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows, including the write path consumed by `atm teams set-nudge-template`."]
+notes = ["AD.21 landed the contract so team-scoped built-in override lookup resolves upstream of PostSendHookEmitter.", "atm-storage-rusqlite is the first concrete storage implementation site for the accepted host-scoped override rows, including the write path consumed by `atm teams set-nudge-template` and the read path consumed by `atm internal-nudge` through the boundary."]

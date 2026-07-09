@@ -531,7 +531,8 @@ Required caller-context rules:
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata
 - if no matching external rule is configured, `atm-core` must still hand off
-  the same canonical event to the shipped built-in `atm internal-nudge` path
+  the canonical post-send event to the shipped built-in `atm internal-nudge`
+  path through a resolved `InternalNudgeEnvelope`
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -544,13 +545,18 @@ Required caller-context rules:
 - repo-tracked `.atm.toml` is dogfood/bootstrap config only; it must not carry
   live post-send pane-routing authority through committed
   `[[rmux.windows.panes]].tmux_pane_id` values
-- `atm-core` owns canonical post-send event construction, but it must not own
-  built-in XML template storage, placeholder substitution policy, or sink-local
-  transport behavior
+- `atm-core` owns canonical post-send event construction plus the shared
+  resolved-template helper used by retained built-in nudge paths, but it must
+  not own sink-local transport behavior
 - any team-scoped built-in template override lookup must cross a dedicated
   storage-neutral `NudgeTemplateOverrideStore` boundary before
   `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
   inside the emitter path
+- the built-in helper envelope is separate from the external hook payload:
+  - external hooks receive `ATM_POST_SEND`
+  - built-in `atm internal-nudge` receives `ATM_INTERNAL_NUDGE`
+  - `ATM_INTERNAL_NUDGE` carries the canonical event, sink target, resolved
+    template kind, and resolved template body or explicit disabled state
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

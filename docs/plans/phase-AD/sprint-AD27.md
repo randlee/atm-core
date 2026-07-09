@@ -1,7 +1,7 @@
 ---
 id: AD.27
 title: Upstream Built-In Template Resolution Extraction
-status: planned
+status: complete
 branch: feature/pAD-s27-upstream-built-in-template-resolution
 worktree: ../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution
 target: integrate/phase-AD
@@ -77,6 +77,7 @@ Required ownership after this sprint:
   - override/default precedence decisions
 - `AD.27` closes the named interim exception `ADR-019-EXC-AD26-001` by moving
   the last built-in override lookup upstream of `PostSendHookEmitter`
+  using the resolved `ATM_INTERNAL_NUDGE` envelope
 
 ## Paths To Delete
 

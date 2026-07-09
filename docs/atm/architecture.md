@@ -122,9 +122,15 @@ Follow-up work:
 - `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
-- `atm` owns the shipped built-in `internal-nudge` command, the six bounded
-  template bodies, direct placeholder substitution for those templates, and
-  the final built-in sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- `atm` owns the shipped built-in `internal-nudge` command, the hidden-command
+  compatibility parsing around its resolved envelope, and the final built-in
+  sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- the accepted built-in template catalog and placeholder renderer are shared
+  helper semantics supplied through `atm-core`; `atm` must not fork that
+  catalog or reintroduce a second selection path
+- `atm internal-nudge` consumes one resolved envelope from
+  `ATM_INTERNAL_NUDGE`; it renders and delivers only and must not reopen
+  `NudgeTemplateOverrideStore`, SQLite, or runtime bootstrap composition.
 - `atm` may consume a team-scoped built-in template override body only through
   the storage-neutral upstream contract accepted for Phase `AD`; it must not
   perform direct SQLite lookup itself.

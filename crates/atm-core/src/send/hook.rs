@@ -14,21 +14,26 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
-use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, qualified_sender_identity};
-use crate::boundary::PostSendHookEvent;
+use super::{
+    POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template,
+    qualified_sender_identity,
+};
+use crate::boundary::{
+    BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary,
+    LocalTmuxNudgeTarget, PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath,
+    PostSendHookEmitter, PostSendHookEvent,
+};
 use crate::config::types::HookRecipient;
 use crate::config::{self, AtmConfig};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::schema::compatible_home_dir;
-use crate::service_runtime::append_notification_log;
+use crate::service_runtime::{RetainedServiceRuntime, append_notification_log};
 use crate::types::{AgentName, TeamName};
 
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
-const ATM_PROGRAM_ENV: &str = "ATM_TEST_ATM_BIN";
-const INTERNAL_NUDGE_SINK_ENV: &str = "ATM_INTERNAL_NUDGE_SINK";
 
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
@@ -47,21 +52,6 @@ enum PostSendHookResultLevel {
     Error,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BuiltInNudgeSinkTarget {
-    Tmux,
-    Graft,
-}
-
-impl BuiltInNudgeSinkTarget {
-    fn env_value(self) -> &'static str {
-        match self {
-            Self::Tmux => "tmux",
-            Self::Graft => "graft",
-        }
-    }
-}
-
 #[derive(Clone, Default)]
 struct HookCancellationToken(Arc<AtomicBool>);
 
@@ -75,42 +65,34 @@ impl HookCancellationToken {
     }
 }
 
-pub(crate) fn emit_post_send_effects(
+pub(crate) fn emit_post_send_effects<R>(
+    runtime: &R,
     warnings: &mut Vec<WarningEntry>,
     config: Option<&AtmConfig>,
-    _graft_port: Option<&dyn crate::boundary::GraftPostSendPort>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     recipient: &ResolvedRecipient,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     messages: &[crate::delivery_plan::LogicalMessage],
-) {
+) where
+    R: RetainedServiceRuntime + ?Sized,
+{
     for message in messages {
         let event = post_send_event_from_message(
             recipient,
             message,
             delivery_snapshot.recipient_pane_id.as_ref(),
         );
-        let mut emitted = false;
-        let hook_matched = config.is_some_and(|loaded| {
-            let mut hook_warnings = Vec::new();
-            let matched = run_post_send_hooks_for_cli(&mut hook_warnings, loaded, &event);
-            if !hook_warnings.is_empty() {
-                warnings.extend(hook_warnings);
-            } else if matched {
-                emitted = true;
-            }
-            matched
-        });
-        if !hook_matched && let Some(target) = built_in_nudge_sink_target(delivery_snapshot) {
-            match emit_built_in_nudge(&event, target) {
-                Ok(()) => emitted = true,
-                Err(error) => warnings.push(post_send_warning(
-                    "post-send emission failed",
-                    &event,
-                    &error,
-                )),
-            }
-        }
-        if emitted && let Err(error) = append_notification_log(&notification_event(&event)) {
+        let outcome = emit_post_send_outcome(
+            runtime,
+            warnings,
+            config,
+            post_send_emitter,
+            delivery_snapshot,
+            &event,
+        );
+        if matches!(outcome, PostSendEmissionOutcome::Delivered { .. })
+            && let Err(error) = append_notification_log(&notification_event(&event))
+        {
             warnings.push(WarningEntry::with_code(
                 error.code,
                 format!(
@@ -119,6 +101,64 @@ pub(crate) fn emit_post_send_effects(
                 ),
                 error.primary_recovery().map(str::to_owned),
             ));
+        }
+    }
+}
+
+fn emit_post_send_outcome<R>(
+    runtime: &R,
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+) -> PostSendEmissionOutcome
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let hook_summary = config
+        .map(|loaded| run_post_send_hooks_for_cli(warnings, loaded, event))
+        .unwrap_or_else(|| HookExecutionSummary::new(0, 0, 0).expect("zero summary"));
+    if hook_summary.succeeded_rules() > 0 {
+        return PostSendEmissionOutcome::Delivered {
+            path: PostSendEmissionPath::ExternalHook,
+            hook_summary,
+        };
+    }
+    if hook_summary.matched_rules() > 0 {
+        let warning = warnings.last().cloned().unwrap_or_else(|| {
+            WarningEntry::with_code(
+                AtmErrorCode::WarningHookExecutionFailed,
+                format!(
+                    "warning: post-send hook execution failed for {}@{} message {}.",
+                    event.recipient, event.recipient_team, event.message_id
+                ),
+                Some(
+                    "Inspect the matching post-send hook command output and retry once the hook exits successfully."
+                        .to_string(),
+                ),
+            )
+        });
+        return PostSendEmissionOutcome::Failed {
+            hook_summary,
+            warning,
+        };
+    }
+    let Some(dispatch) = build_built_in_dispatch(runtime, delivery_snapshot, event) else {
+        return PostSendEmissionOutcome::NoCapability { hook_summary };
+    };
+    let Some(post_send_emitter) = post_send_emitter else {
+        return PostSendEmissionOutcome::NoCapability { hook_summary };
+    };
+    match post_send_emitter.emit_post_send(&dispatch) {
+        Ok(path) => PostSendEmissionOutcome::Delivered { path, hook_summary },
+        Err(error) => {
+            let warning = post_send_warning("post-send emission failed", event, &error);
+            warnings.push(warning.clone());
+            PostSendEmissionOutcome::Failed {
+                hook_summary,
+                warning,
+            }
         }
     }
 }
@@ -144,7 +184,7 @@ fn run_post_send_hooks_for_cli(
     warnings: &mut Vec<WarningEntry>,
     config: &AtmConfig,
     event: &PostSendHookEvent,
-) -> bool {
+) -> HookExecutionSummary {
     // This helper is intentionally synchronous and may block the caller thread
     // for up to POST_SEND_HOOK_TIMEOUT while supervising one child process.
     // Keep it on the CLI path; do not call it from an async runtime thread.
@@ -161,174 +201,88 @@ fn run_post_send_hooks_for_cli(
             recipient_team = %event.recipient_team,
             "post-send hook had no matching recipient rules"
         );
-        return false;
+        return HookExecutionSummary::new(0, 0, 0).expect("zero summary");
     }
 
+    let mut succeeded_rules = 0usize;
+    let mut failed_rules = 0usize;
     for rule in matching_rules {
-        execute_post_send_hook(warnings, config, rule, event);
+        if execute_post_send_hook(warnings, config, rule, event) {
+            succeeded_rules += 1;
+        } else {
+            failed_rules += 1;
+        }
     }
-    true
+    HookExecutionSummary::new(
+        succeeded_rules + failed_rules,
+        succeeded_rules,
+        failed_rules,
+    )
+    .expect("validated hook execution summary")
 }
 
-fn built_in_nudge_sink_target(
+fn build_built_in_dispatch<R>(
+    runtime: &R,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
-) -> Option<BuiltInNudgeSinkTarget> {
-    if delivery_snapshot.local_tmux_post_send {
-        Some(BuiltInNudgeSinkTarget::Tmux)
-    } else if delivery_snapshot.graft_post_send {
-        Some(BuiltInNudgeSinkTarget::Graft)
-    } else {
-        None
-    }
-}
-
-fn emit_built_in_nudge(
     event: &PostSendHookEvent,
-    sink_target: BuiltInNudgeSinkTarget,
-) -> Result<(), AtmError> {
-    let command_path = atm_command_path()?;
-    let payload = post_send_hook_payload(event).to_string();
-    let mut command = Command::new(&command_path);
-    command
-        .arg("internal-nudge")
-        .env("ATM_POST_SEND", payload)
-        .env(INTERNAL_NUDGE_SINK_ENV, sink_target.env_value())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    let mut child = command.spawn().map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to start built-in post-send nudge command {}: {source}",
-            command_path.display()
-        ))
-        .with_recovery(
-            "Ensure the installed `atm` binary is executable and on disk before retrying post-send delivery.",
-        )
-        .with_source(source)
-    })?;
-    let started_at = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => return Ok(()),
-            Ok(Some(status)) => {
-                let error = match sink_target {
-                    BuiltInNudgeSinkTarget::Tmux => AtmError::new_with_code(
-                        AtmErrorCode::PostSendTmuxSendFailed,
-                        crate::error::AtmErrorKind::DaemonUnavailable,
-                        format!(
-                            "built-in tmux post-send nudge exited unsuccessfully with status {status}"
-                        ),
-                    )
-                    .with_recovery(
-                        "Inspect the built-in tmux nudge path and the recipient pane state before retrying post-send delivery.",
-                    ),
-                    BuiltInNudgeSinkTarget::Graft => AtmError::new_with_code(
-                        AtmErrorCode::PostSendGraftUnavailable,
-                        crate::error::AtmErrorKind::DaemonUnavailable,
-                        format!(
-                            "built-in graft post-send nudge exited unsuccessfully with status {status}"
-                        ),
-                    )
-                    .with_recovery(
-                        "Ensure the recipient graft receiver is listening and retry once the built-in graft nudge path is healthy.",
-                    ),
-                };
-                return Err(error);
+) -> Option<BuiltInPostSendDispatch>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    if delivery_snapshot.local_tmux_post_send {
+        let pane_id = event
+            .recipient_pane_id
+            .clone()
+            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
+        let kind = BuiltInNudgeTemplateKind::from_post_send_event(event);
+        let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
+            Ok(row) => row,
+            Err(error) => {
+                warn!(
+                    code = %error.code,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    %error,
+                    "failed to load built-in nudge template override; falling back to default"
+                );
+                None
             }
-            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
+        };
+        let template = nudge_template::resolve_template(override_row, kind);
+        let template_body = template.body.as_deref()?;
+        let rendered_nudge = match nudge_template::render_built_in_nudge(event, template_body) {
+            Ok(rendered) => rendered,
+            Err(error) => {
+                warn!(
+                    code = %error.code,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    %error,
+                    "failed to render built-in tmux nudge"
+                );
+                return None;
             }
-            Ok(None) => {
-                terminate_post_send_hook_process(&mut child, &command_path);
-                return Err(AtmError::daemon_unavailable(format!(
-                    "built-in post-send nudge command timed out after {}s",
-                    POST_SEND_HOOK_TIMEOUT.as_secs()
-                ))
-                .with_recovery(
-                    "Fix the built-in `atm internal-nudge` path so it exits promptly after one nudge delivery attempt.",
-                ));
-            }
-            Err(source) => {
-                terminate_post_send_hook_process(&mut child, &command_path);
-                return Err(AtmError::daemon_unavailable(
-                    "failed while waiting for built-in post-send nudge command",
-                )
-                .with_recovery(
-                    "Inspect the built-in `atm internal-nudge` process lifecycle and retry once the local process environment is healthy.",
-                )
-                .with_source(source));
-            }
-        }
+        };
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+                pane_id,
+                rendered_nudge,
+            }),
+        });
     }
-}
-
-fn atm_command_path() -> Result<PathBuf, AtmError> {
-    if let Some(path) = std::env::var_os(ATM_PROGRAM_ENV).filter(|value| !value.is_empty()) {
-        return Ok(path.into());
+    if delivery_snapshot.graft_post_send {
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: event.recipient.clone(),
+                recipient_team: event.recipient_team.clone(),
+            }),
+        });
     }
-
-    let current_exe = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the running ATM process executable")
-            .with_recovery(
-                "Run ATM from an installed binary path or repair the current process environment before retrying built-in post-send delivery.",
-            )
-            .with_source(source)
-    })?;
-    if is_atm_binary_path(&current_exe) {
-        return Ok(current_exe);
-    }
-
-    for candidate in atm_binary_candidates(&current_exe) {
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(AtmError::daemon_unavailable(format!(
-        "failed to resolve the companion `atm` CLI binary for built-in post-send delivery from {}",
-        current_exe.display()
-    ))
-    .with_recovery(
-        "Install `atm` alongside the running ATM binary, or set ATM_TEST_ATM_BIN to an explicit `atm` path before retrying built-in post-send delivery.",
-    ))
-}
-
-fn atm_binary_candidates(current_exe: &Path) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(parent) = current_exe.parent() {
-        candidates.push(parent.join(atm_binary_leaf()));
-        if parent.file_name().is_some_and(|name| name == "deps")
-            && let Some(grandparent) = parent.parent()
-        {
-            candidates.push(grandparent.join(atm_binary_leaf()));
-        }
-    }
-    candidates
-}
-
-fn atm_binary_leaf() -> &'static str {
-    #[cfg(windows)]
-    {
-        "atm.exe"
-    }
-    #[cfg(not(windows))]
-    {
-        "atm"
-    }
-}
-
-fn is_atm_binary_path(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            #[cfg(windows)]
-            {
-                name.eq_ignore_ascii_case("atm.exe")
-            }
-            #[cfg(not(windows))]
-            {
-                name == "atm"
-            }
-        })
+    None
 }
 
 fn execute_post_send_hook(
@@ -336,16 +290,16 @@ fn execute_post_send_hook(
     config: &AtmConfig,
     rule: &config::types::PostSendHookRule,
     event: &PostSendHookEvent,
-) {
+) -> bool {
     // This function performs blocking child-process supervision with short
     // sleeps. It is safe for the current CLI call path and must stay off async
     // runtime threads unless wrapped in spawn_blocking by the caller.
     let Some(execution) = prepare_post_send_hook_execution(config, rule, event) else {
-        return;
+        return false;
     };
     let mut child = match spawn_post_send_hook_process(config, &execution, event, rule, warnings) {
         Some(child) => child,
-        None => return,
+        None => return false,
     };
     let stdout_cancellation = HookCancellationToken::default();
     let mut stdout_reader =
@@ -368,7 +322,7 @@ fn execute_post_send_hook(
                 thread::sleep(Duration::from_millis(50));
             }
             Ok(None) => {
-                return handle_post_send_hook_timeout(
+                handle_post_send_hook_timeout(
                     &mut child,
                     stdout_reader.take(),
                     &stdout_cancellation,
@@ -377,9 +331,10 @@ fn execute_post_send_hook(
                     event,
                     rule,
                 );
+                return false;
             }
             Err(error) => {
-                return handle_post_send_hook_status_error(
+                handle_post_send_hook_status_error(
                     error,
                     HookStatusFailureArgs {
                         child: &mut child,
@@ -391,6 +346,7 @@ fn execute_post_send_hook(
                         rule,
                     },
                 );
+                return false;
             }
         }
     }
@@ -494,7 +450,8 @@ fn warn_post_send_hook_start_failure(
         %error,
         "post-send hook failed to start"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook failed to start from {}: {error}.",
             command_path.display()
@@ -510,14 +467,16 @@ fn handle_post_send_hook_exit(
     warnings: &mut Vec<WarningEntry>,
     event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
-) {
+) -> bool {
     maybe_log_post_send_hook_result(
         command_path,
         finish_post_send_hook_stdout_capture(stdout_reader, command_path),
     );
     if !status.success() {
         warn_post_send_hook_exit_failure(command_path, status, warnings, event, rule);
+        return false;
     }
+    true
 }
 
 fn warn_post_send_hook_exit_failure(
@@ -537,7 +496,8 @@ fn warn_post_send_hook_exit_failure(
         %status,
         "post-send hook exited unsuccessfully"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook exited unsuccessfully from {} with status {status}.",
             command_path.display()
@@ -567,7 +527,8 @@ fn handle_post_send_hook_timeout(
         timeout_seconds = POST_SEND_HOOK_TIMEOUT.as_secs(),
         "post-send hook timed out"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook timed out after {}s for {}.",
             POST_SEND_HOOK_TIMEOUT.as_secs(),
@@ -604,7 +565,8 @@ fn handle_post_send_hook_status_error(error: std::io::Error, args: HookStatusFai
         %error,
         "post-send hook status check failed"
     );
-    args.warnings.push(WarningEntry::new(
+    args.warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook status check failed for {}: {error}.",
             args.command_path.display()
@@ -923,6 +885,7 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use serde_json::{Map, json};
@@ -930,18 +893,22 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        ATM_PROGRAM_ENV, BuiltInNudgeSinkTarget, HookCancellationToken,
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, emit_built_in_nudge,
+        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
         emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
         parse_post_send_hook_result, sender_config_root,
     };
-    use crate::boundary::{PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind};
+    use crate::boundary::{
+        self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
+        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideRow,
+    };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::delivery_plan::LogicalMessage;
     use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
     use crate::error::AtmError;
+    use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     #[allow(
         deprecated,
@@ -1058,6 +1025,151 @@ mod tests {
             F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
         {
             unreachable!("config lookup test does not commit workflow state")
+        }
+    }
+
+    struct HookEmissionRuntime {
+        override_row: Option<TeamNudgeTemplateOverrideRow>,
+    }
+
+    impl HookEmissionRuntime {
+        fn new(override_row: Option<TeamNudgeTemplateOverrideRow>) -> Self {
+            Self { override_row }
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for HookEmissionRuntime {}
+
+    impl RetainedServiceRuntime for HookEmissionRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_nudge_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(self.override_row.clone())
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, AtmError> {
+            unreachable!("hook emission test does not read team config")
+        }
+
+        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            unreachable!("hook emission test does not resolve team dirs")
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            unreachable!("hook emission test does not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            unreachable!("hook emission test does not deliver non-claude payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            unreachable!("hook emission test does not commit workflow state")
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEmitter {
+        emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
+    }
+
+    impl RecordingEmitter {
+        fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
+            self.emitted.lock().expect("emitter lock").clone()
+        }
+    }
+
+    impl boundary::sealed::Sealed for RecordingEmitter {}
+
+    impl PostSendHookEmitter for RecordingEmitter {
+        fn emit_post_send(
+            &self,
+            dispatch: &BuiltInPostSendDispatch,
+        ) -> Result<PostSendEmissionPath, AtmError> {
+            self.emitted
+                .lock()
+                .expect("emitter lock")
+                .push(dispatch.clone());
+            Ok(match dispatch.target {
+                PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
+                PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
+            })
         }
     }
 
@@ -1191,21 +1303,6 @@ mod tests {
         );
     }
 
-    fn tmux_event(recipient_pane_id: Option<PaneId>) -> PostSendHookEvent {
-        PostSendHookEvent {
-            sender: AgentName::from_validated(TEST_SENDER),
-            sender_team: TeamName::from_validated("test-team"),
-            recipient: AgentName::from_validated("recipient"),
-            recipient_team: TeamName::from_validated("test-team"),
-            message_id: crate::schema::AtmMessageId::new(),
-            description: "hello".to_string(),
-            requires_ack: false,
-            is_ack: false,
-            task_id: None,
-            recipient_pane_id,
-        }
-    }
-
     fn logical_message(text: &str) -> LogicalMessage {
         LogicalMessage::new(
             InboxMessage {
@@ -1231,84 +1328,79 @@ mod tests {
         .expect("logical message")
     }
 
-    #[test]
-    #[serial_test::serial(env)]
-    fn built_in_nudge_fallback_invokes_hidden_cli_with_sink_and_payload() {
-        let tempdir = tempdir().expect("tempdir");
-        let capture_path = tempdir.path().join("capture.txt");
-        #[cfg(windows)]
-        let atm_path = tempdir.path().join("atm.cmd");
-        #[cfg(not(windows))]
-        let atm_path = tempdir.path().join("atm");
-        #[cfg(windows)]
-        fs::write(
-            &atm_path,
-            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_CAPTURE%\" echo %1^|!ATM_INTERNAL_NUDGE_SINK!^|!ATM_POST_SEND!\r\nexit /b 0\r\n",
-        )
-        .expect("write atm shim");
-        #[cfg(not(windows))]
-        fs::write(
-            &atm_path,
-            "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$1\" \"$ATM_INTERNAL_NUDGE_SINK\" \"$ATM_POST_SEND\" > \"$ATM_TEST_CAPTURE\"\nexit 0\n",
-        )
-        .expect("write atm shim");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&atm_path).expect("metadata").permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&atm_path, perms).expect("chmod");
+    fn install_test_home(home_dir: &Path) -> EnvGuard {
+        EnvGuard::set_many([
+            ("HOME", home_dir.to_str()),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+        ])
+    }
+
+    fn read_notification_events(home_dir: &Path) -> Vec<crate::protocol::NotificationEvent> {
+        let notification_path =
+            crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl");
+        match fs::read_to_string(notification_path) {
+            Ok(contents) => contents
+                .lines()
+                .map(|line| serde_json::from_str(line).expect("notification event"))
+                .collect(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => panic!("failed to read notification log: {error}"),
         }
-
-        let capture_value = capture_path.display().to_string();
-        let atm_bin = atm_path.display().to_string();
-        let _env = EnvGuard::set_many([
-            (ATM_PROGRAM_ENV, Some(atm_bin.as_str())),
-            ("ATM_TEST_CAPTURE", Some(capture_value.as_str())),
-        ]);
-
-        emit_built_in_nudge(
-            &tmux_event(Some(PaneId::from_cli("%9").expect("pane"))),
-            BuiltInNudgeSinkTarget::Tmux,
-        )
-        .expect("fallback emit");
-
-        let captured = fs::read_to_string(&capture_path).expect("capture");
-        assert!(captured.contains("internal-nudge"));
-        assert!(captured.contains("|tmux|"));
-        assert!(captured.contains("\"description\":\"hello\""));
     }
 
     #[test]
     #[serial_test::serial(env)]
-    fn built_in_nudge_fallback_surfaces_nonzero_exit() {
+    fn built_in_fallback_dispatches_local_tmux_through_emitter() {
         let tempdir = tempdir().expect("tempdir");
-        #[cfg(windows)]
-        let atm_path = tempdir.path().join("atm.cmd");
-        #[cfg(not(windows))]
-        let atm_path = tempdir.path().join("atm");
-        #[cfg(windows)]
-        fs::write(&atm_path, "@echo off\r\nexit /b 7\r\n").expect("write atm shim");
-        #[cfg(not(windows))]
-        fs::write(&atm_path, "#!/bin/sh\nexit 7\n").expect("write atm shim");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&atm_path).expect("metadata").permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&atm_path, perms).expect("chmod");
+        let _env = install_test_home(tempdir.path());
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            None,
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert!(warnings.is_empty());
+        let emitted = emitter.emitted();
+        assert_eq!(emitted.len(), 1);
+        let dispatch = &emitted[0];
+        match &dispatch.target {
+            PostSendBuiltInTarget::LocalTmux(target) => {
+                assert_eq!(target.pane_id, PaneId::from_cli("%9").expect("pane"));
+                assert!(target.rendered_nudge.contains("read atm --team test-team"));
+                assert!(
+                    target
+                        .rendered_nudge
+                        .contains(&dispatch.event.message_id.to_string())
+                );
+                assert!(target.rendered_nudge.contains("hello"));
+            }
+            other => panic!("expected local tmux dispatch, got {other:?}"),
         }
 
-        let atm_bin = atm_path.display().to_string();
-        let _env = EnvGuard::set_many([(ATM_PROGRAM_ENV, Some(atm_bin.as_str()))]);
-
-        let error = emit_built_in_nudge(
-            &tmux_event(Some(PaneId::from_cli("%9").expect("pane"))),
-            BuiltInNudgeSinkTarget::Graft,
-        )
-        .expect_err("nonzero exit must fail");
-
-        assert!(error.message.contains("exited unsuccessfully"));
+        let notifications = read_notification_events(tempdir.path());
+        assert_eq!(notifications.len(), 1);
     }
 
     #[test]
@@ -1316,15 +1408,10 @@ mod tests {
     fn external_post_send_hook_takes_precedence_over_built_in_nudge() {
         let tempdir = tempdir().expect("tempdir");
         let hook_capture = tempdir.path().join("hook-capture.txt");
-        let built_in_capture = tempdir.path().join("built-in-capture.txt");
         #[cfg(windows)]
         let hook_path = tempdir.path().join("hook.cmd");
         #[cfg(not(windows))]
         let hook_path = tempdir.path().join("hook");
-        #[cfg(windows)]
-        let atm_path = tempdir.path().join("atm.cmd");
-        #[cfg(not(windows))]
-        let atm_path = tempdir.path().join("atm");
         #[cfg(windows)]
         fs::write(
             &hook_path,
@@ -1337,41 +1424,20 @@ mod tests {
             "#!/bin/sh\nprintf '%s\\n' \"$ATM_POST_SEND\" > \"$ATM_TEST_HOOK_CAPTURE\"\nexit 0\n",
         )
         .expect("write hook shim");
-        #[cfg(windows)]
-        fs::write(
-            &atm_path,
-            "@echo off\r\n> \"%ATM_TEST_BUILT_IN_CAPTURE%\" echo invoked\r\nexit /b 0\r\n",
-        )
-        .expect("write atm shim");
-        #[cfg(not(windows))]
-        fs::write(
-            &atm_path,
-            "#!/bin/sh\nprintf 'invoked\\n' > \"$ATM_TEST_BUILT_IN_CAPTURE\"\nexit 0\n",
-        )
-        .expect("write atm shim");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            for path in [&hook_path, &atm_path] {
-                let mut perms = fs::metadata(path).expect("metadata").permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(path, perms).expect("chmod");
-            }
+            let mut perms = fs::metadata(&hook_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&hook_path, perms).expect("chmod");
         }
 
         let hook_capture_value = hook_capture.display().to_string();
-        let built_in_capture_value = built_in_capture.display().to_string();
-        let atm_bin = atm_path.display().to_string();
         let _env = EnvGuard::set_many([
             ("ATM_TEST_HOOK_CAPTURE", Some(hook_capture_value.as_str())),
-            (
-                "ATM_TEST_BUILT_IN_CAPTURE",
-                Some(built_in_capture_value.as_str()),
-            ),
             ("ATM_HOME", tempdir.path().to_str()),
             ("ATM_CONFIG_HOME", tempdir.path().to_str()),
             ("HOME", tempdir.path().to_str()),
-            (ATM_PROGRAM_ENV, Some(atm_bin.as_str())),
         ]);
 
         let config = AtmConfig {
@@ -1396,11 +1462,14 @@ mod tests {
             roster_backed: true,
         };
         let mut warnings = Vec::new();
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
 
         emit_post_send_effects(
+            &runtime,
             &mut warnings,
             Some(&config),
-            None,
+            Some(&emitter),
             &recipient,
             &snapshot,
             &[logical_message("hello")],
@@ -1408,6 +1477,157 @@ mod tests {
 
         let captured = fs::read_to_string(&hook_capture).expect("hook capture");
         assert!(captured.contains("\"description\":\"hello\""));
-        assert!(!built_in_capture.exists());
+        assert!(emitter.emitted().is_empty());
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn mixed_success_hook_accounting_preserves_delivery_and_warning() {
+        let tempdir = tempdir().expect("tempdir");
+        let hook_capture = tempdir.path().join("hook-capture.txt");
+        #[cfg(windows)]
+        let hook_ok = tempdir.path().join("hook-ok.cmd");
+        #[cfg(not(windows))]
+        let hook_ok = tempdir.path().join("hook-ok");
+        #[cfg(windows)]
+        let hook_fail = tempdir.path().join("hook-fail.cmd");
+        #[cfg(not(windows))]
+        let hook_fail = tempdir.path().join("hook-fail");
+        #[cfg(windows)]
+        fs::write(
+            &hook_ok,
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo !ATM_POST_SEND!\r\nexit /b 0\r\n",
+        )
+        .expect("write ok hook");
+        #[cfg(not(windows))]
+        fs::write(
+            &hook_ok,
+            "#!/bin/sh\nprintf '%s\\n' \"$ATM_POST_SEND\" > \"$ATM_TEST_HOOK_CAPTURE\"\nexit 0\n",
+        )
+        .expect("write ok hook");
+        #[cfg(windows)]
+        fs::write(&hook_fail, "@echo off\r\nexit /b 7\r\n").expect("write failing hook");
+        #[cfg(not(windows))]
+        fs::write(&hook_fail, "#!/bin/sh\nexit 7\n").expect("write failing hook");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [&hook_ok, &hook_fail] {
+                let mut perms = fs::metadata(path).expect("metadata").permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(path, perms).expect("chmod");
+            }
+        }
+
+        let hook_capture_value = hook_capture.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("ATM_TEST_HOOK_CAPTURE", Some(hook_capture_value.as_str())),
+            ("ATM_HOME", tempdir.path().to_str()),
+            ("ATM_CONFIG_HOME", tempdir.path().to_str()),
+            ("HOME", tempdir.path().to_str()),
+        ]);
+
+        let config = AtmConfig {
+            config_root: tempdir.path().to_path_buf(),
+            post_send_hooks: vec![
+                PostSendHookRule {
+                    recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                    command: vec![hook_ok.display().to_string()],
+                },
+                PostSendHookRule {
+                    recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                    command: vec![hook_fail.display().to_string()],
+                },
+            ],
+            ..Default::default()
+        };
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            Some(&config),
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert_eq!(emitter.emitted().len(), 0);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            warnings[0].code,
+            Some(AtmErrorCode::WarningHookExecutionFailed)
+        );
+        let notifications = read_notification_events(tempdir.path());
+        assert_eq!(notifications.len(), 1);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn graft_fallback_dispatches_through_emitter_without_tmux_fields() {
+        let tempdir = tempdir().expect("tempdir");
+        let _env = install_test_home(tempdir.path());
+        let runtime = HookEmissionRuntime::new(Some(TeamNudgeTemplateOverrideRow {
+            team_name: TeamName::from_validated("test-team"),
+            kind: BuiltInNudgeTemplateKind::Delivery,
+            template_body: "<ignored/>".to_string(),
+            updated_at: IsoTimestamp::now(),
+        }));
+        let emitter = RecordingEmitter::default();
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            None,
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert!(warnings.is_empty());
+        let emitted = emitter.emitted();
+        assert_eq!(emitted.len(), 1);
+        match &emitted[0].target {
+            PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient,
+                recipient_team,
+            }) => {
+                assert_eq!(recipient, &AgentName::from_validated("recipient"));
+                assert_eq!(recipient_team, &TeamName::from_validated("test-team"));
+            }
+            other => panic!("expected graft dispatch, got {other:?}"),
+        }
     }
 }
