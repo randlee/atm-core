@@ -552,6 +552,13 @@ Required caller-context rules:
   storage-neutral `NudgeTemplateOverrideStore` boundary before
   `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
   inside the emitter path
+- the accepted built-in template lifecycle is explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => delete the row and fall back to product default
+- empty-string template bodies are invalid ATM input and must not be used as a
+  hidden disable signal at any layer
 - the built-in helper envelope is separate from the external hook payload:
   - external hooks receive `ATM_POST_SEND`
   - built-in `atm internal-nudge` receives `ATM_INTERNAL_NUDGE`

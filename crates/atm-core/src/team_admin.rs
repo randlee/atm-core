@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::boundary::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterStore,
+    TeamNudgeTemplateOverrideMode,
 };
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
@@ -171,11 +172,48 @@ impl SetNudgeTemplateOverrideRequest {
         kind: &str,
         template_body: String,
     ) -> Result<Self, AtmError> {
+        validate_nudge_template_body(&template_body)?;
         Ok(Self {
             caller_team,
             team: team.parse()?,
             kind: kind.parse()?,
             template_body,
+        })
+    }
+}
+
+/// Parameters for disabling one team-scoped built-in nudge template.
+#[derive(Debug, Clone)]
+pub struct DisableNudgeTemplateOverrideRequest {
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+}
+
+impl DisableNudgeTemplateOverrideRequest {
+    pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_team,
+            team: team.parse()?,
+            kind: kind.parse()?,
+        })
+    }
+}
+
+/// Parameters for clearing one team-scoped built-in nudge template override.
+#[derive(Debug, Clone)]
+pub struct ClearNudgeTemplateOverrideRequest {
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+}
+
+impl ClearNudgeTemplateOverrideRequest {
+    pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_team,
+            team: team.parse()?,
+            kind: kind.parse()?,
         })
     }
 }
@@ -188,6 +226,24 @@ pub struct SetNudgeTemplateOverrideOutcome {
     pub kind: BuiltInNudgeTemplateKind,
     pub template_body: String,
     pub updated_at: crate::types::IsoTimestamp,
+}
+
+/// Result of disabling one team-scoped built-in nudge template override.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DisableNudgeTemplateOverrideOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub updated_at: crate::types::IsoTimestamp,
+}
+
+/// Result of clearing one team-scoped built-in nudge template override.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ClearNudgeTemplateOverrideOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub cleared: bool,
 }
 
 /// List teams currently discoverable under ATM home.
@@ -282,28 +338,102 @@ pub fn set_nudge_template_override_with_store(
     override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
     request: SetNudgeTemplateOverrideRequest,
 ) -> Result<SetNudgeTemplateOverrideOutcome, AtmError> {
-    if request.caller_team != request.team {
-        return Err(AtmError::validation(format!(
-            "caller team '{}' does not match nudge-template target team '{}'",
-            request.caller_team, request.team
-        ))
-        .with_recovery(
-            "Run `atm teams set-nudge-template` from the same ATM team that owns the target override row.",
-        ));
-    }
+    validate_nudge_template_override_team(
+        request.caller_team.clone(),
+        request.team.clone(),
+        "set-nudge-template",
+    )?;
+    validate_nudge_template_body(&request.template_body)?;
 
     let row = override_store.save_template_override(
         &request.team,
         request.kind,
         &request.template_body,
     )?;
+    let template_body = row
+        .template_body()
+        .expect("saved override rows must retain template bodies")
+        .to_string();
     Ok(SetNudgeTemplateOverrideOutcome {
         action: "set-nudge-template",
         team: row.team_name,
         kind: row.kind,
-        template_body: row.template_body,
+        template_body,
         updated_at: row.updated_at,
     })
+}
+
+/// Disable one team-scoped built-in nudge template override.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when caller-team validation fails or the disabled row
+/// cannot be persisted through the shared override-store boundary.
+pub fn disable_nudge_template_override_with_store(
+    override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
+    request: DisableNudgeTemplateOverrideRequest,
+) -> Result<DisableNudgeTemplateOverrideOutcome, AtmError> {
+    validate_nudge_template_override_team(
+        request.caller_team,
+        request.team.clone(),
+        "disable-nudge-template",
+    )?;
+    let row = override_store.disable_template_override(&request.team, request.kind)?;
+    debug_assert!(matches!(row.mode, TeamNudgeTemplateOverrideMode::Disabled));
+    Ok(DisableNudgeTemplateOverrideOutcome {
+        action: "disable-nudge-template",
+        team: row.team_name,
+        kind: row.kind,
+        updated_at: row.updated_at,
+    })
+}
+
+/// Clear one team-scoped built-in nudge template override row.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when caller-team validation fails or the clear
+/// operation cannot complete through the shared override-store boundary.
+pub fn clear_nudge_template_override_with_store(
+    override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
+    request: ClearNudgeTemplateOverrideRequest,
+) -> Result<ClearNudgeTemplateOverrideOutcome, AtmError> {
+    validate_nudge_template_override_team(
+        request.caller_team,
+        request.team.clone(),
+        "clear-nudge-template",
+    )?;
+    let cleared = override_store.clear_template_override(&request.team, request.kind)?;
+    Ok(ClearNudgeTemplateOverrideOutcome {
+        action: "clear-nudge-template",
+        team: request.team,
+        kind: request.kind,
+        cleared,
+    })
+}
+
+fn validate_nudge_template_override_team(
+    caller_team: TeamName,
+    team: TeamName,
+    action: &'static str,
+) -> Result<(), AtmError> {
+    if caller_team != team {
+        return Err(AtmError::validation(format!(
+            "caller team '{}' does not match nudge-template target team '{}'",
+            caller_team, team
+        ))
+        .with_recovery(format!(
+            "Run `atm teams {action}` from the same ATM team that owns the target override row.",
+        )));
+    }
+    Ok(())
+}
+
+fn validate_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
+    if template_body.trim().is_empty() {
+        return Err(AtmError::empty_nudge_template_body());
+    }
+    Ok(())
 }
 
 pub(crate) fn ordered_roster_member_summaries(
@@ -324,16 +454,18 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, MemberName, MembersQuery, RestoreRequest,
+        AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
+        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RestoreRequest,
         SetNudgeTemplateOverrideRequest, UpdateMemberRequest, add_member_with_roster_store,
-        backup_team_with_roster_store, list_members_with_roster_store,
+        backup_team_with_roster_store, clear_nudge_template_override_with_store,
+        disable_nudge_template_override_with_store, list_members_with_roster_store,
         list_teams_with_roster_store, set_nudge_template_override_with_store,
         update_member_with_roster_store,
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, ReplaySource, RosterEntry,
         RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
-        TeamNudgeTemplateOverrideRow,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
@@ -460,10 +592,15 @@ mod tests {
             kind: BuiltInNudgeTemplateKind,
             template_body: &str,
         ) -> Result<TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            if template_body.trim().is_empty() {
+                return Err(crate::error::AtmError::empty_nudge_template_body());
+            }
             let row = TeamNudgeTemplateOverrideRow {
                 team_name: team.clone(),
                 kind,
-                template_body: template_body.to_string(),
+                mode: TeamNudgeTemplateOverrideMode::Override {
+                    template_body: template_body.to_string(),
+                },
                 updated_at: crate::types::IsoTimestamp::now(),
             };
             self.rows
@@ -471,6 +608,37 @@ mod tests {
                 .expect("override store lock")
                 .insert((team.clone(), kind), row.clone());
             Ok(row)
+        }
+
+        fn disable_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            let row = TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: TeamNudgeTemplateOverrideMode::Disabled,
+                updated_at: crate::types::IsoTimestamp::now(),
+            };
+            self.rows
+                .lock()
+                .expect("override store lock")
+                .insert((team.clone(), kind), row.clone());
+            Ok(row)
+        }
+
+        fn clear_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            Ok(self
+                .rows
+                .lock()
+                .expect("override store lock")
+                .remove(&(team.clone(), kind))
+                .is_some())
         }
     }
 
@@ -1010,6 +1178,19 @@ mod tests {
     }
 
     #[test]
+    fn set_nudge_template_override_rejects_empty_body() {
+        let error = SetNudgeTemplateOverrideRequest::new(
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            "delivery_ack",
+            "   ".to_string(),
+        )
+        .expect_err("empty body");
+
+        assert_eq!(error.code, AtmErrorCode::EmptyNudgeTemplateBody);
+    }
+
+    #[test]
     fn set_nudge_template_override_rejects_caller_team_mismatch() {
         let override_store = RecordingNudgeTemplateOverrideStore::default();
         let error = set_nudge_template_override_with_store(
@@ -1055,7 +1236,85 @@ mod tests {
             )
             .expect("load")
             .expect("saved row");
-        assert_eq!(saved.template_body, "<atm/>");
+        assert_eq!(saved.template_body(), Some("<atm/>"));
+        assert!(!saved.is_disabled());
+    }
+
+    #[test]
+    fn disable_nudge_template_override_saves_disabled_row_through_boundary() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = disable_nudge_template_override_with_store(
+            &override_store,
+            DisableNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("disable");
+
+        assert_eq!(outcome.action, "disable-nudge-template");
+        assert_eq!(outcome.team.as_str(), TEST_TEAM);
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert!(saved.is_disabled());
+        assert_eq!(saved.template_body(), None);
+    }
+
+    #[test]
+    fn clear_nudge_template_override_deletes_row_and_reports_state() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("seed");
+
+        let outcome = clear_nudge_template_override_with_store(
+            &override_store,
+            ClearNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("clear");
+        assert!(outcome.cleared);
+
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+            )
+            .expect("load");
+        assert!(saved.is_none());
+
+        let second = clear_nudge_template_override_with_store(
+            &override_store,
+            ClearNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("clear missing");
+        assert!(!second.cleared);
     }
 
     #[test]

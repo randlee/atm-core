@@ -11,8 +11,7 @@ pub fn resolve_template(
     kind: BuiltInNudgeTemplateKind,
 ) -> ResolvedBuiltInNudgeTemplate {
     let body = match override_row {
-        Some(row) if row.template_body.is_empty() => None,
-        Some(row) => Some(row.template_body),
+        Some(row) => row.template_body().map(ToOwned::to_owned),
         None => Some(default_template(kind).to_string()),
     };
     ResolvedBuiltInNudgeTemplate { kind, body }
@@ -141,7 +140,7 @@ mod tests {
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
-        TeamNudgeTemplateOverrideRow,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -170,11 +169,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_template_body_treats_empty_override_as_disabled() {
+    fn resolve_template_body_treats_disabled_override_as_disabled() {
         let row = TeamNudgeTemplateOverrideRow {
             team_name: TeamName::from_validated(TEST_TEAM),
             kind: BuiltInNudgeTemplateKind::Delivery,
-            template_body: String::new(),
+            mode: TeamNudgeTemplateOverrideMode::Disabled,
             updated_at: IsoTimestamp::now(),
         };
         assert_eq!(
@@ -188,7 +187,9 @@ mod tests {
         let row = TeamNudgeTemplateOverrideRow {
             team_name: TeamName::from_validated(TEST_TEAM),
             kind: BuiltInNudgeTemplateKind::DeliveryAck,
-            template_body: "<atm kind=\"override\"/>".to_string(),
+            mode: TeamNudgeTemplateOverrideMode::Override {
+                template_body: "<atm kind=\"override\"/>".to_string(),
+            },
             updated_at: IsoTimestamp::now(),
         };
         assert_eq!(
