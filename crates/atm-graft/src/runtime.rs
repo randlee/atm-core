@@ -29,6 +29,12 @@ use crate::{
     SessionSnapshot,
 };
 
+// The repeated direct-nudge receiver test exercises a real worker thread and
+// local-socket handoff; keeping a tighter test-only deadline than production
+// turns ordinary CI scheduler jitter into a false WaitTimeout.
+#[cfg(test)]
+const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(500);
+#[cfg(not(test))]
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
