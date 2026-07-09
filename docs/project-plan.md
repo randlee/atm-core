@@ -667,6 +667,15 @@ Deliverables:
   - read-mutation and read-selector output consistency
   - shipped built-in post-send nudge plus bounded template override support
   - pane-routing ownership cleanup out of committed repo config
+- follow-up `AD.25` through `AD.30` closure of:
+  - explicit built-in template override lifecycle/reset semantics
+  - real post-send boundary wiring plus mixed-success hook accounting
+  - upstream extraction of built-in template resolution out of
+    `atm internal-nudge`
+  - deterministic `atm-graft` host-nudge race closure
+  - one authoritative Phase AD post-send smoke matrix
+  - separate Windows daemon integration-depth proof for the remaining local IPC
+    shutdown/error/rejection cases
 
 Sprint line:
 - `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
@@ -691,12 +700,25 @@ Sprint line:
 - `AD.20` `feature/pAD-s20-read-body-search-metadata-consistency-repair`
 - `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
 - `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
+- `AD.25` `feature/pAD-s25-built-in-nudge-override-lifecycle`
+- `AD.26` `feature/pAD-s26-post-send-boundary-wiring-and-accounting`
+- `AD.27` `feature/pAD-s27-upstream-built-in-template-resolution`
+- `AD.28` `feature/pAD-s28-graft-host-nudge-deadline-race-hardening`
+- `AD.29` `feature/pAD-s29-phase-ad-post-send-smoke-matrix`
+- `AD.30` `feature/pAD-s30-windows-daemon-integration-depth`
 
 Acceptance:
 - the phase closes only through
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
-- readiness is valid only if `AD.1` through `AD.11` and `AD.12` through
-  `AD.22` all pass on the accepted line
+- readiness is valid only if `AD.1` through `AD.11`, `AD.12` through
+  `AD.22`, and `AD.25` through `AD.30` all pass on the accepted line
+- `AD.30` is the sole sprint allowed to author the final
+  `docs/plans/phase-AD/readiness.md` verdict, incorporating smoke evidence from
+  `AD.29`, Windows daemon-depth evidence from `AD.30`, and the direct-fix
+  closure ledger in `.triage/phase-AD/direct-fix-track.md`
+- `AD.24` is reserved in the sibling smoke-test planning worktree and is
+  consumed by `AD.29`; its harness scope must not be duplicated in the
+  follow-up line
 
 ## 39. Chore: ADR Rationale Audit [COMPLETE]
 
