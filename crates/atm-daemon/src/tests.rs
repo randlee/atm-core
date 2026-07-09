@@ -55,9 +55,8 @@ impl Drop for ShutdownFinalizerDrainGuard {
     }
 }
 
+mod local_ipc_depth;
 mod runtime_root;
-#[cfg(windows)]
-mod windows_local_ipc_depth;
 
 #[test]
 #[serial_test::serial(env)]

@@ -12,8 +12,11 @@
   triage:sweepScope "single_file" ;
   triage:category "ARCH" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-09T19:54:30Z"^^xsd:dateTime ;
+  triage:resolutionNote "AD30-FIX-5 closes the duplicate-logic fork by consolidating the three local-IPC depth scenarios into crates/atm-daemon/src/tests/local_ipc_depth.rs, removing the Unix-only copies from crates/atm-daemon/src/local_ipc_transport.rs, and reusing the single shared PanicDispatcher from crates/atm-daemon/src/test_support.rs." ;
+  triage:rationale "The worktree snapshot references remain as first-observed evidence on the early AD.30 branch head. Closure is tracked on the finding itself because the duplicated occurrences were eliminated on a later reviewed commit rather than on the original 4d86e024 snapshot." ;
   triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-002/s30/1> ;
   triage:openOn <urn:atm:triage:worktree/s30/4d86e024> ;
