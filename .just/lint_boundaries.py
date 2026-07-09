@@ -70,6 +70,8 @@ SCB_WORKSPACE_ALLOWLIST_PATH = Path(".just/allowlists/scb_workspace_allowlist.to
 SCB_WORKSPACE_FIXTURE_PATH = Path(".just/fixtures/scb_workspace_known_bad.rs")
 SCB_SINGLETON_ALLOWLIST_PATH = Path(".just/allowlists/scb_singleton_allowlist.toml")
 SCB_SINGLETON_FIXTURE_PATH = Path(".just/fixtures/scb_singleton_known_bad.rs")
+SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allowlist.toml")
+SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
     "fn load_team_config(",
@@ -131,6 +133,14 @@ SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
     Path("crates/atm-runtime-test-support/src/lib.rs"),
     Path("crates/atm-daemon/src/composition.rs"),
 }
+SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
+    Path("crates/atm-daemon/src/daemon_runtime_observability.rs"),
+    Path("crates/atm-daemon/src/main.rs"),
+}
+SCB_OBSERVABILITY_DIRECT_PATTERNS = (
+    "sc_observability_types::ActionName",
+    "sc_observability_types::OutcomeLabel",
+)
 
 
 @dataclass(frozen=True)
@@ -245,6 +255,15 @@ class ScbWorkspaceAllowlistEntry:
 
 @dataclass(frozen=True)
 class ScbSingletonAllowlistEntry:
+    rule: str
+    path: Path
+    symbol: str
+    why: str
+    sunset_sprint: str
+
+
+@dataclass(frozen=True)
+class ScbObservabilityAllowlistEntry:
     rule: str
     path: Path
     symbol: str
@@ -570,6 +589,40 @@ def scb_singleton_allowlist(repo_root: Path) -> list[ScbSingletonAllowlistEntry]
     return entries
 
 
+def scb_observability_allowlist(repo_root: Path) -> list[ScbObservabilityAllowlistEntry]:
+    allowlist_path = repo_root / SCB_OBSERVABILITY_ALLOWLIST_PATH
+    if not allowlist_path.exists():
+        raise SystemExit(
+            f"[boundaries] missing required allowlist: {SCB_OBSERVABILITY_ALLOWLIST_PATH.as_posix()}"
+        )
+    data = tomllib_load(allowlist_path)
+    raw_entries = data.get("allow", [])
+    if not isinstance(raw_entries, list):
+        raise SystemExit("[boundaries.allow] must be an array of tables")
+
+    entries: list[ScbObservabilityAllowlistEntry] = []
+    for index, raw_entry in enumerate(raw_entries):
+        if not isinstance(raw_entry, dict):
+            raise SystemExit(f"[boundaries.allow][{index}] must be a TOML table")
+        required = ("rule", "path", "symbol", "why", "sunset_sprint")
+        for field in required:
+            value = raw_entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise SystemExit(
+                    f"[boundaries.allow][{index}].{field} must be a non-empty string"
+                )
+        entries.append(
+            ScbObservabilityAllowlistEntry(
+                rule=raw_entry["rule"],
+                path=Path(raw_entry["path"]),
+                symbol=raw_entry["symbol"],
+                why=raw_entry["why"],
+                sunset_sprint=raw_entry["sunset_sprint"],
+            )
+        )
+    return entries
+
+
 def enclosing_function_name(lines: list[str], line_number: int) -> str | None:
     for index in range(line_number - 1, -1, -1):
         line = lines[index].strip()
@@ -636,6 +689,24 @@ def is_allowlisted_workspace_violation(
 def is_allowlisted_singleton_violation(
     *,
     entries: list[ScbSingletonAllowlistEntry],
+    rule: str,
+    rel_path: Path,
+    symbol: str | None,
+) -> bool:
+    for entry in entries:
+        if entry.rule != rule:
+            continue
+        if entry.path != rel_path:
+            continue
+        if symbol is None or entry.symbol != symbol:
+            continue
+        return True
+    return False
+
+
+def is_allowlisted_observability_violation(
+    *,
+    entries: list[ScbObservabilityAllowlistEntry],
     rule: str,
     rel_path: Path,
     symbol: str | None,
@@ -719,6 +790,24 @@ def scb_singleton_fixture_violation(
         return None
     return BoundaryViolation(
         f"{SCB_SINGLETON_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
+        "",
+    )
+
+
+def scb_observability_fixture_violation(
+    violations: list[BoundaryViolation],
+    expected_rules: set[str],
+) -> BoundaryViolation | None:
+    observed_rules = {
+        violation.location.split(" ", 1)[0]
+        for violation in violations
+        if violation.location.startswith("SCB-OBSERVABILITY-")
+    }
+    missing = sorted(expected_rules - observed_rules)
+    if not missing:
+        return None
+    return BoundaryViolation(
+        f"{SCB_OBSERVABILITY_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
         "",
     )
 
@@ -1777,6 +1866,48 @@ def collect_scb_singleton_rule_violations(
     return violations
 
 
+def collect_scb_observability_rule_violations(
+    repo_root: Path,
+    source_paths: list[Path],
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    allowlist = scb_observability_allowlist(repo_root)
+
+    for source_path in source_paths:
+        rel_path = source_path.relative_to(repo_root)
+        rel_source = rel_path.as_posix()
+        if (
+            rel_path != SCB_OBSERVABILITY_FIXTURE_PATH
+            and not rel_source.startswith("crates/atm-daemon/src/")
+        ):
+            continue
+        if rel_path in SCB_OBSERVABILITY_ALLOWED_SRC_FILES:
+            continue
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+        for line_number, line in enumerate(lines, start=1):
+            if is_comment_line(line):
+                continue
+            stripped = line.strip()
+            if not any(pattern in stripped for pattern in SCB_OBSERVABILITY_DIRECT_PATTERNS):
+                continue
+            symbol = enclosing_function_name(lines, line_number) or "__module__"
+            if is_allowlisted_observability_violation(
+                entries=allowlist,
+                rule="SCB-OBSERVABILITY-001",
+                rel_path=rel_path,
+                symbol=symbol,
+            ):
+                continue
+            violations.append(
+                BoundaryViolation(
+                    f"SCB-OBSERVABILITY-001 {rel_source}:{line_number} direct sc_observability_types ActionName/OutcomeLabel imports are forbidden outside daemon_runtime_observability.rs and main.rs",
+                    "",
+                )
+            )
+
+    return violations
+
+
 def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
@@ -1793,6 +1924,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_singleton_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_observability_rule_violations(repo_root, rust_sources(repo_root)))
     fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
     if not fixture_path.exists():
         violations.append(
@@ -1854,6 +1986,24 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
         fixture_failure = scb_singleton_fixture_violation(
             fixture_violations,
             {"SCB-SINGLETON-001"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
+    observability_fixture_path = repo_root / SCB_OBSERVABILITY_FIXTURE_PATH
+    if not observability_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_OBSERVABILITY_FIXTURE_PATH.as_posix(),
+                "missing required SCB-OBSERVABILITY known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_observability_rule_violations(
+            repo_root, [observability_fixture_path]
+        )
+        fixture_failure = scb_observability_fixture_violation(
+            fixture_violations,
+            {"SCB-OBSERVABILITY-001"},
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)

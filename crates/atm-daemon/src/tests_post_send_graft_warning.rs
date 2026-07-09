@@ -209,7 +209,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let recipient_team = TEST_TEAM.parse::<TeamName>().expect("team");
     let recipient_agent = "qa-a".parse::<AgentName>().expect("agent");
     let receiver_path =
-        graft_receiver_socket_path_from_home(&atm_home, &recipient_team, &recipient_agent);
+        graft_receiver_socket_path_from_home(&workspace_dir, &recipient_team, &recipient_agent);
     if let Some(parent) = receiver_path.parent() {
         std::fs::create_dir_all(parent).expect("receiver dir");
     }

@@ -518,6 +518,7 @@ pub(crate) fn build_production_runtime(
     atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.message_store_arc(),
         assembly.shared_roster_store_arc(),
+        assembly.nudge_template_override_store.clone(),
         non_claude_outbound,
     )
 }

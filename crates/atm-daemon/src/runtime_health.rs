@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_graft_port,
-    boundary::{self, PostSendHookEvent},
+    ack::ack_mail_with_runtime_and_post_send_emitter,
+    boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
@@ -26,7 +26,7 @@ use atm_core::{
     },
     read::read_mail,
     schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_graft_port,
+    send::send_mail_with_runtime_and_post_send_emitter,
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -35,6 +35,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -71,10 +72,14 @@ impl DaemonGraftPostSendPort {
 impl boundary::sealed::Sealed for DaemonGraftPostSendPort {}
 
 impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
-    fn deliver_post_send(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    fn deliver_post_send(
+        &self,
+        event: &PostSendHookEvent,
+        target: &GraftNudgeTarget,
+    ) -> Result<(), AtmError> {
         let Some(member) = self
             .runtime
-            .load_roster_member(&event.recipient_team, &event.recipient)?
+            .load_roster_member(&target.recipient_team, &target.recipient)?
         else {
             return Err(graft_recipient_unavailable_error(
                 event,
@@ -90,12 +95,12 @@ impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
                 "recipient has no authoritative home_dir for graft post-send delivery",
             ).with_recovery(format!(
                 "Repair the roster row with `atm teams update-member --team {} --member {} --home-dir <path>` and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                event.recipient_team, event.recipient
+                target.recipient_team, target.recipient
             )))?;
         let endpoint_path = graft_receiver_socket_path_from_home(
             recipient_home_dir.as_path(),
-            &event.recipient_team,
-            &event.recipient,
+            &target.recipient_team,
+            &target.recipient,
         );
         deliver_post_send_to_graft_receiver(&endpoint_path, event)
     }
@@ -576,24 +581,26 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let graft_post_send_port = DaemonGraftPostSendPort::new(self.service_runtime.clone());
+        let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+        let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail_with_runtime_and_graft_port(
+                let outcome = send_mail_with_runtime_and_post_send_emitter(
                     request,
                     self.observability.as_ref(),
                     &self.service_runtime,
-                    &graft_post_send_port,
+                    &post_send_emitter,
                 )?;
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_graft_port(
+                    ack_mail_with_runtime_and_post_send_emitter(
                         request,
                         self.observability.as_ref(),
                         &self.service_runtime,
-                        &graft_post_send_port,
+                        &post_send_emitter,
                     )?,
                 )))
             }

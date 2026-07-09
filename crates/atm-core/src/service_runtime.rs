@@ -28,6 +28,13 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
 
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
+    fn load_nudge_template_override(
+        &self,
+        _team: &TeamName,
+        _kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        Ok(None)
+    }
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
     fn inbox_path(
@@ -103,6 +110,8 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
+    pub(crate) nudge_template_override_store:
+        std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
 }
@@ -111,11 +120,15 @@ impl LocalServiceRuntime {
     pub fn new_with_delivery_boundaries(
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
+        nudge_template_override_store: std::sync::Arc<
+            dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync,
+        >,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
             roster_store,
+            nudge_template_override_store,
             non_claude_outbound,
         }
     }
@@ -151,6 +164,10 @@ impl fmt::Debug for LocalServiceRuntime {
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
+            .field(
+                "nudge_template_override_store",
+                &std::sync::Arc::as_ptr(&self.nudge_template_override_store),
+            )
             .field(
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
@@ -277,6 +294,15 @@ pub(crate) fn append_notification_log_at_path(
 impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         config::load_config(current_dir)
+    }
+
+    fn load_nudge_template_override(
+        &self,
+        team: &TeamName,
+        kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        self.nudge_template_override_store
+            .load_template_override(team, kind)
     }
 
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
@@ -506,6 +532,31 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct NoopNudgeTemplateOverrideStore;
+
+    impl crate::boundary::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+
+    impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
+    }
+
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
@@ -541,6 +592,7 @@ mod tests {
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
+            Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
         );
         let team = "test-team".parse::<TeamName>().expect("team");
