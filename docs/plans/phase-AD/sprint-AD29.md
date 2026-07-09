@@ -62,8 +62,9 @@ The accepted smoke ownership after this sprint is:
 - the accepted Phase AD end-gate matrix must cover:
   - external hook success
   - external hook partial failure
-  - built-in fallback when no external hook matches
-  - reset-to-default after a prior explicit override
+  - built-in fallback when no external hook matches for both tmux and graft
+    recipients
+  - reset-to-default after deleting a prior explicit override row
   - explicit disable behavior if the retained product design keeps that state
 
 ## Paths To Delete

@@ -713,7 +713,12 @@ Deliverables:
     `atm internal-nudge`, with the helper reduced to one resolved-envelope
     render/deliver leaf
   - deterministic `atm-graft` host-nudge race closure
-  - one authoritative Phase AD post-send smoke matrix
+  - one authoritative Phase AD post-send smoke matrix covering exactly:
+    - external hook success
+    - external hook partial failure
+    - built-in fallback
+    - override reset-to-default
+    - explicit disable behavior when retained
   - separate Windows daemon integration-depth proof for the remaining local IPC
     shutdown/error/rejection cases
 

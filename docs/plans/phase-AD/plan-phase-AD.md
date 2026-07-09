@@ -597,6 +597,13 @@ Phase `AD` closes only when:
   - non-empty override rows replace the product default
   - explicit disable is distinct from explicit reset-to-default
   - empty-string rows are rejected rather than interpreted implicitly
+- the authoritative `AD.29` post-send smoke lane is fixed to exactly five
+  closure cases:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback
+  - override reset-to-default after deleting a prior stored override row
+  - explicit disable behavior when the retained design keeps that state
 - repo config no longer carries obsolete `[atm].identity`
 - post-send configured recipients either receive an emitted nudge or return a
   sender-visible warning

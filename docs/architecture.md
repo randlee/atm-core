@@ -2647,6 +2647,13 @@ Architectural rules:
   emitter/render path runs; `atm` and `atm-core` must not perform direct
   SQLite lookup for this feature, and `atm internal-nudge` must not reopen the
   lookup after it receives the resolved envelope
+- the authoritative Phase AD post-send smoke lane is fixed to five closure
+  cases only:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback across both tmux and graft sinks
+  - override reset-to-default after deleting a prior stored override row
+  - explicit disable behavior when the retained design keeps that state
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning

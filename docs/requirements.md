@@ -3591,6 +3591,13 @@ mail correctness.
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
   - post-send emission must not redefine send success after persistence
+  - the authoritative Phase AD release smoke lane for post-send behavior must
+    prove exactly these closure cases:
+    - external hook success
+    - external hook partial failure
+    - built-in fallback
+    - override reset-to-default after a prior stored override row
+    - explicit disable behavior when that retained state is supported
 
 - `REQ-CORE-COMPAT-004` Post-send capability resolution must not depend on
   caller working directory or retired mailbox/config side channels.
