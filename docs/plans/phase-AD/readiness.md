@@ -2,75 +2,81 @@
 
 ## Goal
 
-Record the accepted closure state for Phase AD:
+Track the authoritative closeout state for the `AD.25` through `AD.30`
+follow-up line on top of the already accepted `AD.1` through `AD.22`
+corrective release work.
 
-- caller identity and caller team are resolved only from explicit CLI surfaces
-  or invoking-shell environment when the command requires them
-- `atm doctor` remains the identity-free diagnostic exception
-- post-send behavior is reduced to explicit emitters with sender-visible
-  warning fallback
-- retained/dead compatibility surfaces are removed from the accepted line or
-  explicitly marked obsolete
+Authoring ownership:
+
+- `AD.29` supplies the authoritative post-send smoke evidence
+- `AD.30` is the sole sprint allowed to author the final close/not-close
+  verdict in this file
+
+Companion closure ledger:
+
+- `.triage/phase-AD/direct-fix-track.md`
 
 ## Sprint Status
 
-| Sprint | Status | Branch | Closure Gate |
+| Sprint | Status | Branch | Worktree | Closure Gate |
+| --- | --- | --- | --- | --- |
+| `AD.25` | `planned` | `feature/pAD-s25-built-in-nudge-override-lifecycle` | `../atm-core-worktrees/feature/pAD-s25-built-in-nudge-override-lifecycle` | override rows expose explicit override, disable, and clear/reset semantics with one stable empty-body error contract |
+| `AD.26` | `planned` | `feature/pAD-s26-post-send-boundary-wiring-and-accounting` | `../atm-core-worktrees/feature/pAD-s26-post-send-boundary-wiring-and-accounting` | `PostSendHookEmitter` and `GraftPostSendPort` are live seams, mixed-success accounting is real, and the `RULE-001` library-internal adapter exception is closed through `ADR-020` plus lint enforcement so only the sanctioned daemon adapter module keeps the direct observability imports |
+| `AD.27` | `planned` | `feature/pAD-s27-upstream-built-in-template-resolution` | `../atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution` | `ADR-019-EXC-AD26-001` is closed and built-in override lookup is upstream of `PostSendHookEmitter` |
+| `AD.28` | `planned` | `feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | `../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
+| `AD.29` | `planned` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
+| `AD.30` | `planned` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the final verdict |
+
+## Direct-Fix Carry-Forward Ledger
+
+These items were validated during earlier AD execution or phase-end review, but
+their final closure evidence is owned by the phase-close artifacts rather than
+by a new code sprint:
+
+| Item | Technical owner | Closure-artifact owner | Required evidence |
 | --- | --- | --- | --- |
-| `AD.1` | `complete` | `feature/pAD-s1-caller-identity-ownership-restore` | shared caller-context resolution and required daemon request fields are explicit and validated at CLI entry |
-| `AD.2` | `complete` | `feature/pAD-s2-config-identity-removal-and-doctor-repair` | obsolete config identity fallback is removed from accepted runtime ownership |
-| `AD.3` | `complete` | `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement` | retired Claude JSON mailbox append path is removed or marked obsolete-only |
-| `AD.4` | `complete` | `feature/pAD-s4-reconcile-runtime-removal` | historical reconcile/watch runtime line is deleted from accepted behavior |
-| `AD.5` | `complete` | `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment` | post-send ownership is narrowed to explicit emitters and sender-visible warnings |
-| `AD.6` | `complete` | `feature/pAD-s6-post-send-nudge-contract-simplification` | `PostSendHookEmitter` boundary is documented and enforced as the governing seam |
-| `AD.7` | `complete` | `feature/pAD-s7-local-tmux-post-send-emitter` | local tmux nudges use authoritative roster pane metadata instead of repo-local pane truth |
-| `AD.8` | `complete` | `feature/pAD-s8-graft-post-send-emitter` | graft-backed post-send emission is isolated behind the graft port and does not leak into core ownership |
-| `AD.9` | `complete` | `feature/pAD-s9-update-member-cli-and-roster-repair-path` | `update-member` is the accepted roster-repair path, canonical roster pane state is primary, and any `.atm.toml` pane mapping is compatibility fallback only |
-| `AD.10` | `complete` | `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup` | durable `home_dir`, runtime `live_cwd`, and log-only `launch_cwd` terminology is enforced consistently |
-| `AD.11` | `complete` | `feature/pAD-s11-smoke-and-readiness-closeout` | smoke artifacts, readiness gate, and promoted AD.9 findings close on one accepted evidence line |
-
-## Evidence
-
-| Sprint / Gate | Evidence | Meaning |
-| --- | --- | --- |
-| general smoke | `reports/smoke/smoke.md` | normal Phase AD smoke evidence for caller-context, doctor, and local post-send lanes |
-| general smoke | `reports/smoke/smoke-thorough.md` | thorough Phase AD smoke evidence for cross-repo sender-home and graft emission lanes |
-| `AD.6` governance | `boundaries/atm-core/post-send-hook-emitter.toml` | authoritative boundary record for `PostSendHookEmitter` |
-| `AD.6` governance | `docs/atm-core/boundaries.md` | inventory entry for `PostSendHookEmitter` |
-| `AD.8` governance | `boundaries/atm-core/graft-post-send-port.toml` | authoritative boundary record for `GraftPostSendPort` |
-| `AD.8` governance | `docs/atm-core/boundaries.md` | inventory entry for `GraftPostSendPort` and its receiver-owned implementation contract |
+| `AD9-BLANKPANE-001` | `AD.9` | `AD.30` | cite accepted-line evidence that closes `docs/plans/phase-AD/sprint-AD9.md` Acceptance Criteria `the validated-on-entry blank tmux_pane_id drift for team-lead and arch-ctm is repaired on the accepted baseline` |
+| `ERRDOC-001` | `AD.9` | `AD.30` | cite accepted-line evidence that closes the `docs/plans/phase-AD/sprint-AD9.md` CLI Error Contract entries for `ATM_MEMBER_ALREADY_EXISTS`, `ATM_MEMBER_NOT_FOUND`, `ATM_IDENTITY_UNAVAILABLE`, `ATM_TEAM_UNAVAILABLE`, `ATM_IDENTITY_INVALID`, and `ATM_TEAM_INVALID` |
+| historical `FTQ-001` record reconciliation | accepted-line code fix predates this follow-up | `AD.30` | either updated historical TTL closure status or an explicit note here explaining why the old discovery record remains open as provenance only |
+| phase-AD triage sweep ledger | `AD.30` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` populated with the final sweep disposition |
+| `CHANGELOG.md` entry for `AD.13` through `AD.30` | `AD.30` | `AD.30` | release-facing changelog text present on the accepted line |
 
 ## Phase Exit Criteria
 
-Phase AD is not ready until all of the following are true:
+`Phase AD` follow-up closure is not complete until all of the following are
+true:
 
-- retained ATM commands that require caller identity fail locally when
-  `ATM_IDENTITY` or an explicit override is unavailable
-- retained ATM commands that require caller team fail locally when `ATM_TEAM`
-  or an explicit override is unavailable
-- commands with explicit caller-context override surfaces prefer those
-  overrides over environment values
-- `atm doctor` does not require caller identity or caller team and still
-  honors optional `--team` scoping
-- local tmux post-send emission uses authoritative roster pane metadata
-- forced post-send emission failure becomes sender-visible warning output
-- sender repository or sender `home_dir` differences do not change local
-  post-send config lookup ownership
-- graft-backed post-send behavior is mediated only by the graft port / emitter
-  seam
-- `GraftPostSendPort` governance exists in both the machine-readable boundary
-  record and the boundary inventory
-- no accepted Phase AD gate depends on daemon ambient identity, queued
-  notification-runtime behavior, or historical Claude mailbox append logic
-
-## Final Verdict
-
-- candidate branch: `feature/pAD-s11-smoke-and-readiness-closeout`
-- readiness gate: `PASS` when `just smoke normal`, `just smoke thorough`, and
-  `python3 scripts/validate_release.py phase-ad-readiness` all pass on the
-  same branch tip
-- release verdict: `READY` on the branch candidate after the required AD.11
-  validation commands pass
-- notes: readiness remains fail-closed because the retained validation suite
-  now checks the Phase AD readiness record, every AD sprint status, the
-  `PostSendHookEmitter` / `GraftPostSendPort` boundary inventories, and both
-  boundary TOML states
+- `AD.25` through `AD.30` all pass on the accepted line
+- `docs/plans/phase-AD/readiness.md` exists and records the final verdict on
+  the accepted line
+- `.triage/phase-AD/direct-fix-track.md` exists and names the final owner plus
+  closure artifact for the non-code obligations surfaced during plan review
+- the AD18/ARCH-004 RULE-001 scope ruling is recorded on the accepted line
+  through `docs/adr/ADR-020-rule001-observability-adapter-exception.md`:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is the sanctioned
+    library-internal adapter module allowed to import
+    `sc_observability_types::{ActionName, OutcomeLabel}` directly
+  - every other `crates/atm-daemon/src/` file routes those aliases through the
+    sanctioned adapter module's crate-visible alias/helper surface
+  - `.just/lint_boundaries.py` mechanically enforces that only the sanctioned
+    adapter module remains allowlisted for this direct import pattern
+- the accepted post-send line keeps `PostSendHookEmitter` attempt-only and
+  `GraftPostSendPort` receiver-specific, with built-in override lookup upstream
+  of the emitter after `AD.27`
+- the authoritative post-send smoke lane from `AD.29` has recorded evidence
+  for:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback
+  - override reset-to-default
+  - override disable behavior when retained
+- the authoritative Windows daemon depth lane from `AD.30` has recorded
+  evidence for:
+  - dispatcher panic during shutdown
+  - injected accept-error handling with bounded retry/backoff semantics
+  - post-terminate connection rejection
+- `CHANGELOG.md` contains the release-facing entry for the `AD.13` through
+  `AD.30` corrective line
+- the phase-close artifacts explicitly reconcile the historical `FTQ-001`
+  discovery ledger with the accepted-line code fix so that historical
+  provenance is not silently inconsistent with the current runtime

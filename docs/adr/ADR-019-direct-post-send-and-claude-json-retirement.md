@@ -99,6 +99,32 @@ pub trait PostSendHookEmitter: sealed::Sealed {
 }
 ```
 
+The accepted ownership rule around that seam is equally important:
+
+- caller-owned send/ack logic decides whether the recipient exposes post-send
+  capability
+- caller-owned send/ack logic resolves external-hook matches, built-in fallback
+  eligibility, and any team-scoped built-in override row before invoking the
+  emitter
+- `PostSendHookEmitter` performs the chosen recipient-side emission attempt
+  only; it does not reopen config/store lookup or own caller-facing warning
+  policy
+- `GraftPostSendPort` is the receiver-specific leaf handoff used when the
+  chosen built-in target is graft-backed
+
+### Interim execution note for the AD.25-AD.30 follow-up line
+
+The accepted architecture above did not change, but the implementation closeout
+sequence is intentionally staged:
+
+- `AD.26` makes `PostSendHookEmitter` and `GraftPostSendPort` live on the
+  production send/ack path and removes the subprocess bypass
+- `AD.26` does **not** claim to close the separate upstream-override-resolution
+  clause; that remaining gap is tracked as `ADR-019-EXC-AD26-001`
+- `AD.27` is the required closure sprint for `ADR-019-EXC-AD26-001`
+- no new lookup site may be introduced below `PostSendHookEmitter` while that
+  named interim exception remains open
+
 ### 5. Notification logging, if retained, is direct append only
 
 - `NotificationSink` is not the governing abstraction for post-send behavior
