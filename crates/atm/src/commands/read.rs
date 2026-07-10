@@ -193,7 +193,12 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_propagates_filters_and_exact_message_id() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
