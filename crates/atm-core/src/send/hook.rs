@@ -911,6 +911,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::schema::AckIntentFields;
     #[allow(
         deprecated,
         reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
@@ -1305,6 +1306,7 @@ mod tests {
     }
 
     fn logical_message(text: &str) -> LogicalMessage {
+        let ack_intent = AckIntentFields::not_required();
         LogicalMessage::new(
             InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
@@ -1314,8 +1316,9 @@ mod tests {
                 source_team: Some(TeamName::from_validated("test-team")),
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
-                pending_ack_at: None,
-                acknowledged_at: None,
+                requires_ack: ack_intent.requires_ack,
+                pending_ack_at: ack_intent.pending_ack_at,
+                acknowledged_at: ack_intent.acknowledged_at,
                 acknowledges_message_id: None,
                 parent_message_id: None,
                 thread_mode: None,

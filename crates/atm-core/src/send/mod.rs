@@ -22,7 +22,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
@@ -552,6 +552,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     requires_ack: bool,
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
+    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.canonical_sender.clone(),
@@ -561,8 +562,9 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             source_team: Some(request.caller_team.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
-            pending_ack_at: requires_ack.then_some(timestamp),
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: None,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
@@ -579,8 +581,9 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         source_team: Some(request.caller_team.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
-        pending_ack_at: requires_ack.then_some(timestamp),
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: request.parent_message_id,
         thread_mode: request.thread_mode,
@@ -763,6 +766,7 @@ fn validate_thread_append(
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);
+    envelope.requires_ack = thread_requires_ack;
     envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
     envelope.acknowledged_at = None;
     Ok(())

@@ -205,6 +205,7 @@ mod tests {
                 source_team: Some(TeamName::from_validated(TEST_TEAM)),
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

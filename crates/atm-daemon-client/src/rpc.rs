@@ -181,6 +181,7 @@ mod tests {
                 source_team: Some(RPC_TEST_TEAM.parse().expect("source team")),
                 summary: Some("body".to_string()),
                 message_id: None,
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

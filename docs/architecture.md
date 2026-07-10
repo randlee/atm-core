@@ -505,12 +505,13 @@ pub enum ReadSelection {
 }
 ```
 
-Ack activation mode:
+Ack requirement state:
 
 ```rust
-pub enum AckActivationMode {
-    PromoteDisplayedUnread,
-    ReadOnly,
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
 }
 ```
 
@@ -518,6 +519,8 @@ Display mapping is fixed:
 - `MessageClass::Unread` -> `DisplayBucket::Unread`
 - `MessageClass::PendingAck` -> `DisplayBucket::PendingAck`
 - `MessageClass::Acknowledged` -> `DisplayBucket::History`
+- displaying a message may mark it read, but it must never promote pending
+  acknowledgement; ADR-022 keeps ack state sender-owned and durable
 - `MessageClass::Read` -> `DisplayBucket::History`
 
 ### 4.3 Typestate Transition Model
@@ -984,7 +987,7 @@ Shared query model:
 `ReadQuery` adds:
 - optional exact `message_id`
 - optional timeout
-- read-mutation controls such as seen-state update and ack activation
+- read-mutation controls such as seen-state update
 
 `ListOutcome` contains:
 - action

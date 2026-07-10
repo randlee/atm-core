@@ -18,7 +18,7 @@ use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 #[cfg(unix)]
 use atm_core::test_support::EnvGuard;
-use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
 #[cfg(unix)]
 use atm_runtime_test_support::hold_sqlite_writer_lock;
 use atm_runtime_test_support::{
@@ -688,9 +688,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mutation_query = mutation_fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -714,7 +712,6 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         .expect("hold no-mutation lock");
     let no_mutation_query = no_mutation_fixture
         .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
         .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
@@ -752,8 +749,7 @@ fn read_unread_output_stays_consistent_with_the_mutated_message() {
 
     let unread_query = fixture
         .read_query(PRIMARY_AGENT)
-        .with_selection_mode(ReadSelection::Unread)
-        .with_ack_activation_mode(AckActivationMode::ReadOnly);
+        .with_selection_mode(ReadSelection::Unread);
 
     let first = read_mail(unread_query.clone(), &observability).expect("first unread read");
     assert!(first.mutation_applied);
@@ -834,7 +830,6 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
         ReadSelection::All,
         false,
         false,
-        AckActivationMode::ReadOnly,
         Some(&message_id.to_string()),
         None,
         None,
@@ -880,7 +875,6 @@ fn read_contains_matches_summary_only_and_body_only_on_store_backed_path() {
         ReadSelection::All,
         false,
         false,
-        AckActivationMode::ReadOnly,
         None,
         None,
         None,
@@ -908,7 +902,6 @@ fn read_contains_matches_summary_only_and_body_only_on_store_backed_path() {
         ReadSelection::All,
         false,
         false,
-        AckActivationMode::ReadOnly,
         None,
         None,
         None,
@@ -987,9 +980,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         "AD.3 should not recreate the retired primary compatibility inbox file on send",
     );
 
-    let read_query = fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let read_query = fixture.read_query(PRIMARY_AGENT);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -1163,7 +1154,6 @@ impl Fixture {
             ReadSelection::Actionable,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1550,6 +1540,7 @@ fn pending_ack_message_at(
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: true,
         pending_ack_at: Some(IsoTimestamp::from_datetime(timestamp)),
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1579,6 +1570,7 @@ fn read_message_at(
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1608,6 +1600,7 @@ fn unread_message_at(
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,

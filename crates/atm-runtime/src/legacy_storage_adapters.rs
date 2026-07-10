@@ -13,8 +13,10 @@ use atm_core::boundary::{
     RosterStoreDoctor, RosterStoreDoctorReport, UpsertMailMessageStateRequest,
     UpsertMailMessageStateResponse,
 };
+use atm_core::derive_ack_requirement;
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
+use atm_core::types::AckRequirementState;
 use atm_storage::contract::{
     Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore, RosterSnapshot,
     RosterStore as SharedRosterStore,
@@ -95,6 +97,7 @@ impl BoundaryMailStoreView {
     }
 
     fn mailbox_row(message: SharedMessage) -> MailStoreMailboxMetadataRow {
+        let ack_requirement = derive_ack_requirement(&message.envelope);
         MailStoreMailboxMetadataRow {
             message_key: message.message_key.clone(),
             message_id: message.envelope.message_id,
@@ -104,7 +107,8 @@ impl BoundaryMailStoreView {
             summary: message.envelope.summary,
             message_at: message.envelope.timestamp,
             read: message.envelope.read,
-            pending_ack: message.envelope.pending_ack_at.is_some(),
+            requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
+            pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
             acknowledged_at: message.envelope.acknowledged_at,
             expires_at: message.envelope.expires_at,
             task_id: message.envelope.task_id,

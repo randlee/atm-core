@@ -114,4 +114,5 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use read::state::derive_ack_requirement;
 pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};

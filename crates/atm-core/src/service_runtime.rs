@@ -582,6 +582,7 @@ mod tests {
             source_team: Some("test-team".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

@@ -12,8 +12,9 @@ use atm_storage::{Message as SharedMessage, MessageQuery};
 
 use crate::boundary;
 use crate::error::AtmError;
+use crate::read::state::derive_ack_requirement;
 use crate::service_runtime::LocalServiceRuntime;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AckRequirementState, AgentName, TeamName};
 
 type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 
@@ -179,6 +180,7 @@ fn shared_message_to_record(message: SharedMessage) -> boundary::Message {
 }
 
 fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStoreMailboxMetadataRow {
+    let ack_requirement = derive_ack_requirement(&message.envelope);
     boundary::MailStoreMailboxMetadataRow {
         message_key: message.message_key.clone(),
         message_id: message.envelope.message_id,
@@ -188,7 +190,8 @@ fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStore
         summary: message.envelope.summary,
         message_at: message.envelope.timestamp,
         read: message.envelope.read,
-        pending_ack: message.envelope.pending_ack_at.is_some(),
+        requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
+        pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
         acknowledged_at: message.envelope.acknowledged_at,
         expires_at: message.envelope.expires_at,
         task_id: message.envelope.task_id,

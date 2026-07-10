@@ -174,6 +174,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("summary".to_string()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

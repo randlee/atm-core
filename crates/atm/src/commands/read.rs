@@ -1,6 +1,6 @@
 use anyhow::Result;
 use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
-use atm_core::types::{AckActivationMode, ReadSelection};
+use atm_core::types::ReadSelection;
 use clap::Args;
 
 use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
@@ -114,7 +114,6 @@ impl ReadCommand {
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             true,
-            AckActivationMode::PromoteDisplayedUnread,
             self.message_id.as_deref(),
             self.from.as_deref(),
             timestamp_filter,

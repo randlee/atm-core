@@ -67,6 +67,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
                 source_team: None,
                 summary: row.summary.clone(),
                 message_id: row.message_id,
+                requires_ack: row.requires_ack,
                 pending_ack_at: row.pending_ack.then_some(row.message_at),
                 acknowledged_at: row.acknowledged_at,
                 acknowledges_message_id: None,

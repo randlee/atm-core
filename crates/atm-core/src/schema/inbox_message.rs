@@ -7,6 +7,37 @@ use serde_json::{Map, Value};
 
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
+use crate::types::IsoTimestamp;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AckIntentFields {
+    pub(crate) requires_ack: bool,
+    pub(crate) pending_ack_at: Option<IsoTimestamp>,
+    pub(crate) acknowledged_at: Option<IsoTimestamp>,
+}
+
+impl AckIntentFields {
+    pub(crate) const fn not_required() -> Self {
+        Self {
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+        }
+    }
+
+    pub(crate) fn from_requires_ack(requires_ack: bool, timestamp: IsoTimestamp) -> Self {
+        Self {
+            requires_ack,
+            pending_ack_at: requires_ack.then_some(timestamp),
+            acknowledged_at: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn required_pending(timestamp: IsoTimestamp) -> Self {
+        Self::from_requires_ack(true, timestamp)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SharedAppendPolicy {
@@ -122,8 +153,8 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy, ThreadMode,
-        to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        AckIntentFields, AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy,
+        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -150,6 +181,32 @@ mod tests {
     }
 
     #[test]
+    fn ack_intent_fields_helpers_keep_the_three_field_invariant_together() {
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+
+        assert_eq!(
+            AckIntentFields::not_required(),
+            AckIntentFields {
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+            }
+        );
+        assert_eq!(
+            AckIntentFields::from_requires_ack(false, timestamp),
+            AckIntentFields::not_required()
+        );
+        assert_eq!(
+            AckIntentFields::required_pending(timestamp),
+            AckIntentFields {
+                requires_ack: true,
+                pending_ack_at: Some(timestamp),
+                acknowledged_at: None,
+            }
+        );
+    }
+
+    #[test]
     fn message_envelope_round_trips_with_current_inbox_shape() {
         // Validates the current ATM superset storage shape, not the
         // Claude-native schema. Ownership is documented in
@@ -166,6 +223,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -184,6 +242,40 @@ mod tests {
         let decoded: InboxMessage = serde_json::from_str(&encoded).expect("decode");
 
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn legacy_pending_ack_without_ack_reply_metadata_defaults_requires_ack_true() {
+        let json = json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": true,
+            "pendingAckAt": "2026-03-30T00:00:01Z"
+        });
+
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
+        assert!(decoded.requires_ack);
+    }
+
+    #[test]
+    fn legacy_ack_reply_metadata_prevents_requires_ack_requalification() {
+        let acknowledged_message_id = AtmMessageId::new();
+        let json = json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "ack",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": true,
+            "pendingAckAt": "2026-03-30T00:00:01Z",
+            "acknowledgesMessageId": acknowledged_message_id,
+        });
+
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
+        assert!(!decoded.requires_ack);
+        assert_eq!(
+            decoded.acknowledges_message_id,
+            Some(acknowledged_message_id)
+        );
     }
 
     #[test]
@@ -281,6 +373,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -326,6 +419,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -364,6 +458,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -405,6 +500,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("ack reply".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: Some(acknowledged_at),
             acknowledges_message_id: Some(AtmMessageId::new()),
@@ -436,6 +532,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("oversized".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -478,6 +575,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("exact-cap".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -515,6 +613,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("above-cap".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -553,6 +652,7 @@ mod tests {
             source_team: None,
             summary: Some("native".into()),
             message_id: None,
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -596,6 +696,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

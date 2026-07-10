@@ -253,8 +253,10 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
-        pending_ack: message.envelope.pending_ack_at.is_some()
-            && message.envelope.acknowledged_at.is_none(),
+        pending_ack: matches!(
+            crate::read::state::derive_ack_requirement(&message.envelope),
+            crate::types::AckRequirementState::RequiredPending
+        ),
         task_id: message.envelope.task_id.clone(),
     }
 }
@@ -307,6 +309,7 @@ mod tests {
                 source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
                 summary: None,
                 message_id: Some(message_id),
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -552,6 +555,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -571,6 +575,7 @@ mod tests {
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,
+                requires_ack: false,
                 pending_ack: false,
                 acknowledged_at: None,
                 expires_at: None,

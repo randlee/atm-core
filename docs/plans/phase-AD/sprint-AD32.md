@@ -1,9 +1,9 @@
 ---
 id: AD.32
 title: Durable Ack Intent And Read Semantics Reset
-status: planned
-branch: feature/pAD-s32-durable-ack-intent-reset
-worktree: ../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-reset
+status: complete
+branch: feature/pAD-s32-durable-ack-intent-and-read-semantics-reset
+worktree: ../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset
 target: integrate/phase-AD
 ---
 
@@ -124,9 +124,8 @@ must call it instead of reconstructing ack intent ad hoc from
 - ack state is derived from sender-owned durable intent plus acknowledgement
   completion, not display-time mutation
 - the accepted compatibility rule for legacy rows is implemented and tested
-- `ReadQuery` / `AckActivationMode` shape changes are carried through the
-  graft boundary and smoke/example call sites so workspace/example builds stay
-  green
+- `ReadQuery` shape changes are carried through the graft boundary and
+  smoke/example call sites so workspace/example builds stay green
 - `ADR-022` records the durable-ack-intent decision separately from
   `ADR-023`'s owner-only mutation boundary
 
@@ -145,8 +144,8 @@ must call it instead of reconstructing ack intent ad hoc from
 - `atm read` and `atm peek` never create `pending_ack_at`
 - legacy ack replies with `acknowledges_message_id` do not become ack-required
   during compatibility load
-- `cargo test --workspace` is green after the `ReadQuery` /
-  `AckActivationMode` shape change, including the `atm-graft` crate tests and
+- `cargo test --workspace` is green after the `ReadQuery` shape change,
+  including the `atm-graft` crate tests and
   `crates/atm-graft/examples/smoke_same_host.rs`
 
 ## Required Validation
