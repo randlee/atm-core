@@ -7,7 +7,7 @@
   triage:title "README.md Quick Start still shows atm read --all --no-mark, contradicting this sprint's own deletion requirement" ;
   triage:description "README.md Quick Start section documents `atm read --all --no-mark`. AD.35's own sprint requirement was to delete/retire this flag usage from documentation as part of the messaging protocol and regression closeout, but the README still shows it, contradicting the sprint's own deliverable." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
@@ -19,13 +19,16 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s33/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s34/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s35/1> ;
-  triage:openOn <urn:atm:triage:worktree/s31/cddd205> ;
-  triage:openOn <urn:atm:triage:worktree/s32/54ad2c6> ;
-  triage:openOn <urn:atm:triage:worktree/s33/5afafd5> ;
-  triage:openOn <urn:atm:triage:worktree/s34/b191e22> ;
-  triage:openOn <urn:atm:triage:worktree/s35/bd3ab37> ;
-  triage:promoteTo <urn:atm:triage:worktree/s35/bd3ab37> ;
-  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+  triage:openOn <urn:atm:triage:worktree/s31/5891c11> ;
+  triage:openOn <urn:atm:triage:worktree/s32/46be50b> ;
+  triage:openOn <urn:atm:triage:worktree/s33/6ef24f3> ;
+  triage:openOn <urn:atm:triage:worktree/s34/05ddab0> ;
+  triage:openOn <urn:atm:triage:worktree/s35/afdaf3c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s35/afdaf3c> ;
+  triage:triagedAt "2026-07-10T21:30:00Z"^^xsd:dateTime ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AD35/s31/1>
   a triage:Occurrence ;
@@ -35,8 +38,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
-  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/5891c11> .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AD35/s32/1>
   a triage:Occurrence ;
@@ -46,8 +49,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
-  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/46be50b> .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AD35/s33/1>
   a triage:Occurrence ;
@@ -57,8 +60,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "5afafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
-  triage:occursIn <urn:atm:triage:worktree/s33/5afafd5> .
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/6ef24f3> .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AD35/s34/1>
   a triage:Occurrence ;
@@ -68,8 +71,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
-  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/05ddab0> .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AD35/s35/1>
   a triage:Occurrence ;
@@ -79,40 +82,40 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
-  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/afdaf3c> .
 
-<urn:atm:triage:worktree/s31/cddd205>
+<urn:atm:triage:worktree/s31/5891c11>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
   triage:orderIndex 31 .
 
-<urn:atm:triage:worktree/s32/54ad2c6>
+<urn:atm:triage:worktree/s32/46be50b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
   triage:orderIndex 32 .
 
-<urn:atm:triage:worktree/s33/5afafd5>
+<urn:atm:triage:worktree/s33/6ef24f3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "5afafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
   triage:orderIndex 33 .
 
-<urn:atm:triage:worktree/s34/b191e22>
+<urn:atm:triage:worktree/s34/05ddab0>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
   triage:orderIndex 34 .
 
-<urn:atm:triage:worktree/s35/bd3ab37>
+<urn:atm:triage:worktree/s35/afdaf3c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
   triage:orderIndex 35 .

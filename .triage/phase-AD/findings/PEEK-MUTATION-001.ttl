@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "PEEK-MUTATION-001" ;
   triage:title "atm peek mutates read state; AckActivationMode never checked at mutation gate" ;
-  triage:description "Prior canonical record (status=open) recorded peek_mail_with_runtime routing through the same read_mail_with_runtime_impl -> resolve_read_display -> apply_display_mutations_to_store path as atm read, with the mutation gate never consulting ack_activation_mode. AD35-QA-1's arch-qa review now reports this is genuinely structurally fixed on AD.35: peek_mail_with_runtime now uses a call path resolve_read_context -> load_read_selection -> build_unmodified_read_display that structurally cannot invoke mutation. Regression test confirmed: build_unmodified_read_display (line 646-673) explicitly sets mutation_applied=false and does not call any mutation gate. Verification on followup_pass: AD.31-34 still have the buggy code (peek_mail_with_runtime calls read_mail_with_runtime_impl at line 344). AD.35 fixed in commit bd3ab37a (peek restructured to avoid mutating code path entirely). Fix must be merged forward from AD.35 to AD.31-34."@en ;
+  triage:description "RESOLVED in followup_pass. Prior canonical record (status=fixed_partial) with fix present only on AD.35. Current sweep confirms fix has been successfully propagated and merged-forward to all AD.31-34 branches. All branches now contain the defensive gate in displayed_messages_require_mutation (line ~890-891): if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }. This gate prevents mutation from ever being applied when peek_mail_with_runtime passes DisplayMutationMode::NonMutatingPeek, structurally closing the vulnerability. No regresssions detected."@en ;
   triage:category "PEEK-MUTATION" ;
   triage:severity "blocking" ;
   triage:phaseId "phase-AD" ;
@@ -13,103 +13,106 @@
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:pattern "displayed_messages_require_mutation|peek_mail_with_runtime|resolve_read_context|load_read_selection|build_unmodified_read_display" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady false ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.31/1> ;
-  triage:openOn <urn:atm:triage:worktree/AD.31/cddd20544a3a5bb9d3caa70eca9cf01dc5f05862> ;
-  triage:openOn <urn:atm:triage:worktree/AD.32/54ad2c6b8e7038f561b5c84e3f51974a636e3ef1> ;
-  triage:openOn <urn:atm:triage:worktree/AD.33/bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49> ;
-  triage:openOn <urn:atm:triage:worktree/AD.34/b191e22001cbf7594c2ecefe88ece707f1b51fcf> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD.35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD.35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.35/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.31/5891c114b9e913313b46534375f038a2478667e8> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD.35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
 
 <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.31/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/mod.rs" ;
-  triage:line 344 ;
-  triage:snippet "let mut outcome = read_mail_with_runtime_impl(synthesized, observability, runtime)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 890 ;
+  triage:snippet "if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
-  triage:occursIn <urn:atm:triage:worktree/AD.31/cddd20544a3a5bb9d3caa70eca9cf01dc5f05862> .
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.31/5891c114b9e913313b46534375f038a2478667e8> .
 
 <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.32/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/mod.rs" ;
-  triage:line 344 ;
-  triage:snippet "let mut outcome = read_mail_with_runtime_impl(synthesized, observability, runtime)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 890 ;
+  triage:snippet "if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
-  triage:occursIn <urn:atm:triage:worktree/AD.32/54ad2c6b8e7038f561b5c84e3f51974a636e3ef1> .
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> .
 
 <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.33/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/mod.rs" ;
-  triage:line 344 ;
-  triage:snippet "let mut outcome = read_mail_with_runtime_impl(synthesized, observability, runtime)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 890 ;
+  triage:snippet "if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
-  triage:occursIn <urn:atm:triage:worktree/AD.33/bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49> .
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
 
 <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.34/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/mod.rs" ;
-  triage:line 344 ;
-  triage:snippet "let mut outcome = read_mail_with_runtime_impl(synthesized, observability, runtime)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 890 ;
+  triage:snippet "if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
-  triage:occursIn <urn:atm:triage:worktree/AD.34/b191e22001cbf7594c2ecefe88ece707f1b51fcf> .
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
 
 <urn:atm:triage:occurrence/PEEK-MUTATION-001/AD.35/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/mod.rs" ;
-  triage:line 350 ;
-  triage:snippet "let mut selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?; ... let display = build_unmodified_read_display(runtime, &synthesized, &target, selection, summary)?" ;
+  triage:line 890 ;
+  triage:snippet "if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }" ;
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
-  triage:occursIn <urn:atm:triage:worktree/AD.35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/AD.35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
 
-<urn:atm:triage:worktree/AD.31/cddd20544a3a5bb9d3caa70eca9cf01dc5f05862>
+<urn:atm:triage:worktree/AD.31/5891c114b9e913313b46534375f038a2478667e8>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
   triage:orderIndex 31 .
 
-<urn:atm:triage:worktree/AD.32/54ad2c6b8e7038f561b5c84e3f51974a636e3ef1>
+<urn:atm:triage:worktree/AD.32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
   triage:orderIndex 32 .
 
-<urn:atm:triage:worktree/AD.33/bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49>
+<urn:atm:triage:worktree/AD.33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
   triage:orderIndex 33 .
 
-<urn:atm:triage:worktree/AD.34/b191e22001cbf7594c2ecefe88ece707f1b51fcf>
+<urn:atm:triage:worktree/AD.34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
   triage:orderIndex 34 .
 
-<urn:atm:triage:worktree/AD.35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2>
+<urn:atm:triage:worktree/AD.35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
   triage:orderIndex 35 .
