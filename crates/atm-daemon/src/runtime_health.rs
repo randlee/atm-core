@@ -24,7 +24,7 @@ use atm_core::{
         RuntimeLivenessState, RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    read::read_mail,
+    read::{peek_mail, read_mail},
     schema::canonical_home_dir,
     send::send_mail_with_runtime_and_post_send_emitter,
 };
@@ -611,6 +611,10 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                 query,
                 self.observability.as_ref(),
             )?)),
+            RequestEnvelope::Peek(query) => Ok(ResponseEnvelope::Peek(Box::new(peek_mail(
+                query,
+                self.observability.as_ref(),
+            )?))),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(read_mail(
                 query,
                 self.observability.as_ref(),

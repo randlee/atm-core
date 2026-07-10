@@ -5,9 +5,7 @@ use atm_core::address::AgentAddress;
 use atm_core::clear::ClearQuery;
 use clap::Args;
 
-use crate::commands::caller_context::{
-    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
-};
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -18,9 +16,6 @@ use crate::output;
 /// Clear read or acknowledged messages from a mailbox.
 pub struct ClearCommand {
     target: Option<String>,
-
-    #[arg(long = "as")]
-    actor_override: Option<String>,
 
     #[arg(long)]
     team: Option<String>,
@@ -60,10 +55,8 @@ impl ClearCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ClearQuery> {
-        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
-            identity_override: self.actor_override.as_deref().map(CallerIdentityOverride),
-            team_override: self.team.as_deref().map(CallerTeamOverride),
-        })?;
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let older_than = self.older_than.as_deref().map(parse_duration).transpose()?;
         let target_address = self
             .target
@@ -120,7 +113,7 @@ fn parse_duration(raw: &str) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_TEAM};
+    use atm_core::test_support::{EnvGuard, TEST_TEAM};
     use serial_test::serial;
 
     use super::ClearCommand;
@@ -129,7 +122,6 @@ mod tests {
     fn build_query_rejects_invalid_target_before_core() {
         let command = ClearCommand {
             target: Some("../evil".to_string()),
-            actor_override: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             older_than: None,
             idle_only: false,
@@ -153,7 +145,6 @@ mod tests {
         ]);
         let command = ClearCommand {
             target: None,
-            actor_override: None,
             team: None,
             older_than: None,
             idle_only: false,
@@ -169,14 +160,13 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn build_query_prefers_cli_overrides_over_environment() {
+    fn build_query_preserves_environment_identity_with_team_override() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),
             ("ATM_TEAM", Some("env-team")),
         ]);
         let command = ClearCommand {
             target: None,
-            actor_override: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             older_than: None,
             idle_only: false,
@@ -186,7 +176,7 @@ mod tests {
 
         let query = command.build_query(".".into(), ".".into()).expect("query");
 
-        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(query.caller_identity.as_str(), "env-sender");
         assert_eq!(query.caller_team.as_str(), TEST_TEAM);
     }
 }

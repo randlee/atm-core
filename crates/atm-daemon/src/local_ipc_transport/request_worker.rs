@@ -306,9 +306,10 @@ fn await_dispatch_response(
 
 fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
     match request {
-        RequestEnvelope::List(_) | RequestEnvelope::Receive(_) | RequestEnvelope::Doctor(_) => {
-            RequestExecutionRisk::ReadOnly
-        }
+        RequestEnvelope::List(_)
+        | RequestEnvelope::Peek(_)
+        | RequestEnvelope::Receive(_)
+        | RequestEnvelope::Doctor(_) => RequestExecutionRisk::ReadOnly,
         RequestEnvelope::Send(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
             RequestExecutionRisk::SideEffecting
         }

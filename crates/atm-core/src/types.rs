@@ -99,6 +99,7 @@ pub enum CommandAction {
     Ack,
     Clear,
     List,
+    Peek,
     Read,
     Send,
 }

@@ -3,6 +3,7 @@
 CLI ownership for `atm send`:
 
 - positional and flag parsing
+- caller-team resolution plus owner-only caller-identity enforcement
 - conversion into `atm-core` send requests
 - human-readable output
 - JSON output

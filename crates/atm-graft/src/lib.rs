@@ -603,6 +603,25 @@ mod tests {
                         dry_run: false,
                     })),
                 ),
+                CoreRequestEnvelope::Peek(_) => {
+                    Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
+                        action: CommandAction::Peek,
+                        team: TeamName::from_validated(TEST_TEAM),
+                        agent: AgentName::from_validated(TEST_LEAD),
+                        selection_mode: ReadSelection::Unread,
+                        mutation_applied: false,
+                        count: 0,
+                        message: None,
+                        selected_message_id: None,
+                        match_count: 0,
+                        additional_match_count: 0,
+                        bucket_counts: BucketCounts {
+                            unread: 0,
+                            pending_ack: 0,
+                            history: 0,
+                        },
+                    })))
+                }
                 CoreRequestEnvelope::Receive(_) => {
                     Ok(CoreResponseEnvelope::Receive(Box::new(ReadOutcome {
                         action: CommandAction::Read,

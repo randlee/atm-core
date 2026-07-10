@@ -24,15 +24,14 @@ Supported selectors/filters:
 - `--since`
 - `--from`
 - `--since-last-seen` and `--no-since-last-seen`
-- `--no-mark`
-- `--no-update-seen`
 - `--timeout`
 - `--json`
-- `--as`
 
 Selection/rendering contract:
 
 - `atm read` returns one full message only
+- `atm read` is owner-only and may mutate read / seen state
+- use `atm peek` for non-mutating mailbox inspection
 - exact `--message-id` selection bypasses logical terminal-node collapse so the
   addressed physical message is returned directly
 - task/from/contains/queue filters otherwise operate on logical current

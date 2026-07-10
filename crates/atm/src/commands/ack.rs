@@ -3,9 +3,7 @@ use atm_core::ack::AckRequest;
 use atm_core::schema::AtmMessageId;
 use clap::Args;
 
-use crate::commands::caller_context::{
-    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
-};
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -20,9 +18,6 @@ pub struct AckCommand {
 
     #[arg(long)]
     team: Option<String>,
-
-    #[arg(long = "as")]
-    actor: Option<String>,
 
     #[arg(long)]
     json: bool,
@@ -50,10 +45,8 @@ impl AckCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<AckRequest> {
-        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
-            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
-            team_override: self.team.as_deref().map(CallerTeamOverride),
-        })?;
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let message_id = self
             .message_id
             .parse::<AtmMessageId>()
@@ -73,7 +66,7 @@ impl AckCommand {
 #[cfg(test)]
 mod tests {
     use atm_core::test_support::EnvGuard;
-    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
+    use atm_core::test_support::TEST_TEAM;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -94,7 +87,6 @@ mod tests {
             message_id: String::new(),
             reply: "working on it".to_string(),
             team: Some(TEST_TEAM.to_string()),
-            actor: Some(ROLE_TEAM_LEAD.to_string()),
             json: false,
         };
 
@@ -112,7 +104,6 @@ mod tests {
             message_id: "   ".to_string(),
             reply: "working on it".to_string(),
             team: Some(TEST_TEAM.to_string()),
-            actor: Some(ROLE_TEAM_LEAD.to_string()),
             json: false,
         };
 
@@ -125,14 +116,14 @@ mod tests {
     }
 
     #[test]
-    fn build_request_preserves_team_override_and_actor() {
+    fn build_request_preserves_team_override_and_environment_identity() {
         let command = AckCommand {
             message_id: VALID_MESSAGE_ID.to_string(),
             reply: "received".to_string(),
             team: Some("test-team".to_string()),
-            actor: Some("sender-a".to_string()),
             json: true,
         };
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
 
         let (_tempdir, home_dir, current_dir) = test_paths();
         let request = command
@@ -155,7 +146,6 @@ mod tests {
             message_id: VALID_MESSAGE_ID.to_string(),
             reply: "received".to_string(),
             team: None,
-            actor: None,
             json: false,
         };
 
@@ -170,7 +160,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn build_request_prefers_cli_overrides_over_environment() {
+    fn build_request_preserves_environment_identity_with_team_override() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),
             ("ATM_TEAM", Some("env-team")),
@@ -179,7 +169,6 @@ mod tests {
             message_id: VALID_MESSAGE_ID.to_string(),
             reply: "received".to_string(),
             team: Some(TEST_TEAM.to_string()),
-            actor: Some(ROLE_TEAM_LEAD.to_string()),
             json: false,
         };
 
@@ -188,7 +177,7 @@ mod tests {
             .build_request(home_dir, current_dir)
             .expect("request");
 
-        assert_eq!(request.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(request.caller_identity.as_str(), "env-sender");
         assert_eq!(request.caller_team.as_str(), TEST_TEAM);
     }
 }

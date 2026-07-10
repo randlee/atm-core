@@ -792,11 +792,12 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--from`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context |
-| `atm read` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
-| `atm ack` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
+| `atm send` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context; mutating identity impersonation is forbidden |
+| `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
+| `atm read` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
+| `atm ack` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
 | `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
-| `atm clear` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target inbox/member selection is not caller context |
+| `atm clear` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating clear path |
 | `atm log` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit caller override surface |
 | `atm members` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--team` scopes the roster being inspected and may also satisfy caller-team requirement |
 | `atm teams` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit override surface |
@@ -808,9 +809,9 @@ Global caller-context rules:
 
 ### 4.2 Command-Specific Notes
 
-- `--from` on `send` is caller identity override
+- `--from` on `send` is not an accepted caller-identity override
 - `--from` on `read` / `list` is a sender filter only
-- `--as` changes caller identity only; it does not change target matching
+- `--as` is accepted only on inspection-only surfaces such as `peek` and `list`
 - any command without an explicit caller override surface must rely on the
   invoking shell when caller context is required
 - `atm doctor` may inspect `ATM_IDENTITY` visibility and team override
@@ -1247,11 +1248,10 @@ Additional supported flags:
 - `--timeout <seconds>`
 - `--since-last-seen`
 - `--no-since-last-seen`
-- `--no-mark`
-- `--no-update-seen`
 
 Required behavior:
 - return exactly one full message
+- mutate owner-visible seen/read state when a message is selected
 - when `--message-id <id>` is present, resolve that exact message when present
 - collapse successor/update chains to their terminal node before selector-based
   matching so superseded predecessors do not appear as separate current
