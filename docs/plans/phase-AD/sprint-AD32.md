@@ -48,7 +48,7 @@ target: integrate/phase-AD
 - `docs/atm/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
-- `docs/adr/ADR-021-owner-only-message-mutation.md`
+- `docs/adr/ADR-023-owner-only-message-mutation.md`
 - `docs/adr/ADR-022-durable-ack-intent.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
@@ -128,7 +128,7 @@ must call it instead of reconstructing ack intent ad hoc from
   graft boundary and smoke/example call sites so workspace/example builds stay
   green
 - `ADR-022` records the durable-ack-intent decision separately from
-  `ADR-021`'s owner-only mutation boundary
+  `ADR-023`'s owner-only mutation boundary
 
 ## This Sprint Does Not Close
 
