@@ -616,8 +616,9 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
     boundary_text = boundary_inventory.read_text(encoding="utf-8")
     required_readiness_markers = (
         "# Phase AD Readiness",
-        "`AD.11`",
-        "release verdict: `READY`",
+        "`AD.25`",
+        "`AD.29`",
+        "`AD.30`",
         "`reports/smoke/smoke.md`",
         "`reports/smoke/smoke-thorough.md`",
     )
@@ -631,6 +632,15 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
                 severity="error",
                 summary="phase AD readiness document is incomplete",
                 detail=", ".join(missing_markers),
+            )
+        )
+    if "release verdict:" not in readiness_text:
+        findings.append(
+            Finding(
+                check="phase-ad-readiness",
+                severity="error",
+                summary="phase AD readiness document is missing the release verdict marker",
+                detail="docs/plans/phase-AD/readiness.md must state the current release verdict, even when AD.30 still owns the final close/not-close decision",
             )
         )
 

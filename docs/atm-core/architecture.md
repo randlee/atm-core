@@ -454,6 +454,12 @@ Identity-specific policy:
 - after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
+- any retained built-in helper does not consume `ATM_POST_SEND`; it consumes
+  one resolved `ATM_INTERNAL_NUDGE` envelope carrying:
+  - the canonical post-send event
+  - the concrete sink target
+  - the resolved template kind
+  - the resolved template body or explicit disabled state
 - committed `.atm.toml` pane ids are not live routing truth; any retained
   compatibility helper must consume authoritative roster/payload pane metadata
   or an explicit operator-provided pane id
@@ -587,11 +593,15 @@ Architectural rules:
   storage-neutral `NudgeTemplateOverrideStore` contract upstream of
   `PostSendHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
+- any retained built-in CLI helper receives the already-resolved template
+  through `InternalNudgeEnvelope`; the live production path stays in-process,
+  and the helper must not reopen runtime/store lookup
 - that boundary returns an explicit row lifecycle, not hidden control strings:
   no row => product default, override row => stored text, disabled row => no
   emission, clear/reset => row deletion
-- `atm-core` does not own built-in XML template bodies, template override
-  storage, tmux injection, or graft host-wakeup mechanics
+- `atm-core` owns the shared resolved-template helper for built-in nudges, but
+  it does not own built-in XML template bodies, template override storage,
+  tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:
   - `TmuxNudgeSink` for local tmux-backed recipients
   - `GraftNudgeSink` for graft-backed recipients

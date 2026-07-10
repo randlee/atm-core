@@ -1,24 +1,72 @@
 use std::collections::BTreeMap;
 
-use crate::boundary::{BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideRow};
+use crate::boundary::{
+    BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
+    TeamNudgeTemplateOverrideRow,
+};
 use crate::error::AtmError;
+
+pub fn resolve_template(
+    override_row: Option<TeamNudgeTemplateOverrideRow>,
+    kind: BuiltInNudgeTemplateKind,
+) -> ResolvedBuiltInNudgeTemplate {
+    let body = match override_row {
+        Some(row) => row.template_body().map(ToOwned::to_owned),
+        None => Some(default_template(kind).to_string()),
+    };
+    ResolvedBuiltInNudgeTemplate { kind, body }
+}
 
 pub fn resolve_template_body(
     override_row: Option<TeamNudgeTemplateOverrideRow>,
     kind: BuiltInNudgeTemplateKind,
 ) -> Option<String> {
-    match override_row {
-        Some(row) => row.template_body().map(ToOwned::to_owned),
-        None => Some(default_template(kind).to_string()),
-    }
+    resolve_template(override_row, kind).body
+}
+
+pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
+    format!("{}@{}", event.sender, event.sender_team)
+}
+
+pub fn render_resolved_built_in_nudge(
+    event: &PostSendHookEvent,
+    template: &ResolvedBuiltInNudgeTemplate,
+) -> Result<Option<String>, AtmError> {
+    let Some(template_body) = template.body.as_deref() else {
+        return Ok(None);
+    };
+    render_template(template_body, &render_values(event)).map(Some)
+}
+
+pub fn render_template_body(
+    event: &PostSendHookEvent,
+    template_body: &str,
+) -> Result<String, AtmError> {
+    render_template(template_body, &render_values(event))
 }
 
 pub fn render_built_in_nudge(
     event: &PostSendHookEvent,
-    from: &str,
     template_body: &str,
 ) -> Result<String, AtmError> {
-    render_template(template_body, &render_values(event, from))
+    render_template_body(event, template_body)
+}
+
+fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
+    BTreeMap::from([
+        ("from", qualified_sender_identity(event)),
+        ("team", event.recipient_team.to_string()),
+        ("message_id", event.message_id.to_string()),
+        ("description", event.description.clone()),
+        (
+            "task_id",
+            event
+                .task_id
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        ),
+    ])
 }
 
 pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
@@ -42,23 +90,6 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
         }
     }
-}
-
-fn render_values(event: &PostSendHookEvent, from: &str) -> BTreeMap<&'static str, String> {
-    BTreeMap::from([
-        ("from", from.to_string()),
-        ("team", event.recipient_team.to_string()),
-        ("message_id", event.message_id.to_string()),
-        ("description", event.description.clone()),
-        (
-            "task_id",
-            event
-                .task_id
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-        ),
-    ])
 }
 
 fn render_template(
@@ -103,10 +134,13 @@ fn render_template(
 
 #[cfg(test)]
 mod tests {
-    use super::{default_template, render_built_in_nudge, resolve_template_body};
+    use super::{
+        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
+        resolve_template_body,
+    };
     use crate::boundary::{
-        BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow,
+        BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
@@ -149,10 +183,36 @@ mod tests {
     }
 
     #[test]
+    fn resolve_template_uses_explicit_override_body() {
+        let row = TeamNudgeTemplateOverrideRow {
+            team_name: TeamName::from_validated(TEST_TEAM),
+            kind: BuiltInNudgeTemplateKind::DeliveryAck,
+            mode: TeamNudgeTemplateOverrideMode::Override {
+                template_body: "<atm kind=\"override\"/>".to_string(),
+            },
+            updated_at: IsoTimestamp::now(),
+        };
+        assert_eq!(
+            resolve_template(Some(row), BuiltInNudgeTemplateKind::DeliveryAck),
+            ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::DeliveryAck,
+                body: Some("<atm kind=\"override\"/>".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_uses_sender_and_team() {
+        assert_eq!(
+            qualified_sender_identity(&base_event()),
+            format!("{TEST_LEAD}@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
     fn render_built_in_nudge_populates_placeholders() {
         let rendered = render_built_in_nudge(
             &base_event(),
-            &format!("{TEST_LEAD}@{TEST_TEAM}"),
             default_template(BuiltInNudgeTemplateKind::DeliveryTaskAck),
         )
         .expect("rendered template");

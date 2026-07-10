@@ -209,6 +209,7 @@ fn normalize_loaded_override_mode(
 mod tests {
     use atm_core::boundary::BuiltInNudgeTemplateKind;
     use atm_core::boundary::TeamNudgeTemplateOverrideMode;
+    use rusqlite::params;
 
     #[test]
     fn sqlite_override_store_saves_and_loads_override_row() {
@@ -249,6 +250,45 @@ mod tests {
                 &"test-team".parse().expect("team"),
                 BuiltInNudgeTemplateKind::Delivery,
             )
+            .expect("lookup");
+
+        assert!(row.is_none());
+    }
+
+    #[test]
+    fn sqlite_override_store_returns_none_after_override_row_is_deleted() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let team = "test-team".parse().expect("team");
+        let kind = BuiltInNudgeTemplateKind::Delivery;
+
+        backend
+            .nudge_template_override_store()
+            .save_template_override(&team, kind, "<atm kind=\"override\"/>")
+            .expect("save");
+
+        backend
+            .nudge_template_override_store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "DELETE FROM team_nudge_template_overrides
+                         WHERE team_name = ?1 AND template_kind = ?2;",
+                        params![team.as_str(), kind.as_str()],
+                    )
+                    .map_err(|error| {
+                        backend.nudge_template_override_store.db.error(
+                            "failed to delete team nudge template override row in test",
+                            error,
+                        )
+                    })?;
+                Ok(())
+            })
+            .expect("delete override row");
+
+        let row = backend
+            .nudge_template_override_store()
+            .load_template_override(&team, kind)
             .expect("lookup");
 
         assert!(row.is_none());

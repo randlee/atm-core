@@ -5,8 +5,108 @@ import argparse
 import sys
 
 from phase_ad_suite import SuiteRowSpec, run_suite
-from run_thorough_graft import graft_commands
 
+
+POST_SEND_ROWS = [
+    SuiteRowSpec(
+        id="AD29-POSTSEND-EXTERNAL-001",
+        flow="external post-send hook success suppresses built-in fallback while preserving durable send success",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::hook::tests::external_post_send_hook_takes_precedence_over_built_in_nudge",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="external post-send hook success keeps the built-in nudge path inactive while durable send success remains intact",
+    ),
+    SuiteRowSpec(
+        id="AD29-POSTSEND-PARTIAL-001",
+        flow="mixed post-send hook outcomes preserve durable delivery while surfacing sender-visible warnings",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::hook::tests::mixed_success_hook_accounting_preserves_delivery_and_warning",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="mixed hook accounting preserves durable delivery success and retains a sender-visible warning for failed matches",
+    ),
+    SuiteRowSpec(
+        id="AD29-POSTSEND-BUILTIN-001",
+        flow="built-in fallback covers both tmux and graft recipients when no external hook matches",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::hook::tests::built_in_fallback_dispatches_local_tmux_through_emitter",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::hook::tests::graft_fallback_dispatches_through_emitter_without_tmux_fields",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="built-in fallback stays honest for both tmux-backed and graft-backed recipients when no external hook matches",
+    ),
+    SuiteRowSpec(
+        id="AD29-POSTSEND-RESET-001",
+        flow="deleting a prior override row restores the built-in default template path",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-storage-rusqlite",
+                "nudge_template_override_store::tests::sqlite_override_store_returns_none_after_override_row_is_deleted",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail-core",
+                "send::nudge_template::tests::resolve_template_body_uses_default_when_no_override_exists",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="removing a stored override row re-exposes the built-in default template instead of leaving an implicit disabled state behind",
+    ),
+    SuiteRowSpec(
+        id="AD29-POSTSEND-DISABLE-001",
+        flow="explicitly disabled built-in template state skips local post-send delivery cleanly",
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "commands::internal_nudge::tests::internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled",
+                "--",
+                "--exact",
+            ],
+        ],
+        pass_note="the explicit disabled-template state becomes a documented no-delivery path instead of an accidental empty-string side effect",
+    ),
+]
 
 THOROUGH_ROWS = [
     SuiteRowSpec(
@@ -429,7 +529,35 @@ THOROUGH_ROWS = [
     SuiteRowSpec(
         id="AD11-GRAFT-001",
         flow="graft-backed post-send uses a direct same-host receiver socket with typed warning fallback",
-        commands=graft_commands(),
+        commands=[
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_send_delivers_direct_graft_nudge_without_warning",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable",
+                "--",
+                "--exact",
+            ],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "atm-daemon",
+                "tests_post_send_graft_warning::dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable",
+                "--",
+                "--exact",
+            ],
+        ],
         pass_note="the graft-backed emission seam performs one bounded same-host receiver delivery attempt and still surfaces typed sender warnings when the receiver path is unavailable",
     ),
     SuiteRowSpec(
@@ -638,6 +766,7 @@ THOROUGH_ROWS = [
         ],
         pass_note="metadata-backed contains stays full-body correct and only reloads durable body for surviving summary-miss candidates",
     ),
+    *POST_SEND_ROWS,
 ]
 
 

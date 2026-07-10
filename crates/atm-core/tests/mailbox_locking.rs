@@ -33,8 +33,6 @@ use tempfile::TempDir;
 // architecture §18.3.
 #[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
-#[cfg(unix)]
-const TEST_LOCK_TIMEOUT_ERROR_BUDGET_CEILING: Duration = Duration::from_secs(15);
 const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
@@ -608,22 +606,23 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 fn send_times_out_under_bounded_lock_contention() {
     let fixture = Fixture::new();
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
-    let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
+    let request = fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "blocked send");
+    let (tx, rx) = mpsc::sync_channel(1);
 
-    let started = Instant::now();
-    let error = send_mail(
-        fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "blocked send"),
-        &observability,
-    )
-    .expect_err("timeout");
+    let join = thread::spawn(move || {
+        let result = send_mail(request, &NullObservability);
+        tx.send(result).expect("send result");
+    });
+
+    let error = rx
+        .recv_timeout(TEST_LOCK_BUDGET_CEILING)
+        .expect("bounded send completion")
+        .expect_err("timeout");
+    join.join().expect("join send thread");
 
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-    assert!(
-        started.elapsed() < TEST_LOCK_TIMEOUT_ERROR_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
 }
 
 #[test]

@@ -9,11 +9,17 @@ use atm_core::protocol::{
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
 
-use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+use crate::SubsystemObservability;
+use crate::active_connection_registry::{
+    ActiveConnectionRegistry, DispatchReapSummary, TrackedDispatchHandle,
+};
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
-use super::{MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, write_shutdown_response};
+use super::{
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
+    write_shutdown_response,
+};
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -53,6 +59,7 @@ pub(super) fn handle_connection(
     force_shutdown: &AtomicBool,
     registry: Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
+    observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
@@ -76,8 +83,22 @@ pub(super) fn handle_connection(
     let (request_id, request) = codec.request_from_frame(frame)?;
     let response = dispatch_request(request_id, request, dispatcher, &registry)?;
     write_response(&mut stream, &codec, request_id, response)?;
-    registry.reap_finished_dispatches()?;
+    emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
     Ok(())
+}
+
+fn emit_dispatch_panic_recovery(
+    observability: &SubsystemObservability,
+    summary: DispatchReapSummary,
+) {
+    if summary.recovered_panics == 0 {
+        return;
+    }
+    observability.emit_or_warn(
+        "dispatch_worker",
+        "panic_recovered",
+        DISPATCH_PANIC_RECOVERED_MESSAGE,
+    );
 }
 
 fn read_connection_frame(
@@ -347,7 +368,7 @@ fn write_response(
 
 #[cfg(test)]
 #[cfg_attr(not(unix), allow(dead_code))]
-pub(super) fn install_injected_accept_error_for_test(
+pub(crate) fn install_injected_accept_error_for_test(
     runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
 ) {

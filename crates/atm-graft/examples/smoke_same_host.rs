@@ -31,8 +31,8 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge);
+    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
+        self.nudges.lock().expect("nudges lock").push(nudge.clone());
         let _ = self.delivered_tx.send(());
         Ok(())
     }
