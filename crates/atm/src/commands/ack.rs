@@ -82,7 +82,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_empty_message_id() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
         let command = AckCommand {
             message_id: String::new(),
             reply: "working on it".to_string(),
@@ -99,7 +101,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_whitespace_only_message_id() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
         let command = AckCommand {
             message_id: "   ".to_string(),
             reply: "working on it".to_string(),
