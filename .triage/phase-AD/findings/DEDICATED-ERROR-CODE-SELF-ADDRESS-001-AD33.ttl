@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33>
+  a triage:Finding ;
+  triage:findingId "DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33" ;
+  triage:title "No dedicated typed error code for self-address rejection" ;
+  triage:description "validate_non_self_recipient's rejection uses the generic AtmErrorCode::MessageValidationFailed, shared by 130+ other validation call sites across 35 files, departing from the codebase convention of dedicated codes for distinct failures (team_invalid(), caller_context_request_invalid()). Undocumented in docs/atm-error-codes.md. Sprint doc's deliverable calls for 'one stable typed error contract' -- arguably satisfied loosely (consistent across all entry paths) but not uniquely typed to this failure." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ERROR-CONTRACT" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 643 ;
+  triage:snippet "AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+
+<urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 643 ;
+  triage:snippet "AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
+
+<urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 643 ;
+  triage:snippet "AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
+
+<urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 .

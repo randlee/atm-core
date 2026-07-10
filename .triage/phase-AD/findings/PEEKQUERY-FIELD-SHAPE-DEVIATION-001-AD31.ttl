@@ -1,0 +1,183 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31>
+  a triage:Finding ;
+  triage:findingId "PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31" ;
+  triage:title "Implemented PeekQuery/ReadQuery field shapes deviate undocumented from sprint doc's Exact Interface" ;
+  triage:description "AD31-QA-2 (PR #503) req-qa ATM-QA-106, minor. Implemented PeekQuery/ReadQuery field shapes differ from the sprint doc's documented interface (resolved-required identity vs optional overrides) -- arguably a stronger design, but an undocumented deviation from the sprint doc's Exact Interface section. Likely a documentation-only fix (update sprint doc to match shipped interface) rather than a code fix. Record for completeness; assess whether this warrants dev dispatch at all given it may be an intentional/superior design choice." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD31/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD32/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD34/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD35/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD35/2> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD31/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 91 ;
+  triage:snippet "pub struct PeekQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD31/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 136 ;
+  triage:snippet "pub struct ReadQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 91 ;
+  triage:snippet "pub struct PeekQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD32/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 136 ;
+  triage:snippet "pub struct ReadQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 91 ;
+  triage:snippet "pub struct PeekQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD33/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 136 ;
+  triage:snippet "pub struct ReadQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 91 ;
+  triage:snippet "pub struct PeekQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD34/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 136 ;
+  triage:snippet "pub struct ReadQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 91 ;
+  triage:snippet "pub struct PeekQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
+
+<urn:atm:triage:occurrence/PEEKQUERY-FIELD-SHAPE-DEVIATION-001-AD31/AD35/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 136 ;
+  triage:snippet "pub struct ReadQuery {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
+
+<urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 ;
+  triage:status "open" .

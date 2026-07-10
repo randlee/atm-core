@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AD35" ;
+  triage:title "No test for cross-agent ack reply not re-promoted into pending-ack scenario" ;
+  triage:description "Cross-agent ack-reply test now validates complete scenario on AD.35 (PR #507): loopback_transport_ack_appends_reply_without_daemon now asserts both sender_inbox[0].pending_ack_at.is_none() and replies[0].pending_ack_at.is_none(). Lower branches (AD.31-34) have incomplete test (still asserts sender_inbox[0].pending_ack_at.is_some() on line 1350). Protocol/ack handling fix is in AD.35 and needs merge-forward to lower branches." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "TEST" ;
+  triage:severity "blocking" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AD35/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AD35/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AD35/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AD35/AD34/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AD35/AD31/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1350 ;
+  triage:snippet "assert!(sender_inbox[0].pending_ack_at.is_some())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AD35/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1352 ;
+  triage:snippet "assert!(sender_inbox[0].pending_ack_at.is_some())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AD35/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1389 ;
+  triage:snippet "assert!(sender_inbox[0].pending_ack_at.is_some())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AD35/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1390 ;
+  triage:snippet "assert!(sender_inbox[0].pending_ack_at.is_some())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
+
+<urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 .
