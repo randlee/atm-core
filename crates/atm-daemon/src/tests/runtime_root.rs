@@ -1,6 +1,7 @@
 use super::*;
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     SendResponseEnvelope, next_request_id,
@@ -144,6 +145,54 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     });
 
     handle.join().expect("threaded send dispatch");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+    let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                &self_address,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello self".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
+        )))
+        .expect_err("self-addressed daemon send must fail");
+
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert!(error.is_validation());
 }
 
 #[test]

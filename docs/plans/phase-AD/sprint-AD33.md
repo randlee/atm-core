@@ -2,8 +2,8 @@
 id: AD.33
 title: Self-Addressed Send Rejection
 status: planned
-branch: feature/pAD-s33-self-address-send-rejection
-worktree: ../atm-core-worktrees/feature/pAD-s33-self-address-send-rejection
+branch: feature/pAD-s33-self-addressed-send-rejection
+worktree: ../atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection
 target: integrate/phase-AD
 ---
 
@@ -29,7 +29,7 @@ target: integrate/phase-AD
 - `crates/atm-core/src/send/tests.rs`
 - `crates/atm/src/commands/send.rs`
 - `crates/atm/src/composition.rs`
-- `crates/atm-daemon/src/tests.rs`
+- `crates/atm-daemon/src/tests/runtime_root.rs`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm/requirements.md`
@@ -46,7 +46,7 @@ target: integrate/phase-AD
 The accepted send validation contract after this sprint is:
 
 ```rust
-pub fn validate_non_self_recipient(
+pub(crate) fn validate_non_self_recipient(
     sender: &AgentName,
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,

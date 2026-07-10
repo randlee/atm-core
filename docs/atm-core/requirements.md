@@ -499,6 +499,8 @@ Required caller-context rules:
   in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
+- canonical same-team self-addressed sends must fail in the shared `atm-core`
+  send path before persistence and before any `dry-run` success result
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
   `command` argv
 - `recipient` must be one concrete recipient name or `*`

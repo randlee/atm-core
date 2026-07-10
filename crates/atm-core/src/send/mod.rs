@@ -513,6 +513,7 @@ fn prepare_send_context<
     };
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
+    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
@@ -630,6 +631,22 @@ fn emit_send_command_event(
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
+}
+
+pub(crate) fn validate_non_self_recipient(
+    sender: &AgentName,
+    sender_team: &TeamName,
+    recipient: &ResolvedRecipient,
+) -> Result<(), AtmError> {
+    if sender == &recipient.agent && sender_team == &recipient.team {
+        return Err(AtmError::validation(format!(
+            "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
+        ))
+        .with_recovery(
+            "Target a different recipient or use a non-mutating mailbox inspection command instead of sending a message to yourself.",
+        ));
+    }
+    Ok(())
 }
 
 fn resolve_recipient(

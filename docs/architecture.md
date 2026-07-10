@@ -663,6 +663,8 @@ Architectural rules:
   canonical sender identity in SQLite-owned state
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
+- the shared send-context path must reject canonical same-team self-addressed
+  sends before message-body persistence and before `dry-run` can report success
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send or ack; it fires
