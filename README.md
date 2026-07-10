@@ -101,7 +101,7 @@ atm send teammate "Please confirm" --requires-ack
 
 ```bash
 atm read
-atm read --all --no-mark
+atm peek --all
 atm read --pending-ack-only
 ```
 

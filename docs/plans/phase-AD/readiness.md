@@ -21,7 +21,7 @@ Companion closure ledger:
 
 Current readiness verdict:
 
-- `release verdict: AD.25 through AD.35 closeout complete on this branch; the authoritative smoke, Windows daemon-depth, and messaging follow-up evidence are all present.`
+- `release verdict: AD.25 through AD.30 closeout is complete on this branch, but the AD.31 through AD.35 messaging follow-up line is not yet fully closed because follow-up documentation-surface findings remain open.`
 
 Current evidence surfaces:
 
