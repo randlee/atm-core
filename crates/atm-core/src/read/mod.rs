@@ -334,6 +334,14 @@ pub fn peek_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<ReadOutcome, AtmError> {
+    peek_mail_with_runtime_impl(query, observability, runtime)
+}
+
+fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: PeekQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ReadOutcome, AtmError> {
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
@@ -343,28 +351,28 @@ pub fn peek_mail_with_runtime(
     };
     let ReadRuntimeContext {
         actor,
+        actor_team,
         target,
         seen_watermark,
-        ..
     } = resolve_read_context(&synthesized, runtime)?;
-    let mut selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?;
-    let summary = ReadSelectionSummary {
-        match_count: selection.selected.len(),
-        selected_message_id: selection
-            .selected
-            .first()
-            .and_then(|message| message.envelope.message_id),
-    };
-    sort_and_limit_selected(&mut selection.selected, Some(1));
-    let display =
-        build_unmodified_read_display(runtime, &synthesized, &target, selection, summary)?;
+    let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
+    let selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?;
+    let display = resolve_read_display(
+        runtime,
+        &synthesized,
+        &target,
+        seen_watermark,
+        own_inbox,
+        DisplayMutationMode::NonMutatingPeek,
+        selection,
+    )?;
 
     let outcome = ReadOutcome {
         action: CommandAction::Peek,
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: synthesized.mailbox.selection_mode,
-        mutation_applied: false,
+        mutation_applied: display.mutation_applied,
         count: usize::from(display.output_message.is_some()),
         message: display.output_message,
         selected_message_id: display.selected_message_id,
@@ -412,6 +420,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &target,
         seen_watermark,
         own_inbox,
+        DisplayMutationMode::MutatingRead,
         selection,
     )?;
 
@@ -547,6 +556,7 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
     target: &crate::mailbox::source::ResolvedTarget,
     seen_watermark: Option<IsoTimestamp>,
     own_inbox: bool,
+    mutation_mode: DisplayMutationMode,
     mut selection: ReadSelectionState,
 ) -> Result<ReadDisplayState, AtmError> {
     let summary = ReadSelectionSummary {
@@ -557,7 +567,7 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
             .and_then(|message| message.envelope.message_id),
     };
     sort_and_limit_selected(&mut selection.selected, Some(1));
-    let mutation_needed = displayed_messages_require_mutation(&selection.selected);
+    let mutation_needed = displayed_messages_require_mutation(mutation_mode, &selection.selected);
 
     if selection.timed_out || selection.selected.is_empty() || !mutation_needed {
         return build_unmodified_read_display(runtime, query, target, selection, summary);
@@ -587,6 +597,12 @@ type WaitedSelection = Option<(
     BucketCounts,
     Vec<ClassifiedMessage>,
 )>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DisplayMutationMode {
+    MutatingRead,
+    NonMutatingPeek,
+}
 
 fn wait_for_selection_candidates<R: RetainedMailboxRuntime>(
     runtime: &R,
@@ -837,10 +853,9 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     agent: &AgentName,
     displayed_messages: &[ClassifiedMessage],
     ack_activation_mode: AckActivationMode,
-    own_inbox: bool,
+    _own_inbox: bool,
 ) -> Result<bool, AtmError> {
     let mut changed = false;
-    debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);
     debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly);
     let now = IsoTimestamp::now();
 
@@ -867,7 +882,13 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     Ok(changed)
 }
 
-fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
+fn displayed_messages_require_mutation(
+    mutation_mode: DisplayMutationMode,
+    displayed_messages: &[ClassifiedMessage],
+) -> bool {
+    if mutation_mode == DisplayMutationMode::NonMutatingPeek {
+        return false;
+    }
     displayed_messages
         .iter()
         .any(|message| !message.envelope.read)
@@ -921,8 +942,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
-        read_mail_with_runtime_impl, state,
+        BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, metadata_selection,
+        peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
     };
     use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
@@ -937,8 +958,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-        TaskId, TeamName,
+        AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
+        ReadSelection, TaskId, TeamName,
     };
     use crate::workflow::{self, WorkflowStateFile};
 
@@ -1233,6 +1254,8 @@ mod tests {
         message_records: HashMap<MessageKey, boundary::Message>,
         query_mailbox_metadata_rows_count: Arc<AtomicUsize>,
         load_message_record_count: Arc<AtomicUsize>,
+        save_seen_watermark_count: Arc<AtomicUsize>,
+        persist_message_state_count: Arc<AtomicUsize>,
         fail_load_message_record: bool,
     }
 
@@ -1286,6 +1309,8 @@ mod tests {
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
+            self.save_seen_watermark_count
+                .fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
@@ -1401,7 +1426,9 @@ mod tests {
             &self,
             _state: boundary::MailMessageState,
         ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not persist message state")
+            self.persist_message_state_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
         }
     }
 
@@ -1425,6 +1452,26 @@ mod tests {
             None,
         )
         .expect("read query")
+    }
+
+    fn explicit_peek_query(home_dir: PathBuf, current_dir: PathBuf) -> PeekQuery {
+        let target = format!("recipient@{TEST_TEAM}");
+        PeekQuery::new(
+            home_dir,
+            current_dir,
+            TEST_SENDER.parse().expect("caller"),
+            Some(&target),
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query")
     }
 
     fn base_read_query() -> ReadQuery {
@@ -1876,6 +1923,8 @@ mod tests {
             message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
             query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: load_count.clone(),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
             fail_load_message_record: false,
         };
         let query = ReadQuery::new(
@@ -1912,6 +1961,49 @@ mod tests {
     }
 
     #[test]
+    fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (metadata_row, message_record) =
+            metadata_row("peek target", Some("peek summary"), TEST_SENDER);
+        let persist_count = Arc::new(AtomicUsize::new(0));
+        let seen_count = Arc::new(AtomicUsize::new(0));
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+            metadata_rows: vec![metadata_row],
+            metadata_row_batches: None,
+            message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: seen_count.clone(),
+            persist_message_state_count: persist_count.clone(),
+            fail_load_message_record: false,
+        };
+
+        let outcome = peek_mail_with_runtime_impl(
+            explicit_peek_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("peek outcome");
+
+        assert_eq!(outcome.action, CommandAction::Peek);
+        assert!(!outcome.mutation_applied);
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+        assert_eq!(persist_count.load(Ordering::SeqCst), 0);
+        assert_eq!(seen_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn read_mail_uses_atm_roster_truth_for_explicit_targets() {
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
@@ -1924,6 +2016,8 @@ mod tests {
             message_records: HashMap::new(),
             query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
             fail_load_message_record: false,
         };
 
@@ -1952,6 +2046,8 @@ mod tests {
             message_records: HashMap::new(),
             query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
             fail_load_message_record: false,
         };
 
@@ -1983,6 +2079,8 @@ mod tests {
             message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
             query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
             fail_load_message_record: true,
         };
         let query = ReadQuery::new(

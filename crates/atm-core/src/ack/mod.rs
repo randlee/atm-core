@@ -13,7 +13,7 @@ use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
-use crate::schema::{AtmMessageId, InboxMessage};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
 use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -239,15 +239,17 @@ enum PersistedAckReply {
         reply_text: String,
         task_id: Option<TaskId>,
     },
-    Sent {
-        reply_target: ReplyTarget,
-        reply_snapshot: crate::delivery_policy::DeliveryRecipientSnapshot,
-        reply_message_id: AtmMessageId,
-        reply_text: String,
-        task_id: Option<TaskId>,
-        reply_inbox_path: PathBuf,
-        persistence: Box<crate::send::DeliveryPersistenceResult>,
-    },
+    Sent(SentAckReply),
+}
+
+struct SentAckReply {
+    reply_target: ReplyTarget,
+    reply_snapshot: crate::delivery_policy::DeliveryRecipientSnapshot,
+    reply_message_id: AtmMessageId,
+    reply_text: String,
+    task_id: Option<TaskId>,
+    reply_inbox_path: PathBuf,
+    persistence: Box<crate::send::DeliveryPersistenceResult>,
 }
 
 struct FinalizeAckContext<'a> {
@@ -416,6 +418,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     context: AckPersistenceContext<'_>,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
+    let ack_intent = AckIntentFields::not_required();
     let reply_text = input::validate_message_text(context.request.reply_body.clone())?;
     let task_id = context.source.record.envelope.task_id.clone();
 
@@ -448,9 +451,9 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         source_team: Some(context.team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: Some(context.request.message_id),
         parent_message_id: None,
         thread_mode: None,
@@ -477,7 +480,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         false,
     )?;
 
-    Ok(PersistedAckReply::Sent {
+    Ok(PersistedAckReply::Sent(SentAckReply {
         reply_target: context.reply_target.clone(),
         reply_snapshot,
         reply_message_id,
@@ -485,7 +488,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id,
         reply_inbox_path,
         persistence: Box::new(persistence),
-    })
+    }))
 }
 
 fn home_dir(request: &AckRequest) -> &std::path::Path {
@@ -518,27 +521,9 @@ fn finalize_ack_outcome<
             reply_text,
             task_id,
         )),
-        PersistedAckReply::Sent {
-            reply_target,
-            reply_snapshot,
-            reply_message_id,
-            reply_text,
-            task_id,
-            reply_inbox_path,
-            persistence,
-        } => finalize_sent_ack_outcome(
-            runtime,
-            observability,
-            post_send_emitter,
-            &context,
-            reply_target,
-            reply_snapshot,
-            *reply_message_id,
-            reply_text,
-            task_id,
-            reply_inbox_path,
-            persistence.as_ref(),
-        ),
+        PersistedAckReply::Sent(reply) => {
+            finalize_sent_ack_outcome(runtime, observability, post_send_emitter, &context, reply)
+        }
     }
 }
 
@@ -568,10 +553,6 @@ fn finalize_suppressed_self_ack_outcome(
     outcome
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "AD.34 keeps the sent-reply finalization fields explicit at the ack disposition seam."
-)]
 fn finalize_sent_ack_outcome<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -579,29 +560,27 @@ fn finalize_sent_ack_outcome<
     observability: &dyn ObservabilityPort,
     post_send_emitter: Option<&dyn PostSendHookEmitter>,
     context: &FinalizeAckContext<'_>,
-    reply_target: &ReplyTarget,
-    reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
-    reply_message_id: AtmMessageId,
-    reply_text: &str,
-    task_id: &Option<TaskId>,
-    reply_inbox_path: &std::path::Path,
-    persistence: &crate::send::DeliveryPersistenceResult,
+    reply: &SentAckReply,
 ) -> Result<AckOutcome, AtmError> {
-    let post_send_messages = reply_post_send_messages(persistence)?;
-    let plan =
-        build_reply_delivery_plan(persistence, reply_target, reply_snapshot, reply_inbox_path)?;
+    let post_send_messages = reply_post_send_messages(reply.persistence.as_ref())?;
+    let plan = build_reply_delivery_plan(
+        reply.persistence.as_ref(),
+        &reply.reply_target,
+        &reply.reply_snapshot,
+        &reply.reply_inbox_path,
+    )?;
     let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
         team: context.team.clone(),
         agent: context.actor.clone(),
         message_id: context.request_message_id,
-        task_id: task_id.clone(),
+        task_id: reply.task_id.clone(),
         reply_disposition: AckReplyDisposition::Sent {
-            reply_message_id,
-            reply_target: reply_target.clone(),
+            reply_message_id: reply.reply_message_id,
+            reply_target: reply.reply_target.clone(),
         },
-        reply_text: reply_text.to_string(),
+        reply_text: reply.reply_text.clone(),
         warnings: context.warnings.clone(),
     };
     outcome.warnings.extend(plan.warnings.iter().cloned());
@@ -609,11 +588,11 @@ fn finalize_sent_ack_outcome<
         observability,
         DeliveryTransitionContext {
             family: DeliveryEventFamily::AckReply,
-            team: &reply_target.team,
-            agent: &reply_target.agent,
+            team: &reply.reply_target.team,
+            agent: &reply.reply_target.agent,
             sender: context.actor,
-            message_id: reply_message_id,
-            task_id: task_id.clone(),
+            message_id: reply.reply_message_id,
+            task_id: reply.task_id.clone(),
         },
         &plan,
         &execution,
@@ -625,10 +604,10 @@ fn finalize_sent_ack_outcome<
         context.post_send_config.as_ref(),
         post_send_emitter,
         &ResolvedRecipient {
-            agent: reply_target.agent.clone(),
-            team: reply_target.team.clone(),
+            agent: reply.reply_target.agent.clone(),
+            team: reply.reply_target.team.clone(),
         },
-        reply_snapshot,
+        &reply.reply_snapshot,
         &post_send_messages,
     );
     record_ack_telemetry(
@@ -636,7 +615,7 @@ fn finalize_sent_ack_outcome<
         context.actor,
         context.team.clone(),
         context.request_message_id,
-        task_id.clone(),
+        reply.task_id.clone(),
     );
     Ok(outcome)
 }
@@ -794,7 +773,8 @@ mod tests {
 
     use super::{
         AckReplyDisposition, AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply,
-        ReplyTarget, canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
+        ReplyTarget, SentAckReply, canonical_sender_identity, finalize_ack_outcome,
+        resolve_reply_target,
     };
     use crate::boundary::{
         self, BuiltInPostSendDispatch, MessageKey, NonClaudeOutboundDeliveryRequest,
@@ -805,7 +785,7 @@ mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AtmMessageId, InboxMessage, TeamConfig};
+    use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, TeamConfig};
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -1211,6 +1191,7 @@ mod tests {
     }
 
     fn message_with_from(from: &str) -> InboxMessage {
+        let ack_intent = AckIntentFields::not_required();
         InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
@@ -1219,9 +1200,9 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
-            requires_ack: false,
-            pending_ack_at: None,
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
@@ -1304,6 +1285,7 @@ mod tests {
         let reply_message_id = AtmMessageId::new();
         let request_message_id = AtmMessageId::new();
         let reply_text = "ack reply".to_string();
+        let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
             text: reply_text.clone(),
@@ -1312,9 +1294,9 @@ mod tests {
             source_team: Some(team.clone()),
             summary: None,
             message_id: Some(reply_message_id),
-            requires_ack: false,
-            pending_ack_at: None,
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: Some(request_message_id),
             parent_message_id: None,
             thread_mode: None,
@@ -1338,7 +1320,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone());
-        let persisted = PersistedAckReply::Sent {
+        let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1346,7 +1328,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: PathBuf::from("reply.jsonl"),
             persistence: Box::new(persistence),
-        };
+        });
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1423,6 +1405,7 @@ mod tests {
         let reply_message_id = AtmMessageId::new();
         let request_message_id = AtmMessageId::new();
         let reply_text = "ack reply".to_string();
+        let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
             text: reply_text.clone(),
@@ -1431,9 +1414,9 @@ mod tests {
             source_team: Some(team.clone()),
             summary: None,
             message_id: Some(reply_message_id),
-            requires_ack: false,
-            pending_ack_at: None,
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: Some(request_message_id),
             parent_message_id: None,
             thread_mode: None,
@@ -1457,7 +1440,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone());
-        let persisted = PersistedAckReply::Sent {
+        let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1465,7 +1448,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: tempdir.path().join("reply.jsonl"),
             persistence: Box::new(persistence),
-        };
+        });
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1516,6 +1499,7 @@ mod tests {
         let reply_message_id = AtmMessageId::new();
         let request_message_id = AtmMessageId::new();
         let reply_text = "ack reply".to_string();
+        let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
             text: reply_text.clone(),
@@ -1524,9 +1508,9 @@ mod tests {
             source_team: Some(team.clone()),
             summary: None,
             message_id: Some(reply_message_id),
-            requires_ack: false,
-            pending_ack_at: None,
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: Some(request_message_id),
             parent_message_id: None,
             thread_mode: None,
@@ -1550,7 +1534,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent, team.clone());
-        let persisted = PersistedAckReply::Sent {
+        let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1558,7 +1542,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: tempdir.path().join("reply.jsonl"),
             persistence: Box::new(persistence),
-        };
+        });
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1627,23 +1611,26 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_SENDER.parse().expect("agent"),
                 message_key: MessageKey::new("atm:source").expect("message key"),
-                envelope: InboxMessage {
-                    from: TEST_SENDER.parse().expect("agent"),
-                    text: "source".to_string(),
-                    timestamp: IsoTimestamp::now(),
-                    read: false,
-                    source_team: Some(TEST_TEAM.parse().expect("team")),
-                    summary: Some("summary".to_string()),
-                    message_id: Some(AtmMessageId::new()),
-                    requires_ack: true,
-                    pending_ack_at: Some(IsoTimestamp::now()),
-                    acknowledged_at: None,
-                    acknowledges_message_id: None,
-                    parent_message_id: None,
-                    thread_mode: None,
-                    expires_at: None,
-                    task_id: None,
-                    extra: Map::new(),
+                envelope: {
+                    let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
+                    InboxMessage {
+                        from: TEST_SENDER.parse().expect("agent"),
+                        text: "source".to_string(),
+                        timestamp: IsoTimestamp::now(),
+                        read: false,
+                        source_team: Some(TEST_TEAM.parse().expect("team")),
+                        summary: Some("summary".to_string()),
+                        message_id: Some(AtmMessageId::new()),
+                        requires_ack: ack_intent.requires_ack,
+                        pending_ack_at: ack_intent.pending_ack_at,
+                        acknowledged_at: ack_intent.acknowledged_at,
+                        acknowledges_message_id: None,
+                        parent_message_id: None,
+                        thread_mode: None,
+                        expires_at: None,
+                        task_id: None,
+                        extra: Map::new(),
+                    }
                 },
             },
             outbound_deliveries: Mutex::new(Vec::new()),
@@ -1698,23 +1685,26 @@ mod tests {
                 team: team.clone(),
                 agent: actor.clone(),
                 message_key: source_key,
-                envelope: InboxMessage {
-                    from: actor.clone(),
-                    text: "source".to_string(),
-                    timestamp: IsoTimestamp::now(),
-                    read: false,
-                    source_team: Some(team.clone()),
-                    summary: Some("summary".to_string()),
-                    message_id: Some(source_message_id),
-                    requires_ack: true,
-                    pending_ack_at: Some(IsoTimestamp::now()),
-                    acknowledged_at: None,
-                    acknowledges_message_id: None,
-                    parent_message_id: None,
-                    thread_mode: None,
-                    expires_at: None,
-                    task_id: None,
-                    extra: Map::new(),
+                envelope: {
+                    let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
+                    InboxMessage {
+                        from: actor.clone(),
+                        text: "source".to_string(),
+                        timestamp: IsoTimestamp::now(),
+                        read: false,
+                        source_team: Some(team.clone()),
+                        summary: Some("summary".to_string()),
+                        message_id: Some(source_message_id),
+                        requires_ack: ack_intent.requires_ack,
+                        pending_ack_at: ack_intent.pending_ack_at,
+                        acknowledged_at: ack_intent.acknowledged_at,
+                        acknowledges_message_id: None,
+                        parent_message_id: None,
+                        thread_mode: None,
+                        expires_at: None,
+                        task_id: None,
+                        extra: Map::new(),
+                    }
                 },
             },
             outbound_deliveries: Mutex::new(Vec::new()),

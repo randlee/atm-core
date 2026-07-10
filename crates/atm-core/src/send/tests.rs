@@ -28,7 +28,7 @@ use crate::observability::{
 use crate::process::process_is_alive;
 use crate::protocol::NotificationEvent;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -42,6 +42,7 @@ fn message(
     parent_message_id: Option<AtmMessageId>,
     thread_mode: Option<ThreadMode>,
 ) -> InboxMessage {
+    let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: "hello".to_string(),
@@ -50,9 +51,9 @@ fn message(
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id,
         thread_mode,
@@ -386,6 +387,7 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
 }
 
 fn outbound_message() -> InboxMessage {
+    let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
         text: "hello".to_string(),
@@ -394,9 +396,9 @@ fn outbound_message() -> InboxMessage {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
@@ -571,6 +573,7 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
 fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let tempdir = tempdir().expect("tempdir");
     let original = outbound_message();
+    let ack_intent = AckIntentFields::not_required();
     let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
         text: "sqlite failed".to_string(),
@@ -579,9 +582,9 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
@@ -927,6 +930,13 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = self_addressed_send_request(tempdir.path());
+    request.to = format!(
+        "{}@{}",
+        TEST_SENDER.to_ascii_uppercase(),
+        TEST_TEAM.to_ascii_uppercase()
+    )
+    .parse()
+    .expect("case-variant self address");
     request.dry_run = true;
 
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)

@@ -181,7 +181,7 @@ mod tests {
         MAX_LOGICAL_THREAD_TEXT_BYTES, TRUNCATED_THREAD_CONTEXT_SENTINEL, ThreadIndex,
         canonical_sender_identity, is_ephemeral, is_expired_ephemeral,
     };
-    use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+    use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -191,6 +191,7 @@ mod tests {
         parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> InboxMessage {
+        let ack_intent = AckIntentFields::not_required();
         InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
@@ -199,9 +200,9 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(message_id),
-            requires_ack: false,
-            pending_ack_at: None,
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
