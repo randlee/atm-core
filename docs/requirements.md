@@ -2193,16 +2193,12 @@ Read own inbox with marking enabled, normal unread message
 Read own inbox with marking enabled, ack-required unread message
   (Unread, PendingAck) -> (Read, PendingAck)
 
-Read own inbox with --no-mark
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
-
-Read another inbox
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
+Peek any inbox
+  (Unread, NoAckRequired) -> (Unread, NoAckRequired)
+  (Unread, PendingAck) -> (Unread, PendingAck)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
   (Read, PendingAck) -> (Read, PendingAck)
   (Read, Acknowledged) -> (Read, Acknowledged)
-  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
   (Read, PendingAck) -> (Read, Acknowledged)

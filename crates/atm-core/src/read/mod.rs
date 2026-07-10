@@ -1510,6 +1510,7 @@ mod tests {
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,
+                requires_ack: false,
                 pending_ack: false,
                 acknowledged_at: None,
                 expires_at: None,
