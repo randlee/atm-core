@@ -162,14 +162,11 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
-        println!(
-            "Acknowledged {} for {}@{} and sent reply {} to {}",
-            outcome.message_id,
-            outcome.agent,
-            outcome.team,
-            outcome.reply_message_id,
-            outcome.reply_target
-        );
+        println!("{}", render_ack_result_line(outcome));
+        if outcome.reply_disposition.is_suppressed_self_ack() {
+            println!("Suppressed reply text:");
+            println!("{}", outcome.reply_text);
+        }
     }
 
     for warning in &outcome.warnings {
@@ -177,6 +174,22 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn render_ack_result_line(outcome: &AckOutcome) -> String {
+    match &outcome.reply_disposition {
+        atm_core::ack::AckReplyDisposition::SuppressedSelfAck => format!(
+            "Acknowledged {} for {}@{} and suppressed the self-ack reply",
+            outcome.message_id, outcome.agent, outcome.team
+        ),
+        atm_core::ack::AckReplyDisposition::Sent {
+            reply_message_id,
+            reply_target,
+        } => format!(
+            "Acknowledged {} for {}@{} and sent reply {} to {}",
+            outcome.message_id, outcome.agent, outcome.team, reply_message_id, reply_target
+        ),
+    }
 }
 
 /// Print one clear result in human-readable or JSON form.
@@ -723,12 +736,14 @@ fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport,
     };
+    use serde_json::json;
 
-    use super::render_bootstrap_trace_section;
+    use super::{render_ack_result_line, render_bootstrap_trace_section};
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -747,5 +762,56 @@ mod tests {
         assert!(rendered.contains("Auto-start: auto_started"));
         assert!(rendered.contains("Connect detail: connect detail"));
         assert!(rendered.contains("Auto-start detail: auto-start detail"));
+    }
+
+    #[test]
+    fn ack_output_renders_suppressed_self_ack_human_line() {
+        let outcome: AckOutcome = serde_json::from_value(json!({
+            "action": "ack",
+            "team": "test-team",
+            "agent": "sender-a",
+            "message_id": "01KX5TEST00000000000000001",
+            "task_id": null,
+            "reply_disposition": {
+                "kind": "suppressed_self_ack"
+            },
+            "reply_text": "already on it",
+            "warnings": []
+        }))
+        .expect("ack outcome");
+
+        let rendered = render_ack_result_line(&outcome);
+        assert!(rendered.contains("suppressed the self-ack reply"));
+        assert!(rendered.contains("01KX5TEST00000000000000001"));
+    }
+
+    #[test]
+    fn ack_output_json_shape_preserves_sent_reply_disposition() {
+        let outcome: AckOutcome = serde_json::from_value(json!({
+            "action": "ack",
+            "team": "test-team",
+            "agent": "sender-a",
+            "message_id": "01KX5TEST00000000000000002",
+            "task_id": null,
+            "reply_disposition": {
+                "kind": "sent",
+                "reply_target": "team-lead@test-team",
+                "reply_message_id": "01KX5TEST00000000000000003"
+            },
+            "reply_text": "received",
+            "warnings": []
+        }))
+        .expect("ack outcome");
+
+        let rendered = serde_json::to_value(&outcome).expect("json outcome");
+        assert_eq!(rendered["reply_disposition"]["kind"], "sent");
+        assert_eq!(
+            rendered["reply_disposition"]["reply_target"],
+            "team-lead@test-team"
+        );
+        assert_eq!(
+            rendered["reply_disposition"]["reply_message_id"],
+            "01KX5TEST00000000000000003"
+        );
     }
 }

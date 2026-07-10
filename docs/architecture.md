@@ -1088,10 +1088,10 @@ Public entrypoint:
 - resolved agent
 - source message id
 - optional task id from the acknowledged message
-- reply target
-- reply message id
-`AckOutcome.reply_message_id` uses the one logical message identity in the
-retained CLI/output ULID form
+- reply disposition
+  - `Sent { reply_message_id, reply_target }` when a reply message was emitted
+  - `SuppressedSelfAck` when a historical self-addressed pending-ack was
+    acknowledged without emitting a replacement reply
 - reply text
 - warnings: Vec<String>
 - Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -1102,6 +1102,9 @@ The ack service is responsible for the legal transition from `(Read, PendingAck)
 Phase R continuation rules:
 - `atm ack` emits exactly one visible reply and that reply must hardcode
   `requires_ack = false`
+- historical self-addressed pending-ack messages are the explicit exception:
+  they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`
+  and no replacement reply message
 - acknowledgement replies must never request acknowledgement themselves
 - compatibility/export surfaces encode successor metadata with
   `parentMessageId` and `threadMode`

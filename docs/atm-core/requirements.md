@@ -528,7 +528,10 @@ Required caller-context rules:
     pane mapping for the recipient
 - the hook must run after successful non-`dry-run` `atm send`
 - the hook must also run after successful `atm ack`, using the reply message as
-  the hook subject
+  the hook subject when ack emitted a reply
+- if `atm ack` suppresses a historical self-addressed reply, the
+  acknowledgement still succeeds but no ack hook fires because no outbound
+  reply message exists
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata

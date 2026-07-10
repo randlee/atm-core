@@ -1502,12 +1502,16 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - set `read = true`
   - remove `pendingAckAt`
   - set `acknowledgedAt`
-  - append a reply message to the original sender's inbox
+  - append a reply message to the original sender's inbox unless the
+    acknowledged pending-ack message is already self-addressed to the current actor
 - preserve `acknowledgesMessageId` on the emitted reply
 - hardcode `requires_ack = false` on the emitted reply
 - do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
+- when the pending-ack message is self-addressed to the current actor, mark it
+  acknowledged, suppress reply emission, and report the suppression explicitly
+  in the ack output contract
 
 Phase R continuation semantics:
 - one successful acknowledgement clears the chain-level acknowledgement
@@ -1605,10 +1609,14 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_message_id` (ULID of the reply message sent)
-- `reply_text` (String body of the reply message sent)
+- `reply_disposition`
+  - `kind = "sent"` with `reply_message_id` and `reply_target` when a reply
+    message was emitted
+  - `kind = "suppressed_self_ack"` when the historical pending-ack message was
+    self-addressed and no reply message was emitted
+- `reply_text` (validated reply body; retained even when self-ack suppression
+  prevents reply emission)
 - `task_id` (optional String, present when the source message has `taskId`)
-- `reply_target`
 - `warnings` (array of strings, omitted when empty)
 
 ## 9. `atm clear`

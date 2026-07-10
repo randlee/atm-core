@@ -10,6 +10,10 @@ CLI ownership for `atm ack`:
 
 Ack transition semantics remain owned by `atm-core`.
 
+`atm ack` distinguishes normal reply emission from suppressed self-ack
+completion when a historical pending-ack message was already addressed back to
+the current actor.
+
 References:
 
 - Product requirements: `docs/requirements.md` §8

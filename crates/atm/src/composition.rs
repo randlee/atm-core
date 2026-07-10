@@ -1380,10 +1380,11 @@ mod tests {
         assert_eq!(outcome.team.as_str(), TEST_TEAM);
         assert_eq!(outcome.agent.as_str(), TEST_SENDER);
         assert_eq!(outcome.message_id, message_id);
-        assert_eq!(
-            outcome.reply_target.to_string(),
-            format!("{TEST_LEAD}@{TEST_TEAM}")
-        );
+        assert!(matches!(
+            &outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::Sent { reply_target, .. }
+                if reply_target.to_string() == format!("{TEST_LEAD}@{TEST_TEAM}")
+        ));
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
