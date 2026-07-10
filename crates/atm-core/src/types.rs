@@ -62,6 +62,14 @@ pub enum AckState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MessageClass {
     Unread,
     PendingAck,
@@ -89,7 +97,6 @@ pub enum ReadSelection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AckActivationMode {
-    PromoteDisplayedUnread,
     ReadOnly,
 }
 

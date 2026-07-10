@@ -114,7 +114,7 @@ impl ReadCommand {
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             true,
-            AckActivationMode::PromoteDisplayedUnread,
+            AckActivationMode::ReadOnly,
             self.message_id.as_deref(),
             self.from.as_deref(),
             timestamp_filter,

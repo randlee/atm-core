@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::schema::InboxMessage;
 use crate::types::{
-    AckState, DisplayBucket, IsoTimestamp, MessageClass, NoAckState, PendingAckState,
+    AckRequirementState, AckState, DisplayBucket, MessageClass, NoAckState, PendingAckState,
     ReadReadState, ReadState, UnreadReadState,
 };
 
@@ -26,12 +26,8 @@ impl StoredMessage<UnreadReadState, NoAckState> {
         self.mark_read()
     }
 
-    pub fn display_and_require_ack(
-        mut self,
-        at: IsoTimestamp,
-    ) -> StoredMessage<ReadReadState, PendingAckState> {
+    pub fn display_and_require_ack(mut self) -> StoredMessage<ReadReadState, PendingAckState> {
         self.envelope.read = true;
-        self.envelope.pending_ack_at = Some(at);
         StoredMessage::read_pending_ack(self.envelope)
     }
 
@@ -101,13 +97,21 @@ pub fn derive_read_state(message: &InboxMessage) -> ReadState {
     }
 }
 
-pub fn derive_ack_state(message: &InboxMessage) -> AckState {
-    if message.acknowledged_at.is_some() {
-        AckState::Acknowledged
-    } else if message.pending_ack_at.is_some() {
-        AckState::PendingAck
+pub fn derive_ack_requirement(message: &InboxMessage) -> AckRequirementState {
+    if !message.requires_ack {
+        AckRequirementState::NotRequired
+    } else if message.acknowledged_at.is_some() {
+        AckRequirementState::RequiredAcknowledged
     } else {
-        AckState::NoAckRequired
+        AckRequirementState::RequiredPending
+    }
+}
+
+pub fn derive_ack_state(message: &InboxMessage) -> AckState {
+    match derive_ack_requirement(message) {
+        AckRequirementState::NotRequired => AckState::NoAckRequired,
+        AckRequirementState::RequiredPending => AckState::PendingAck,
+        AckRequirementState::RequiredAcknowledged => AckState::Acknowledged,
     }
 }
 

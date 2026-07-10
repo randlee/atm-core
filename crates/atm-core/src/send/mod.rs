@@ -561,6 +561,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             source_team: Some(request.caller_team.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
+            requires_ack,
             pending_ack_at: requires_ack.then_some(timestamp),
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -579,6 +580,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         source_team: Some(request.caller_team.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
+        requires_ack,
         pending_ack_at: requires_ack.then_some(timestamp),
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -763,6 +765,7 @@ fn validate_thread_append(
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);
+    envelope.requires_ack = thread_requires_ack;
     envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
     envelope.acknowledged_at = None;
     Ok(())

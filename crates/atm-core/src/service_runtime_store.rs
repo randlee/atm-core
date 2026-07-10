@@ -188,7 +188,7 @@ fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStore
         summary: message.envelope.summary,
         message_at: message.envelope.timestamp,
         read: message.envelope.read,
-        pending_ack: message.envelope.pending_ack_at.is_some(),
+        pending_ack: message.envelope.requires_ack && message.envelope.acknowledged_at.is_none(),
         acknowledged_at: message.envelope.acknowledged_at,
         expires_at: message.envelope.expires_at,
         task_id: message.envelope.task_id,

@@ -793,12 +793,12 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     own_inbox: bool,
 ) -> Result<bool, AtmError> {
     let mut changed = false;
-    let promote_unread =
-        own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
+    debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);
+    debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly);
     let now = IsoTimestamp::now();
 
     for message in displayed_messages {
-        let updated = transition_displayed_message(message, promote_unread, now).into_envelope();
+        let updated = transition_displayed_message(message).into_envelope();
         if updated == message.envelope {
             continue;
         }
@@ -828,21 +828,11 @@ fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage])
 
 fn transition_displayed_message(
     message: &ClassifiedMessage,
-    promote_unread: bool,
-    now: IsoTimestamp,
 ) -> state::TransitionedMessage {
     let read_state = state::derive_read_state(&message.envelope);
     let ack_state = state::derive_ack_state(&message.envelope);
 
     match (read_state, ack_state) {
-        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
-            state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
-                    message.envelope.clone(),
-                )
-                .display_and_require_ack(now),
-            )
-        }
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
             state::TransitionedMessage::ReadNoAck(
                 state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(

@@ -253,8 +253,10 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
-        pending_ack: message.envelope.pending_ack_at.is_some()
-            && message.envelope.acknowledged_at.is_none(),
+        pending_ack: matches!(
+            crate::read::state::derive_ack_requirement(&message.envelope),
+            crate::types::AckRequirementState::RequiredPending
+        ),
         task_id: message.envelope.task_id.clone(),
     }
 }

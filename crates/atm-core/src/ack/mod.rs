@@ -414,6 +414,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         source_team: Some(context.team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: Some(context.request.message_id),

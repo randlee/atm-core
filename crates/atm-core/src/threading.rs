@@ -136,7 +136,7 @@ impl<'a> ThreadIndex<'a> {
     pub(crate) fn thread_requires_ack(&self, message_id: AtmMessageId) -> bool {
         self.chain_messages(message_id)
             .into_iter()
-            .any(|message| message.pending_ack_at.is_some() || message.acknowledged_at.is_some())
+            .any(|message| message.requires_ack)
     }
 
     pub(crate) fn chain_messages(&self, message_id: AtmMessageId) -> Vec<&'a InboxMessage> {
@@ -199,6 +199,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

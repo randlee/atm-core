@@ -153,6 +153,7 @@ fn build_missing_config_notice(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
         message_id: Some(AtmMessageId::new()),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
