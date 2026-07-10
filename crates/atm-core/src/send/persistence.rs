@@ -6,7 +6,7 @@ use serde_json::Map;
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, InboxMessage};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -94,6 +94,7 @@ fn build_sqlite_failure_companion_message(
         .message_id
         .map(|message_id| message_id.to_string())
         .unwrap_or_else(|| "unknown-message-id".to_string());
+    let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated("atm-system"),
         text: format!(
@@ -108,9 +109,9 @@ fn build_sqlite_failure_companion_message(
             agent, team
         )),
         message_id: Some(AtmMessageId::new()),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,

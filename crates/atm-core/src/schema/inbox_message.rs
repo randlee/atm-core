@@ -7,6 +7,37 @@ use serde_json::{Map, Value};
 
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
+use crate::types::IsoTimestamp;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AckIntentFields {
+    pub(crate) requires_ack: bool,
+    pub(crate) pending_ack_at: Option<IsoTimestamp>,
+    pub(crate) acknowledged_at: Option<IsoTimestamp>,
+}
+
+impl AckIntentFields {
+    pub(crate) const fn not_required() -> Self {
+        Self {
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+        }
+    }
+
+    pub(crate) fn from_requires_ack(requires_ack: bool, timestamp: IsoTimestamp) -> Self {
+        Self {
+            requires_ack,
+            pending_ack_at: requires_ack.then_some(timestamp),
+            acknowledged_at: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn required_pending(timestamp: IsoTimestamp) -> Self {
+        Self::from_requires_ack(true, timestamp)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SharedAppendPolicy {
@@ -122,8 +153,8 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy, ThreadMode,
-        to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        AckIntentFields, AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy,
+        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -146,6 +177,32 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&unknown).expect("encode unknown"),
             r#""future_alert_kind""#
+        );
+    }
+
+    #[test]
+    fn ack_intent_fields_helpers_keep_the_three_field_invariant_together() {
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+
+        assert_eq!(
+            AckIntentFields::not_required(),
+            AckIntentFields {
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+            }
+        );
+        assert_eq!(
+            AckIntentFields::from_requires_ack(false, timestamp),
+            AckIntentFields::not_required()
+        );
+        assert_eq!(
+            AckIntentFields::required_pending(timestamp),
+            AckIntentFields {
+                requires_ack: true,
+                pending_ack_at: Some(timestamp),
+                acknowledged_at: None,
+            }
         );
     }
 

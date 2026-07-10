@@ -853,10 +853,9 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     agent: &AgentName,
     displayed_messages: &[ClassifiedMessage],
     ack_activation_mode: AckActivationMode,
-    own_inbox: bool,
+    _own_inbox: bool,
 ) -> Result<bool, AtmError> {
     let mut changed = false;
-    debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);
     debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly);
     let now = IsoTimestamp::now();
 
