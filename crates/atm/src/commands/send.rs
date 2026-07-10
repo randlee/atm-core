@@ -124,7 +124,9 @@ mod tests {
     const TEST_TEAM: &str = "test-team";
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_invalid_target_before_core() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
@@ -301,7 +303,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_supports_file_with_trailing_inline_note() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),

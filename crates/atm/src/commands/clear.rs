@@ -119,7 +119,9 @@ mod tests {
     use super::ClearCommand;
 
     #[test]
+    #[serial(env)]
     fn build_query_rejects_invalid_target_before_core() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
         let command = ClearCommand {
             target: Some("../evil".to_string()),
             team: Some(TEST_TEAM.to_string()),
