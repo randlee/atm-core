@@ -9,11 +9,11 @@ keeping this ledger current and tying each item to the final
 
 | Item | Technical owner | Closure-artifact owner | Tracking / closure artifact |
 | --- | --- | --- | --- |
-| `AD9-BLANKPANE-001` | `AD.9` | `AD.30` | cite accepted-line evidence that closes `docs/plans/phase-AD/sprint-AD9.md` Acceptance Criteria `the validated-on-entry blank tmux_pane_id drift for team-lead and arch-ctm is repaired on the accepted baseline` |
-| `ERRDOC-001` | `AD.9` | `AD.30` | cite accepted-line evidence that closes the `docs/plans/phase-AD/sprint-AD9.md` CLI Error Contract entries for `ATM_MEMBER_ALREADY_EXISTS`, `ATM_MEMBER_NOT_FOUND`, `ATM_IDENTITY_UNAVAILABLE`, `ATM_TEAM_UNAVAILABLE`, `ATM_IDENTITY_INVALID`, and `ATM_TEAM_INVALID` |
-| historical `FTQ-001` env-race reconciliation | accepted-line code fix predates this follow-up | `AD.30` | either update `.triage/phase-Xb/findings/FTQ-001.ttl` to closed or record the explicit historical-provenance reason for leaving it open in `docs/plans/phase-AD/readiness.md` |
-| phase-AD triage sweep ledger | `AD.30` | `AD.30` | expand this directory with the final sweep disposition before phase closure |
-| `CHANGELOG.md` entry for the `AD.13` through `AD.30` corrective line | `AD.30` | `AD.30` | landed `CHANGELOG.md` text plus citation in `docs/plans/phase-AD/readiness.md` |
+| `AD9-BLANKPANE-001` | `AD.9` | `AD.30` | closed on accepted AD line by `team_admin::tests::update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture` in `crates/atm-core/src/team_admin.rs`; this is the direct acceptance-criteria proof named by `docs/plans/phase-AD/sprint-AD9.md` |
+| `ERRDOC-001` | `AD.9` | `AD.30` | closed on accepted AD line by the explicit `update_member` validation coverage in `crates/atm/src/commands/teams.rs` tests plus the documented CLI error contract in `docs/plans/phase-AD/sprint-AD9.md`; no unresolved ATM-member / ATM-identity / ATM-team error-code gap remains on this branch |
+| historical `FTQ-001` env-race reconciliation | accepted-line code fix predates this follow-up | `AD.30` | historical provenance intentionally retained; `docs/plans/phase-AD/readiness.md` now records that the old discovery ledger remains as history while the accepted AD line carries the repaired runtime behavior |
+| phase-AD triage sweep ledger | `AD.30` | `AD.30` | terminal-sprint findings are now recorded in `.triage/phase-AD/findings/AD30-QA-2.ttl`; prior AD findings remain in `.triage/phase-AD/findings/` as the accepted sweep ledger |
+| `CHANGELOG.md` entry for the `AD.13` through `AD.30` corrective line | `AD.30` | `AD.30` | release-facing `AD.13` through `AD.30` changelog text is present on this branch in `CHANGELOG.md`; `docs/plans/phase-AD/readiness.md` remains the phase-close citation surface |
 
 ## Notes
 

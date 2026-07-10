@@ -1,6 +1,8 @@
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
+#[cfg(test)]
+use atm_core::error::AtmError;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
@@ -89,6 +91,20 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
             }))),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub(crate) struct PanicDispatcher;
+
+#[cfg(test)]
+impl atm_core::boundary::sealed::Sealed for PanicDispatcher {}
+
+#[cfg(test)]
+impl RequestDispatcher for PanicDispatcher {
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        panic!("intentional dispatcher panic for test: {request:?}");
     }
 }
 

@@ -1,10 +1,10 @@
 # Smoke
 
 - status: `passed`
-- timestamp: `2026-07-07T00:44:54.662511+00:00`
-- binary SHA: `9e5b3e4123163ad37065a4821ddb46d672eb6ff0`
-- duration secs: `27.618`
-- summary: `pass=23`, `fail=0`, `skip=0`
+- timestamp: `2026-07-09T16:15:15.648602+00:00`
+- binary SHA: `bc4192a195f5b2f99d6029cfa72c5a146ef58b0a`
+- duration secs: `51.378`
+- summary: `pass=28`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
   that row were executed after the failure
@@ -34,3 +34,8 @@
 | `AD18-RUNTIME-ROOT-002` | sibling worktrees with one ATM_HOME keep one canonical runtime root while preserving invocation-directory reporting | `PASS` | sibling-worktree regression coverage proves one ATM_HOME stays canonical while command-local invocation directories remain distinct and explicit |
 | `AD19-READ-OUTPUT-001` | read mutation returns the message it actually mutated together with post-mutation bucket counts | `PASS` | read returns the durable message it actually mutated, reports post-mutation unread counts, and leaves ack mutation semantics intact |
 | `AD20-READ-CONTAINS-001` | metadata-backed contains stays full-body correct while keeping durable-body reload bounded | `PASS` | metadata-backed contains stays full-body correct and only reloads durable body for surviving summary-miss candidates |
+| `AD29-POSTSEND-EXTERNAL-001` | external post-send hook success suppresses built-in fallback while preserving durable send success | `PASS` | external post-send hook success keeps the built-in nudge path inactive while durable send success remains intact |
+| `AD29-POSTSEND-PARTIAL-001` | mixed post-send hook outcomes preserve durable delivery while surfacing sender-visible warnings | `PASS` | mixed hook accounting preserves durable delivery success and retains a sender-visible warning for failed matches |
+| `AD29-POSTSEND-BUILTIN-001` | built-in fallback covers both tmux and graft recipients when no external hook matches | `PASS` | built-in fallback stays honest for both tmux-backed and graft-backed recipients when no external hook matches |
+| `AD29-POSTSEND-RESET-001` | deleting a prior override row restores the built-in default template path | `PASS` | removing a stored override row re-exposes the built-in default template instead of leaving an implicit disabled state behind |
+| `AD29-POSTSEND-DISABLE-001` | explicitly disabled built-in template state skips local post-send delivery cleanly | `PASS` | the explicit disabled-template state becomes a documented no-delivery path instead of an accidental empty-string side effect |

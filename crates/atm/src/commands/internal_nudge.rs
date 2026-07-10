@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -6,8 +5,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use atm_core::boundary::{
-    BuiltInNudgeTemplateKind, PostSendHookEvent, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow,
+    BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
 };
 use atm_core::error::{AtmError, AtmErrorKind};
 use atm_core::error_codes::AtmErrorCode;
@@ -16,15 +14,17 @@ use atm_core::graft::{
     read_graft_post_send_message, write_graft_post_send_message,
 };
 use atm_core::home;
-use atm_daemon_bootstrap::with_default_nudge_template_override_store;
+use atm_core::send::nudge_template;
 use clap::Args;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
 
-const ATM_POST_SEND_ENV: &str = "ATM_POST_SEND";
-const INTERNAL_NUDGE_SINK_ENV: &str = "ATM_INTERNAL_NUDGE_SINK";
+#[cfg(test)]
+use std::collections::BTreeMap;
+
+const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
 const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
 const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
@@ -37,125 +37,58 @@ pub struct InternalNudgeCommand;
 impl InternalNudgeCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
-        let kind = BuiltInNudgeTemplateKind::from_post_send_event(&input.event);
-        let Some(template) = resolve_template_body(&input.event.recipient_team, kind)? else {
+        let Some(template) =
+            nudge_template::render_resolved_built_in_nudge(&input.event, &input.template)?
+        else {
             return Ok(());
         };
-        let rendered = render_template(&template, &input.render_values())?;
         match input.sink_target {
-            NudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &rendered)?,
-            NudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event)?,
+            BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
+            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event)?,
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NudgeSinkTarget {
-    Tmux,
-    Graft,
-}
-
-impl NudgeSinkTarget {
-    fn from_env() -> Result<Self> {
-        match std::env::var(INTERNAL_NUDGE_SINK_ENV).as_deref() {
-            Ok("tmux") => Ok(Self::Tmux),
-            Ok("graft") => Ok(Self::Graft),
-            Ok(other) => Err(AtmError::validation(format!(
-                "unsupported built-in nudge sink target `{other}`"
-            ))
-            .with_recovery(
-                "Set ATM_INTERNAL_NUDGE_SINK to `tmux` or `graft` before retrying the built-in post-send path.",
-            )
-            .into()),
-            Err(_) => Err(AtmError::validation(
-                "missing ATM_INTERNAL_NUDGE_SINK for built-in post-send nudge",
-            )
-            .with_recovery(
-                "Populate ATM_INTERNAL_NUDGE_SINK before invoking `atm internal-nudge`.",
-            )
-            .into()),
-        }
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct RawInternalNudgePayload {
-    from: String,
-    sender: String,
-    recipient: String,
-    team: String,
-    message_id: String,
-    #[serde(default)]
-    description: String,
-    #[serde(default)]
-    message: String,
-    requires_ack: bool,
-    is_ack: bool,
-    #[serde(default)]
-    task_id: Option<String>,
-    #[serde(default)]
-    recipient_pane_id: Option<String>,
-}
-
 #[derive(Debug)]
 struct InternalNudgeInput {
-    from: String,
     event: PostSendHookEvent,
-    sink_target: NudgeSinkTarget,
+    sink_target: BuiltInNudgeSinkTarget,
+    template: ResolvedBuiltInNudgeTemplate,
 }
 
 impl InternalNudgeInput {
     fn from_env() -> Result<Self> {
-        let raw_payload = std::env::var(ATM_POST_SEND_ENV).map_err(|_| {
-            AtmError::validation("missing ATM_POST_SEND payload for built-in post-send nudge")
+        let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {
+            AtmError::validation("missing ATM_INTERNAL_NUDGE payload for built-in post-send nudge")
                 .with_recovery(
-                    "Populate ATM_POST_SEND before invoking the built-in `atm internal-nudge` path.",
+                    "Populate ATM_INTERNAL_NUDGE with a resolved envelope before invoking `atm internal-nudge`.",
                 )
         })?;
-        let payload: RawInternalNudgePayload =
+        let payload: InternalNudgeEnvelope =
             serde_json::from_str(&raw_payload).map_err(|source| {
-                AtmError::validation("failed to decode ATM_POST_SEND payload for built-in nudge")
+                AtmError::validation(
+                    "failed to decode ATM_INTERNAL_NUDGE payload for built-in nudge",
+                )
                     .with_recovery(
-                        "Repair the ATM_POST_SEND JSON payload before retrying the built-in post-send path.",
+                        "Repair the ATM_INTERNAL_NUDGE JSON payload before retrying the built-in post-send path.",
                     )
                     .with_source(source)
             })?;
-        let description = if payload.description.trim().is_empty() {
-            payload.message.clone()
-        } else {
-            payload.description.clone()
-        };
         Ok(Self {
-            from: payload.from,
-            event: PostSendHookEvent {
-                sender: payload.sender.parse()?,
-                sender_team: payload.team.parse()?,
-                recipient: payload.recipient.parse()?,
-                recipient_team: payload.team.parse()?,
-                message_id: payload.message_id.parse()?,
-                description,
-                requires_ack: payload.requires_ack,
-                is_ack: payload.is_ack,
-                task_id: payload
-                    .task_id
-                    .filter(|value| !value.trim().is_empty())
-                    .map(|value| value.parse())
-                    .transpose()?,
-                recipient_pane_id: payload
-                    .recipient_pane_id
-                    .filter(|value| !value.trim().is_empty())
-                    .as_deref()
-                    .map(atm_core::types::PaneId::from_cli)
-                    .transpose()?,
-            },
-            sink_target: NudgeSinkTarget::from_env()?,
+            event: payload.event,
+            sink_target: payload.sink_target,
+            template: payload.template,
         })
     }
 
+    #[cfg(test)]
     fn render_values(&self) -> BTreeMap<&'static str, String> {
         BTreeMap::from([
-            ("from", self.from.clone()),
+            (
+                "from",
+                nudge_template::qualified_sender_identity(&self.event),
+            ),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
             ("description", self.event.description.clone()),
@@ -171,54 +104,7 @@ impl InternalNudgeInput {
     }
 }
 
-fn load_template_override(
-    team: &atm_core::types::TeamName,
-    kind: BuiltInNudgeTemplateKind,
-) -> Result<Option<TeamNudgeTemplateOverrideRow>> {
-    with_default_nudge_template_override_store(|store| store.load_template_override(team, kind))
-        .map_err(Into::into)
-}
-
-fn resolve_template_body(
-    team: &atm_core::types::TeamName,
-    kind: BuiltInNudgeTemplateKind,
-) -> Result<Option<String>> {
-    match load_template_override(team, kind)? {
-        Some(TeamNudgeTemplateOverrideRow {
-            mode: TeamNudgeTemplateOverrideMode::Override { template_body },
-            ..
-        }) => Ok(Some(template_body)),
-        Some(TeamNudgeTemplateOverrideRow {
-            mode: TeamNudgeTemplateOverrideMode::Disabled,
-            ..
-        }) => Ok(None),
-        None => Ok(Some(default_template(kind).to_string())),
-    }
-}
-
-fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
-    match kind {
-        BuiltInNudgeTemplateKind::Delivery => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
-        }
-        BuiltInNudgeTemplateKind::DeliveryAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
-        }
-        BuiltInNudgeTemplateKind::DeliveryTask => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
-        }
-        BuiltInNudgeTemplateKind::DeliveryTaskAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>read atm --team {{team}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
-        }
-        BuiltInNudgeTemplateKind::Acknowledge => {
-            "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
-        }
-        BuiltInNudgeTemplateKind::AcknowledgeTask => {
-            "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
-        }
-    }
-}
-
+#[cfg(test)]
 fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> Result<String> {
     if template.contains("{%") || template.contains("%}") {
         return Err(AtmError::validation(
@@ -463,15 +349,18 @@ mod tests {
     use std::fs;
     use std::time::Duration;
 
-    use atm_core::boundary::{BuiltInNudgeTemplateKind, PostSendHookEvent};
+    use atm_core::boundary::{
+        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
+        ResolvedBuiltInNudgeTemplate,
+    };
+    use atm_core::send::nudge_template::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
-        ATM_POST_SEND_ENV, INTERNAL_NUDGE_SINK_ENV, InternalNudgeInput, NudgeSinkTarget,
-        TMUX_DOUBLE_ENTER_DELAY, TMUX_PROGRAM_ENV, default_template, render_template,
-        resolve_template_body,
+        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_DOUBLE_ENTER_DELAY,
+        TMUX_PROGRAM_ENV, render_template,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -542,9 +431,12 @@ mod tests {
         let rendered = render_template(
             "<atm from=\"{{from}}\" task-id=\"{{task_id}}\">{{description}}</atm>",
             &InternalNudgeInput {
-                from: format!("{TEST_LEAD}@{TEST_TEAM}"),
                 event: base_event(),
-                sink_target: NudgeSinkTarget::Tmux,
+                sink_target: BuiltInNudgeSinkTarget::Tmux,
+                template: ResolvedBuiltInNudgeTemplate {
+                    kind: BuiltInNudgeTemplateKind::Delivery,
+                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
+                },
             }
             .render_values(),
         )
@@ -559,9 +451,12 @@ mod tests {
         let error = render_template(
             "<atm>{{unknown}}</atm>",
             &InternalNudgeInput {
-                from: format!("{TEST_LEAD}@{TEST_TEAM}"),
                 event: base_event(),
-                sink_target: NudgeSinkTarget::Tmux,
+                sink_target: BuiltInNudgeSinkTarget::Tmux,
+                template: ResolvedBuiltInNudgeTemplate {
+                    kind: BuiltInNudgeTemplateKind::Delivery,
+                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
+                },
             }
             .render_values(),
         )
@@ -575,31 +470,73 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn internal_nudge_input_reads_post_send_env() {
-        let payload = serde_json::json!({
-            "from": format!("{TEST_LEAD}@{TEST_TEAM}"),
-            "sender": TEST_LEAD,
-            "recipient": TEST_ARCH_CTM,
-            "team": TEST_TEAM,
-            "message_id": "01KX1TEST00000000000000000",
-            "description": "review failing smoke lane",
-            "message": "review failing smoke lane",
-            "requires_ack": true,
-            "is_ack": false,
-            "task_id": "AD.21",
-            "recipient_pane_id": "%9"
-        });
+    fn internal_nudge_input_reads_resolved_envelope() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: PostSendHookEvent {
+                requires_ack: true,
+                task_id: Some("AD.21".parse().expect("task")),
+                ..base_event()
+            },
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::DeliveryTaskAck,
+                body: Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>".to_string()),
+            },
+        })
+        .expect("serialize envelope");
         let payload_value = payload.to_string();
-        let _env = EnvGuard::set_many([
-            (ATM_POST_SEND_ENV, Some(payload_value.as_str())),
-            (INTERNAL_NUDGE_SINK_ENV, Some("tmux")),
-        ]);
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload_value.as_str()))]);
 
         let input = InternalNudgeInput::from_env().expect("input");
 
-        assert_eq!(input.from, format!("{TEST_LEAD}@{TEST_TEAM}"));
-        assert_eq!(input.sink_target, NudgeSinkTarget::Tmux);
+        assert_eq!(input.sink_target, BuiltInNudgeSinkTarget::Tmux);
         assert_eq!(input.event.task_id.expect("task").as_str(), "AD.21");
+        assert_eq!(
+            input.template.kind,
+            BuiltInNudgeTemplateKind::DeliveryTaskAck
+        );
+        assert_eq!(
+            input.template.body.as_deref(),
+            Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn internal_nudge_input_accepts_explicit_disabled_template_state() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: base_event(),
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: None,
+            },
+        })
+        .expect("serialize envelope");
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload.as_str()))]);
+
+        let input = InternalNudgeInput::from_env().expect("input");
+
+        assert_eq!(input.template.body, None);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: base_event(),
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: None,
+            },
+        })
+        .expect("serialize envelope");
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload.as_str()))]);
+
+        InternalNudgeCommand
+            .run(&crate::observability::CliObservability::fallback())
+            .expect("disabled template should short-circuit");
     }
 
     #[test]
@@ -643,62 +580,5 @@ mod tests {
         let logged = fs::read_to_string(&tmux_log).expect("tmux log");
         assert_eq!(logged.matches("Enter").count(), 2);
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
-    }
-
-    #[test]
-    #[serial(env)]
-    fn disabled_override_row_skips_built_in_nudge_delivery() {
-        let tempdir = tempdir().expect("tempdir");
-        let home_dir = tempdir.path().join("home");
-        fs::create_dir_all(&home_dir).expect("home");
-        let team = TEST_TEAM.parse().expect("team");
-        let _env = EnvGuard::set_many([
-            ("ATM_HOME", Some(home_dir.to_str().expect("utf8"))),
-            ("HOME", Some(home_dir.to_str().expect("utf8"))),
-        ]);
-
-        atm_daemon_bootstrap::with_default_nudge_template_override_store(|override_store| {
-            override_store.disable_template_override(&team, BuiltInNudgeTemplateKind::Delivery)?;
-            Ok(())
-        })
-        .expect("save override");
-
-        let template =
-            resolve_template_body(&team, BuiltInNudgeTemplateKind::Delivery).expect("resolve");
-        assert!(template.is_none());
-    }
-
-    #[test]
-    #[serial(env)]
-    fn override_row_only_applies_to_selected_template_kind() {
-        let tempdir = tempdir().expect("tempdir");
-        let home_dir = tempdir.path().join("home");
-        fs::create_dir_all(&home_dir).expect("home");
-        let team = TEST_TEAM.parse().expect("team");
-        let _env = EnvGuard::set_many([
-            ("ATM_HOME", Some(home_dir.to_str().expect("utf8"))),
-            ("HOME", Some(home_dir.to_str().expect("utf8"))),
-        ]);
-
-        atm_daemon_bootstrap::with_default_nudge_template_override_store(|override_store| {
-            override_store.save_template_override(
-                &team,
-                BuiltInNudgeTemplateKind::DeliveryAck,
-                "<atm kind=\"override\"/>",
-            )?;
-            Ok(())
-        })
-        .expect("save override");
-
-        let overridden = resolve_template_body(&team, BuiltInNudgeTemplateKind::DeliveryAck)
-            .expect("resolve ack override");
-        let fallback = resolve_template_body(&team, BuiltInNudgeTemplateKind::Delivery)
-            .expect("resolve delivery fallback");
-
-        assert_eq!(overridden.as_deref(), Some("<atm kind=\"override\"/>"));
-        assert_eq!(
-            fallback.as_deref(),
-            Some(default_template(BuiltInNudgeTemplateKind::Delivery))
-        );
     }
 }

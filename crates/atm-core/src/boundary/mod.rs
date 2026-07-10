@@ -215,6 +215,26 @@ impl TeamNudgeTemplateOverrideRow {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ResolvedBuiltInNudgeTemplate {
+    pub kind: BuiltInNudgeTemplateKind,
+    pub body: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BuiltInNudgeSinkTarget {
+    Tmux,
+    Graft,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct InternalNudgeEnvelope {
+    pub event: PostSendHookEvent,
+    pub sink_target: BuiltInNudgeSinkTarget,
+    pub template: ResolvedBuiltInNudgeTemplate,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct LocalTmuxNudgeTarget {
     pub pane_id: PaneId,
     pub rendered_nudge: String,

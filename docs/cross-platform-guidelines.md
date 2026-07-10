@@ -78,6 +78,24 @@ Forbidden shape:
 - swallowing `ErrorKind::Unsupported` and then proceeding to an unbounded read, write, flush, or
   shutdown wait
 
+### AD.30 Windows Local IPC Depth Cases
+
+The accepted Windows daemon depth closure covers exactly these same-host local
+IPC cases:
+- dispatcher panic during shutdown
+- injected accept-error handling
+- post-terminate connection rejection
+
+Required proof shape:
+- the tests must run through the accepted runtime/local-IPC hooks rather than
+  a Windows-only alternate contract
+- dispatcher panic and injected accept-error paths must each produce one
+  retained observable failure record plus bounded completion
+- injected accept-error handling is a fail-fast typed-error path on the
+  accepted line; it is not a retry/backoff scenario
+- post-terminate rejection must fail quickly after terminate and must not rely
+  on a late connection eventually timing out
+
 ## Windows Smoke Test
 
 Use this procedure on a fresh Windows checkout of `feature/windows-test-parity`. The Windows
