@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "PEEK-MUTATION-001" ;
   triage:title "atm peek mutates read state; AckActivationMode never checked at mutation gate" ;
-  triage:description "RESOLVED in followup_pass. Prior canonical record (status=fixed_partial) with fix present only on AD.35. Current sweep confirms fix has been successfully propagated and merged-forward to all AD.31-34 branches. All branches now contain the defensive gate in displayed_messages_require_mutation (line ~890-891): if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }. This gate prevents mutation from ever being applied when peek_mail_with_runtime passes DisplayMutationMode::NonMutatingPeek, structurally closing the vulnerability. No regresssions detected."@en ;
+  triage:description "RESOLVED in followup_pass. Fix originated on AD.31 (commits 032ef476 + 5891c114) and properly propagated/merged-forward to all downstream branches AD.32-35. All five branches contain the defensive gate in displayed_messages_require_mutation (line 890-891): if mutation_mode == DisplayMutationMode::NonMutatingPeek { return false; }. Call path verified: peek_mail_with_runtime → resolve_read_context → load_read_selection → resolve_read_display → displayed_messages_require_mutation(DisplayMutationMode::NonMutatingPeek) → returns false, preventing mutation. This gate structurally closes the vulnerability. No regressions detected."@en ;
   triage:category "PEEK-MUTATION" ;
   triage:severity "blocking" ;
   triage:phaseId "phase-AD" ;
