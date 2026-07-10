@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/SPRINT-DOC-STATUS-001>
   a triage:Finding ;
   triage:findingId "SPRINT-DOC-STATUS-001" ;
-  triage:title "Sprint doc frontmatter status not updated to complete despite dev-completion report" ;
-  triage:description "Consolidated across sprints: AD31 ATM-QA-006 (status:planned), AD32 ATM-QA-001 (status:in_progress), AD33-QA-2 ATM-QA-101 (still status:planned at PR #505, not fixed by arch-ctm), AD34-QA-1 ATM-QA-001 (still status:planned at PR #506 despite complete implementation with real store-backed integration test). Re-sweep docs/plans/phase-AD/sprint-AD31.md through sprint-AD35.md frontmatter status field on all 5 branches at current HEAD." ;
+  triage:title "Sprint doc frontmatter status and readiness table consistency across phase-AD sprints" ;
+  triage:description "Multi-layered finding: (1) Sprint frontmatter status fields in sprint-AD31-35.md are now all complete; (2) Each worktree's inherited readiness.md contains stale/misspelled data for downstream sprints. AD.31 readiness.md lines 48-50 show AD.32-35 with wrong status/branch-slug; AD.32 readiness.md lines 48-50 show AD.33-35 wrong; AD.33 readiness.md lines 48-50 have AD.33 misspelled (self-address not self-addressed), AD.34-35 wrong status; AD.34 readiness.md line 50 shows AD.35 as planned not complete. Each branch must independently close its own readiness.md inconsistencies per feature-branch isolation rules." ;
   triage:phaseId "phase-AD" ;
   triage:triageMode "followup_pass" ;
   triage:category "DOC" ;
@@ -13,86 +13,170 @@
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/1> ;
-  triage:openOn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> ;
-  triage:openOn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
-  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD34/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/3fe8c2eddad78cce64d0a140760d9439fc9601d8> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD35/ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> ;
   triage:propagated false ;
   triage:mergeForwardNeeded false ;
   triage:regressed false ;
-  triage:notes "Followup sweep shows: AD.31 (status:planned), AD.32 (status:in_progress), AD.33 (status:planned) are OPEN; AD.34 (status:complete) and AD.35 (status:complete) are FIXED. Per repo convention (feedback_team_lead_doc_fixes_on_integrate), team-lead may fix these status fields directly on integrate/phase-AD branch. dispatch_ready=true because this is a docs-only housekeeping task." .
+  triage:notes "Followup sweep finds: (1) Sprint frontmatter status: AD.31-35 ALL NOW COMPLETE (fixed by commit f6b219178de77ebc on AD.33 and propagated forward). (2) Readiness.md tables have inherited stale data from earlier branching. Each branch's readiness.md table rows for downstream sprints contain wrong status/slugs per branch isolation rule: AD.31 must fix lines 48-50 in its readiness.md, AD.32 must fix lines 48-50, AD.33 must fix lines 48-50 (self-address misspelling + status), AD.34 must fix line 50 (AD.35 status). AD.35 readiness.md is correct. dispatch_ready=false because AD.31-34 must each independently close their readiness inconsistencies before merge." .
 
 <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/1>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-AD/sprint-AD31.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 48 ;
+  triage:snippet "AD.32 | `planned` | `feature/pAD-s32-durable-ack-intent-reset`" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> .
+  triage:headSha "508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 49 ;
+  triage:snippet "AD.33 | `planned` | `feature/pAD-s33-self-address-send-rejection`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "AD.34 | `planned` | `feature/pAD-s34-self-ack-loop-termination`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee> .
 
 <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/1>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-AD/sprint-AD32.md" ;
-  triage:line 4 ;
-  triage:snippet "status: in_progress" ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 48 ;
+  triage:snippet "AD.33 | `planned` | `feature/pAD-s33-self-address-send-rejection`" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> .
+  triage:headSha "3fe8c2eddad78cce64d0a140760d9439fc9601d8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2eddad78cce64d0a140760d9439fc9601d8> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 49 ;
+  triage:snippet "AD.34 | `planned` | `feature/pAD-s34-self-ack-loop-termination`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "3fe8c2eddad78cce64d0a140760d9439fc9601d8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2eddad78cce64d0a140760d9439fc9601d8> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "AD.35 | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "3fe8c2eddad78cce64d0a140760d9439fc9601d8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2eddad78cce64d0a140760d9439fc9601d8> .
 
 <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/1>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 48 ;
+  triage:snippet "AD.33 | `planned` | `feature/pAD-s33-self-address-send-rejection` (misspelled: missing -ed)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
-  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> .
 
-<urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 49 ;
+  triage:snippet "AD.34 | `planned` | `feature/pAD-s34-self-ack-loop-termination` (incomplete slug)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD33/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "AD.35 | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "AD.35 | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout` (should be complete)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "ffe281ef16c7742b0042e21185965a50d0cc470f" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> .
+
+<urn:atm:triage:worktree/AD31/508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:headSha "508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee" ;
   triage:orderIndex 31 .
 
-<urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+<urn:atm:triage:worktree/AD32/3fe8c2eddad78cce64d0a140760d9439fc9601d8>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:headSha "3fe8c2eddad78cce64d0a140760d9439fc9601d8" ;
   triage:orderIndex 32 .
 
-<urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
+<urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
   triage:orderIndex 33 .
 
-<urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
+<urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:headSha "ffe281ef16c7742b0042e21185965a50d0cc470f" ;
   triage:orderIndex 34 .
 
-<urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
+<urn:atm:triage:worktree/AD35/ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:headSha "ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68" ;
   triage:orderIndex 35 .

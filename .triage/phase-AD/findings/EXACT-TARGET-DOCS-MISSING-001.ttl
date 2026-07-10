@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/EXACT-TARGET-DOCS-MISSING-001>
   a triage:Finding ;
   triage:findingId "EXACT-TARGET-DOCS-MISSING-001" ;
-  triage:title "5 named architecture/requirements docs never updated for peek/self-address/owner-only-mutation content" ;
-  triage:description "Cross-branch doc gap spanning AD.31-35. AD31-QA-2 ATM-QA-101/102 (docs/architecture.md and docs/atm/architecture.md, docs/atm-core/architecture.md, docs/atm-core/requirements.md, docs/atm/requirements.md missing peek content), AD33-QA-2 ATM-QA-103 (docs/atm/requirements.md, docs/atm/architecture.md missing self-address content -- the SAME two files consistently missed across topics), AD35-QA-2 ATM-QA-004 (all 5 docs missing peek/impersonation content). Canonical cross-branch record. Note: prior ATM-QA-004-AD35.ttl is an alias/subset to be merged into this record." ;
+  triage:title "10 documented Exact Targets for self-addressed-send-rejection: AD.33 now closed, propagation across AD.31/32 pending" ;
+  triage:description "AD.33 sprint deliverable: 10 named Exact Targets must document self-addressed-send-rejection content per AD33-QA-2 (PR #505). Correct scope: docs/requirements.md, docs/architecture.md, docs/atm/requirements.md, docs/atm/architecture.md, docs/atm/commands/send.md, docs/atm-core/requirements.md, docs/atm-core/architecture.md, docs/project-plan.md, docs/plans/phase-AD/plan-phase-AD.md, docs/plans/phase-AD/sprint-AD33.md. AD.33 commit f6b2191 (fix: close ad33 doc gaps) now carries all 10 docs with self-address content. AD.34/35 already have the 7 shared-doc content. AD.31/32 still lack content on shared docs (merge-forward pending per phase rules). Canonical cross-branch record updated 2026-07-10." ;
   triage:phaseId "phase-AD" ;
   triage:triageMode "followup_pass" ;
   triage:category "DOC" ;
@@ -20,182 +20,193 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/7> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/5> ;
-  triage:openOn <urn:atm:triage:worktree/AD31/5891c114> ;
-  triage:openOn <urn:atm:triage:worktree/AD32/46be50b0> ;
-  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD34/05ddab01> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD35/afdaf3c5> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD33/6ef24f32> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/7> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/508e5df8> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/3fe8c2ed> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD33/f6b21917> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD34/ffe281ef> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD35/ff9b4a1b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD33/f6b21917> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/1>
   a triage:Occurrence ;
-  triage:file "docs/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.31" ;
-  triage:headSha "5891c114" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114> .
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/2>
   a triage:Occurrence ;
-  triage:file "docs/atm/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.31" ;
-  triage:headSha "5891c114" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114> .
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/3>
   a triage:Occurrence ;
-  triage:file "docs/atm-core/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.31" ;
-  triage:headSha "5891c114" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114> .
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/4>
   a triage:Occurrence ;
-  triage:file "docs/atm-core/requirements.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.31" ;
-  triage:headSha "5891c114" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114> .
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/5>
   a triage:Occurrence ;
-  triage:file "docs/atm/requirements.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.31" ;
-  triage:headSha "5891c114" ;
-  triage:occursIn <urn:atm:triage:worktree/AD31/5891c114> .
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/6>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/7>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:snippet "Plan already mentions self-addressed-send; content propagation to other docs pending" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "508e5df8" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/508e5df8> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/1>
   a triage:Occurrence ;
-  triage:file "docs/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.32" ;
-  triage:headSha "46be50b0" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0> .
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/2>
   a triage:Occurrence ;
-  triage:file "docs/atm/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.32" ;
-  triage:headSha "46be50b0" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0> .
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/3>
   a triage:Occurrence ;
-  triage:file "docs/atm-core/architecture.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.32" ;
-  triage:headSha "46be50b0" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0> .
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/4>
   a triage:Occurrence ;
-  triage:file "docs/atm-core/requirements.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.32" ;
-  triage:headSha "46be50b0" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0> .
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
 <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/5>
   a triage:Occurrence ;
-  triage:file "docs/atm/requirements.md" ;
-  triage:snippet "Missing peek/impersonation/self-address/owner-only content" ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.32" ;
-  triage:headSha "46be50b0" ;
-  triage:occursIn <urn:atm:triage:worktree/AD32/46be50b0> .
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
-<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/1>
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/6>
   a triage:Occurrence ;
-  triage:file "docs/atm/architecture.md" ;
-  triage:snippet "Missing self-address content (line context: AD.34 has it)" ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing self-addressed-send-rejection language (fixed on AD.33)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AD.33" ;
-  triage:headSha "6ef24f32" ;
-  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32> .
+  triage:branch "AD.32" ;
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
-<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/2>
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/7>
   a triage:Occurrence ;
-  triage:file "docs/atm/requirements.md" ;
-  triage:snippet "Missing self-address content (line context: AD.34 has it)" ;
+  triage:file "docs/project-plan.md" ;
+  triage:snippet "Plan already mentions self-addressed-send; content propagation to other docs pending" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AD.33" ;
-  triage:headSha "6ef24f32" ;
-  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32> .
+  triage:branch "AD.32" ;
+  triage:headSha "3fe8c2ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/3fe8c2ed> .
 
-<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/5>
-  a triage:Occurrence ;
-  triage:file "docs/architecture.md" ;
-  triage:snippet "self-address: line 666 has partial content (AD.34 expands it)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "AD.33" ;
-  triage:headSha "6ef24f32" ;
-  triage:occursIn <urn:atm:triage:worktree/AD33/6ef24f32> .
-
-<urn:atm:triage:worktree/AD31/5891c114>
+<urn:atm:triage:worktree/AD31/508e5df8>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.31" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
-  triage:headSha "5891c114" ;
+  triage:headSha "508e5df8229ef009c53a433f9c3f9bd1ddb2f3ee" ;
   triage:orderIndex 31 .
 
-<urn:atm:triage:worktree/AD32/46be50b0>
+<urn:atm:triage:worktree/AD32/3fe8c2ed>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.32" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
-  triage:headSha "46be50b0" ;
+  triage:headSha "3fe8c2eddad78cce64d0a140760d9439fc9601d8" ;
   triage:orderIndex 32 .
 
-<urn:atm:triage:worktree/AD33/6ef24f32>
+<urn:atm:triage:worktree/AD33/f6b21917>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.33" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
-  triage:headSha "6ef24f32" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
   triage:orderIndex 33 .
 
-<urn:atm:triage:worktree/AD34/05ddab01>
+<urn:atm:triage:worktree/AD34/ffe281ef>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.34" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
-  triage:headSha "05ddab01" ;
+  triage:headSha "ffe281ef16c7742b0042e21185965a50d0cc470f" ;
   triage:orderIndex 34 .
 
-<urn:atm:triage:worktree/AD35/afdaf3c5>
+<urn:atm:triage:worktree/AD35/ff9b4a1b>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.35" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
-  triage:headSha "afdaf3c5" ;
+  triage:headSha "ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68" ;
   triage:orderIndex 35 .
