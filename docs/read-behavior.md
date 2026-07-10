@@ -131,11 +131,11 @@ Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
 - the selected displayed message is always written back with `read = true`
-- `atm read` never creates a new acknowledgement obligation on display
+- selected unread messages that do not already require acknowledgement remain
+  `NoAckRequired` after display
 - selected unread messages that already require acknowledgement remain
   pending-ack after display
-- selected unread messages that do not require acknowledgement remain
-  `NoAckRequired` after display
+- `atm read` never creates a new acknowledgement obligation on display
 
 Required `atm peek` behavior:
 - it is the explicit non-mutating inspection surface that replaced the legacy
@@ -173,9 +173,9 @@ Classification rule:
   - `read = false` => `Unread`
   - `read = true` => `Read`
 - ack axis:
-  - `acknowledgedAt` present => `Acknowledged`
-  - else `pendingAckAt` present => `PendingAck`
-  - else => `NoAckRequired`
+  - `requiresAck = false` => `NoAckRequired`
+  - `requiresAck = true` and `acknowledgedAt` absent => `PendingAck`
+  - `requiresAck = true` and `acknowledgedAt` present => `Acknowledged`
 
 Derived message class:
 - `PendingAck` when the ack axis is pending
@@ -212,19 +212,19 @@ Send task-linked message
   -> persist taskId
   -> (Unread, PendingAck)
 
-Read own inbox, marking enabled
+Read own inbox, owner-only mutating read
   (Unread, NoAckRequired) -> (Read, NoAckRequired)
   (Unread, PendingAck) -> (Read, PendingAck)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
   (Read, PendingAck) -> (Read, PendingAck)
   (Read, Acknowledged) -> (Read, Acknowledged)
-  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
-Peek any inbox
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
+Peek any inbox, inspection-only
+  (Unread, NoAckRequired) -> (Unread, NoAckRequired)
+  (Unread, PendingAck) -> (Unread, PendingAck)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
   (Read, PendingAck) -> (Read, PendingAck)
   (Read, Acknowledged) -> (Read, Acknowledged)
-  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
   (Read, PendingAck) -> (Read, Acknowledged)
@@ -243,7 +243,7 @@ Disallowed transitions:
 - any transition that skips the legal graph
 
 Notes:
-- `read = true` is the base mutation on display
+- `read = true` is the base mutation on owner-only `atm read`
 - `atm peek` performs inspection only and applies no mutation
 - task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
 
@@ -339,7 +339,6 @@ pub struct AcknowledgedAckState;
 
 impl StoredMessage<UnreadReadState, NoAckState> {
     pub fn display_without_ack(self) -> StoredMessage<ReadReadState, NoAckState>;
-    pub fn display_and_require_ack(self, at: IsoTimestamp) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {

@@ -20,7 +20,7 @@ type MetadataQueryRow = (
     Option<String>,
     String,
     i64,
-    Option<String>,
+    i64,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -56,7 +56,7 @@ fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Metada
         row.get::<_, Option<String>>(5)?,
         row.get::<_, String>(6)?,
         row.get::<_, i64>(7)?,
-        row.get::<_, Option<String>>(8)?,
+        row.get::<_, i64>(8)?,
         row.get::<_, Option<String>>(9)?,
         row.get::<_, Option<String>>(10)?,
         row.get::<_, Option<String>>(11)?,
@@ -137,7 +137,7 @@ fn decode_mailbox_metadata_row(
         summary,
         message_at,
         read,
-        pending_ack_at,
+        requires_ack,
         acknowledged_at,
         expires_at,
         task_id,
@@ -176,7 +176,8 @@ fn decode_mailbox_metadata_row(
                 )
             })?,
         read: read != 0,
-        pending_ack: pending_ack_at.is_some() && acknowledged_at.is_none(),
+        requires_ack: requires_ack != 0,
+        pending_ack: requires_ack != 0 && acknowledged_at.is_none(),
         acknowledged_at: parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?,
         expires_at: parse_optional_timestamp(expires_at, "expires_at timestamp")?,
         task_id: parse_task_id(task_id, &message_key)?,
@@ -211,7 +212,10 @@ pub(crate) fn query_mailbox_metadata_rows(
                      json_extract(mail_messages.envelope_json, '$.read'),
                      0
                  ),
-                 mail_message_states.pending_ack_at,
+                 COALESCE(
+                     json_extract(mail_messages.envelope_json, '$.requiresAck'),
+                     0
+                 ),
                  mail_message_states.acknowledged_at,
                  mail_message_states.expires_at,
                  json_extract(mail_messages.envelope_json, '$.taskId')

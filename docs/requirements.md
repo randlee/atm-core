@@ -2245,11 +2245,11 @@ Read own inbox with marking enabled, ack-required unread message
   (Unread, PendingAck) -> (Read, PendingAck)
 
 Peek any inbox
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
+  (Unread, NoAckRequired) -> (Unread, NoAckRequired)
+  (Unread, PendingAck) -> (Unread, PendingAck)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
   (Read, PendingAck) -> (Read, PendingAck)
   (Read, Acknowledged) -> (Read, Acknowledged)
-  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
   (Read, PendingAck) -> (Read, Acknowledged)
