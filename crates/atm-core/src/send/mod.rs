@@ -204,7 +204,7 @@ impl WarningEntry {
 /// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
-/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`],
+/// [`crate::error_codes::AtmErrorCode::SelfAddressedSendInvalid`],
 /// [`crate::error_codes::AtmErrorCode::FilePolicyRejected`],
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
@@ -646,12 +646,9 @@ pub(crate) fn validate_non_self_recipient(
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str())
     {
-        return Err(AtmError::validation(format!(
+        return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
-        ))
-        .with_recovery(
-            "Target a different recipient or use a non-mutating mailbox inspection command instead of sending a message to yourself.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -659,6 +656,7 @@ pub(crate) fn validate_non_self_recipient(
 #[cfg(test)]
 mod self_address_tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::error_codes::AtmErrorCode;
     use crate::types::{AgentName, TeamName};
 
     #[test]
@@ -674,6 +672,7 @@ mod self_address_tests {
         .expect_err("case-variant self target must be rejected");
 
         assert!(error.is_validation(), "{error:?}");
+        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     }
 }
 

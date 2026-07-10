@@ -1186,7 +1186,7 @@ mod tests {
 
         assert_eq!(
             error.code,
-            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
         );
         assert!(fixture.inbox_contents(TEST_SENDER).is_empty());
     }
