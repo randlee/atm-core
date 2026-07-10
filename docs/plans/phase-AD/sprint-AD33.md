@@ -1,7 +1,7 @@
 ---
 id: AD.33
 title: Self-Addressed Send Rejection
-status: planned
+status: complete
 branch: feature/pAD-s33-self-addressed-send-rejection
 worktree: ../atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection
 target: integrate/phase-AD
