@@ -223,6 +223,7 @@ mod tests {
         let root_id = AtmMessageId::new();
         let terminal_id = AtmMessageId::new();
         let mut root = message(TEST_SENDER, root_id, None, None);
+        root.requires_ack = true;
         root.acknowledged_at = Some(IsoTimestamp::now());
         let terminal = message(
             TEST_SENDER,

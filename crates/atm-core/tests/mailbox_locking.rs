@@ -690,7 +690,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         .expect("hold mutation lock");
     let mutation_query = mutation_fixture
         .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+        .with_ack_activation_mode(AckActivationMode::ReadOnly);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -714,7 +714,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         .expect("hold no-mutation lock");
     let no_mutation_query = no_mutation_fixture
         .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
+        .with_ack_activation_mode(AckActivationMode::ReadOnly)
         .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
@@ -989,7 +989,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 
     let read_query = fixture
         .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+        .with_ack_activation_mode(AckActivationMode::ReadOnly);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -1550,6 +1550,7 @@ fn pending_ack_message_at(
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: true,
         pending_ack_at: Some(IsoTimestamp::from_datetime(timestamp)),
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1579,6 +1580,7 @@ fn read_message_at(
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1608,6 +1610,7 @@ fn unread_message_at(
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,

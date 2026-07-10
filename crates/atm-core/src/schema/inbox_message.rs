@@ -166,6 +166,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -184,6 +185,40 @@ mod tests {
         let decoded: InboxMessage = serde_json::from_str(&encoded).expect("decode");
 
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn legacy_pending_ack_without_ack_reply_metadata_defaults_requires_ack_true() {
+        let json = json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": true,
+            "pendingAckAt": "2026-03-30T00:00:01Z"
+        });
+
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
+        assert!(decoded.requires_ack);
+    }
+
+    #[test]
+    fn legacy_ack_reply_metadata_prevents_requires_ack_requalification() {
+        let acknowledged_message_id = AtmMessageId::new();
+        let json = json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "ack",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": true,
+            "pendingAckAt": "2026-03-30T00:00:01Z",
+            "acknowledgesMessageId": acknowledged_message_id,
+        });
+
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
+        assert!(!decoded.requires_ack);
+        assert_eq!(
+            decoded.acknowledges_message_id,
+            Some(acknowledged_message_id)
+        );
     }
 
     #[test]
@@ -281,6 +316,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -326,6 +362,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -364,6 +401,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -405,6 +443,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("ack reply".into()),
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: Some(acknowledged_at),
             acknowledges_message_id: Some(AtmMessageId::new()),
@@ -436,6 +475,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("oversized".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -478,6 +518,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("exact-cap".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -515,6 +556,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("above-cap".into()),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -553,6 +595,7 @@ mod tests {
             source_team: None,
             summary: Some("native".into()),
             message_id: None,
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -596,6 +639,7 @@ mod tests {
             source_team: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

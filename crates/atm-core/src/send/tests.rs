@@ -50,6 +50,7 @@ fn message(
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -393,6 +394,7 @@ fn outbound_message() -> InboxMessage {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -569,6 +571,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -928,6 +931,7 @@ fn resolve_recipient_rejects_invalid_alias_target() {
 fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
     let root_id = AtmMessageId::new();
     let mut root = message(TEST_SENDER, root_id, None, None);
+    root.requires_ack = true;
     root.acknowledged_at = Some(IsoTimestamp::now());
     let mut update = message(
         TEST_SENDER,
@@ -946,6 +950,7 @@ fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
 fn prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread() {
     let root_id = AtmMessageId::new();
     let mut root = message(TEST_SENDER, root_id, None, None);
+    root.requires_ack = true;
     root.acknowledged_at = Some(IsoTimestamp::now());
     let mut update = message(
         TEST_SENDER,

@@ -1,9 +1,9 @@
 ---
 id: AD.32
 title: Durable Ack Intent And Read Semantics Reset
-status: planned
-branch: feature/pAD-s32-durable-ack-intent-reset
-worktree: ../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-reset
+status: in_progress
+branch: feature/pAD-s32-durable-ack-intent-and-read-semantics-reset
+worktree: ../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset
 target: integrate/phase-AD
 ---
 
@@ -48,7 +48,6 @@ target: integrate/phase-AD
 - `docs/atm/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
-- `docs/adr/ADR-021-owner-only-message-mutation.md`
 - `docs/adr/ADR-022-durable-ack-intent.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
@@ -127,8 +126,8 @@ must call it instead of reconstructing ack intent ad hoc from
 - `ReadQuery` / `AckActivationMode` shape changes are carried through the
   graft boundary and smoke/example call sites so workspace/example builds stay
   green
-- `ADR-022` records the durable-ack-intent decision separately from
-  `ADR-021`'s owner-only mutation boundary
+- `ADR-022` records the durable-ack-intent decision directly on the retained
+  Phase AD line
 
 ## This Sprint Does Not Close
 

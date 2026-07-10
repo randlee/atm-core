@@ -509,8 +509,13 @@ Ack activation mode:
 
 ```rust
 pub enum AckActivationMode {
-    PromoteDisplayedUnread,
     ReadOnly,
+}
+
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
 }
 ```
 

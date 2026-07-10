@@ -826,9 +826,7 @@ fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage])
         .any(|message| !message.envelope.read)
 }
 
-fn transition_displayed_message(
-    message: &ClassifiedMessage,
-) -> state::TransitionedMessage {
+fn transition_displayed_message(message: &ClassifiedMessage) -> state::TransitionedMessage {
     let read_state = state::derive_read_state(&message.envelope);
     let ack_state = state::derive_ack_state(&message.envelope);
 
@@ -1151,6 +1149,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -1417,6 +1416,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

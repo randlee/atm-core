@@ -238,9 +238,9 @@ impl From<MessageEnvelope> for RawMessageEnvelope {
 
 impl From<RawMessageEnvelope> for MessageEnvelope {
     fn from(value: RawMessageEnvelope) -> Self {
-        let requires_ack = value.requires_ack.unwrap_or(
-            value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none(),
-        );
+        let requires_ack = value
+            .requires_ack
+            .unwrap_or(value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none());
         Self {
             from: value.from,
             text: value.text,

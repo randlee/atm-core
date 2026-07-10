@@ -314,8 +314,13 @@ pub enum DisplayBucket {
 }
 
 pub enum AckActivationMode {
-    PromoteDisplayedUnread,
     ReadOnly,
+}
+
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
 }
 
 pub struct StoredMessage<R, A> {
