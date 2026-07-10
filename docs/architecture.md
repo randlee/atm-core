@@ -987,7 +987,7 @@ Shared query model:
 `ReadQuery` adds:
 - optional exact `message_id`
 - optional timeout
-- read-mutation controls such as seen-state update and ack activation
+- read-mutation controls such as seen-state update
 
 `ListOutcome` contains:
 - action
