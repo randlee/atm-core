@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use atm_core::address::AgentAddress;
 use atm_core::clear::ClearQuery;
 use clap::Args;
 
@@ -15,8 +14,6 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Clear read or acknowledged messages from a mailbox.
 pub struct ClearCommand {
-    target: Option<String>,
-
     #[arg(long)]
     team: Option<String>,
 
@@ -58,17 +55,11 @@ impl ClearCommand {
         let caller_context =
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let older_than = self.older_than.as_deref().map(parse_duration).transpose()?;
-        let target_address = self
-            .target
-            .as_deref()
-            .map(str::parse::<AgentAddress>)
-            .transpose()?;
 
         Ok(ClearQuery {
             home_dir,
             current_dir,
             caller_identity: caller_context.caller_identity,
-            target_address,
             caller_team: caller_context.caller_team,
             older_than,
             idle_only: self.idle_only,
@@ -114,28 +105,22 @@ fn parse_duration(raw: &str) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use atm_core::test_support::{EnvGuard, TEST_TEAM};
+    use clap::Parser;
     use serial_test::serial;
 
     use super::ClearCommand;
 
     #[test]
-    #[serial(env)]
-    fn build_query_rejects_invalid_target_before_core() {
-        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
-        let command = ClearCommand {
-            target: Some("../evil".to_string()),
-            team: Some(TEST_TEAM.to_string()),
-            older_than: None,
-            idle_only: false,
-            dry_run: false,
-            json: false,
-        };
+    fn cli_rejects_positional_mailbox_target_for_owner_only_clear() {
+        let error = crate::commands::Cli::try_parse_from(["atm", "clear", "recipient@test-team"])
+            .expect_err("owner-only clear must reject positional target");
 
-        let error = command
-            .build_query(".".into(), ".".into())
-            .expect_err("invalid target");
-
-        assert!(error.to_string().contains("agent name"));
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("unexpected argument 'recipient@test-team'")
+                || rendered.contains("unexpected argument"),
+            "{rendered}"
+        );
     }
 
     #[test]
@@ -146,7 +131,6 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let command = ClearCommand {
-            target: None,
             team: None,
             older_than: None,
             idle_only: false,
@@ -168,7 +152,6 @@ mod tests {
             ("ATM_TEAM", Some("env-team")),
         ]);
         let command = ClearCommand {
-            target: None,
             team: Some(TEST_TEAM.to_string()),
             older_than: None,
             idle_only: false,
