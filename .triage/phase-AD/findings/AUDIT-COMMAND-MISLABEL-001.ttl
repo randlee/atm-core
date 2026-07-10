@@ -1,0 +1,123 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AUDIT-COMMAND-MISLABEL-001>
+  a triage:Finding ;
+  triage:findingId "AUDIT-COMMAND-MISLABEL-001" ;
+  triage:title "peek's audit CommandEvent hardcodes command:\"read\", indistinguishable from atm read in audit trail" ;
+  triage:description "CommandEvent hardcodes command: \"read\" even when called via peek, despite a CommandAction::Peek variant already existing and being unused for this purpose. This makes peek and read indistinguishable in the audit trail." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AUDIT-COMMAND-MISLABEL" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "AD.35" ;
+  triage:promoteTowardsBranch "AD.35" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD31/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 402 ;
+  triage:snippet "command: \"read\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> .
+
+<urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 402 ;
+  triage:snippet "command: \"read\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 402 ;
+  triage:snippet "command: \"read\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 3 ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 402 ;
+  triage:snippet "command: \"read\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 4 ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/AUDIT-COMMAND-MISLABEL-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 402 ;
+  triage:snippet "command: \"read\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 .

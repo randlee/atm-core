@@ -1,0 +1,130 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-ACK-FIXTURE-001>
+  a triage:Finding ;
+  triage:findingId "CI-ACK-FIXTURE-001" ;
+  triage:title "pending_ack_message() test fixture missing requires_ack:true breaks cargo test --workspace on all 3 CI platforms" ;
+  triage:description "req-qa (ATM-QA-004 on AD.32) reports crates/atm/src/composition.rs's pending_ack_message() test fixture sets pending_ack_at but never sets requires_ack:true on the seeded InboxMessage. Since ack eligibility is now gated purely on the durable requires_ack-derived AckState, the seeded envelope is ineligible for acknowledgement, breaking loopback_transport_ack_appends_reply_without_daemon (composition.rs:1325) and cli_composition_supports_graft_client_surface_without_daemon (composition.rs:1362) -- both assert .ack()/.acknowledge_message() succeeds. This is the confirmed likely cause of Test failing on macos/ubuntu/windows CI on both PR #503 and #504." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI-ACK" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/composition.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246ee> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:highestOpenBranch "AD.35" ;
+  triage:highestFixedBranch "none" .
+
+<urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD31/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1048 ;
+  triage:snippet "message.pending_ack_at = Some(Utc::now().into());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:severity "blocking" ;
+  triage:context "pending_ack_message() fixture sets pending_ack_at but omits requires_ack:true, making message ineligible for ack() operations. Tests loopback_transport_ack_appends_reply_without_daemon (1325) and cli_composition_supports_graft_client_surface_without_daemon (1362) fail expecting .ack()/.acknowledge_message() to succeed." ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1048 ;
+  triage:snippet "message.pending_ack_at = Some(Utc::now().into());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:severity "blocking" ;
+  triage:context "pending_ack_message() fixture sets pending_ack_at but omits requires_ack:true, making message ineligible for ack() operations. Tests loopback_transport_ack_appends_reply_without_daemon (1327) and cli_composition_supports_graft_client_surface_without_daemon (1383) fail expecting .ack()/.acknowledge_message() to succeed." ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1060 ;
+  triage:snippet "message.pending_ack_at = Some(Utc::now().into());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:severity "blocking" ;
+  triage:context "Inherited from AD.32 (no unique commits). pending_ack_message() fixture sets pending_ack_at but omits requires_ack:true." ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1060 ;
+  triage:snippet "message.pending_ack_at = Some(Utc::now().into());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:severity "blocking" ;
+  triage:context "Inherited from AD.32 (no unique commits). pending_ack_message() fixture sets pending_ack_at but omits requires_ack:true." ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/CI-ACK-FIXTURE-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1060 ;
+  triage:snippet "message.pending_ack_at = Some(Utc::now().into());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:severity "blocking" ;
+  triage:context "Inherited from AD.32 (no unique commits). pending_ack_message() fixture sets pending_ack_at but omits requires_ack:true." ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246ee" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 35 .
