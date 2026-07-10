@@ -58,6 +58,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
     let db_path = tempdir.path().join("mail.db");
     write_team_config(&atm_home, &[]);
+    write_workspace_config(&workspace_dir);
 
     add_member_via_retained_admin(
         &db_path,
