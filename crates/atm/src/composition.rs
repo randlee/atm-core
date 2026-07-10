@@ -1415,7 +1415,7 @@ mod tests {
             .expect_err("self-addressed send must fail");
         assert_eq!(
             error.code,
-            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
         );
     }
 
