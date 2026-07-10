@@ -81,7 +81,7 @@ Messaging follow-up dependency note:
 
 ## Phase Exit Criteria (AD.25-AD.35)
 
-`AD.25` through `AD.30` follow-up closure is not complete until all of the following are
+`AD.25` through `AD.35` follow-up closure is not complete until all of the following are
 true:
 
 - `AD.25` through `AD.30` all pass on the accepted line
