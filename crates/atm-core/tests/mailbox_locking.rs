@@ -12,7 +12,7 @@ use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::list::{ListQuery, list_mail};
 use atm_core::observability::NullObservability;
-use atm_core::read::{ReadQuery, read_mail};
+use atm_core::read::{PeekQuery, ReadQuery, peek_mail, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
@@ -885,6 +885,52 @@ fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
 
 #[test]
 #[serial_test::serial(env)]
+fn peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            TEAM_LEAD,
+            "peek without mutation",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let before = fixture
+        .inbox_contents(PRIMARY_AGENT)
+        .into_iter()
+        .find(|message| message.message_id == Some(message_id))
+        .expect("message before peek");
+
+    let outcome = peek_mail(
+        fixture.peek_query(SECONDARY_AGENT, Some(PRIMARY_AGENT), message_id),
+        &observability,
+    )
+    .expect("peek outcome");
+
+    assert!(!outcome.mutation_applied);
+    assert_eq!(outcome.selected_message_id, Some(message_id));
+
+    let after = fixture
+        .inbox_contents(PRIMARY_AGENT)
+        .into_iter()
+        .find(|message| message.message_id == Some(message_id))
+        .expect("message after peek");
+
+    assert_eq!(after.read, before.read);
+    assert_eq!(after.pending_ack_at, before.pending_ack_at);
+    assert_eq!(after.acknowledged_at, before.acknowledged_at);
+    assert_eq!(
+        after.acknowledges_message_id,
+        before.acknowledges_message_id
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn read_contains_matches_summary_only_and_body_only_on_store_backed_path() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -1198,6 +1244,25 @@ impl Fixture {
             None,
         )
         .expect("read query")
+    }
+
+    fn peek_query(&self, actor: &str, target: Option<&str>, message_id: AtmMessageId) -> PeekQuery {
+        PeekQuery::new(
+            self.tempdir.path().to_path_buf(),
+            self.tempdir.path().to_path_buf(),
+            actor.parse().expect("caller"),
+            target,
+            PRIMARY_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            Some(&message_id.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query")
     }
 
     fn send_request(&self, sender: &str, to: &str, text: &str) -> SendRequest {

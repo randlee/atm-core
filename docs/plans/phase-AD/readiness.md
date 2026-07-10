@@ -21,7 +21,7 @@ Companion closure ledger:
 
 Current readiness verdict:
 
-- `release verdict: AD.25 through AD.30 closeout complete on this branch; the authoritative smoke and Windows daemon-depth evidence are both present.`
+- `release verdict: AD.25 through AD.30 closeout is complete on this branch, but the AD.31 through AD.35 messaging follow-up line is not yet fully closed because follow-up documentation-surface findings remain open.`
 
 Current evidence surfaces:
 
@@ -32,6 +32,15 @@ Current evidence surfaces:
   for commit `77c30bb3` / PR `#497`, with successful `windows-latest`
   `atm-daemon` coverage for dispatcher panic during shutdown, injected
   accept-error handling, and post-terminate connection rejection
+- authoritative messaging regression suite:
+  - `loopback_transport_phase_ad_messaging_regression_matrix_without_daemon`
+    in `crates/atm/src/composition.rs:1281`
+  - `loopback_transport_ack_appends_reply_without_daemon` in
+    `crates/atm/src/composition.rs:1555`
+  - `loopback_transport_ack_historical_self_poison_suppresses_replacement_reply`
+    in `crates/atm/src/composition.rs:1593`
+  - `ack_self_addressed_poison_message_suppresses_replacement_reply` in
+    `crates/atm-core/tests/mailbox_locking.rs:852`
 
 ## Sprint Status
 
@@ -70,9 +79,9 @@ Messaging follow-up dependency note:
 | phase-AD triage sweep ledger | `AD.30` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` populated with the final sweep disposition |
 | `CHANGELOG.md` entry for `AD.13` through `AD.30` | `AD.30` | `AD.30` | release-facing changelog text present on the accepted line |
 
-## Phase Exit Criteria
+## Phase Exit Criteria (AD.25-AD.35)
 
-`AD.25` through `AD.30` follow-up closure is not complete until all of the following are
+`AD.25` through `AD.35` follow-up closure is not complete until all of the following are
 true:
 
 - `AD.25` through `AD.30` all pass on the accepted line

@@ -127,7 +127,7 @@ Retained tests and requirements establish these rules:
 
 ### 3.6 Mutation Behavior
 
-Mutation belongs to `atm read`, not to `atm list`.
+Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
 - the selected displayed message is always written back with `read = true`
@@ -135,6 +135,13 @@ Required `atm read` behavior:
   `NoAckRequired` after display
 - selected unread messages that already require acknowledgement remain
   pending-ack after display
+- `atm read` never creates a new acknowledgement obligation on display
+
+Required `atm peek` behavior:
+- it is the explicit non-mutating inspection surface that replaced the legacy
+  non-mutating read path
+- it never changes `read`, `pendingAckAt`, `acknowledgedAt`, or seen-state
+  watermark data
 
 Current ack behavior:
 - an acknowledged message receives `acknowledgedAt`
@@ -237,6 +244,7 @@ Disallowed transitions:
 
 Notes:
 - `read = true` is the base mutation on owner-only `atm read`
+- `atm peek` performs inspection only and applies no mutation
 - task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
 
 ## 7. Seen-State Rules

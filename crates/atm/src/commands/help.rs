@@ -308,7 +308,10 @@ Send identity precedence:
 
 Inspection vs mutation:
 - `atm peek --as alice` inspects `alice`'s mailbox without mutating it
+- `atm list --as alice` is also inspection-only and does not mutate mailbox state
 - `atm read`, `atm ack`, `atm clear`, and `atm send` do not allow identity impersonation
+- only `atm send --requires-ack` and task-linked sends create durable acknowledgement work
+- `atm ack` closes existing pending-ack work; it never manufactures a new ack obligation
 - `atm read --team atm-dev` changes the selected caller team, not the caller identity
 
 Troubleshooting:
@@ -458,6 +461,8 @@ mod tests {
         assert!(hooks.body.contains("ATM_LOG=debug"));
         assert!(identity.body.contains("`ATM_IDENTITY`"));
         assert!(identity.body.contains("`atm peek --as alice`"));
+        assert!(identity.body.contains("`atm list --as alice`"));
+        assert!(identity.body.contains("`atm send --requires-ack`"));
         assert!(
             skills
                 .body

@@ -11,6 +11,12 @@ CLI ownership for `atm clear`:
 
 Clear eligibility remains owned by `atm-core`.
 
+Owner contract:
+
+- `atm clear` is owner-only and does not accept `--as`
+- it removes only non-actionable messages and never clears pending-ack work by
+  default
+
 References:
 
 - Product requirements: `docs/requirements.md` §9

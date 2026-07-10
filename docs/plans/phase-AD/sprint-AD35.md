@@ -1,7 +1,7 @@
 ---
 id: AD.35
 title: Messaging Protocol And Regression Closeout
-status: planned
+status: complete
 branch: feature/pAD-s35-messaging-protocol-and-regression-closeout
 worktree: ../atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout
 target: integrate/phase-AD
@@ -34,9 +34,12 @@ target: integrate/phase-AD
 - `docs/atm/commands/ack.md`
 - `docs/atm/commands/clear.md`
 - `docs/atm/commands/help.md`
+- `docs/atm/commands/peek.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
+- `docs/read-behavior.md`
 - `docs/adr/ADR-023-owner-only-message-mutation.md`
+- `docs/read-behavior.md`
 - `crates/atm/src/commands/help.rs`
 - `crates/atm/src/composition.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`

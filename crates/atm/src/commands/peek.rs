@@ -171,3 +171,106 @@ impl PeekCommand {
         warnings
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::ROLE_TEAM_LEAD;
+    use atm_core::types::ReadSelection;
+    use serde_json::json;
+    use serial_test::serial;
+
+    use super::PeekCommand;
+
+    #[test]
+    fn selection_mode_maps_cli_flags_to_expected_bucket() {
+        let mut command = base_command();
+        command.all = true;
+        assert_eq!(command.selection_mode(), ReadSelection::All);
+
+        let mut command = base_command();
+        command.unread = true;
+        assert_eq!(command.selection_mode(), ReadSelection::Unread);
+
+        let mut command = base_command();
+        command.pending_ack = true;
+        assert_eq!(command.selection_mode(), ReadSelection::PendingAck);
+
+        let command = base_command();
+        assert_eq!(command.selection_mode(), ReadSelection::Actionable);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+
+        let query = base_command()
+            .build_query(".".into(), ".".into())
+            .expect("query");
+        let query_json = serde_json::to_value(&query).expect("serialized query");
+
+        assert_eq!(query_json["caller_identity"], json!("sender-a"));
+        assert_eq!(query_json["caller_team"], json!("env-team"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_as_overrides_for_cross_agent_peek() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.target = Some("recipient-a@test-team".to_string());
+        command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
+        command.all = true;
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+        let query_json = serde_json::to_value(&query).expect("serialized query");
+
+        assert_eq!(query_json["caller_identity"], json!(ROLE_TEAM_LEAD));
+        assert_eq!(query_json["caller_team"], json!("override-team"));
+        assert_eq!(
+            query_json["mailbox"]["target_address"],
+            json!({
+                "agent": "recipient-a",
+                "team": "test-team"
+            })
+        );
+        assert_eq!(query_json["mailbox"]["selection_mode"], json!("all"));
+        assert_eq!(query_json["mailbox"]["seen_state_filter"], json!(false));
+        assert_eq!(
+            query_json["mailbox"]["message_id_filter"],
+            json!("01KRFK5QTF2R6NRS3Q0F8Z9K0S")
+        );
+    }
+
+    fn base_command() -> PeekCommand {
+        PeekCommand {
+            target: None,
+            team: None,
+            all: false,
+            unread: false,
+            unread_only: false,
+            pending_ack: false,
+            pending_ack_only: false,
+            history: false,
+            message_id: None,
+            task: None,
+            contains: None,
+            since_last_seen: false,
+            no_since_last_seen: false,
+            since: None,
+            from: None,
+            json: false,
+            timeout: None,
+            actor: None,
+        }
+    }
+}

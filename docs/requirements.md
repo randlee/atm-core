@@ -1147,7 +1147,7 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 7. Queue Inspection Surfaces (`atm list` and `atm read`)
+## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
 Product requirement IDs:
 - `REQ-P-LIST-001` `atm list` must satisfy the bounded queue/search contract.
@@ -1166,10 +1166,11 @@ Satisfied by:
 
 ### 7.1 Shared Purpose
 
-Queue inspection is split into two commands:
+Queue inspection is split into three commands:
 
 - `atm list` finds messages without returning full message bodies
-- `atm read` opens one full message
+- `atm peek` opens one full message without mutation
+- `atm read` opens one full message with owner-only mutation
 
 The split exists so ATM can keep default queue inspection bounded even when
 SQLite-backed mailbox history grows without a practical fixed upper bound.
@@ -1189,26 +1190,34 @@ Shared queue filters:
 
 Shared command options:
 - `--json`
-- `--as <name>`
+
+Inspection-only command option:
+- `--as <name>` on `atm list` and `atm peek`
 
 Shared rules:
-- both commands must default to the caller's own inbox when no target agent is
-  provided
-- both commands must resolve identity and target address using the defined
-  precedence
-- if caller identity cannot be resolved from `--as` or invoking-shell
-  `ATM_IDENTITY`, fail before daemon dispatch
-- `--as <name>` changes caller identity resolution, not message matching
+- all three commands must default to the caller's own inbox when no target
+  agent is provided
+- all three commands must resolve identity and target address using the
+  defined precedence
+- `atm list` and `atm peek` may resolve caller identity from `--as`, else the
+  invoking-shell `ATM_IDENTITY`
+- `atm read` must resolve caller identity from invoking-shell `ATM_IDENTITY`
+  only
+- if required caller identity cannot be resolved from the documented source
+  for that command, fail before daemon dispatch
+- `--as <name>` changes caller identity resolution on inspection-only
+  commands, not message matching
 - `--json` changes output format only and is not a message-selection filter
-- both commands must verify target team exists
-- both commands must verify explicit target agent exists in team config
-- both commands must support the same semantic message filters even when their
-  output shapes differ
+- all three commands must verify target team exists
+- all three commands must verify explicit target agent exists in team config
+- all three commands must support the same semantic message filters even when
+  their output shapes differ
 - `--contains` must search both summary text and full message body text
-- on metadata-backed read/list paths, `--contains` must stay full-body correct
-  without widening the bounded metadata query into an eager full-body scan
-- both commands must preserve origin-inbox visibility when bridge remotes are
-  configured
+- on metadata-backed read/list/peek paths, `--contains` must stay full-body
+  correct without widening the bounded metadata query into an eager full-body
+  scan
+- all three commands must preserve origin-inbox visibility when bridge remotes
+  are configured
 
 Legacy `atm read` flag migration:
 - `--unread-only` is a deprecated alias for `--unread`
@@ -1246,7 +1255,44 @@ Required behavior:
 - keep default output bounded to actionable/head results rather than
   materializing full history by default
 
-### 7.4 `atm read`
+### 7.4 `atm peek`
+
+Additional supported flags:
+- `--message-id <id>`
+- `--timeout <seconds>`
+- `--since-last-seen`
+- `--no-since-last-seen`
+- `--as <name>`
+
+Required behavior:
+- return exactly one full message
+- perform no read-state, seen-state, or ack-state mutation
+- when `--message-id <id>` is present, resolve that exact message when present
+- collapse successor/update chains to their terminal node before selector-based
+  matching so superseded predecessors do not appear as separate current
+  messages
+- when `--task <task-id>` is present, find task-linked messages, collapse each
+  successor chain to its terminal node, then select the most recent logical
+  current message
+- when selectors such as `--task`, `--from`, `--since`, `--contains`,
+  `--unread`, or `--pending-ack` match multiple messages, return the most
+  recent match
+- when `--contains` is present on the metadata-backed path, selector
+  correctness must be preserved by checking bounded summary text first and
+  reloading durable body text only for surviving summary-miss candidates
+- when multiple matches exist, include:
+  - `selected_message_id`
+  - `match_count`
+  - `additional_match_count`
+- `match_count` is the total number of logical current-message matches after
+  all filters and successor-chain collapse are applied
+- `additional_match_count` is `match_count - 1` for a successful peek
+- when no selector is provided, return the most recent unread actionable
+- when no selector is provided, prioritize pending-ack messages ahead of
+  unread messages that do not require acknowledgement
+- support optional wait mode with timeout
+
+### 7.5 `atm read`
 
 Additional supported flags:
 - `--message-id <id>`
@@ -1294,7 +1340,7 @@ Required behavior:
   state produced by that command execution rather than stale pre-mutation
   counts
 
-### 7.5 Shared Message Classification And Deduplication
+### 7.6 Shared Message Classification And Deduplication
 
 - load messages from the merged inbox surface
 - deduplicate entries by `message_id` before bucket selection and output
@@ -1313,7 +1359,7 @@ Deduplication order:
 - when timestamps are equal, keep the later record encountered in inbox order
 - do not emit suppressed duplicates in either human or JSON output
 
-### 7.6 Display Buckets
+### 7.7 Display Buckets
 
 The shared queue model exposes three display buckets:
 - `unread`
@@ -1329,14 +1375,15 @@ Bucket mapping from the derived message class:
 The display buckets are a presentation contract. They are not the canonical
 two-axis model.
 
-### 7.7 Default Selection And Historical Expansion
+### 7.8 Default Selection And Historical Expansion
 
 Default queue inspection behavior:
 - `atm list` returns a bounded actionable/head view
+- bare `atm peek` returns one selected actionable message without mutation
 - bare `atm read` returns one selected actionable message
 - `--all` is the explicit full-surface override and may be slower
 
-### 7.8 Seen-State Rules
+### 7.9 Seen-State Rules
 
 Seen-state is enabled by default unless `--no-since-last-seen` is set.
 
@@ -1371,9 +1418,9 @@ both constraints apply independently.
 `--from <name>` is a sender filter: it restricts matched messages to those
 sent by the named agent. It does not override the caller's identity.
 
-### 7.9 Wait Mode Rules
+### 7.10 Wait Mode Rules
 
-When `--timeout <seconds>` is set on `atm read`:
+When `--timeout <seconds>` is set on `atm peek` or `atm read`:
 - establish the read selection baseline after actor resolution, inbox loading,
   workflow classification, and filter application
 - if the requested selection already contains an eligible message at wait
@@ -1394,30 +1441,33 @@ Timeout failure condition:
 - the initial selection is empty and no newly eligible message arrives before
   the timeout expires
 
-### 7.10 Mutation Rules
+### 7.11 Mutation Rules
 
-Base display mutation:
-- any selected message is written back with `read = true`
+Peek mutation rule:
+- `atm peek` never mutates mailbox state
 
-ADR-022 rule:
+Read mutation rules:
+- any selected `atm read` message is written back with `read = true`
+- `atm read` must never create a new pending-ack obligation on display
 - displaying a message never promotes acknowledgement state
 - only sender-owned durable `requires_ack` intent may create `pending_ack_at`
 - only explicit `atm ack` handling may clear pending acknowledgement into
   `acknowledged_at`
+- when a selected message already requires acknowledgement, it remains
+  pending-ack after display
+- when a selected message does not require acknowledgement, it remains
+  `NoAckRequired` after display
+- required transition on read of a normal unread message:
+  - `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
+- required transition on read of an ack-required unread message:
+  - `(Unread, PendingAck) -> (Read, PendingAck)`
+- no additional ack-axis mutation happens when:
+  - the message is `NoAckRequired`
+  - the message is already `PendingAck`
+  - the message is already `Acknowledged`
+  - the message is already `Read`
 
-Required transition on read of a normal unread message:
-- `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
-
-Required transition on read of an ack-required unread message:
-- `(Unread, PendingAck) -> (Read, PendingAck)`
-
-No additional ack-axis mutation happens on display when:
-- the message is `NoAckRequired`
-- the message is already `PendingAck`
-- the message is already `Acknowledged`
-- the message is already `Read`
-
-### 7.11 Output Contract
+### 7.12 Output Contract
 
 `atm list` human-readable output must remain metadata-only.
 
@@ -1448,6 +1498,10 @@ Every list row must include:
 - `additional_match_count`
 - `bucket_counts`
 
+`atm peek` JSON output must include the same shape as `atm read`, except:
+- `action = "peek"`
+- `mutation_applied = false`
+
 When `mutation_applied = true` and `message` is present:
 - `message.message_id` and `selected_message_id` must identify the same
   durable message
@@ -1457,10 +1511,10 @@ When `mutation_applied = true` and `message` is present:
   message `read = true`, but only ack clears `pending_ack_at` and sets
   `acknowledged_at`
 
-Human-readable `atm read` output must render one message body only. When
-additional matches exist, it must state that more matches were found and direct
-the operator to `atm list` for metadata inspection instead of emitting
-additional full bodies.
+Human-readable `atm peek` and `atm read` output must render one message body
+only. When additional matches exist, they must state that more matches were
+found and direct the operator to `atm list` for metadata inspection instead of
+emitting additional full bodies.
 
 ## 8. `atm ack`
 
@@ -1484,13 +1538,11 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
 - positional `message-id`
 - positional reply text
 - `--team <name>`
-- `--as <name>`
 - `--json`
 
 ### 8.3 Required Behavior
 
-- resolve the caller's own inbox using explicit `--as` or invoking-shell
-  `ATM_IDENTITY`
+- resolve the caller's own inbox using invoking-shell `ATM_IDENTITY`
 - fail before daemon dispatch if caller identity is unavailable
 - locate the target message in the merged inbox surface
 - require the target message to be in the pending-ack ack state
@@ -1637,7 +1689,6 @@ Remove non-actionable messages from one inbox without touching actionable work.
 ### 9.2 Supported Flags
 
 - optional target agent: `agent` or `agent@team`
-- `--as <name>` override actor identity for this clear operation
 - `--team <name>`
 - `--older-than <duration>`
 - `--idle-only`

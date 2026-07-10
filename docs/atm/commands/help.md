@@ -18,6 +18,10 @@ Concept/help policy:
   output for that subcommand
 - ATM-owned prose may be appended after the clap output, but it must not
   duplicate or drift from flag/argument documentation
+- the conceptual `identity` topic must reinforce the accepted Phase AD rule:
+  `atm peek` / `atm list` are inspection-only surfaces, while mutating
+  commands resolve only the actual caller and do not expose impersonation
+  flags
 
 First-delivery topic scope:
 
