@@ -1028,7 +1028,6 @@ mod tests {
                 ReadSelection::All,
                 false,
                 false,
-                AckActivationMode::ReadOnly,
                 Some(&message_id.to_string()),
                 None,
                 None,
