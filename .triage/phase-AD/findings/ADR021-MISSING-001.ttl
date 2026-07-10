@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ADR021-MISSING-001>
+  a triage:Finding ;
+  triage:findingId "ADR021-MISSING-001" ;
+  triage:title "Required ADR-021 owner-only-message-mutation.md does not exist" ;
+  triage:description "req-qa (ATM-QA-003 on AD.31) reports docs/adr/ADR-021-owner-only-message-mutation.md is an explicit Exact Target and Deliverable of sprint AD.31 but does not exist anywhere in the worktree or repo." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "deliverable-missing" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246ee> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD31/6ad246ee> ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246ee" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 35 .
