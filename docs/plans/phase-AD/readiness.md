@@ -34,9 +34,13 @@ Current evidence surfaces:
   accept-error handling, and post-terminate connection rejection
 - authoritative messaging regression suite:
   - `loopback_transport_phase_ad_messaging_regression_matrix_without_daemon`
-    in `crates/atm/src/composition.rs`
+    in `crates/atm/src/composition.rs:1281`
+  - `loopback_transport_ack_appends_reply_without_daemon` in
+    `crates/atm/src/composition.rs:1555`
+  - `loopback_transport_ack_historical_self_poison_suppresses_replacement_reply`
+    in `crates/atm/src/composition.rs:1593`
   - `ack_self_addressed_poison_message_suppresses_replacement_reply` in
-    `crates/atm-core/tests/mailbox_locking.rs`
+    `crates/atm-core/tests/mailbox_locking.rs:852`
 
 ## Sprint Status
 

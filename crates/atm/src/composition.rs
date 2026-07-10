@@ -1038,12 +1038,17 @@ mod tests {
             .expect("read query")
         }
 
-        fn peek_query_for(&self, caller: &str, message_id: AtmMessageId) -> PeekQuery {
+        fn peek_query_for(
+            &self,
+            caller: &str,
+            target: Option<&str>,
+            message_id: AtmMessageId,
+        ) -> PeekQuery {
             PeekQuery::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
                 caller.parse().expect("caller"),
-                None,
+                target,
                 TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
                 false,
@@ -1310,7 +1315,7 @@ mod tests {
 
         // Peek is the explicit non-mutating inspection path.
         let peek_outcome = composition
-            .peek(fixture.peek_query_for(TEST_RECIPIENT, plain_message_id))
+            .peek(fixture.peek_query_for(TEST_RECIPIENT, None, plain_message_id))
             .expect("peek outcome");
         assert!(!peek_outcome.mutation_applied);
         assert_eq!(peek_outcome.selected_message_id, Some(plain_message_id));
@@ -1329,6 +1334,34 @@ mod tests {
             .expect("plain inbox message after peek");
         assert!(!plain_after_peek.read);
         assert!(plain_after_peek.pending_ack_at.is_none());
+        assert!(plain_after_peek.acknowledged_at.is_none());
+
+        // Cross-agent peek via target address also stays non-mutating.
+        let cross_agent_peek = composition
+            .peek(fixture.peek_query_for(
+                TEST_SENDER,
+                Some(TEST_RECIPIENT_ADDRESS),
+                plain_message_id,
+            ))
+            .expect("cross-agent peek outcome");
+        assert!(!cross_agent_peek.mutation_applied);
+        assert_eq!(cross_agent_peek.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            cross_agent_peek
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_cross_agent_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_cross_agent_peek = inbox_after_cross_agent_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after cross-agent peek");
+        assert!(!plain_after_cross_agent_peek.read);
+        assert!(plain_after_cross_agent_peek.pending_ack_at.is_none());
+        assert!(plain_after_cross_agent_peek.acknowledged_at.is_none());
 
         // Read mutates read state but never manufactures pending-ack state.
         let read_outcome = composition
