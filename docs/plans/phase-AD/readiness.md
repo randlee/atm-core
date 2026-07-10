@@ -47,7 +47,7 @@ Current evidence surfaces:
 | `AD.32` | `complete` | `feature/pAD-s32-durable-ack-intent-and-read-semantics-reset` | `../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset` | durable `requires_ack` state replaces read-time ack creation and legacy compatibility is explicit |
 | `AD.33` | `complete` | `feature/pAD-s33-self-addressed-send-rejection` | `../atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection` | self-addressed sends are rejected before persistence on every send entry path |
 | `AD.34` | `complete` | `feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup` | `../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup` | historical self-addressed poison messages can be acknowledged without emitting replacement replies |
-| `AD.35` | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout` | `../atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout` | the operator protocol/docs/regression matrix close the messaging follow-up line and this readiness file records the final Phase `AD` verdict |
+| `AD.35` | `complete` | `feature/pAD-s35-messaging-protocol-and-regression-closeout` | `../atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout` | the operator protocol/docs/regression matrix close the messaging follow-up line and this readiness file records the final Phase `AD` verdict |
 
 ## Direct-Fix Carry-Forward Ledger
 

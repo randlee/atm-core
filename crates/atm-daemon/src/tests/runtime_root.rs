@@ -191,7 +191,7 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
         )))
         .expect_err("self-addressed daemon send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(error.is_validation());
 }
 

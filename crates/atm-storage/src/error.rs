@@ -432,6 +432,17 @@ impl AtmError {
         )
     }
 
+    pub fn self_addressed_send_invalid(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::SelfAddressedSendInvalid,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Target a different recipient or use a non-mutating mailbox inspection command instead of sending a message to yourself.",
+        )
+    }
+
     pub fn empty_nudge_template_body() -> Self {
         Self::new_with_code(
             AtmErrorCode::EmptyNudgeTemplateBody,
