@@ -1,0 +1,142 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ACKMODE-DEAD-PARAM-001>
+  a triage:Finding ;
+  triage:findingId "ACKMODE-DEAD-PARAM-001" ;
+  triage:title "AckActivationMode is a single-variant enum still threaded as a live parameter, masking the peek-mutation bug" ;
+  triage:description "arch-qa (ARCH-002 on AD.32) reports AckActivationMode is now a single-variant enum (ReadOnly only) but is still threaded as a live parameter through ReadQuery/apply_display_mutations_to_store/CLI/graft call sites where it can never vary -- dead structural weight that also masked PEEK-MUTATION-001 (the peek-mutation bug, since a single-variant enum gives the false impression of a real intent-branch when there is none)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "AckActivationMode call sites in ReadQuery/apply_display_mutations_to_store/CLI/graft" ;
+  triage:category "structural" ;
+  triage:severity "important" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:relatedFinding "PEEK-MUTATION-001" ;
+  triage:relatedFindingNote "Directly related to PEEK-MUTATION-001 (same root file/region); should likely be fixed together but tracked separately due to distinct structural complaint (dead parameter vs. missing behavior)" ;
+  triage:highestOpenBranch "AD.35" ;
+  triage:promoteTowardBranch "AD.35" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:triagedAt "2026-07-09T20:30:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/types.rs" ;
+  triage:line 99 ;
+  triage:snippet "pub enum AckActivationMode { ReadOnly, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "Single-variant enum definition. Variant reduced from {PromoteDisplayedUnread, ReadOnly} to {ReadOnly} but parameter still threaded through call chain." .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD32/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 141 ;
+  triage:snippet "pub(crate) ack_activation_mode: AckActivationMode," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "Dead parameter field in ReadQuery struct. Can only ever be ReadOnly." .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD32/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 117 ;
+  triage:snippet "AckActivationMode::ReadOnly," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "CLI hardcodes ReadOnly variant; no alternative ever passed from command line." .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/types.rs" ;
+  triage:line 99 ;
+  triage:snippet "pub enum AckActivationMode { ReadOnly, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "Inherited from AD.32; same single-variant enum definition." .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/types.rs" ;
+  triage:line 99 ;
+  triage:snippet "pub enum AckActivationMode { ReadOnly, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "Inherited from AD.32; same single-variant enum definition." .
+
+<urn:atm:triage:occurrence/ACKMODE-DEAD-PARAM-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/types.rs" ;
+  triage:line 99 ;
+  triage:snippet "pub enum AckActivationMode { ReadOnly, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:description "Inherited from AD.32; same single-variant enum definition." .
+
+<urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 ;
+  triage:findingState "absent" ;
+  triage:findingStateNote "AckActivationMode enum still has two variants (PromoteDisplayedUnread, ReadOnly); parameter is not yet dead." .
+
+<urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 ;
+  triage:findingState "open" .
+
+<urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 3 ;
+  triage:findingState "open" .
+
+<urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 4 ;
+  triage:findingState "open" .
+
+<urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 ;
+  triage:findingState "open" .
