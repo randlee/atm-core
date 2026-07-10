@@ -27,9 +27,10 @@
   triage:openOn <urn:atm:triage:worktree/AD33/46f44bb> ;
   triage:openOn <urn:atm:triage:worktree/AD34/46f44bb> ;
   triage:openOn <urn:atm:triage:worktree/AD35/46f44bb> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bb> ;
-  triage:highestOpenBranch "AD.35" ;
-  triage:highest_open_branch_sha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" .
+  triage:promoteTo <urn:atm:triage:worktree/AD32/68d5c2f> ;
+  triage:highestOpenBranch "AD.32" ;
+  triage:highest_open_branch_sha "68d5c2facd7aa3c378a745c1d53f2a075f66e9fe" ;
+  triage:notes "Corrected 2026-07-10 during AD32-QA-3 recheck: promoteTo/highestOpenBranch previously pointed at AD.35 under the old highest-open-branch promotion model. This phase closeout requires strict earliest-branch-first dispatch: every branch must independently reach QA closure, and findings cannot be handled by promoting solely to the highest branch where they are observed. This finding does not exist on AD.31 and was introduced on AD.32, so AD.32 is the earliest defective branch and the correct fix target. The fix must land on AD.32 first, then be merge-forwarded through AD.33, AD.34, and AD.35, with each downstream branch independently re-verified to actually close on the fix rather than assumed to inherit it. highest_open_branch_sha updated to AD.32's current HEAD (68d5c2facd7aa3c378a745c1d53f2a075f66e9fe) as of the AD32-CLOSURE-FIX-1 merge that landed prior to this correction." .
 
 <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD32/1>
   a triage:Occurrence ;
@@ -132,6 +133,14 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
   triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
   triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD32/68d5c2f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "68d5c2facd7aa3c378a745c1d53f2a075f66e9fe" ;
+  triage:orderIndex 32 ;
+  triage:notes "Post-AD32-CLOSURE-FIX-1 HEAD, recorded 2026-07-10 during promoteTo correction for AD32-QA-3 recheck." .
 
 <urn:atm:triage:worktree/AD33/46f44bb>
   a triage:WorktreeSnapshot ;
