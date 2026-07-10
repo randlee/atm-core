@@ -1,9 +1,9 @@
 ---
 id: AD.34
 title: Self-Ack Loop Termination And Historical Poison Cleanup
-status: planned
-branch: feature/pAD-s34-self-ack-loop-termination
-worktree: ../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination
+status: complete
+branch: feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup
+worktree: ../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup
 target: integrate/phase-AD
 ---
 

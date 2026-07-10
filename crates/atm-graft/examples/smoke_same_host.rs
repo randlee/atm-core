@@ -249,7 +249,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             "read_selected_message_id": read_selected_message_id.to_string(),
             "ack_message_id": ack_outcome.message_id.to_string(),
-            "ack_reply_message_id": ack_outcome.reply_message_id.to_string(),
+            "ack_reply_disposition": ack_outcome.reply_disposition,
             "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );

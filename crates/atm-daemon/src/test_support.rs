@@ -95,15 +95,45 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
 }
 
 #[cfg(test)]
-#[derive(Debug, Default)]
-pub(crate) struct PanicDispatcher;
+struct PanicUnwindSignal(Option<std::sync::mpsc::SyncSender<()>>);
 
 #[cfg(test)]
-impl atm_core::boundary::sealed::Sealed for PanicDispatcher {}
+impl Drop for PanicUnwindSignal {
+    fn drop(&mut self) {
+        if let Some(sender) = self.0.take() {
+            let _ = sender.send(());
+        }
+    }
+}
 
 #[cfg(test)]
-impl RequestDispatcher for PanicDispatcher {
+#[derive(Debug)]
+pub(crate) struct PanicDispatcherWithUnwindSignal {
+    unwind_tx: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+}
+
+#[cfg(test)]
+impl PanicDispatcherWithUnwindSignal {
+    pub(crate) fn new(unwind_tx: std::sync::mpsc::SyncSender<()>) -> Self {
+        Self {
+            unwind_tx: std::sync::Mutex::new(Some(unwind_tx)),
+        }
+    }
+}
+
+#[cfg(test)]
+impl atm_core::boundary::sealed::Sealed for PanicDispatcherWithUnwindSignal {}
+
+#[cfg(test)]
+impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let unwind_signal = PanicUnwindSignal(
+            self.unwind_tx
+                .lock()
+                .expect("panic dispatcher unwind signal lock")
+                .take(),
+        );
+        let _keep_unwind_signal_until_panic_unwinds = unwind_signal;
         panic!("intentional dispatcher panic for test: {request:?}");
     }
 }

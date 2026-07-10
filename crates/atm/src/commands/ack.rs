@@ -11,7 +11,7 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
-/// Acknowledge one pending-ack message and send a reply.
+/// Acknowledge one pending-ack message and emit a reply when required.
 pub struct AckCommand {
     message_id: String,
     reply: String,

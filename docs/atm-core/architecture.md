@@ -458,6 +458,11 @@ Identity-specific policy:
   successful send into a command failure
 - the hook fires for successful outbound mailbox writes from `atm send` and
   `atm ack`; `is_ack = false` for send and `is_ack = true` for ack
+- historical self-addressed pending-ack cleanup is handled in the shared ack
+  path by suppressing reply emission while still completing the source
+  acknowledgement state transition
+- suppressed self-ack completion emits no ack hook because no outbound reply
+  write exists
 - after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state

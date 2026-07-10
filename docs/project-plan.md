@@ -769,7 +769,7 @@ Sprint line:
 - `AD.31` `feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset`
 - `AD.32` `feature/pAD-s32-durable-ack-intent-and-read-semantics-reset`
 - `AD.33` `feature/pAD-s33-self-addressed-send-rejection`
-- `AD.34` `feature/pAD-s34-self-ack-loop-termination`
+- `AD.34` `feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup`
 - `AD.35` `feature/pAD-s35-messaging-protocol-and-regression-closeout`
 
 Acceptance:

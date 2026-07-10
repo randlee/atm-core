@@ -55,6 +55,13 @@ These items were validated during earlier AD execution or phase-end review, but
 their final closure evidence is owned by the phase-close artifacts rather than
 by a new code sprint:
 
+Messaging follow-up dependency note:
+
+- `AD.34` depends on `AD.33` being complete on the accepted line because the
+  self-ack cleanup closes only historical poison created before the
+  self-addressed-send rejection gate; new self-addressed sends are rejected by
+  the `AD.33` contract and must not recreate that state.
+
 | Item | Technical owner | Closure-artifact owner | Required evidence |
 | --- | --- | --- | --- |
 | `AD9-BLANKPANE-001` | `AD.9` | `AD.30` | cite accepted-line evidence that closes `docs/plans/phase-AD/sprint-AD9.md` Acceptance Criteria `the validated-on-entry blank tmux_pane_id drift for team-lead and arch-ctm is repaired on the accepted baseline` |
