@@ -426,6 +426,14 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
     }
 }
 
+fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
+    let mut request = send_request(home_dir);
+    request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
+        .parse()
+        .expect("self address");
+    request
+}
+
 fn send_runtime_with_missing_claude_member() -> TestRuntime {
     let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.claude_roster_members.clear();
@@ -830,6 +838,105 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
         error.primary_recovery(),
         Some("Update the team membership or target a different recipient.")
     );
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_plain_send_is_rejected_before_persistence() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.task_id = None;
+    request.summary_override = None;
+
+    let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect_err("self-addressed send must fail");
+
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(
+        error
+            .message
+            .contains("self-addressed messages are invalid ATM input")
+    );
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_task_send_is_rejected_before_persistence() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+
+    let error = super::send_mail_with_runtime_impl(
+        self_addressed_send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect_err("self-addressed task send must fail");
+
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_dry_run_is_rejected_before_reporting_success() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.dry_run = true;
+
+    let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect_err("self-addressed dry-run must fail");
+
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages

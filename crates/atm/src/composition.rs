@@ -950,6 +950,22 @@ mod tests {
             .expect("send request")
         }
 
+        fn send_request_to(&self, recipient: &str, body: &str) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_SENDER.parse().expect("caller"),
+                recipient,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request")
+        }
+
         fn send_request_with_flags(
             &self,
             body: &str,
@@ -1106,6 +1122,29 @@ mod tests {
         assert_eq!(inbox.len(), 1);
         assert_eq!(inbox[0].text, "hello from loopback");
         assert_eq!(inbox[0].from.as_str(), TEST_SENDER);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_rejects_self_addressed_send_without_persisting_inbox() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let transport_observability = Arc::new(atm_core::observability::NullObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(transport_observability)),
+            &composition_observability,
+        );
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
+        );
+        assert!(fixture.inbox_contents(TEST_SENDER).is_empty());
     }
 
     #[test]

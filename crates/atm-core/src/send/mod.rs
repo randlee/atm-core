@@ -204,7 +204,7 @@ impl WarningEntry {
 /// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
-/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`],
+/// [`crate::error_codes::AtmErrorCode::SelfAddressedSendInvalid`],
 /// [`crate::error_codes::AtmErrorCode::FilePolicyRejected`],
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
@@ -513,6 +513,7 @@ fn prepare_send_context<
     };
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
+    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
@@ -631,6 +632,48 @@ fn emit_send_command_event(
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
+}
+
+pub(crate) fn validate_non_self_recipient(
+    sender: &AgentName,
+    sender_team: &TeamName,
+    recipient: &ResolvedRecipient,
+) -> Result<(), AtmError> {
+    if sender
+        .as_str()
+        .eq_ignore_ascii_case(recipient.agent.as_str())
+        && sender_team
+            .as_str()
+            .eq_ignore_ascii_case(recipient.team.as_str())
+    {
+        return Err(AtmError::self_addressed_send_invalid(format!(
+            "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod self_address_tests {
+    use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::error_codes::AtmErrorCode;
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let error = validate_non_self_recipient(
+            &AgentName::from_validated("Sender-A"),
+            &TeamName::from_validated("Test-Team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+        )
+        .expect_err("case-variant self target must be rejected");
+
+        assert!(error.is_validation(), "{error:?}");
+        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    }
 }
 
 fn resolve_recipient(

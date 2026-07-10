@@ -1012,6 +1012,8 @@ Retired from the current implementation:
 - when a cross-team alias-oriented sender is projected into `from`, also
   persist the canonical sender identity in SQLite-owned state and use it for
   validation, self-send checks, routing, and audit behavior
+- reject canonical same-team self-addressed sends before any persistence or
+  `--dry-run` success reporting
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1

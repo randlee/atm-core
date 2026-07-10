@@ -78,14 +78,14 @@ pub struct MailboxQueryFields {
 
 pub struct PeekQuery {
     pub mailbox: MailboxQueryFields,
-    pub actor_override: Option<AgentName>,
-    pub team_override: Option<TeamName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
 }
 
 pub struct ReadQuery {
     pub mailbox: MailboxQueryFields,
-    pub actor: AgentName,
-    pub team: TeamName,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub seen_state_update: bool,
 }
 

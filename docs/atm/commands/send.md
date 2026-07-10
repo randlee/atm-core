@@ -10,6 +10,10 @@ CLI ownership for `atm send`:
 
 Core send behavior remains owned by `atm-core`.
 
+`atm send` rejects self-addressed same-team targets before persistence. The
+shared `atm-core` send path owns that validation, so direct CLI, loopback, and
+daemon-backed send flows all fail the same way.
+
 References:
 
 - Product requirements: `docs/requirements.md` §6
