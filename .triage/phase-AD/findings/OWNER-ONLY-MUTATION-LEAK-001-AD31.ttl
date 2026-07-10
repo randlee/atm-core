@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/OWNER-ONLY-MUTATION-LEAK-001-AD31>
+  a triage:Finding ;
+  triage:findingId "OWNER-ONLY-MUTATION-LEAK-001-AD31" ;
+  triage:title "atm read/clear still accept and execute explicit cross-agent mailbox targets on the mutating path, violating ADR-023 owner-only mutation" ;
+  triage:description "AD.31 sprint doc (docs/plans/phase-AD/sprint-AD31.md) explicitly required 'atm read is owner-only and mutates mailbox state' and 'atm read remains the owner-only mutating command', citing ADR-021 (now tracked as ADR-023-owner-only-message-mutation.md). Despite this, on integrate/phase-AD @ ced7ff66: crates/atm/src/commands/read.rs:16-18,108-124 still exposes a positional target and forwards it into ReadQuery; crates/atm/src/commands/clear.rs:15-18,53-77 still exposes a positional target and forwards it into ClearQuery; crates/atm-core/src/read/mod.rs:758-815 resolve_read_context() calls resolve_target() on explicit targets, only validates roster existence, not owner equality; crates/atm-core/src/clear/mod.rs:138-210 load_clear_runtime_context() has the same gap. Existing tests INTENTIONALLY assert this permissive cross-target behavior as correct: crates/atm-core/src/read/mod.rs:2032-2048 read_mail_uses_atm_roster_truth_for_explicit_targets() explicitly tests caller=TEST_SENDER with target=recipient and asserts success. Tests in crates/atm-core/src/clear/mod.rs similarly permit cross-agent mutation. This contradicts docs/adr/ADR-023-owner-only-message-mutation.md, docs/atm/commands/read.md, and docs/atm/commands/clear.md, all documenting read/clear as owner-only." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "critical" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/4> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AD/ced7ff66> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AD/ced7ff66> ;
+  triage:triagedAt "2026-07-10T22:45:00Z"^^xsd:dateTime ;
+  triage:notes "Post-merge finding discovered on integrate/phase-AD. Commit a59d812e added resolve_cli_mutation_caller_context but did not enforce owner-only semantics. No prior QA round caught this because tests explicitly validate permissive cross-target behavior. Repeatable sweep will include all crates for similar patterns in other mutating commands (send, ack, etc.)." .
+
+<urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 17 ;
+  triage:snippet "target: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
+
+<urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 112 ;
+  triage:snippet "self.target.as_deref()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
+
+<urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/clear.rs" ;
+  triage:line 18 ;
+  triage:snippet "target: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
+
+<urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/clear.rs" ;
+  triage:line 61 ;
+  triage:snippet "self.target.as_deref().map(str::parse::<AgentAddress>)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
+
+<urn:atm:triage:worktree/integrate-AD/ced7ff66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:orderIndex 999 .

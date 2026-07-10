@@ -1,0 +1,24 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/STALE-PHASE-CLOSE-ARTIFACTS-001-AD35>
+  a triage:Finding ;
+  triage:findingId "STALE-PHASE-CLOSE-ARTIFACTS-001-AD35" ;
+  triage:title "readiness.md and open AD.35 triage records no longer describe the real blocker" ;
+  triage:description "docs/plans/phase-AD/readiness.md:22-24 still claims AD.31-AD.35 is blocked only on documentation-surface findings (ATM-QA-001-AD35, ATM-QA-002-AD35, PEEK-TEST-MOCK-ONLY-001-AD31), but current sweep on integrate/phase-AD @ ced7ff66 shows: (1) ATM-QA-001-AD35 README.md --no-mark reference is FIXED (README now correctly shows atm read without --no-mark); (2) ATM-QA-002-AD35 cross-agent peek --as test is STILL OPEN; (3) PEEK-TEST-MOCK-ONLY-001-AD31 mock-only test is STILL OPEN. However, discovery of OWNER-ONLY-MUTATION-LEAK-001-AD31 (critical severity, blocking) on integrate/phase-AD itself reveals that readiness.md is now out-of-date: the true blocker is no longer these three documentation findings, but rather the owner-only mutation enforcement gap. Readiness.md needs updating to reflect: (a) ATM-QA-001-AD35 is now FIXED and can be closed; (b) real remaining blockers are OWNER-ONLY-MUTATION-LEAK-001-AD31 (critical), ATM-QA-002-AD35 (blocking), and PEEK-TEST-MOCK-ONLY-001-AD31 (minor)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "META-TRIAGE" ;
+  triage:severity "medium" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:notes "Status baseline: ATM-QA-001-AD35.ttl status=open but finding is actually fixed on current branch (README updated). ATM-QA-002-AD35.ttl status=open (still valid). PEEK-TEST-MOCK-ONLY-001-AD31.ttl status=open (still valid). This finding serves as documentation triage to update readiness.md and clarify phase closure status once OWNER-ONLY-MUTATION-LEAK-001-AD31 is addressed." .
+
+<urn:atm:triage:worktree/integrate-AD/ced7ff66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "ced7ff66" ;
+  triage:orderIndex 999 .
