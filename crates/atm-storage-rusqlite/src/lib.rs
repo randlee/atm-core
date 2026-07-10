@@ -146,6 +146,7 @@ pub(crate) struct SqliteMailboxMetadataRow {
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
     pub read: bool,
+    pub requires_ack: bool,
     pub pending_ack: bool,
     pub acknowledged_at: Option<IsoTimestamp>,
     pub expires_at: Option<IsoTimestamp>,
