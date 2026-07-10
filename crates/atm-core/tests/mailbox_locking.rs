@@ -885,7 +885,7 @@ fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
 
 #[test]
 #[serial_test::serial(env)]
-fn peek_cross_agent_target_keeps_store_backed_message_state_unchanged() {
+fn peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     let message_id = AtmMessageId::new();
@@ -923,6 +923,10 @@ fn peek_cross_agent_target_keeps_store_backed_message_state_unchanged() {
     assert_eq!(after.read, before.read);
     assert_eq!(after.pending_ack_at, before.pending_ack_at);
     assert_eq!(after.acknowledged_at, before.acknowledged_at);
+    assert_eq!(
+        after.acknowledges_message_id,
+        before.acknowledges_message_id
+    );
 }
 
 #[test]

@@ -79,7 +79,7 @@ Messaging follow-up dependency note:
 | phase-AD triage sweep ledger | `AD.30` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` populated with the final sweep disposition |
 | `CHANGELOG.md` entry for `AD.13` through `AD.30` | `AD.30` | `AD.30` | release-facing changelog text present on the accepted line |
 
-## Phase Exit Criteria
+## Phase Exit Criteria (AD.25-AD.35)
 
 `AD.25` through `AD.30` follow-up closure is not complete until all of the following are
 true:
