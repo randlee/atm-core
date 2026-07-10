@@ -21,7 +21,7 @@ pub struct CallerContextOverrides<'a> {
     pub team_override: Option<CallerTeamOverride<'a>>,
 }
 
-pub fn resolve_cli_caller_context(
+pub fn resolve_cli_inspection_caller_context(
     overrides: CallerContextOverrides<'_>,
 ) -> Result<CallerContext, AtmError> {
     let caller_identity =
@@ -31,6 +31,21 @@ pub fn resolve_cli_caller_context(
         caller_identity,
         caller_team,
     })
+}
+
+pub fn resolve_cli_mutation_caller_context(
+    team_override: Option<CallerTeamOverride<'_>>,
+) -> Result<CallerContext, AtmError> {
+    resolve_cli_inspection_caller_context(CallerContextOverrides {
+        identity_override: None,
+        team_override,
+    })
+}
+
+pub fn resolve_cli_caller_context(
+    overrides: CallerContextOverrides<'_>,
+) -> Result<CallerContext, AtmError> {
+    resolve_cli_inspection_caller_context(overrides)
 }
 
 pub fn read_cli_identity_from_env() -> Result<Option<AgentName>, AtmError> {
@@ -115,7 +130,8 @@ mod tests {
 
     use super::{
         CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        read_cli_identity_from_env, read_cli_team_from_env, resolve_cli_caller_context,
+        read_cli_identity_from_env, read_cli_team_from_env, resolve_cli_inspection_caller_context,
+        resolve_cli_mutation_caller_context,
     };
 
     #[test]
@@ -127,7 +143,7 @@ mod tests {
         ]);
         let override_team = format!("{TEST_TEAM}-alt");
 
-        let context = resolve_cli_caller_context(CallerContextOverrides {
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
             team_override: Some(CallerTeamOverride(override_team.as_str())),
         })
@@ -145,8 +161,8 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
 
-        let context =
-            resolve_cli_caller_context(CallerContextOverrides::default()).expect("caller context");
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect("caller context");
 
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), TEST_TEAM);
@@ -157,7 +173,7 @@ mod tests {
     fn missing_identity_fails_before_dispatch() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", Some(TEST_TEAM))]);
 
-        let error = resolve_cli_caller_context(CallerContextOverrides::default())
+        let error = resolve_cli_mutation_caller_context(Some(CallerTeamOverride(TEST_TEAM)))
             .expect_err("missing identity");
 
         assert_eq!(error.code, AtmErrorCode::IdentityUnavailable);
@@ -171,7 +187,7 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
 
-        let error = resolve_cli_caller_context(CallerContextOverrides {
+        let error = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: None,
             team_override: Some(CallerTeamOverride("../bad")),
         })
@@ -187,5 +203,20 @@ mod tests {
 
         assert_eq!(read_cli_identity_from_env().expect("identity"), None);
         assert_eq!(read_cli_team_from_env().expect("team"), None);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn mutating_context_ignores_identity_override_surface() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let context = resolve_cli_mutation_caller_context(Some(CallerTeamOverride(TEST_TEAM)))
+            .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(context.caller_team.as_str(), TEST_TEAM);
     }
 }

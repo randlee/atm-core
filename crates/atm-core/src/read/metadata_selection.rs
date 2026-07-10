@@ -22,10 +22,10 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     seen_watermark: Option<IsoTimestamp>,
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
     let classified_all = classify_mailbox_metadata_rows(rows);
-    if let Some(message_id) = query.message_id_filter {
+    if let Some(message_id) = query.message_id_filter() {
         let selected = classified_all
             .iter()
-            .filter(|message| message.envelope.message_id == Some(message_id))
+            .filter(|message| message.envelope.message_id == Some(*message_id))
             .cloned()
             .collect();
         let logical_current = logical_current_messages(classified_all);
@@ -36,11 +36,11 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     let bucket_counts = bucket_counts_for(&logical_current);
     let filtered = apply_metadata_only_filters(
         logical_current,
-        query.sender_filter.as_ref(),
-        query.timestamp_filter,
-        query.task_filter.as_ref(),
+        query.mailbox.sender_filter.as_ref(),
+        query.mailbox.timestamp_filter,
+        query.mailbox.task_filter.as_ref(),
     );
-    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let selected = select_messages(&filtered, query.selection_mode(), seen_watermark);
     (bucket_counts, selected)
 }
 

@@ -303,12 +303,13 @@ ATM command identity is about the sending agent, the selected team, and the
 resolved runtime destination. Harness and model are not the same thing.
 
 Send identity precedence:
-- `atm send --from alice team-lead \"...\"` uses `alice` immediately
-- if `--from` is absent, ATM falls back to `ATM_IDENTITY`
+- `atm send team-lead \"...\"` always uses the resolved caller identity
+- ATM resolves caller identity from `ATM_IDENTITY` for mutating commands
 
-Read/clear operator examples:
-- `atm read --as alice` changes the acting identity for that command
-- `atm read --team atm-dev` changes the selected team, not the sender identity
+Inspection vs mutation:
+- `atm peek --as alice` inspects `alice`'s mailbox without mutating it
+- `atm read`, `atm ack`, `atm clear`, and `atm send` do not allow identity impersonation
+- `atm read --team atm-dev` changes the selected caller team, not the caller identity
 
 Troubleshooting:
 - repo-local `[atm].identity` and legacy top-level `identity` are obsolete and
@@ -456,7 +457,7 @@ mod tests {
         assert!(hooks.body.contains("[[atm.post_send_hooks]]"));
         assert!(hooks.body.contains("ATM_LOG=debug"));
         assert!(identity.body.contains("`ATM_IDENTITY`"));
-        assert!(identity.body.contains("`atm read --as alice`"));
+        assert!(identity.body.contains("`atm peek --as alice`"));
         assert!(
             skills
                 .body

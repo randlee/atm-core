@@ -20,7 +20,7 @@ use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outc
 use atm_core::protocol::{
     self, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
-use atm_core::read::{ReadOutcome, ReadQuery};
+use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
@@ -369,6 +369,29 @@ impl<'a> CliComposition<'a> {
                 Ok(*outcome)
             }
             other => Err(unexpected_response("receive", other)),
+        }
+    }
+
+    pub(crate) fn peek(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Peek(query))? {
+            ResponseEnvelope::Peek(outcome) => {
+                self.observability_port.emit_command_event(CommandEvent {
+                    command: "peek",
+                    action: action_name("peek"),
+                    outcome: outcome_label("ok"),
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.clone(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(*outcome)
+            }
+            other => Err(unexpected_response("peek", other)),
         }
     }
 

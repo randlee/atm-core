@@ -472,6 +472,11 @@ Required caller-context rules:
   `docs/requirements.md` §4.1
 - `atm-core` must implement that matrix exactly; crate-local code must not
   widen accepted caller identity/team sources beyond the product matrix
+- `atm-core` owns the service-layer mailbox split:
+  - `peek` and `list` are inspection-only queries
+  - `send`, `read`, `ack`, and `clear` are owner-only mutating operations
+- only inspection-only service calls may accept an
+  impersonation-equivalent caller-context override
 - where a command requires caller identity, runtime identity must come from the
   documented explicit command override when supported or invoking-shell
   `ATM_IDENTITY`

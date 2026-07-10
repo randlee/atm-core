@@ -93,6 +93,11 @@ Phase-AD planning note:
   are required closure sprints for the graft-boundary reset, ULID-only
   identity cleanup, raw CLI runtime-root unification, and read-path
   consistency repair
+- the corrective release line extends again through `AD.25` to `AD.30` for
+  post-send closeout and Windows daemon-depth proof
+- the corrective release line extends again through `AD.31` to `AD.35` for
+  the mailbox peek surface, owner-only mutation reset, durable ack intent,
+  self-address/self-ack closure, and final messaging regression closeout
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -721,6 +726,16 @@ Deliverables:
     - explicit disable behavior when retained
   - separate Windows daemon integration-depth proof for the remaining local IPC
     shutdown/error/rejection cases
+- follow-up `AD.31` through `AD.35` closure of:
+  - explicit split between non-mutating `atm peek` inspection and owner-only
+    mutating `atm read`
+  - owner-only mutation for `send`, `read`, `ack`, and `clear`, with no
+    mutating impersonation path
+  - durable sender-owned `requires_ack` message state and deletion of
+    read-time ack creation
+  - self-addressed send rejection and self-ack poison termination
+  - operator-protocol/help/regression closeout for the repaired messaging
+    model
 
 Sprint line:
 - `AD.1 [COMPLETE]` `feature/pAD-s1-caller-identity-ownership-restore`
@@ -751,16 +766,22 @@ Sprint line:
 - `AD.28` `feature/pAD-s28-atm-graft-timing-independent`
 - `AD.29` `feature/pAD-s29-phase-ad-post-send-smoke-matrix`
 - `AD.30` `feature/pAD-s30-windows-daemon-integration-depth`
+- `AD.31` `feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset`
+- `AD.32` `feature/pAD-s32-durable-ack-intent-reset`
+- `AD.33` `feature/pAD-s33-self-address-send-rejection`
+- `AD.34` `feature/pAD-s34-self-ack-loop-termination`
+- `AD.35` `feature/pAD-s35-messaging-protocol-and-regression-closeout`
 
 Acceptance:
 - the phase closes only through
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
 - readiness is valid only if `AD.1` through `AD.11`, `AD.12` through
-  `AD.22`, and `AD.25` through `AD.30` all pass on the accepted line
-- `AD.30` is the sole sprint allowed to author the final
-  `docs/plans/phase-AD/readiness.md` verdict, incorporating smoke evidence from
-  `AD.29`, Windows daemon-depth evidence from `AD.30`, and the direct-fix
-  closure ledger in `.triage/phase-AD/direct-fix-track.md`
+  `AD.22`, `AD.25` through `AD.30`, and `AD.31` through `AD.35` all pass on
+  the accepted line
+- `AD.30` is the sole sprint allowed to author the Windows/post-send
+  sub-line closeout record in `docs/plans/phase-AD/readiness.md`, while
+  `AD.35` is the sole sprint allowed to author the final Phase `AD` messaging
+  follow-up verdict after `AD.31` through `AD.35` are complete
 - `AD.24` is reserved in the sibling smoke-test planning worktree and is
   consumed by `AD.29`; its harness scope must not be duplicated in the
   follow-up line

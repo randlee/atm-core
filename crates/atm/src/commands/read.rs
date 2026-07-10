@@ -3,9 +3,7 @@ use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
 use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
-use crate::commands::caller_context::{
-    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
-};
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
 use crate::commands::util::parse_timestamp;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
@@ -55,12 +53,6 @@ pub struct ReadCommand {
     no_since_last_seen: bool,
 
     #[arg(long)]
-    no_mark: bool,
-
-    #[arg(long)]
-    no_update_seen: bool,
-
-    #[arg(long)]
     since: Option<String>,
 
     #[arg(long)]
@@ -71,9 +63,6 @@ pub struct ReadCommand {
 
     #[arg(long)]
     timeout: Option<u64>,
-
-    #[arg(long = "as")]
-    actor: Option<String>,
 }
 
 impl ReadCommand {
@@ -101,10 +90,8 @@ impl ReadCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
-        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
-            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
-            team_override: self.team.as_deref().map(CallerTeamOverride),
-        })?;
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         if let Some(timeout_secs) = self.timeout
             && timeout_secs > MAX_TIMEOUT_SECS
         {
@@ -126,12 +113,8 @@ impl ReadCommand {
             caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
-            !self.no_update_seen,
-            if self.no_mark {
-                AckActivationMode::ReadOnly
-            } else {
-                AckActivationMode::PromoteDisplayedUnread
-            },
+            true,
+            AckActivationMode::PromoteDisplayedUnread,
             self.message_id.as_deref(),
             self.from.as_deref(),
             timestamp_filter,
@@ -186,8 +169,7 @@ impl ReadCommand {
 #[cfg(test)]
 mod tests {
     use atm_core::test_support::EnvGuard;
-    use atm_core::test_support::ROLE_TEAM_LEAD;
-    use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::types::ReadSelection;
     use serial_test::serial;
 
     use super::ReadCommand;
@@ -211,23 +193,24 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_propagates_filters_and_exact_message_id() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
-        command.actor = Some(ROLE_TEAM_LEAD.to_string());
         command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
         command.no_since_last_seen = true;
-        command.no_mark = true;
-        command.no_update_seen = true;
         command.timeout = Some(9);
 
         let query = command.build_query(".".into(), ".".into()).expect("query");
 
         assert_eq!(query.selection_mode(), ReadSelection::Actionable);
-        assert_eq!(query.ack_activation_mode(), AckActivationMode::ReadOnly);
         assert!(!query.seen_state_filter());
-        assert!(!query.seen_state_update());
+        assert!(query.seen_state_update());
         assert_eq!(query.timeout_secs(), Some(9));
         assert!(query.message_id_filter().is_some());
     }
@@ -270,7 +253,6 @@ mod tests {
         ]);
         let mut command = base_command();
         command.team = Some("override-team".to_string());
-        command.actor = Some(ROLE_TEAM_LEAD.to_string());
 
         let query = command.build_query(".".into(), ".".into()).expect("query");
 
@@ -295,13 +277,10 @@ mod tests {
             contains: None,
             since_last_seen: false,
             no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
             since: None,
             from: None,
             json: false,
             timeout: None,
-            actor: None,
         }
     }
 }

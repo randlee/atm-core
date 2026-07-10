@@ -84,6 +84,8 @@ impl ClientTransport for LoopbackClientTransport {
             RequestEnvelope::List(query) => {
                 list::list_mail(query, self.observability.as_ref()).map(ResponseEnvelope::List)
             }
+            RequestEnvelope::Peek(query) => read::peek_mail(query, self.observability.as_ref())
+                .map(|outcome| ResponseEnvelope::Peek(Box::new(outcome))),
             RequestEnvelope::Receive(query) => read::read_mail(query, self.observability.as_ref())
                 .map(|outcome| ResponseEnvelope::Receive(Box::new(outcome))),
             RequestEnvelope::Clear(query) => {

@@ -19,7 +19,7 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
-use crate::read::{ReadOutcome, ReadQuery};
+use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -45,6 +45,7 @@ pub enum RequestEnvelope {
     Send(SendRequestEnvelope),
     Heartbeat(TeamMemberHeartbeatRequest),
     List(ListQuery),
+    Peek(PeekQuery),
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
@@ -56,6 +57,7 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
+    Peek(Box<ReadOutcome>),
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
@@ -221,16 +223,18 @@ pub enum MessageKind {
     SendAcknowledgeRequest = 0x0002,
     HeartbeatRequest = 0x0003,
     ListRequest = 0x0004,
-    ReceiveRequest = 0x0005,
-    ClearRequest = 0x0006,
-    DoctorRequest = 0x0007,
+    PeekRequest = 0x0005,
+    ReceiveRequest = 0x0006,
+    ClearRequest = 0x0007,
+    DoctorRequest = 0x0008,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
     ListResponse = 0x1004,
-    ReceiveResponse = 0x1005,
-    ClearResponse = 0x1006,
-    DoctorResponse = 0x1007,
+    PeekResponse = 0x1005,
+    ReceiveResponse = 0x1006,
+    ClearResponse = 0x1007,
+    DoctorResponse = 0x1008,
     ErrorResponse = 0x1fff,
 }
 
@@ -246,6 +250,7 @@ impl MessageKind {
                 | Self::SendAcknowledgeRequest
                 | Self::HeartbeatRequest
                 | Self::ListRequest
+                | Self::PeekRequest
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
@@ -266,16 +271,18 @@ impl TryFrom<u16> for MessageKind {
             0x0002 => Self::SendAcknowledgeRequest,
             0x0003 => Self::HeartbeatRequest,
             0x0004 => Self::ListRequest,
-            0x0005 => Self::ReceiveRequest,
-            0x0006 => Self::ClearRequest,
-            0x0007 => Self::DoctorRequest,
+            0x0005 => Self::PeekRequest,
+            0x0006 => Self::ReceiveRequest,
+            0x0007 => Self::ClearRequest,
+            0x0008 => Self::DoctorRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
             0x1004 => Self::ListResponse,
-            0x1005 => Self::ReceiveResponse,
-            0x1006 => Self::ClearResponse,
-            0x1007 => Self::DoctorResponse,
+            0x1005 => Self::PeekResponse,
+            0x1006 => Self::ReceiveResponse,
+            0x1007 => Self::ClearResponse,
+            0x1008 => Self::DoctorResponse,
             0x1fff => Self::ErrorResponse,
             _ => {
                 return Err(AtmError::validation(format!(
@@ -364,6 +371,7 @@ pub fn request_from_frame_payload(
         MessageKind::SendComposeRequest
         | MessageKind::SendAcknowledgeRequest
         | MessageKind::ListRequest
+        | MessageKind::PeekRequest
         | MessageKind::ReceiveRequest
         | MessageKind::ClearRequest => {
             let value = serde_json::from_slice::<serde_json::Value>(&frame.bytes)
@@ -401,6 +409,7 @@ fn caller_context_payload_object(
             nested_payload_object(envelope, &["Send", "Acknowledge"])
         }
         MessageKind::ListRequest => nested_payload_object(envelope, &["List"]),
+        MessageKind::PeekRequest => nested_payload_object(envelope, &["Peek"]),
         MessageKind::ReceiveRequest => nested_payload_object(envelope, &["Receive"]),
         MessageKind::ClearRequest => nested_payload_object(envelope, &["Clear"]),
         _ => unreachable!("caller-context validation only runs for caller-owned request kinds"),
@@ -611,6 +620,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         }
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
         RequestEnvelope::List(_) => MessageKind::ListRequest,
+        RequestEnvelope::Peek(_) => MessageKind::PeekRequest,
         RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
         RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
         RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
@@ -625,6 +635,7 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         }
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
         ResponseEnvelope::List(_) => MessageKind::ListResponse,
+        ResponseEnvelope::Peek(_) => MessageKind::PeekResponse,
         ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
         ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
         ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,

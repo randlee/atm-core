@@ -58,16 +58,18 @@ pub enum MessageKind {
     SendAcknowledgeRequest = 0x0002,
     HeartbeatRequest = 0x0003,
     ListRequest = 0x0004,
-    ReceiveRequest = 0x0005,
-    ClearRequest = 0x0006,
-    DoctorRequest = 0x0007,
+    PeekRequest = 0x0005,
+    ReceiveRequest = 0x0006,
+    ClearRequest = 0x0007,
+    DoctorRequest = 0x0008,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
     ListResponse = 0x1004,
-    ReceiveResponse = 0x1005,
-    ClearResponse = 0x1006,
-    DoctorResponse = 0x1007,
+    PeekResponse = 0x1005,
+    ReceiveResponse = 0x1006,
+    ClearResponse = 0x1007,
+    DoctorResponse = 0x1008,
     ErrorResponse = 0x1fff,
 }
 
@@ -83,6 +85,7 @@ impl MessageKind {
                 | Self::SendAcknowledgeRequest
                 | Self::HeartbeatRequest
                 | Self::ListRequest
+                | Self::PeekRequest
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
@@ -103,16 +106,18 @@ impl TryFrom<u16> for MessageKind {
             0x0002 => Ok(Self::SendAcknowledgeRequest),
             0x0003 => Ok(Self::HeartbeatRequest),
             0x0004 => Ok(Self::ListRequest),
-            0x0005 => Ok(Self::ReceiveRequest),
-            0x0006 => Ok(Self::ClearRequest),
-            0x0007 => Ok(Self::DoctorRequest),
+            0x0005 => Ok(Self::PeekRequest),
+            0x0006 => Ok(Self::ReceiveRequest),
+            0x0007 => Ok(Self::ClearRequest),
+            0x0008 => Ok(Self::DoctorRequest),
             0x1001 => Ok(Self::SendSentResponse),
             0x1002 => Ok(Self::SendAcknowledgedResponse),
             0x1003 => Ok(Self::HeartbeatResponse),
             0x1004 => Ok(Self::ListResponse),
-            0x1005 => Ok(Self::ReceiveResponse),
-            0x1006 => Ok(Self::ClearResponse),
-            0x1007 => Ok(Self::DoctorResponse),
+            0x1005 => Ok(Self::PeekResponse),
+            0x1006 => Ok(Self::ReceiveResponse),
+            0x1007 => Ok(Self::ClearResponse),
+            0x1008 => Ok(Self::DoctorResponse),
             0x1fff => Ok(Self::ErrorResponse),
             other => Err(AtmError::validation(format!(
                 "unsupported ATM daemon message kind 0x{other:04x}"
@@ -369,6 +374,7 @@ fn message_kind_for_request(request: &RequestEnvelope) -> MessageKind {
         }
         Heartbeat(_) => MessageKind::HeartbeatRequest,
         List(_) => MessageKind::ListRequest,
+        Peek(_) => MessageKind::PeekRequest,
         Receive(_) => MessageKind::ReceiveRequest,
         Clear(_) => MessageKind::ClearRequest,
         Doctor(_) => MessageKind::DoctorRequest,
@@ -385,6 +391,7 @@ fn message_kind_for_response(response: &ResponseEnvelope) -> MessageKind {
         }
         Heartbeat(_) => MessageKind::HeartbeatResponse,
         List(_) => MessageKind::ListResponse,
+        Peek(_) => MessageKind::PeekResponse,
         Receive(_) => MessageKind::ReceiveResponse,
         Clear(_) => MessageKind::ClearResponse,
         Doctor(_) => MessageKind::DoctorResponse,

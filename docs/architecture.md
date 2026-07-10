@@ -1532,6 +1532,10 @@ The accepted command contract is:
   supported, otherwise from invoking-shell `ATM_IDENTITY`
 - commands that require caller team resolve it from explicit override when
   supported, otherwise from invoking-shell `ATM_TEAM`
+- `atm peek` and `atm list` are inspection-only mailbox/message surfaces and
+  may inspect another member only through the documented `--as` override path
+- `atm send`, `atm read`, `atm ack`, and `atm clear` are owner-only mutating
+  surfaces and must not expose caller impersonation
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch or retained command execution
 - downstream caller-owned request DTOs carry required resolved caller context
@@ -1543,6 +1547,13 @@ The accepted command contract is:
 
 An obsolete `[atm].identity` field may be diagnosed by doctor, but it must not
 control sender/actor resolution.
+
+The accepted mailbox split is explicit:
+- `atm peek` inspects one selected message without mutating mailbox state
+- `atm list` inspects queue metadata without mutating mailbox state
+- `atm read` is the owner-only mutating detail view
+- mailbox inspection paths must not change read, seen, or acknowledgement
+  state
 
 ### 13.3 File Policy
 

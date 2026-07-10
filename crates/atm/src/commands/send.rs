@@ -5,9 +5,7 @@ use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::TaskId;
 use clap::Args;
 
-use crate::commands::caller_context::{
-    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
-};
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -25,9 +23,6 @@ pub struct SendCommand {
 
     #[arg(index = 2)]
     message: Option<String>,
-
-    #[arg(long)]
-    from: Option<String>,
 
     #[arg(long)]
     team: Option<String>,
@@ -72,10 +67,8 @@ impl SendCommand {
     }
 
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
-        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
-            identity_override: self.from.as_deref().map(CallerIdentityOverride),
-            team_override: self.team.as_deref().map(CallerTeamOverride),
-        })?;
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let message_source = self.build_message_source()?;
         SendRequest::new(
             home_dir,
@@ -131,11 +124,12 @@ mod tests {
     const TEST_TEAM: &str = "test-team";
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_invalid_target_before_core() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
-            from: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             file: None,
             stdin: false,
@@ -158,7 +152,6 @@ mod tests {
         let stdin_and_file = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: None,
-            from: None,
             team: None,
             file: Some(PathBuf::from("message.md")),
             stdin: true,
@@ -171,7 +164,6 @@ mod tests {
         let stdin_and_message = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
-            from: None,
             team: None,
             file: None,
             stdin: true,
@@ -198,7 +190,6 @@ mod tests {
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: None,
-            from: None,
             team: None,
             file: None,
             stdin: false,
@@ -215,11 +206,15 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_preserves_cli_send_options() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello from send".to_string()),
-            from: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             file: None,
             stdin: false,
@@ -261,7 +256,6 @@ mod tests {
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
-            from: None,
             team: None,
             file: None,
             stdin: false,
@@ -282,7 +276,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn build_request_prefers_cli_overrides_over_environment() {
+    fn build_request_uses_environment_identity_even_with_team_override() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),
             ("ATM_TEAM", Some("env-team")),
@@ -290,7 +284,6 @@ mod tests {
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
-            from: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             file: None,
             stdin: false,
@@ -305,16 +298,17 @@ mod tests {
             .build_request(".".into(), ".".into())
             .expect("request");
 
-        assert_eq!(request.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(request.caller_identity.as_str(), "env-sender");
         assert_eq!(request.caller_team.as_str(), TEST_TEAM);
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_supports_file_with_trailing_inline_note() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
-            from: Some(ROLE_TEAM_LEAD.to_string()),
             team: Some(TEST_TEAM.to_string()),
             file: Some(PathBuf::from("incident.md")),
             stdin: false,

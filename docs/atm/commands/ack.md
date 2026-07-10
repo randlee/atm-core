@@ -3,7 +3,7 @@
 CLI ownership for `atm ack`:
 
 - message-id and reply parsing
-- actor override parsing
+- caller-team resolution plus owner-only caller-identity enforcement
 - conversion into `atm-core` ack requests
 - human-readable output
 - JSON output
