@@ -92,6 +92,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState

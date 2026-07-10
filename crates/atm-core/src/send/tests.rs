@@ -868,7 +868,7 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
         .expect_err("self-addressed send must fail");
 
     assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         error
             .message
@@ -906,7 +906,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
     .expect_err("self-addressed task send must fail");
 
     assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -936,7 +936,7 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
         .expect_err("self-addressed dry-run must fail");
 
     assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
