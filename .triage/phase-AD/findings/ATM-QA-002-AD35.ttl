@@ -28,7 +28,7 @@
   triage:promoteTo <urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
   triage:highestOpenBranch "AD.35" ;
   triage:priorStatus "open" ;
-  triage:statusChange "unchanged" .
+  triage:statusChange "open_to_fixed" .
 
 <urn:atm:triage:worktree/pAD-s31/5891c114b9e913313b46534375f038a2478667e8>
   a triage:WorktreeSnapshot ;
