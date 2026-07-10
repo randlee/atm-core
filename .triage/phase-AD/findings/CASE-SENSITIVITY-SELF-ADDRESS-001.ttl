@@ -7,7 +7,7 @@
   triage:title "Case-sensitive comparisons in self-address/self-ack detection; contradictory QA reports on fix status" ;
   triage:description "Consolidates two related case-sensitivity gaps in self-address/self-ack detection with contradictory QA reports resolved by direct sweep. (a) validate_non_self_recipient (send/mod.rs:642) case-sensitive on AD.33, fixed on AD.34+. (b) is_self_ack_reply_target (ack/mod.rs:765) case-sensitive on AD.34-35. Severity characterization differs across reviewers per AD34-QA-2." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:category "SECURITY" ;
@@ -21,7 +21,7 @@
   triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
   triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
   triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
-  triage:promoteTo <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> .
+  triage:promoteTo <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
 
 <urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD33/1>
   a triage:Occurrence ;

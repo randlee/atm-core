@@ -188,6 +188,20 @@ Each command document defines:
 - output rendering behavior
 - references to the relevant product and `atm-core` requirements
 
+## 4.1 Mailbox Inspection And Mutation Split
+
+Requirement ID:
+- `REQ-ATM-CMD-002`
+
+Required rules:
+- `atm peek` is the explicit non-mutating mailbox inspection command
+- `atm list` remains a non-mutating mailbox metadata query
+- only inspection-only surfaces may accept `--as`
+- `atm send`, `atm read`, `atm ack`, and `atm clear` are owner-only mutating
+  commands and must not expose mutating impersonation flags
+- CLI request mapping must preserve that split when it constructs
+  `atm-core` request DTOs
+
 ## 5. Required References
 
 The `atm` crate docs must remain aligned with:

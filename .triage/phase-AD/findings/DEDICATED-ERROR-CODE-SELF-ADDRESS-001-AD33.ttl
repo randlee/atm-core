@@ -7,7 +7,7 @@
   triage:title "No dedicated typed error code for self-address rejection" ;
   triage:description "validate_non_self_recipient's rejection uses the generic AtmErrorCode::MessageValidationFailed, shared by 130+ other validation call sites across 35 files, departing from the codebase convention of dedicated codes for distinct failures (team_invalid(), caller_context_request_invalid()). Undocumented in docs/atm-error-codes.md. Sprint doc's deliverable calls for 'one stable typed error contract' -- arguably satisfied loosely (consistent across all entry paths) but not uniquely typed to this failure." ;
   triage:phaseId "phase-AD" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ERROR-CONTRACT" ;
   triage:severity "important" ;
   triage:repeatable false ;
@@ -21,7 +21,7 @@
   triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
   triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
   triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
-  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+  triage:triagedAt "2026-07-10T18:30:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD33/1>
   a triage:Occurrence ;
@@ -37,8 +37,8 @@
 <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD34/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 643 ;
-  triage:snippet "AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
+  triage:line 649 ;
+  triage:snippet "return Err(AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.34" ;
@@ -48,8 +48,8 @@
 <urn:atm:triage:occurrence/DEDICATED-ERROR-CODE-SELF-ADDRESS-001-AD33/AD35/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 643 ;
-  triage:snippet "AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
+  triage:line 649 ;
+  triage:snippet "return Err(AtmError::validation(format!(\"self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself\"))" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "AD.35" ;

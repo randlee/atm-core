@@ -4,15 +4,15 @@
 <urn:atm:triage:finding/STALE-BRANCH-DOC-001>
   a triage:Finding ;
   triage:findingId "STALE-BRANCH-DOC-001" ;
-  triage:title "docs/project-plan.md, sprint docs, and readiness.md cite stale/mismatched branch names for AD.31-AD.34" ;
-  triage:description "Consolidated branch-name-drift finding across documentation. Multiple sprint branches have incomplete or mismatched branch name references in docs/project-plan.md, sprint-ADXX.md frontmatter, and docs/plans/phase-AD/readiness.md. AD.31 stale across all three locations. AD.32-34 show mixed fixes (some docs updated, others still stale). AD.35 is fully fixed." ;
+  triage:title "docs/project-plan.md, sprint docs, and readiness.md cite stale/mismatched branch names for AD.31-AD.35" ;
+  triage:description "Consolidated branch-name-drift finding across documentation. Multiple sprint branches have incomplete or mismatched branch name references in docs/project-plan.md, sprint-ADXX.md frontmatter, and docs/plans/phase-AD/readiness.md. AD.31-AD.34 remain open with multiple stale references. AD.35 also open: project-plan.md and readiness.md fixed, but sprint-AD31.md still contains stale branch name. Prior triage incorrectly marked AD.35 as fixed; re-verification discovered live occurrence in sprint-AD31.md." ;
   triage:phaseId "phase-AD" ;
   triage:triageMode "followup_pass" ;
   triage:category "DOC" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "fixed_partial" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD31/1> ;
@@ -22,11 +22,12 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD32/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD33/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD34/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD35/1> ;
   triage:openOn <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8> ;
   triage:openOn <urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
   triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
   triage:openOn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
-  triage:fixedOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
   triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
 
 <urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD31/1>
@@ -113,6 +114,18 @@
   triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
   triage:occursIn <urn:atm:triage:worktree/AD34/05ddab013dea5a71a345bcf20f948b44a0420ed0> .
 
+<urn:atm:triage:occurrence/STALE-BRANCH-DOC-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD31.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pAD-s31-mailbox-peek-and-owner-only-mutation" ;
+  triage:expected "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> .
+
 <urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
   a triage:WorktreeSnapshot ;
   triage:branch "AD.31" ;
@@ -151,4 +164,4 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
   triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
   triage:orderIndex 35 ;
-  triage:branchStatus "fixed" .
+  triage:branchStatus "open" .

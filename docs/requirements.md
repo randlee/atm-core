@@ -1399,23 +1399,20 @@ Timeout failure condition:
 Base display mutation:
 - any selected message is written back with `read = true`
 
-Ack-axis activation on display happens only when:
-- the caller is reading their own inbox
-- `--no-mark` is not set
-- the message is displayed
-- the message is currently `Unread`
-- the message does not already require acknowledgement
+ADR-022 rule:
+- displaying a message never promotes acknowledgement state
+- only sender-owned durable `requires_ack` intent may create `pending_ack_at`
+- only explicit `atm ack` handling may clear pending acknowledgement into
+  `acknowledged_at`
 
 Required transition on read of a normal unread message:
-- `(Unread, NoAckRequired) -> (Read, PendingAck)`
+- `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
 
 Required transition on read of an ack-required unread message:
 - `(Unread, PendingAck) -> (Read, PendingAck)`
 
-Required transition on read with `--no-mark` or when reading another inbox:
-- `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
-
-No additional ack-axis mutation happens when:
+No additional ack-axis mutation happens on display when:
+- the message is `NoAckRequired`
 - the message is already `PendingAck`
 - the message is already `Acknowledged`
 - the message is already `Read`
@@ -2183,7 +2180,7 @@ Send task-linked message
   -> (Unread, PendingAck)
 
 Read own inbox with marking enabled, normal unread message
-  (Unread, NoAckRequired) -> (Read, PendingAck)
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
 
 Read own inbox with marking enabled, ack-required unread message
   (Unread, PendingAck) -> (Read, PendingAck)
