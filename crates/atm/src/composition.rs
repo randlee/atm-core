@@ -1061,6 +1061,7 @@ mod tests {
             let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);
+            message.requires_ack = true;
             message.pending_ack_at = Some(Utc::now().into());
             (message_id, message)
         }
