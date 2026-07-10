@@ -647,7 +647,7 @@ mod tests {
     use atm_core::transport::testing::{
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
-    use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
@@ -844,6 +844,26 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
+            if self.sqlite_db_path().exists() {
+                let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+                let mail_store = assembly.mail_store_arc();
+                let team = TEST_TEAM.parse::<TeamName>().expect("team");
+                let agent_name = agent.parse::<AgentName>().expect("agent");
+                let metadata_rows = mail_store
+                    .query_mailbox_metadata(&team, &agent_name, None)
+                    .expect("mailbox rows");
+                return metadata_rows
+                    .into_iter()
+                    .map(|row| {
+                        mail_store
+                            .load_message(&team, &agent_name, &row.message_key)
+                            .expect("message record")
+                            .expect("stored message")
+                            .envelope
+                    })
+                    .collect();
+            }
+
             let inbox_path = self.inbox_path(agent);
             if let Ok(raw) = fs::read_to_string(&inbox_path) {
                 if raw.trim_start().starts_with('[') {
@@ -860,23 +880,7 @@ mod tests {
                     .collect();
             }
 
-            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
-            let team = TEST_TEAM.parse::<TeamName>().expect("team");
-            let agent_name = agent.parse::<AgentName>().expect("agent");
-            let metadata_rows = mail_store
-                .query_mailbox_metadata(&team, &agent_name, None)
-                .expect("mailbox rows");
-            metadata_rows
-                .into_iter()
-                .map(|row| {
-                    mail_store
-                        .load_message(&team, &agent_name, &row.message_key)
-                        .expect("message record")
-                        .expect("stored message")
-                        .envelope
-                })
-                .collect()
+            Vec::new()
         }
 
         fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
@@ -1004,7 +1008,6 @@ mod tests {
                 ReadSelection::All,
                 false,
                 false,
-                AckActivationMode::ReadOnly,
                 None,
                 None,
                 None,
@@ -1389,8 +1392,8 @@ mod tests {
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
-        assert!(sender_inbox[0].pending_ack_at.is_some());
-        assert!(sender_inbox[0].acknowledged_at.is_none());
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");

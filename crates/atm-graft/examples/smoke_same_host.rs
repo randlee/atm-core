@@ -8,7 +8,7 @@ use atm_core::ack::AckRequest;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
-use atm_core::types::{AckActivationMode, AgentName, ReadSelection, TeamName};
+use atm_core::types::{AgentName, ReadSelection, TeamName};
 use atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
 };
@@ -181,7 +181,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         ReadSelection::All,
         false,
         false,
-        AckActivationMode::ReadOnly,
         Some(nudge_message_id.as_str()),
         None,
         None,
