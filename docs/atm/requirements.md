@@ -147,6 +147,11 @@ Required rules:
   `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
   rather than performing direct SQLite access or runtime/store reopening in
   the CLI crate
+- `atm` must preserve the shared self-addressed-send rejection contract across
+  every CLI send entry path, including `--dry-run`; when the canonical sender
+  and resolved recipient are the same same-team member, the CLI surfaces the
+  typed validation failure returned by `atm-core` instead of reporting send
+  success
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
   - resolved team-scoped template row returned through the upstream

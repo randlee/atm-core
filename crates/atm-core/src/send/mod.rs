@@ -639,7 +639,13 @@ pub(crate) fn validate_non_self_recipient(
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
 ) -> Result<(), AtmError> {
-    if sender == &recipient.agent && sender_team == &recipient.team {
+    if sender
+        .as_str()
+        .eq_ignore_ascii_case(recipient.agent.as_str())
+        && sender_team
+            .as_str()
+            .eq_ignore_ascii_case(recipient.team.as_str())
+    {
         return Err(AtmError::validation(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         ))

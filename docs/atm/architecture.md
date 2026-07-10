@@ -132,6 +132,10 @@ Follow-up work:
   envelope from `ATM_INTERNAL_NUDGE`; they render and deliver only and must
   not reopen `NudgeTemplateOverrideStore`, SQLite, or runtime bootstrap
   composition.
+- the self-addressed-send rejection rule remains `atm-core` business logic;
+  `atm` must route all send entry paths, including `--dry-run`, through that
+  shared validation contract and render the returned typed failure rather than
+  introducing a CLI-local mailbox-equality rule
 - `atm` may consume a team-scoped built-in template override body only through
   the storage-neutral upstream contract accepted for Phase `AD`; it must not
   perform direct SQLite lookup itself.

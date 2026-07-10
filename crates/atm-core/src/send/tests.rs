@@ -930,6 +930,13 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = self_addressed_send_request(tempdir.path());
+    request.to = format!(
+        "{}@{}",
+        TEST_SENDER.to_ascii_uppercase(),
+        TEST_TEAM.to_ascii_uppercase()
+    )
+    .parse()
+    .expect("case-variant self address");
     request.dry_run = true;
 
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)

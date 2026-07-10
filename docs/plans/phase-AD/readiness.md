@@ -43,10 +43,10 @@ Current evidence surfaces:
 | `AD.28` | `complete` | `feature/pAD-s28-atm-graft-timing-independent` | `../atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent` | the graft host-nudge readiness race is closed through deterministic readiness, not timeout luck |
 | `AD.29` | `complete` | `feature/pAD-s29-phase-ad-post-send-smoke-matrix` | `../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix` | one authoritative smoke lane proves the repaired post-send matrix |
 | `AD.30` | `complete` | `feature/pAD-s30-windows-daemon-integration-depth` | `../atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth` | Windows local-IPC depth coverage is restored, the direct-fix ledger is closed, and this readiness file records the `AD.25` through `AD.30` sub-line verdict |
-| `AD.31` | `planned` | `feature/pAD-s31-mailbox-peek-and-owner-only-mutation` | `../atm-core-worktrees/feature/pAD-s31-mailbox-peek-and-owner-only-mutation` | mailbox inspection is split from mutation and owner-only mutation becomes the enforced command contract |
-| `AD.32` | `planned` | `feature/pAD-s32-durable-ack-intent-reset` | `../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-reset` | durable `requires_ack` state replaces read-time ack creation and legacy compatibility is explicit |
-| `AD.33` | `planned` | `feature/pAD-s33-self-address-send-rejection` | `../atm-core-worktrees/feature/pAD-s33-self-address-send-rejection` | self-addressed sends are rejected before persistence on every send entry path |
-| `AD.34` | `planned` | `feature/pAD-s34-self-ack-loop-termination` | `../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination` | historical self-addressed poison messages can be acknowledged without emitting replacement replies |
+| `AD.31` | `complete` | `feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset` | `../atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset` | mailbox inspection is split from mutation and owner-only mutation becomes the enforced command contract |
+| `AD.32` | `complete` | `feature/pAD-s32-durable-ack-intent-and-read-semantics-reset` | `../atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset` | durable `requires_ack` state replaces read-time ack creation and legacy compatibility is explicit |
+| `AD.33` | `complete` | `feature/pAD-s33-self-addressed-send-rejection` | `../atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection` | self-addressed sends are rejected before persistence on every send entry path |
+| `AD.34` | `complete` | `feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup` | `../atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup` | historical self-addressed poison messages can be acknowledged without emitting replacement replies |
 | `AD.35` | `planned` | `feature/pAD-s35-messaging-protocol-and-regression-closeout` | `../atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout` | the operator protocol/docs/regression matrix close the messaging follow-up line and this readiness file records the final Phase `AD` verdict |
 
 ## Direct-Fix Carry-Forward Ledger
@@ -54,6 +54,13 @@ Current evidence surfaces:
 These items were validated during earlier AD execution or phase-end review, but
 their final closure evidence is owned by the phase-close artifacts rather than
 by a new code sprint:
+
+Messaging follow-up dependency note:
+
+- `AD.34` depends on `AD.33` being complete on the accepted line because the
+  self-ack cleanup closes only historical poison created before the
+  self-addressed-send rejection gate; new self-addressed sends are rejected by
+  the `AD.33` contract and must not recreate that state.
 
 | Item | Technical owner | Closure-artifact owner | Required evidence |
 | --- | --- | --- | --- |
