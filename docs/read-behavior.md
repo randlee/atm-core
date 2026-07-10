@@ -127,14 +127,21 @@ Retained tests and requirements establish these rules:
 
 ### 3.6 Mutation Behavior
 
-Mutation belongs to `atm read`, not to `atm list`.
+Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
 - the selected displayed message is always written back with `read = true`
-- selected unread messages in your own inbox also receive `pendingAckAt` when
-  marking is enabled and the message did not already require acknowledgement
+- `atm read` never creates a new acknowledgement obligation on display
 - selected unread messages that already require acknowledgement remain
   pending-ack after display
+- selected unread messages that do not require acknowledgement remain
+  `NoAckRequired` after display
+
+Required `atm peek` behavior:
+- it is the explicit non-mutating inspection surface that replaced the legacy
+  non-mutating read path
+- it never changes `read`, `pendingAckAt`, `acknowledgedAt`, or seen-state
+  watermark data
 
 Current ack behavior:
 - an acknowledged message receives `acknowledgedAt`
@@ -206,14 +213,13 @@ Send task-linked message
   -> (Unread, PendingAck)
 
 Read own inbox, marking enabled
-  (Unread, NoAckRequired) -> (Read, PendingAck)
-  (Unread, PendingAck) -> (Read, PendingAck)
-
-Read own inbox, --no-mark
   (Unread, NoAckRequired) -> (Read, NoAckRequired)
   (Unread, PendingAck) -> (Read, PendingAck)
+  (Read, PendingAck) -> (Read, PendingAck)
+  (Read, Acknowledged) -> (Read, Acknowledged)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
-Read other inbox
+Peek any inbox
   (Unread, NoAckRequired) -> (Read, NoAckRequired)
   (Unread, PendingAck) -> (Read, PendingAck)
   (Read, PendingAck) -> (Read, PendingAck)
@@ -238,6 +244,7 @@ Disallowed transitions:
 
 Notes:
 - `read = true` is the base mutation on display
+- `atm peek` performs inspection only and applies no mutation
 - task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
 
 ## 7. Seen-State Rules

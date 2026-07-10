@@ -14,6 +14,12 @@ Ack transition semantics remain owned by `atm-core`.
 completion when a historical pending-ack message was already addressed back to
 the current actor.
 
+Owner/queue contract:
+
+- `atm ack` is owner-only and does not accept `--as`
+- it closes durable sender-owned pending-ack state only
+- emitted ack replies always hardcode `requires_ack = false`
+
 References:
 
 - Product requirements: `docs/requirements.md` §8

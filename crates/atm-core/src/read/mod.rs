@@ -341,8 +341,55 @@ pub fn peek_mail_with_runtime(
         seen_state_update: false,
         ack_activation_mode: AckActivationMode::ReadOnly,
     };
-    let mut outcome = read_mail_with_runtime_impl(synthesized, observability, runtime)?;
-    outcome.action = CommandAction::Peek;
+    let ReadRuntimeContext {
+        actor,
+        target,
+        seen_watermark,
+        ..
+    } = resolve_read_context(&synthesized, runtime)?;
+    let mut selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?;
+    let summary = ReadSelectionSummary {
+        match_count: selection.selected.len(),
+        selected_message_id: selection
+            .selected
+            .first()
+            .and_then(|message| message.envelope.message_id),
+    };
+    sort_and_limit_selected(&mut selection.selected, Some(1));
+    let display =
+        build_unmodified_read_display(runtime, &synthesized, &target, selection, summary)?;
+
+    let outcome = ReadOutcome {
+        action: CommandAction::Peek,
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        selection_mode: synthesized.mailbox.selection_mode,
+        mutation_applied: false,
+        count: usize::from(display.output_message.is_some()),
+        message: display.output_message,
+        selected_message_id: display.selected_message_id,
+        match_count: display.match_count,
+        additional_match_count: display.match_count.saturating_sub(1),
+        bucket_counts: display.bucket_counts,
+    };
+
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "peek",
+        action: action_name("peek"),
+        outcome: outcome_label(if display.timed_out { "timeout" } else { "ok" }),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: actor,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, command = "peek", action = "peek", "failed to emit peek command event");
+    }
+
     Ok(outcome)
 }
 

@@ -14,6 +14,13 @@ Core send behavior remains owned by `atm-core`.
 shared `atm-core` send path owns that validation, so direct CLI, loopback, and
 daemon-backed send flows all fail the same way.
 
+Acknowledgement ownership notes:
+
+- `--requires-ack` creates durable sender-owned acknowledgement state at send
+  time
+- task-linked sends imply `requires_ack = true`
+- plain informational sends remain `requires_ack = false`
+
 References:
 
 - Product requirements: `docs/requirements.md` §6

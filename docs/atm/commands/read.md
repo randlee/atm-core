@@ -31,7 +31,9 @@ Selection/rendering contract:
 
 - `atm read` returns one full message only
 - `atm read` is owner-only and may mutate read / seen state
-- use `atm peek` for non-mutating mailbox inspection
+- `atm read` never creates new pending-ack state on display
+- use `atm peek` for non-mutating mailbox inspection, including inspection of
+  another member with `--as`
 - exact `--message-id` selection bypasses logical terminal-node collapse so the
   addressed physical message is returned directly
 - task/from/contains/queue filters otherwise operate on logical current

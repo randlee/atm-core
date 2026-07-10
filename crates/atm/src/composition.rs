@@ -637,7 +637,7 @@ mod tests {
     use atm_core::protocol::{
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
-    use atm_core::read::ReadQuery;
+    use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
@@ -844,6 +844,26 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
+            if self.sqlite_db_path().exists() {
+                let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+                let mail_store = assembly.mail_store_arc();
+                let team = TEST_TEAM.parse::<TeamName>().expect("team");
+                let agent_name = agent.parse::<AgentName>().expect("agent");
+                let metadata_rows = mail_store
+                    .query_mailbox_metadata(&team, &agent_name, None)
+                    .expect("mailbox rows");
+                return metadata_rows
+                    .into_iter()
+                    .map(|row| {
+                        mail_store
+                            .load_message(&team, &agent_name, &row.message_key)
+                            .expect("message record")
+                            .expect("stored message")
+                            .envelope
+                    })
+                    .collect();
+            }
+
             let inbox_path = self.inbox_path(agent);
             if let Ok(raw) = fs::read_to_string(&inbox_path) {
                 if raw.trim_start().starts_with('[') {
@@ -860,23 +880,7 @@ mod tests {
                     .collect();
             }
 
-            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
-            let team = TEST_TEAM.parse::<TeamName>().expect("team");
-            let agent_name = agent.parse::<AgentName>().expect("agent");
-            let metadata_rows = mail_store
-                .query_mailbox_metadata(&team, &agent_name, None)
-                .expect("mailbox rows");
-            metadata_rows
-                .into_iter()
-                .map(|row| {
-                    mail_store
-                        .load_message(&team, &agent_name, &row.message_key)
-                        .expect("message record")
-                        .expect("stored message")
-                        .envelope
-                })
-                .collect()
+            Vec::new()
         }
 
         fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
@@ -1013,6 +1017,46 @@ mod tests {
                 None,
             )
             .expect("read query")
+        }
+
+        fn read_query_for(&self, caller: &str, message_id: AtmMessageId) -> ReadQuery {
+            ReadQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                AckActivationMode::ReadOnly,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query")
+        }
+
+        fn peek_query_for(&self, caller: &str, message_id: AtmMessageId) -> PeekQuery {
+            PeekQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("peek query")
         }
 
         fn clear_query(&self) -> ClearQuery {
@@ -1231,6 +1275,121 @@ mod tests {
 
     #[test]
     #[serial(env)]
+    fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        // Plain informational send stays non-ack-requiring.
+        let plain_outcome = composition
+            .send(fixture.send_request("plain informational"))
+            .expect("plain send outcome");
+        assert!(!plain_outcome.requires_ack);
+        let plain_message_id = plain_outcome.message_id;
+
+        // Explicit requires-ack send persists durable pending-ack state.
+        let ack_required_outcome = composition
+            .send(fixture.send_request_with_flags("needs acknowledgement", true, None))
+            .expect("ack-required send outcome");
+        assert!(ack_required_outcome.requires_ack);
+        let ack_required_message_id = ack_required_outcome.message_id;
+
+        // Task send also persists durable pending-ack state.
+        let task_outcome = composition
+            .send(fixture.send_request_with_flags(
+                "task payload",
+                false,
+                Some("TASK-314".parse().expect("task id")),
+            ))
+            .expect("task send outcome");
+        assert!(task_outcome.requires_ack);
+        let task_message_id = task_outcome.message_id;
+
+        // Peek is the explicit non-mutating inspection path.
+        let peek_outcome = composition
+            .peek(fixture.peek_query_for(TEST_RECIPIENT, plain_message_id))
+            .expect("peek outcome");
+        assert!(!peek_outcome.mutation_applied);
+        assert_eq!(peek_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            peek_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_peek = inbox_after_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after peek");
+        assert!(!plain_after_peek.read);
+        assert!(plain_after_peek.pending_ack_at.is_none());
+
+        // Read mutates read state but never manufactures pending-ack state.
+        let read_outcome = composition
+            .receive(fixture.read_query_for(TEST_RECIPIENT, plain_message_id))
+            .expect("read outcome");
+        assert!(read_outcome.mutation_applied);
+        assert_eq!(read_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(true)
+        );
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .and_then(|message| message.envelope.pending_ack_at),
+            None
+        );
+
+        let inbox_after_read = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_read = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after read");
+        assert!(plain_after_read.read);
+        assert!(plain_after_read.pending_ack_at.is_none());
+
+        let ack_required_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(ack_required_message_id))
+            .expect("ack-required inbox message");
+        assert!(ack_required_after_send.pending_ack_at.is_some());
+
+        let task_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(task_message_id))
+            .expect("task inbox message");
+        assert!(task_after_send.pending_ack_at.is_some());
+        assert_eq!(
+            task_after_send.task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+
+        // Canonical same-team self-addressed sends fail before persistence.
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+    }
+
+    #[test]
+    #[serial(env)]
     fn loopback_transport_read_surfaces_messages_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
@@ -1389,13 +1548,44 @@ mod tests {
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
-        assert!(sender_inbox[0].pending_ack_at.is_some());
-        assert!(sender_inbox[0].acknowledged_at.is_none());
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let (message_id, mut pending_ack) = fixture.pending_ack_message("historical self poison");
+        pending_ack.from = TEST_SENDER.parse().expect("self sender");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .ack(fixture.ack_request(message_id, "resolved"))
+            .expect("self poison ack outcome");
+
+        assert!(matches!(
+            outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::SuppressedSelfAck
+        ));
+        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
+        assert_eq!(sender_inbox.len(), 1);
+        assert_eq!(sender_inbox[0].message_id, Some(message_id));
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
+        assert!(fixture.inbox_contents(TEST_LEAD).is_empty());
     }
 
     #[test]
