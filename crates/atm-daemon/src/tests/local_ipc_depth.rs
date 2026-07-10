@@ -9,7 +9,7 @@ use crate::test_observability::TestDaemonObservability;
 #[cfg(windows)]
 use crate::test_support::connect_local_ipc_with_timeout;
 use crate::test_support::{
-    DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcher,
+    DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcherWithUnwindSignal,
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 use atm_core::boundary::RequestDispatcher;
@@ -250,7 +250,9 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(PanicDispatcher);
+    let (panic_unwound_tx, panic_unwound_rx) = mpsc::sync_channel(1);
+    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+        Arc::new(PanicDispatcherWithUnwindSignal::new(panic_unwound_tx));
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
@@ -286,6 +288,12 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
         tempdir.path().join("cwd"),
     );
     assert!(matches!(response, ResponseEnvelope::Error(_)));
+    match panic_unwound_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {}
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            panic!("dispatch panic did not finish unwinding within 5s");
+        }
+    }
 
     let shutdown_started = Instant::now();
     lifecycle.set_terminate_for_test(true);
