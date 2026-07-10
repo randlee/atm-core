@@ -639,7 +639,13 @@ pub(crate) fn validate_non_self_recipient(
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
 ) -> Result<(), AtmError> {
-    if sender == &recipient.agent && sender_team == &recipient.team {
+    if sender
+        .as_str()
+        .eq_ignore_ascii_case(recipient.agent.as_str())
+        && sender_team
+            .as_str()
+            .eq_ignore_ascii_case(recipient.team.as_str())
+    {
         return Err(AtmError::validation(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         ))
@@ -648,6 +654,27 @@ pub(crate) fn validate_non_self_recipient(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod self_address_tests {
+    use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let error = validate_non_self_recipient(
+            &AgentName::from_validated("Sender-A"),
+            &TeamName::from_validated("Test-Team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+        )
+        .expect_err("case-variant self target must be rejected");
+
+        assert!(error.is_validation(), "{error:?}");
+    }
 }
 
 fn resolve_recipient(
