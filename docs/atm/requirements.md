@@ -155,7 +155,7 @@ Required rules:
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
   - resolved team-scoped template row returned through the upstream
-    `NudgeTemplateOverrideStore` contract for the selected template kind
+  `NudgeTemplateOverrideStore` contract for the selected template kind
   - built-in product default template body for that kind when no row exists
 - resolved row semantics are:
   - no row => built-in product default
