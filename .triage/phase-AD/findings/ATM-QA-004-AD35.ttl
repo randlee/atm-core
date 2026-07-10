@@ -1,0 +1,364 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-004-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004-AD35" ;
+  triage:title "5 named Exact Target docs still describe pre-AD.31 model with zero peek content" ;
+  triage:description "The following 5 named Exact Target docs still describe the pre-AD.31 messaging model and contain zero content about the peek surface introduced in AD.31: docs/atm/requirements.md, docs/atm/architecture.md, docs/atm-core/requirements.md, docs/atm-core/architecture.md, docs/architecture.md. These should have been updated to reflect the AD.31 peek surface and owner-only mutation reset but were not." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/5> ;
+  triage:openOn <urn:atm:triage:worktree/s31/cddd205> ;
+  triage:openOn <urn:atm:triage:worktree/s32/54ad2c6> ;
+  triage:openOn <urn:atm:triage:worktree/s33/bfafd5d> ;
+  triage:openOn <urn:atm:triage:worktree/s34/b191e22> ;
+  triage:openOn <urn:atm:triage:worktree/s35/bd3ab37> ;
+  triage:promoteTo <urn:atm:triage:worktree/s35/bd3ab37> .
+
+# Sprint AD.31 occurrences
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s31/5>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/cddd205> .
+
+# Sprint AD.32 occurrences
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s32/5>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/54ad2c6> .
+
+# Sprint AD.33 occurrences
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/bfafd5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/bfafd5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/bfafd5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/bfafd5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s33/5>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/bfafd5d> .
+
+# Sprint AD.34 occurrences
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s34/5>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/b191e22> .
+
+# Sprint AD.35 occurrences
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AD35/s35/5>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing 'peek' content / pre-AD.31 model description" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37> .
+
+# WorktreeSnapshots
+<urn:atm:triage:worktree/s31/cddd205>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/s32/54ad2c6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/s33/bfafd5d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/s34/b191e22>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/s35/bd3ab37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:orderIndex 35 .

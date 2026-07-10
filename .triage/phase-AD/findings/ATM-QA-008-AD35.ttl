@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-008-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008-AD35" ;
+  triage:title "One authoritative regression matrix is actually fragmented across 3 test functions in 2 files" ;
+  triage:description "The sprint claims one authoritative regression matrix test, but the actual coverage is fragmented across 3 separate test functions spread across 2 files: composition.rs (2 test functions) and mailbox_locking.rs (1 test function). This contradicts the claim of a single authoritative matrix." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/3> ;
+  triage:openOn <urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> ;
+  triage:promoteTo <urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1278 ;
+  triage:snippet "#[test] fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+
+<urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1562 ;
+  triage:snippet "#[test] fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+
+<urn:atm:triage:occurrence/ATM-QA-008-AD35/s35/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 857 ;
+  triage:snippet "#[test] fn ack_self_addressed_poison_message_suppresses_replacement_reply()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+
+<urn:atm:triage:worktree/s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:orderIndex 35 .

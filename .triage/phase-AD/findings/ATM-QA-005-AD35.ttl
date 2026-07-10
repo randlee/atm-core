@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AD35" ;
+  triage:title "readiness.md falsely declares AD.25-AD.35 closeout complete" ;
+  triage:description "docs/plans/phase-AD/readiness.md falsely declares 'AD.25-AD.35 closeout complete'. This is contradicted by ATM-QA-001-AD35 through ATM-QA-004-AD35 (this same batch) and by AD.31-AD.34 all having returned FAIL on QA-1. The sprint's own conditional gate for declaring closeout is not satisfied." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AD35/s35/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AD35/s35/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 24 ;
+  triage:snippet "release verdict: AD.25 through AD.35 closeout complete on this branch; the authoritative smoke, Windows daemon-depth, and messaging follow-up evidence are all present." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2> .
+
+<urn:atm:triage:worktree/pAD-s31/cddd20544a3a5bb9d3caa70eca9cf01dc5f05862>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/pAD-s32/54ad2c6b8e7038f561b5c84e3f51974a636e3ef1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/pAD-s33/bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/pAD-s34/b191e22001cbf7594c2ecefe88ece707f1b51fcf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/pAD-s35/bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:orderIndex 35 .
