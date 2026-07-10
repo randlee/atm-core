@@ -1,9 +1,9 @@
 ---
 id: AD.31
 title: Mailbox Peek Surface And Owner-Only Mutation Reset
-status: planned
-branch: feature/pAD-s31-mailbox-peek-and-owner-only-mutation
-worktree: ../atm-core-worktrees/feature/pAD-s31-mailbox-peek-and-owner-only-mutation
+status: complete
+branch: feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset
+worktree: ../atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset
 target: integrate/phase-AD
 ---
 
@@ -52,7 +52,7 @@ target: integrate/phase-AD
 - `docs/atm/commands/clear.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
-- `docs/adr/ADR-021-owner-only-message-mutation.md`
+- `docs/adr/ADR-023-owner-only-message-mutation.md`
 - `docs/project-plan.md`
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `docs/plans/phase-AD/sprint-AD31.md`

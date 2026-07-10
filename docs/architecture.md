@@ -505,13 +505,9 @@ pub enum ReadSelection {
 }
 ```
 
-Ack activation mode:
+Ack requirement state:
 
 ```rust
-pub enum AckActivationMode {
-    ReadOnly,
-}
-
 pub enum AckRequirementState {
     NotRequired,
     RequiredPending,
@@ -523,6 +519,8 @@ Display mapping is fixed:
 - `MessageClass::Unread` -> `DisplayBucket::Unread`
 - `MessageClass::PendingAck` -> `DisplayBucket::PendingAck`
 - `MessageClass::Acknowledged` -> `DisplayBucket::History`
+- displaying a message may mark it read, but it must never promote pending
+  acknowledgement; ADR-022 keeps ack state sender-owned and durable
 - `MessageClass::Read` -> `DisplayBucket::History`
 
 ### 4.3 Typestate Transition Model
@@ -1537,6 +1535,10 @@ The accepted command contract is:
   supported, otherwise from invoking-shell `ATM_IDENTITY`
 - commands that require caller team resolve it from explicit override when
   supported, otherwise from invoking-shell `ATM_TEAM`
+- `atm peek` and `atm list` are inspection-only mailbox/message surfaces and
+  may inspect another member only through the documented `--as` override path
+- `atm send`, `atm read`, `atm ack`, and `atm clear` are owner-only mutating
+  surfaces and must not expose caller impersonation
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch or retained command execution
 - downstream caller-owned request DTOs carry required resolved caller context
@@ -1548,6 +1550,13 @@ The accepted command contract is:
 
 An obsolete `[atm].identity` field may be diagnosed by doctor, but it must not
 control sender/actor resolution.
+
+The accepted mailbox split is explicit:
+- `atm peek` inspects one selected message without mutating mailbox state
+- `atm list` inspects queue metadata without mutating mailbox state
+- `atm read` is the owner-only mutating detail view
+- mailbox inspection paths must not change read, seen, or acknowledgement
+  state
 
 ### 13.3 File Policy
 

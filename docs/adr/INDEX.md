@@ -31,6 +31,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-020 — RULE-001 Observability Adapter Exception](./ADR-020-rule001-observability-adapter-exception.md)
 - [ADR-021 — NudgeTemplateOverrideStore Dependent Widening](./ADR-021-nudge-template-override-store-dependent-widening.md)
 - [ADR-022 — Durable Ack Intent](./ADR-022-durable-ack-intent.md)
+- [ADR-023 — Owner-Only Message Mutation](./ADR-023-owner-only-message-mutation.md)
 
 ## Extracted Crate-Local ADRs
 

@@ -36,7 +36,7 @@ target: integrate/phase-AD
 - `docs/atm/commands/help.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
-- `docs/adr/ADR-021-owner-only-message-mutation.md`
+- `docs/adr/ADR-023-owner-only-message-mutation.md`
 - `crates/atm/src/commands/help.rs`
 - `crates/atm/src/composition.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`

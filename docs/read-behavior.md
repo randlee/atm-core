@@ -313,10 +313,6 @@ pub enum DisplayBucket {
     History,
 }
 
-pub enum AckActivationMode {
-    ReadOnly,
-}
-
 pub enum AckRequirementState {
     NotRequired,
     RequiredPending,
