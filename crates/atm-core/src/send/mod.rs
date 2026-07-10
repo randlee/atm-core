@@ -656,6 +656,27 @@ pub(crate) fn validate_non_self_recipient(
     Ok(())
 }
 
+#[cfg(test)]
+mod self_address_tests {
+    use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let error = validate_non_self_recipient(
+            &AgentName::from_validated("Sender-A"),
+            &TeamName::from_validated("Test-Team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+        )
+        .expect_err("case-variant self target must be rejected");
+
+        assert!(error.is_validation(), "{error:?}");
+    }
+}
+
 fn resolve_recipient(
     target_address: &AgentAddress,
     caller_team: &TeamName,
