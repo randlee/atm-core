@@ -567,8 +567,7 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
             .and_then(|message| message.envelope.message_id),
     };
     sort_and_limit_selected(&mut selection.selected, Some(1));
-    let mutation_needed =
-        displayed_messages_require_mutation(mutation_mode, &selection.selected);
+    let mutation_needed = displayed_messages_require_mutation(mutation_mode, &selection.selected);
 
     if selection.timed_out || selection.selected.is_empty() || !mutation_needed {
         return build_unmodified_read_display(runtime, query, target, selection, summary);
@@ -891,7 +890,9 @@ fn displayed_messages_require_mutation(
     if mutation_mode == DisplayMutationMode::NonMutatingPeek {
         return false;
     }
-    displayed_messages.iter().any(|message| !message.envelope.read)
+    displayed_messages
+        .iter()
+        .any(|message| !message.envelope.read)
 }
 
 fn transition_displayed_message(
@@ -970,8 +971,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp,
-        MessageClass, ReadSelection, TaskId, TeamName,
+        AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
+        ReadSelection, TaskId, TeamName,
     };
     use crate::workflow::{self, WorkflowStateFile};
 
@@ -1320,7 +1321,8 @@ mod tests {
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
-            self.save_seen_watermark_count.fetch_add(1, Ordering::SeqCst);
+            self.save_seen_watermark_count
+                .fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
@@ -2002,7 +2004,10 @@ mod tests {
         assert!(!outcome.mutation_applied);
         assert_eq!(outcome.count, 1);
         assert_eq!(
-            outcome.message.as_ref().map(|message| message.envelope.read),
+            outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
             Some(false)
         );
         assert_eq!(persist_count.load(Ordering::SeqCst), 0);
