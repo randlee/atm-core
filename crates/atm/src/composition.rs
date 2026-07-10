@@ -647,7 +647,7 @@ mod tests {
     use atm_core::transport::testing::{
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
-    use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
@@ -1008,7 +1008,6 @@ mod tests {
                 ReadSelection::All,
                 false,
                 false,
-                AckActivationMode::ReadOnly,
                 None,
                 None,
                 None,

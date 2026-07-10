@@ -403,6 +403,11 @@ Identity-specific policy:
   daemon dispatch
 - downstream caller-owned request DTOs must carry resolved caller identity as a
   required field
+- `atm-core` owns the service-layer mailbox split:
+  - `peek` and `list` are inspection-only queries
+  - `send`, `read`, `ack`, and `clear` are owner-only mutating operations
+- mutating mailbox/message service operations must not expose caller
+  impersonation
 - `atm-core` must not treat hook files, repo-local config, or daemon ambient
   `ATM_IDENTITY` as fallback caller identity
 - `atm-core` must not derive a normal sender/actor identity from repo-local

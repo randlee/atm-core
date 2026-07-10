@@ -693,7 +693,6 @@ mod tests {
             ReadSelection::Unread,
             false,
             false,
-            atm_core::types::AckActivationMode::ReadOnly,
             None,
             None,
             None,

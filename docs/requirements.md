@@ -1449,11 +1449,20 @@ Peek mutation rule:
 Read mutation rules:
 - any selected `atm read` message is written back with `read = true`
 - `atm read` must never create a new pending-ack obligation on display
+- displaying a message never promotes acknowledgement state
+- only sender-owned durable `requires_ack` intent may create `pending_ack_at`
+- only explicit `atm ack` handling may clear pending acknowledgement into
+  `acknowledged_at`
 - when a selected message already requires acknowledgement, it remains
   pending-ack after display
 - when a selected message does not require acknowledgement, it remains
   `NoAckRequired` after display
+- required transition on read of a normal unread message:
+  - `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
+- required transition on read of an ack-required unread message:
+  - `(Unread, PendingAck) -> (Read, PendingAck)`
 - no additional ack-axis mutation happens when:
+  - the message is `NoAckRequired`
   - the message is already `PendingAck`
   - the message is already `Acknowledged`
   - the message is already `Read`

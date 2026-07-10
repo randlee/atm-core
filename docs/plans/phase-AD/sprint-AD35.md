@@ -38,6 +38,8 @@ target: integrate/phase-AD
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 - `docs/read-behavior.md`
+- `docs/adr/ADR-023-owner-only-message-mutation.md`
+- `docs/read-behavior.md`
 - `crates/atm/src/commands/help.rs`
 - `crates/atm/src/composition.rs`
 - `crates/atm-core/tests/mailbox_locking.rs`

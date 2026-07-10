@@ -17,8 +17,8 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{
-    AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
-    ReadSelection, SourceIndex, TaskId, TeamName,
+    AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    SourceIndex, TaskId, TeamName,
 };
 use metadata_selection::{
     filter_metadata_backed_contains_candidates, load_durable_metadata_message,
@@ -138,7 +138,6 @@ pub struct ReadQuery {
     pub(crate) caller_identity: AgentName,
     pub(crate) caller_team: TeamName,
     pub(crate) seen_state_update: bool,
-    pub(crate) ack_activation_mode: AckActivationMode,
 }
 
 impl ReadQuery {
@@ -152,7 +151,6 @@ impl ReadQuery {
         selection_mode: ReadSelection,
         seen_state_filter: bool,
         seen_state_update: bool,
-        ack_activation_mode: AckActivationMode,
         message_id_filter: Option<&str>,
         sender_filter: Option<&str>,
         timestamp_filter: Option<IsoTimestamp>,
@@ -177,7 +175,6 @@ impl ReadQuery {
             caller_identity,
             caller_team,
             seen_state_update,
-            ack_activation_mode,
         })
     }
 
@@ -197,10 +194,6 @@ impl ReadQuery {
         self.seen_state_update
     }
 
-    pub fn ack_activation_mode(&self) -> AckActivationMode {
-        self.ack_activation_mode
-    }
-
     pub fn message_id_filter(&self) -> Option<&AtmMessageId> {
         self.mailbox.message_id_filter.as_ref()
     }
@@ -211,11 +204,6 @@ impl ReadQuery {
 
     pub fn with_selection_mode(mut self, selection_mode: ReadSelection) -> Self {
         self.mailbox.selection_mode = selection_mode;
-        self
-    }
-
-    pub fn with_ack_activation_mode(mut self, ack_activation_mode: AckActivationMode) -> Self {
-        self.ack_activation_mode = ack_activation_mode;
         self
     }
 }
@@ -347,7 +335,6 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         caller_identity: query.caller_identity,
         caller_team: query.caller_team,
         seen_state_update: false,
-        ack_activation_mode: AckActivationMode::ReadOnly,
     };
     let ReadRuntimeContext {
         actor,
@@ -555,7 +542,7 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
     query: &ReadQuery,
     target: &crate::mailbox::source::ResolvedTarget,
     seen_watermark: Option<IsoTimestamp>,
-    own_inbox: bool,
+    _own_inbox: bool,
     mutation_mode: DisplayMutationMode,
     mut selection: ReadSelectionState,
 ) -> Result<ReadDisplayState, AtmError> {
@@ -578,8 +565,6 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
         &target.team,
         &target.agent,
         &selection.selected,
-        query.ack_activation_mode,
-        own_inbox,
     )?;
     build_mutated_read_display(
         runtime,
@@ -852,11 +837,8 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     team: &TeamName,
     agent: &AgentName,
     displayed_messages: &[ClassifiedMessage],
-    ack_activation_mode: AckActivationMode,
-    _own_inbox: bool,
 ) -> Result<bool, AtmError> {
     let mut changed = false;
-    debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly);
     let now = IsoTimestamp::now();
 
     for message in displayed_messages {
@@ -958,8 +940,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
-        ReadSelection, TaskId, TeamName,
+        AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId,
+        TeamName,
     };
     use crate::workflow::{self, WorkflowStateFile};
 
@@ -1443,7 +1425,6 @@ mod tests {
             ReadSelection::All,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1484,7 +1465,6 @@ mod tests {
             ReadSelection::All,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1601,7 +1581,6 @@ mod tests {
             ReadSelection::Actionable,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1936,7 +1915,6 @@ mod tests {
             ReadSelection::All,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -2092,7 +2070,6 @@ mod tests {
             ReadSelection::All,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,

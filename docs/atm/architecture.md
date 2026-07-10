@@ -107,6 +107,11 @@ Follow-up work:
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns mapping of CLI commands to the daemon/service request boundary in
   production.
+- `atm` owns the explicit mailbox-surface split where `peek` and `list` are
+  inspection-only, while `send`, `read`, `ack`, and `clear` are owner-only
+  mutating commands.
+- `atm` must not expose caller impersonation on mutating mailbox/message
+  commands.
 - `atm` owns bootstrap of shared observability implementations used by
   `atm-core`.
 - `atm` owns the concrete published-crate bootstrap against
