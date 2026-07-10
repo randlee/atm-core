@@ -129,6 +129,29 @@ The authoritative follow-up blockers are:
 `AD.23` remains reserved outside this worktree, and `AD.24` is the sibling
 smoke-harness planning slot consumed by `AD.29` rather than renumbered here.
 
+## Post-AD30 Dogfood Messaging Blockers
+
+The accepted `AD.30` line still leaves three serious dogfood-discovered ATM
+messaging defects open:
+
+- `#498` ATM still allows self-addressed messages to be created
+- `#499` `atm ack` on a historical self-addressed message can still create a
+  replacement self-addressed message instead of terminating the queue item
+- `#500` the product still conflates mailbox inspection with mailbox mutation,
+  and the read path can still create ack obligations on display instead of
+  respecting sender-owned durable message state
+
+These are still Phase `AD` blockers because they violate the same caller
+ownership, send/read/ack contract that `AD.1` through `AD.30` were meant to
+restore. Phase `AD` therefore extends again with the `AD.31` through `AD.35`
+follow-up line:
+
+- `AD.31` mailbox peek surface and owner-only mutation reset
+- `AD.32` durable ack intent and read semantics reset
+- `AD.33` self-addressed send rejection
+- `AD.34` self-ack loop termination and historical poison cleanup
+- `AD.35` messaging protocol and regression closeout
+
 ## Follow-Up Closure Artifact Ownership
 
 The `AD.25` through `AD.30` follow-up line splits technical-fix ownership from
@@ -143,13 +166,15 @@ one explicit home:
 | historical `FTQ-001` env-race record reconciliation | accepted-line code fix predates this follow-up | `AD.30` | `.triage/phase-AD/direct-fix-track.md` plus `docs/plans/phase-AD/readiness.md` |
 | phase-AD triage sweep ledger | `AD.30` | `AD.30` | `.triage/phase-AD/direct-fix-track.md` |
 | release-facing `CHANGELOG.md` entry for `AD.13` through `AD.30` | `AD.30` | `AD.30` | `CHANGELOG.md` plus `docs/plans/phase-AD/readiness.md` |
-| final phase-close verdict artifact | `AD.30` | `AD.30` | `docs/plans/phase-AD/readiness.md` |
+| intermediate `AD.25` through `AD.30` closeout record | `AD.30` | `AD.30` | `docs/plans/phase-AD/readiness.md` |
+| final phase-close verdict artifact for the messaging follow-up line | `AD.35` | `AD.35` | `docs/plans/phase-AD/readiness.md` |
 
 Notes:
 
-- `AD.29` feeds the authoritative post-send smoke evidence into the final
-  closure record, but `AD.30` is the only sprint allowed to author the
-  phase-close verdict in `docs/plans/phase-AD/readiness.md`.
+- `AD.29` feeds the authoritative post-send smoke evidence into the
+  `AD.30` closeout record for that sub-line, but `AD.35` is the only sprint
+  allowed to author the final Phase `AD` readiness verdict once the messaging
+  follow-up line is complete.
 - `FTQ-001` is a historical phase-`Xb` discovery record. If the accepted line
   keeps that historical TTL open as snapshot provenance, `AD.30` must record
   the reason explicitly in the readiness/direct-fix artifacts so the code fix
@@ -163,9 +188,16 @@ The governing rules are:
 
 - caller identity and caller team are mandatory only for retained ATM commands
   that require caller-owned state or routing context
+- mutating message/mailbox commands act only as the resolved caller identity
+- ATM does not implement a special impersonation exception when
+  `ATM_IDENTITY` is unset; if the caller is unresolved, mutating commands fail
+  closed
+- inspection-only commands may inspect another member's queue state, but they
+  must not mutate seen state, pending-ack state, or acknowledgement state
 - the accepted mandatory caller-context inventory for this rule is:
   - `send`
   - `read`
+  - `peek`
   - `ack`
   - `list`
   - `clear`
@@ -176,6 +208,13 @@ The governing rules are:
   - `teams update-member`
   - `teams backup`
   - `teams restore`
+- `atm peek` is inspection-only, but it is still caller-context resolver
+  required rather than resolver-exempt:
+  - it shares the retained mailbox query surface with `list` / `read`
+  - it may inspect another member with `--as`, so actor/team overrides must be
+    validated through the shared CLI-owned resolver instead of command-local
+    parsing
+  - unlike `doctor`, it is not an identity-free diagnostic exception
 - `atm doctor` is diagnostic-only and must not require caller identity; its
   `--team` override remains optional diagnostic scope, not mandatory caller
   context
@@ -205,7 +244,13 @@ The governing rules are:
 - the daemon must execute caller-owned commands against declared request
   identity and team only and must never consult daemon ambient
   `ATM_IDENTITY` or `ATM_TEAM` to fill missing caller context
+- `atm peek` is the accepted explicit non-mutating mailbox inspection command
+- `atm read` remains the owner-only mutating mailbox-read command
+- `atm read --no-mark` is not an accepted long-term surface; inspection and
+  mutation must be split into different commands
 - message persistence is the send success boundary
+- self-addressed messages (`from == to` within the same team) are invalid ATM
+  input and must be rejected before persistence
 - post-send behavior is a post-commit side effect only
 - post-send behavior is event-driven; it is not planned through a generic
   delivery-plan abstraction
@@ -239,6 +284,10 @@ The governing rules are:
   second-`Enter` operational path, with the delay treated as an
   implementation-tuning parameter rather than an unspecified side effect
 - `atm read` is a database read path only
+- `atm read` and `atm peek` must never create new ack-required state as a side
+  effect of display
+- sender-owned durable message data, not display-time mutation, decides whether
+  a message requires acknowledgement
 - active `tmux_pane_id` already exists in SQLite roster state and must remain
   authoritative there rather than drifting back to repo config assumptions
 - pane metadata must be settable and repairable from the CLI
@@ -291,17 +340,28 @@ The governing rules are:
 Phase `AD` may:
 
 - fix caller context ownership on the full retained ATM command surface
+- split mailbox inspection from mailbox mutation by introducing `atm peek` as
+  the explicit non-mutating mailbox-inspection command while keeping `atm
+  read` owner-only and mutating
 - make caller identity and caller team transport explicit and required for
   daemon-backed caller-owned commands
 - make local retained command entry points consume the same shared
   caller-context resolver rather than carrying duplicate command-specific
   fallback logic
+- keep one shared caller-context resolver with explicit modes:
+  - owner-only mutation for mutating commands
+  - inspection-mode override resolution for `peek` / `list`
 - preserve diagnostic commands that do not need caller identity; `doctor`
   remains identity-free with optional team scoping
 - simplify the post-send nudge path to one post-commit emission seam
 - restore a shipped built-in post-send nudge path for normal ATM installs
 - allow bounded built-in nudge template overrides without requiring teams to
   copy repo-local scripts across many repos
+- make built-in nudge override lifecycle explicit with first-class override,
+  disable, and reset-to-default semantics instead of hidden empty-string state
+- make the accepted post-send seams real on the production send/ack path,
+  including mixed-success hook accounting that preserves successful emission
+  even when a sibling matching rule warns or fails
 - add or tighten trait contracts for local tmux-backed and graft-backed
   post-send emission
 - remove graft-only session registration, fetch/drain, queue, and advisory
@@ -322,6 +382,12 @@ Phase `AD` may:
   `live_cwd`, and log-only startup `launch_cwd` remain
 - remove committed pane-id routing state from repo config and keep live pane
   routing in SQLite roster state plus CLI repair/update flows only
+- add one authoritative end-to-end smoke/service-hardening lane for the
+  repaired Phase AD post-send matrix without duplicating the sibling harness
+  planning scope
+- restore the missing Windows daemon local-IPC integration-depth coverage in
+  CI for dispatcher panic during shutdown, accept-error handling, and
+  post-terminate connection rejection
 - add smoke and doctor coverage required to keep these regressions closed
 
 Phase `AD` must not:
@@ -537,6 +603,11 @@ Phase `AD` orchestration rule:
 26. [AD.28 `atm-graft` Host-Nudge Deadline Race Hardening](./sprint-AD28.md)
 27. [AD.29 Phase AD Post-Send Smoke Matrix Closeout](./sprint-AD29.md)
 28. [AD.30 Windows Daemon Integration-Depth Coverage Closeout](./sprint-AD30.md)
+29. [AD.31 Mailbox Peek Surface And Owner-Only Mutation Reset](./sprint-AD31.md)
+30. [AD.32 Durable Ack Intent And Read Semantics Reset](./sprint-AD32.md)
+31. [AD.33 Self-Addressed Send Rejection](./sprint-AD33.md)
+32. [AD.34 Self-Ack Loop Termination And Historical Poison Cleanup](./sprint-AD34.md)
+33. [AD.35 Messaging Protocol And Regression Closeout](./sprint-AD35.md)
 
 ## Phase Exit Criteria
 
@@ -628,9 +699,17 @@ Phase `AD` closes only when:
   - built-in fallback
   - override reset-to-default
   - override disable behavior when that state is retained
-- `docs/plans/phase-AD/readiness.md` exists on the accepted line and is the
-  sole authoritative closeout artifact for the `AD.25` through `AD.30`
+- `docs/plans/phase-AD/readiness.md` exists on the accepted line and remains
+  the sole authoritative closeout artifact for the `AD.25` through `AD.35`
   follow-up line
+- `AD.31` through `AD.35` all pass on the accepted line before `Phase AD`
+  may close
+- `docs/plans/phase-AD/readiness.md` records dual closeout ownership
+  correctly:
+  - `AD.30` authors the Windows/post-send `AD.25` through `AD.30` sub-line
+    closeout record
+  - `AD.35` authors the final Phase `AD` verdict after the messaging
+    follow-up line is complete
 - `.triage/phase-AD/direct-fix-track.md` exists on the accepted line and names
   the closure-artifact owner for the non-code obligations surfaced during plan
   review
