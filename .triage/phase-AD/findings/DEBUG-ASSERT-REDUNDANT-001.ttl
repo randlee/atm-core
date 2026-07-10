@@ -1,0 +1,105 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DEBUG-ASSERT-REDUNDANT-001>
+  a triage:Finding ;
+  triage:findingId "DEBUG-ASSERT-REDUNDANT-001" ;
+  triage:title "redundant debug_assert! in apply_display_mutations_to_store strictly subsumed by following debug_assert_eq!" ;
+  triage:description "rust-best-practices-agent (RBP-F003 on AD.32) reports a redundant debug_assert! in apply_display_mutations_to_store strictly subsumed by the following debug_assert_eq! (same line region flagged by arch-qa's ARCH-001/ARCH-002, i.e. crates/atm-core/src/read/mod.rs around lines 796-797). This finding overlaps the same code region as PEEK-MUTATION-001 and ACKMODE-DEAD-PARAM-001 and should be fixed in the same pass as those." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 796 ;
+  triage:snippet "debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 796 ;
+  triage:snippet "debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 796 ;
+  triage:snippet "debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/DEBUG-ASSERT-REDUNDANT-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 796 ;
+  triage:snippet "debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246ee" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 35 .
