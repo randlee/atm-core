@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-101" ;
+  triage:title "AD.33 sprint doc frontmatter still status:planned, not complete" ;
+  triage:description "docs/plans/phase-AD/sprint-AD33.md frontmatter status field is \"planned\" despite the sprint's implementation being pushed and QA'd. QA gate requires status:complete before PASS is possible." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "plan-doc-frontmatter" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:36:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/AD31/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/AD32/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/AD33/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/AD34/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/AD35/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD33.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD33/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD34/06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 .

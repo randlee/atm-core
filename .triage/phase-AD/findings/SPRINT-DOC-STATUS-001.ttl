@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/SPRINT-DOC-STATUS-001>
+  a triage:Finding ;
+  triage:findingId "SPRINT-DOC-STATUS-001" ;
+  triage:title "Sprint doc frontmatter status not updated to complete despite dev-completion report" ;
+  triage:description "req-qa reported: ATM-QA-006 on AD.31 — sprint doc frontmatter still status:planned. ATM-QA-001 on AD.32 — sprint doc frontmatter status is in_progress, not complete. Same pattern on both sprints: frontmatter status field not advanced to reflect actual dev progress at the time of QA-1." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "SPRINT-DOC" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:notes "Process/frontmatter-hygiene finding resolved by updating status fields to reflect dev completion. Per repo convention (feedback_team_lead_doc_fixes_on_integrate), team-lead may fix docs directly on integrate/phase-X worktree; dispatch_ready=false." .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD31/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD31.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> .
+
+<urn:atm:triage:occurrence/SPRINT-DOC-STATUS-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD32.md" ;
+  triage:line 4 ;
+  triage:snippet "status: in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,333 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/EXACT-TARGET-DOCS-MISSING-001>
+  a triage:Finding ;
+  triage:findingId "EXACT-TARGET-DOCS-MISSING-001" ;
+  triage:title "5 named architecture/requirements docs never updated to describe owner-only mutation rule" ;
+  triage:description "req-qa (ATM-QA-004 on AD.31) reports docs/architecture.md, docs/atm/architecture.md, docs/atm-core/architecture.md, docs/atm-core/requirements.md, docs/atm/requirements.md were named as Exact Targets in sprint AD.31 but were never updated to describe the owner-only mutation rule." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "EXACT-TARGET" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/5> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246ee> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD31/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246ee" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD32/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD33/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD34/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/EXACT-TARGET-DOCS-MISSING-001/AD35/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:snippet "Missing owner-only mutation rule documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246ee" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 35 .

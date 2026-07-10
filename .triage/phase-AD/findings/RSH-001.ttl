@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "self-addressed-send rejection uses case-sensitive comparison, could miss collisions on case-insensitive filesystems" ;
+  triage:description "The new validate_non_self_recipient check (AD.33) compares team-member identifiers case-sensitively. On case-insensitive filesystems (macOS default, Windows), two identifiers differing only by case could still resolve to the same mailbox on disk, bypassing the self-address rejection." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/AD34/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/06623b1> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/06623b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD34/06623b1> ;
+  triage:absentsOn <urn:atm:triage:worktree/AD31/6ad246e> ;
+  triage:absentsOn <urn:atm:triage:worktree/AD32/46f44bb> ;
+  triage:absentsOn <urn:atm:triage:worktree/AD35/46f44bb> .
+
+<urn:atm:triage:occurrence/RSH-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 641 ;
+  triage:snippet "if sender == &recipient.agent && sender_team == &recipient.team {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "06623b1f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/06623b1> .
+
+<urn:atm:triage:occurrence/RSH-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 641 ;
+  triage:snippet "if sender == &recipient.agent && sender_team == &recipient.team {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "06623b1f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/06623b1> .
+
+<urn:atm:triage:worktree/AD31/6ad246e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD32/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD33/06623b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD34/06623b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "06623b11f5ab6b7d8ccd1ea2dadd67f16c8730e2" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD35/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 .
