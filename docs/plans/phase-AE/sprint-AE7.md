@@ -21,9 +21,10 @@ docs, or invalid fenced examples.
 
 ## Exact Targets
 
-- `scripts/`
+- `scripts/verify_user_docs.py`
 - `.just/`
 - `Justfile`
+- `scripts/validate_release.py`
 - user-doc tests under the existing repo test harness
 
 ## Interfaces To Add Or Modify
@@ -37,17 +38,24 @@ def validate_xml_block(block: FencedBlock) -> list[str]: ...
 def validate_toml_block(block: FencedBlock) -> list[str]: ...
 def validate_bash_block(block: FencedBlock) -> list[str]: ...
 def validate_relative_links(doc_root: Path) -> list[str]: ...
+def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]: ...
 ```
 
 ## Deliverables
 
-- one verifier checks:
+- one canonical verifier script at `scripts/verify_user_docs.py` checks:
   - every linked user-doc target exists
   - every linked path is relative
   - every fenced `json` block parses
   - every fenced `xml` block parses
   - every fenced `toml` block parses
   - every fenced `bash` block passes `bash -n`
+- the same verifier supports two modes:
+  - source-tree verification for `docs/user-documents/`
+  - installed-copy verification for `<install-root>/share/doc/atm/`
+- `just test` invokes the source-tree verification path
+- `scripts/validate_release.py` invokes the installed-copy verification path
+  rather than inventing another documentation checker
 - failures name:
   - the document path
   - the fenced language
@@ -59,9 +67,12 @@ def validate_relative_links(doc_root: Path) -> list[str]: ...
 - broken docs fail locally before publisher/release work starts
 - the verifier operates on the repo-owned source tree and does not depend on
   installed side effects
+- installed-copy verification reuses the same script and failure format
 - verifier coverage includes nested relative links, not just README siblings
 
 ## Required Validation
 
+- `python3 scripts/verify_user_docs.py --source-root docs/user-documents`
+- `python3 scripts/verify_user_docs.py --source-root docs/user-documents --installed-root '<staged-install-root>/share/doc/atm'`
 - `just test`
 - `git diff --check`

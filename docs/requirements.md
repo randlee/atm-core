@@ -2174,9 +2174,14 @@ Required behavior:
 - the authoritative repo-owned source tree for installed end-user docs is
   `docs/user-documents/`
 - the installed destination is `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
 - the default local-install root remains `~/.local/atm/<version>/`
+- installed-doc lookup at runtime is derived from the installed `atm` binary
+  location using the executable-relative path `../share/doc/atm/`
 - runtime state under `~/.atm/` must remain distinct from the installed
   document tree
+- `ATM_HOME` is the runtime/data root only and must not be used to locate the
+  installed end-user document tree
 - `atm help` may stay concise, but it must point users to the installed corpus
   for long-form operator guidance
 - end-user docs must remain operator-facing only:
@@ -2201,6 +2206,8 @@ Required behavior:
   missing, stale for the target release version, or structurally invalid
 - fenced `json`, `xml`, `toml`, and `bash` examples in the user-doc corpus
   must be mechanically validated
+- the same canonical verifier must validate both the repo-owned source tree and
+  the staged/installed copied tree
 - phase-close evidence must prove the installed/archive output contains the
   expected copied corpus
 

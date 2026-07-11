@@ -34,9 +34,13 @@ The accepted architecture is:
 
 - the repo-owned authoring tree is `docs/user-documents/`
 - packaging copies that tree into `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
 - the default local install root is `~/.local/atm/<version>/`
+- installed-doc lookup is derived from the installed `atm` binary location
+  using the executable-relative path `../share/doc/atm/`
 - runtime state under `~/.atm/` remains a distinct runtime/data tree and is
   not the installed doc root
+- `ATM_HOME` remains the runtime/data root and is not an installed-doc locator
 - `atm help` remains concise and points users to the installed corpus for
   long-form operator guidance
 - the installed corpus uses relative links only so the copied tree remains
@@ -45,6 +49,8 @@ The accepted architecture is:
   artifacts and must validate mechanically
 - every end-user doc file carries a metadata header including
   `reviewed_for_release`
+- one canonical verifier validates both the repo-owned source tree and the
+  staged/installed copied tree
 
 ## Consequences
 
@@ -67,6 +73,8 @@ This ADR remains valid only while all of the following stay true:
 - long-form operator guidance remains in installed markdown rather than new
   help-only commands
 - the installed corpus is copied from `docs/user-documents/`
+- installed-doc lookup remains executable-relative and does not drift onto
+  `ATM_HOME`
 - relative-link and fenced-example verification remain mechanical release gates
 - user docs remain operator-facing and do not become a backdoor for direct
   database-edit guidance

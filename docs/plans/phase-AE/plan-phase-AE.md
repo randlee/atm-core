@@ -33,6 +33,11 @@ be trusted without opening the repo or reading implementation docs.
   - `~/.local/atm/<version>/`
 - required installed user-doc root:
   - `~/.local/atm/<version>/share/doc/atm/`
+- required installed user-doc entrypoint:
+  - `~/.local/atm/<version>/share/doc/atm/README.md`
+- required binary/doc relationship:
+  - installed `atm` binary at `~/.local/atm/<version>/bin/atm`
+  - installed docs resolved executable-relative as `../share/doc/atm/`
 - runtime state remains separate at:
   - `~/.atm/`
 
@@ -64,12 +69,16 @@ See [`issues.md`](./issues.md) for sprint mapping.
 - `atm help` remains the only ATM-owned conceptual-help command
 - `atm help` must stay concise and point to installed docs instead of trying
   to inline full operator manuals
+- installed-doc lookup is derived from the resolved installed `atm` binary
+  location, not from `ATM_HOME`
 - the authoritative repo source tree for installed user docs is
   `docs/user-documents/`
 - installed user docs must remain end-user facing:
   - no SQLite queries
   - no direct database edits
   - no repo-internal development workflow instructions
+- `ATM_HOME` remains the runtime/data root only and must not be used to locate
+  installed user docs
 - all links between installed user docs must be relative so they survive the
   install-copy step unchanged
 - fenced examples are production artifacts:
@@ -140,6 +149,9 @@ line:
   release-review version marker
 - release/local-install outputs place the corpus under
   `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
+- the accepted runtime lookup model for installed docs is executable-relative:
+  from `<install-root>/bin/atm`, resolve `../share/doc/atm/`
 - `atm help` topic output points users to the installed corpus rather than
   duplicating long-form guidance inline
 - all relative links between user-doc files are mechanically verified

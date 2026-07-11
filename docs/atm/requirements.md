@@ -118,6 +118,9 @@ Initial crate requirement IDs:
 - keeping `atm help` topic rendering aligned with the installed end-user
   corpus so the CLI points to `<install-root>/share/doc/atm/` for long-form
   operator docs
+- resolving installed-doc pointers for `atm help` from the installed binary
+  location using the executable-relative path `../share/doc/atm/README.md`
+  rather than from `ATM_HOME`
 
 ## 3.1 Built-In Nudge Surface
 

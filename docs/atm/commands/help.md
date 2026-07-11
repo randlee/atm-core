@@ -21,6 +21,8 @@ Concept/help policy:
 - long-form operator guidance lives in the installed user-doc corpus under
   `<install-root>/share/doc/atm/`; help topics should point there rather than
   trying to inline the full manuals
+- installed-doc lookup is derived from the resolved installed `atm` binary
+  location as `../share/doc/atm/`; it must not use `ATM_HOME`
 - the conceptual `identity` topic must reinforce the accepted Phase AD rule:
   `atm peek` / `atm list` are inspection-only surfaces, while mutating
   commands resolve only the actual caller and do not expose impersonation

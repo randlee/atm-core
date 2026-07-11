@@ -45,9 +45,14 @@ The installed user-doc surface is part of the product architecture:
 
 - the repo-owned source tree is `docs/user-documents/`
 - packaging copies that tree into `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
 - the default local install root is `~/.local/atm/<version>/`
+- installed-doc lookup is executable-relative from `<install-root>/bin/atm` as
+  `../share/doc/atm/`
 - runtime state under `~/.atm/` remains separate and must not be presented as
   the installed document tree
+- `ATM_HOME` remains the runtime/data root only and must not be used as the
+  installed-doc locator
 - long-form operator guidance lives in installed markdown, not in new help-only
   commands
 - `atm help` remains the concise CLI-owned conceptual-help layer that points
@@ -56,6 +61,8 @@ The installed user-doc surface is part of the product architecture:
   links are relative and validated mechanically
 - fenced `json`, `xml`, `toml`, and `bash` examples in the installed corpus
   are release artifacts and must be validated before publish
+- one canonical verifier should validate both the repo-owned source tree and
+  the staged/installed copy
 
 ## 1.2 Documentation Structure
 
