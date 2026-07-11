@@ -41,6 +41,13 @@ packaging sprints do not guess at file layout, metadata, or validation shape.
 
 - one canonical repo-owned end-user documentation source tree is defined as
   `docs/user-documents/`
+- planning/index surfaces updated in-place:
+  - `docs/adr/INDEX.md`
+  - `docs/project-plan.md`
+  - `docs/plans/phase-AE/plan-phase-AE.md`
+  - `docs/plans/phase-AE/issues.md`
+  - `docs/plans/phase-AE/readiness.md`
+  - `docs/plans/phase-AE/sprint-AE1.md`
 - the required corpus inventory is fixed as:
   - `README.md`
   - `install-layout.md`
@@ -78,9 +85,15 @@ packaging sprints do not guess at file layout, metadata, or validation shape.
   new help-only commands
 - the project plan includes a Phase `AE` planning note consistent with this
   sprint's branch and integration-branch contract
+- `docs/adr/INDEX.md`, `docs/plans/phase-AE/plan-phase-AE.md`,
+  `docs/plans/phase-AE/issues.md`, `docs/plans/phase-AE/readiness.md`, and
+  `docs/plans/phase-AE/sprint-AE1.md` all point at the same Phase `AE`
+  contract without stale branch or scope language
 
 ## Required Validation
 
 - `rg -n "docs/user-documents|share/doc/atm|reviewed_for_release" docs/requirements.md docs/architecture.md docs/documentation-guidelines.md docs/atm/requirements.md docs/atm/architecture.md docs/atm/commands/help.md docs/adr/ADR-025-installed-user-documentation-surface.md`
+- `rg -n "ADR-025|installed-user-documentation-surface" docs/adr/INDEX.md`
 - `rg -n "Phase-AE planning note|plan/phase-AE|integrate/phase-AE" docs/project-plan.md`
+- `rg -n "integrate/phase-AE|docs/user-documents|share/doc/atm" docs/plans/phase-AE/plan-phase-AE.md docs/plans/phase-AE/issues.md docs/plans/phase-AE/readiness.md docs/plans/phase-AE/sprint-AE1.md`
 - `git diff --check`

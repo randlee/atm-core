@@ -57,7 +57,8 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
 - installed-copy verification reuses the deterministic staged install root
   defined by `AE.5`; `AE.7` must not introduce a second staging path or a
   second install-copy verifier
-- `just test` invokes the source-tree verification path
+- `.just/` and `Justfile` wire `just test` to invoke the source-tree
+  verification path
 - `scripts/validate_release.py` invokes the installed-copy verification path
   rather than inventing another documentation checker
 - failures name:
@@ -75,11 +76,14 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
 - verifier coverage includes nested relative links, not just README siblings
 - `AE.7` is the only sprint allowed to add fenced-example and relative-link
   validation to the installed-copy path
+- `.just/`, `Justfile`, and `scripts/validate_release.py` all reference the
+  same canonical verifier instead of introducing a second documentation path
 
 ## Required Validation
 
 - `python3 scripts/release_artifacts.py stage-install-docs --manifest release/publish-artifacts.toml --output-root target/phase-ae/staged-install-root`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents --installed-root target/phase-ae/staged-install-root/share/doc/atm`
+- `rg -n "verify_user_docs.py" .just Justfile scripts/validate_release.py`
 - `just test`
 - `git diff --check`

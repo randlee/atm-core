@@ -22,8 +22,6 @@ Point concise `atm help` topic output at the installed long-form corpus.
 
 - `crates/atm/src/commands/help.rs`
 - `docs/atm/commands/help.md`
-- `docs/atm/requirements.md`
-- `docs/atm/architecture.md`
 
 ## Interfaces To Add Or Modify
 

@@ -30,24 +30,28 @@ operator troubleshooting.
 
 ## Deliverables
 
-- `mailbox-workflows.md` explains supported workflows for:
+- `docs/user-documents/mailbox-workflows.md` explains supported workflows for:
   - `send`
   - `list`
   - `peek`
   - `read`
   - `ack`
   - `clear`
-- `doctor-and-log.md` explains:
+- `docs/user-documents/doctor-and-log.md` explains:
   - `atm doctor`
   - how to interpret high-signal diagnostic output
   - where retained logs live
   - supported log-inspection commands
-- `troubleshooting.md` explains supported recovery guidance for:
+- `docs/user-documents/troubleshooting.md` explains supported recovery guidance
+  for:
   - unresolved caller identity/team
   - daemon startup/connect failures
   - post-send warning surfaces
   - nudge delivery misconfiguration
-- the document set includes working fenced examples for:
+- `docs/user-documents/examples/mailbox/`,
+  `docs/user-documents/examples/diagnostics/`, and
+  `docs/user-documents/examples/troubleshooting/` contain working fenced
+  examples for:
   - `bash`
   - `json`
 
@@ -58,9 +62,14 @@ operator troubleshooting.
   - `read`/`ack`/`clear` are owner-only mutating commands
 - troubleshooting guidance references supported ATM commands and log files only
 - no troubleshooting step asks the operator to edit the database directly
+- `docs/user-documents/mailbox-workflows.md`,
+  `docs/user-documents/doctor-and-log.md`, and
+  `docs/user-documents/troubleshooting.md` are all present and validated by
+  this sprint
 
 ## Required Validation
 
+- `python3 -c "from pathlib import Path; files=[Path('docs/user-documents/mailbox-workflows.md'), Path('docs/user-documents/doctor-and-log.md'), Path('docs/user-documents/troubleshooting.md')]; dirs=[Path('docs/user-documents/examples/mailbox'), Path('docs/user-documents/examples/diagnostics'), Path('docs/user-documents/examples/troubleshooting')]; assert all(p.is_file() for p in files); assert all(d.is_dir() for d in dirs)"`
 - `find docs/user-documents/examples/mailbox -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
 - `find docs/user-documents/examples/diagnostics -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
 - `find docs/user-documents/examples/mailbox docs/user-documents/examples/diagnostics docs/user-documents/examples/troubleshooting -name '*.sh' -print0 | xargs -0 -n1 bash -n`

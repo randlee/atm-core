@@ -29,12 +29,12 @@ template overrides.
 
 ## Deliverables
 
-- `hooks.md` explains:
+- `docs/user-documents/hooks.md` explains:
   - where ATM-enabled repo-local hook configuration lives
   - which supported hook surfaces exist today
   - how `ATM_IDENTITY` / `ATM_TEAM` affect ATM-aware hook behavior
   - where installed docs and runtime state differ
-- `nudge-templates.md` explains:
+- `docs/user-documents/nudge-templates.md` explains:
   - the six built-in template kinds
   - the exact supported variables:
     - `{{from}}`
@@ -45,7 +45,9 @@ template overrides.
   - override precedence
   - disable/reset behavior
   - complete example template bodies
-- the document set includes working fenced examples for:
+- `docs/user-documents/examples/hooks/` and
+  `docs/user-documents/examples/nudge-templates/` include working fenced
+  examples for:
   - `toml`
   - `xml`
   - `bash`
@@ -59,9 +61,14 @@ template overrides.
 - every XML template example includes `message_id`
 - acknowledge-template examples stay compact and match the accepted AD.21
   contract
+- `docs/user-documents/hooks.md`, `docs/user-documents/nudge-templates.md`,
+  `docs/user-documents/examples/hooks/`, and
+  `docs/user-documents/examples/nudge-templates/` are all owned and validated
+  by this sprint
 
 ## Required Validation
 
+- `python3 -c "from pathlib import Path; files=[Path('docs/user-documents/hooks.md'), Path('docs/user-documents/nudge-templates.md')]; dirs=[Path('docs/user-documents/examples/hooks'), Path('docs/user-documents/examples/nudge-templates')]; assert all(p.is_file() for p in files); assert all(d.is_dir() for d in dirs)"`
 - `python3 - <<'PY'\nimport pathlib, tomllib\nfor path in pathlib.Path('docs/user-documents/examples/hooks').glob('*.toml'):\n    tomllib.loads(path.read_text(encoding='utf-8'))\nPY`
 - `python3 - <<'PY'\nimport pathlib, xml.etree.ElementTree as ET\nfor path in pathlib.Path('docs/user-documents/examples/nudge-templates').glob('*.xml'):\n    ET.fromstring(path.read_text(encoding='utf-8'))\nPY`
 - `find docs/user-documents/examples/nudge-templates -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`

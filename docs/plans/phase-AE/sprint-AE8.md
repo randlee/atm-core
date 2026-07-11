@@ -28,6 +28,11 @@ for the release version.
 
 ## Deliverables
 
+- `scripts/release_artifacts.py` exposes the release-version input needed by
+  the freshness gate so user-doc review checks run against the same version
+  contract as the publish surface
+- `.github/workflows/release-preflight.yml` executes the freshness gate in CI
+  so stale user docs fail before publish/release work proceeds
 - every file in `docs/user-documents/` must carry:
   ```yaml
   reviewed_for_release: 1.3.0
@@ -49,9 +54,12 @@ for the release version.
   second partial validation path
 - the publish-surface scope doc names the same freshness gate inputs and
   validation entrypoint implemented by this sprint
+- `scripts/release_artifacts.py` and `.github/workflows/release-preflight.yml`
+  name the same freshness-gate entrypoint and release-version contract
 
 ## Required Validation
 
 - `python3 scripts/validate_release.py validate`
+- `rg -n "reviewed_for_release|release version|docs/user-documents" scripts/release_artifacts.py .github/workflows/release-preflight.yml`
 - `rg -n "reviewed_for_release|docs/user-documents|validate_release.py validate" release/publish-surface-scope.md`
 - `git diff --check`

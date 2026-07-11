@@ -27,6 +27,9 @@ ships and validates on the accepted line.
 
 ## Deliverables
 
+- `docs/plans/phase-AE/readiness.md` records
+  `reports/smoke/phase-AE-installed-docs-proof.md` as the AE.9 closure
+  artifact for the accepted line
 - one accepted-line artifact proves:
   - the installed archive/output contains `share/doc/atm/`
   - the copied corpus matches the repo-owned source tree
@@ -43,11 +46,15 @@ ships and validates on the accepted line.
 - the final artifact records the release version reviewed
 - the final artifact records whether `release/release-notes.md` still names the
   installed doc location
+- `docs/plans/phase-AE/readiness.md` points at the same
+  `reports/smoke/phase-AE-installed-docs-proof.md` artifact named by this
+  sprint
 
 ## Required Validation
 
 - `just test`
 - `python3 scripts/validate_release.py validate --proof-output reports/smoke/phase-AE-installed-docs-proof.md`
+- `rg -n "phase-AE-installed-docs-proof.md" docs/plans/phase-AE/readiness.md`
 - `python3 -c "from pathlib import Path; assert Path('reports/smoke/phase-AE-installed-docs-proof.md').is_file()"`
 - `python3 -c "from pathlib import Path; text = Path('reports/smoke/phase-AE-installed-docs-proof.md').read_text(); assert 'share/doc/atm' in text and 'README.md' in text and 'release version' in text and 'release/release-notes.md' in text"`
 - `git diff --check`
