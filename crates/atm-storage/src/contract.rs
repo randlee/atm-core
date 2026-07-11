@@ -13,21 +13,31 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+fn require_non_blank(
+    value: String,
+    subject: &str,
+    recovery: &'static str,
+) -> Result<String, AtmError> {
+    if value.trim().is_empty() {
+        return Err(
+            AtmError::validation(format!("{subject} must not be blank")).with_recovery(recovery)
+        );
+    }
+    Ok(value)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct MessageKey(String);
 
 impl MessageKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("message key must not be blank").with_recovery(
-                    "Populate a stable ATM message key before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "message key",
+            "Populate a stable ATM message key before calling the storage contract.",
+        )
+        .map(Self)
     }
 
     pub fn into_inner(self) -> String {
@@ -84,15 +94,12 @@ pub struct TaskState(String);
 
 impl TaskState {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("task state must not be blank").with_recovery(
-                    "Populate a non-empty task state before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "task state",
+            "Populate a non-empty task state before calling the storage contract.",
+        )
+        .map(Self)
     }
 }
 
@@ -136,15 +143,12 @@ pub struct AckTransition(String);
 
 impl AckTransition {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("ack transition must not be blank").with_recovery(
-                    "Populate a non-empty ack transition before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "ack transition",
+            "Populate a non-empty ack transition before calling the storage contract.",
+        )
+        .map(Self)
     }
 }
 
