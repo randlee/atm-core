@@ -20,6 +20,11 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/10> ;
   triage:openOn <urn:atm:triage:worktree/integrate-AD/51a8b82e> ;
   triage:promoteTo <urn:atm:triage:worktree/integrate-AD/51a8b82e> ;
   triage:notes """Documented during the post-phase-AD boundary investigation.
@@ -27,21 +32,41 @@
 Required type moves:
 1. Move the nudge override storage contract itself off `atm_core::boundary` and into a backend-neutral shared crate surface, most likely `atm-storage`. The moved contract must include `NudgeTemplateOverrideStore`, `BuiltInNudgeTemplateKind`, `TeamNudgeTemplateOverrideMode`, and `TeamNudgeTemplateOverrideRow`.
 2. Move the sealing seam with that trait. `atm-storage-rusqlite` must stop implementing `atm_core::boundary::sealed::Sealed`; after the move it should implement an `atm-storage`-owned sealed trait for the override-store boundary instead.
-3. Do not move `ResolvedBuiltInNudgeTemplate`, `InternalNudgeEnvelope`, or the rendering helpers. Those are core-side send/nudge execution types and can stay in `atm-core`; they should import the moved `BuiltInNudgeTemplateKind` and `TeamNudgeTemplateOverrideRow` from the new shared contract home.
+3. Split `BuiltInNudgeTemplateKind` ownership carefully to avoid both a reintroduced forbidden edge and Rust orphan-rule trouble. Move only the storage-neutral enum plus `as_str` / `Display` / `FromStr` logic into `atm-storage`. Do not move `BuiltInNudgeTemplateKind::from_post_send_event(&PostSendHookEvent)` with that enum, because `PostSendHookEvent` remains `atm-core` owned. Replace that method with an `atm-core` owned helper or extension path such as `built_in_nudge_template_kind_from_post_send_event(event: &PostSendHookEvent) -> BuiltInNudgeTemplateKind`, or another core-local wrapper that preserves call-site ergonomics without requiring an `atm-storage -> atm-core` edge or an impl in the wrong crate.
+4. Do not move `ResolvedBuiltInNudgeTemplate`, `InternalNudgeEnvelope`, or the rendering helpers. Those are core-side send/nudge execution types and can stay in `atm-core`; they should import the moved `BuiltInNudgeTemplateKind` and `TeamNudgeTemplateOverrideRow` from the new shared contract home.
+5. Keep `atm-core`'s boundary facade re-exporting the moved nudge override contract/types during the cutover so downstream consumer crates (`atm-runtime`, `atm-daemon-bootstrap`, and the `atm` internal-nudge tests) do not break while the ownership relocation lands. The cutover plan is: move canonical ownership to `atm-storage`, keep compatibility re-exports in `atm-core::boundary`, then retire those re-exports only after all consumers have moved and the updated boundary record/ADR path is accepted.
+
+Required boundary-record and ADR reconciliation:
+1. `boundaries/atm-core/nudge-template-override-store.toml` currently declares `owner_package = "atm-core"` under ADR-021's enforcement path. The implementation plan must explicitly relocate that owner record to the new canonical home or otherwise supersede it with a team-lead-approved replacement boundary record.
+2. Update the paired human-readable boundary record in `docs/atm-core/boundaries.md:179-207` so it no longer claims `atm-core` owns the override-store contract once the canonical contract moves.
+3. Because ADR-021 specifically governs the accepted dependent widening for this contract, closure requires either:
+   - a team-lead ruling that ADR-021 is superseded for this ownership relocation and the new boundary record is the accepted replacement, or
+   - a replacement/superseding ADR documenting the move of `NudgeTemplateOverrideStore` ownership out of `atm-core`.
+4. The closure condition is not met by code motion alone; the boundary record and ADR/governance update must be complete in the same fix family.
 
 Required mailbox-metadata untangling:
 1. Remove `atm-storage-rusqlite/src/mailbox_metadata.rs` imports of `atm_core::derive_ack_requirement`, `atm_core::schema::InboxMessage`, and `atm_core::types::AckRequirementState`.
-2. Replace that upward dependency with one of two explicit designs:
-   - preferred: move only the minimal backend-neutral ack-intent classifier/state shape into `atm-storage`, then call that from both `atm-core` and `atm-storage-rusqlite`; or
-   - acceptable fallback: keep mailbox-metadata ack classification backend-local inside `atm-storage-rusqlite` with no `atm-core` imports.
-3. `InboxMessage` did not move in this phase and should not be re-homed as part of this fix. If the backend still needs the shared schema type after the classifier split, it must import the canonical `atm_storage::schema::InboxMessage` path rather than the `atm-core` re-export.
+2. Resolve the design choice firmly: prefer moving the minimal backend-neutral ack-intent classifier/state shape into `atm-storage`, not a backend-local duplicate. This path removes the current `atm-storage-rusqlite -> atm-core` edge while avoiding duplicated ack-state logic across `atm-storage-rusqlite`, `atm-runtime`, and `atm-core`.
+3. The minimal shared move must cover the actual current consumer surface, not just mailbox metadata. `AckRequirementState` and the classifier are also consumed by `crates/atm-core/src/read/state.rs`, `crates/atm-core/src/list.rs`, `crates/atm-core/src/service_runtime_store.rs`, and `crates/atm-runtime/src/legacy_storage_adapters.rs`. The plan must treat those as part of the blast radius for the preferred path.
+4. Correct the rationale: `derive_ack_requirement()` currently depends only on `requires_ack` and `acknowledged_at` in `crates/atm-core/src/read/state.rs:95-103`. `task_id` does not influence ack semantics. Task-backed message cases may still stay in regression coverage if helpful, but they are not the reason this classifier must move.
+5. `InboxMessage` did not move in this phase and should not be re-homed as part of this fix. If the backend still needs the shared schema type after the classifier split, it must import the canonical `atm_storage::schema::InboxMessage` path rather than the `atm-core` re-export.
+
+Required sealed-trait design decision:
+1. The moved `NudgeTemplateOverrideStore` contract must declare whether the new `atm-storage` home keeps compiler-enforced sealing. This plan chooses yes: add an `atm-storage` owned sealed module for this contract family so `atm-storage-rusqlite` implements an `atm-storage` sealed trait instead of `atm-core`'s.
+2. That does create a temporary asymmetry with existing `atm-storage` traits that are currently unsealed. The plan accepts that asymmetry explicitly rather than silently weakening the moved contract. Do not drop sealing just to match older unsealed `atm-storage` traits.
+3. If the project later standardizes sealing across more `atm-storage` contracts, that should be a separate follow-up. It is not a prerequisite for this coupling fix.
 
 Move instructions by file:
-1. Move the enum/row definitions currently in `crates/atm-core/src/boundary/mod.rs` (`BuiltInNudgeTemplateKind`, `TeamNudgeTemplateOverrideMode`, `TeamNudgeTemplateOverrideRow`) into an `atm-storage` contract module.
+1. Move the storage-neutral enum/row definitions currently in `crates/atm-core/src/boundary/mod.rs` (`BuiltInNudgeTemplateKind`, `TeamNudgeTemplateOverrideMode`, `TeamNudgeTemplateOverrideRow`) into an `atm-storage` contract module, but leave `from_post_send_event` behind as an `atm-core` helper or extension path because it depends on `PostSendHookEvent`.
 2. Move the trait currently in `crates/atm-core/src/boundary/store.rs` (`NudgeTemplateOverrideStore`) into the same `atm-storage` contract surface, with its sealing seam owned there.
-3. Update `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs` and `crates/atm-storage-rusqlite/src/lib.rs` to implement and return the `atm-storage` contract, not the `atm-core` one.
-4. Update `crates/atm-core/src/lib.rs` re-exports plus all core-side imports in `crates/atm-core/src/send/nudge_template.rs`, `crates/atm-core/src/send/hook.rs`, `crates/atm-core/src/team_admin.rs`, `crates/atm-core/src/service_runtime.rs`, and `crates/atm-core/src/doctor/mod.rs` so they use the moved shared contract.
-5. After those imports are repointed and the mailbox-metadata helper no longer reaches into `atm-core`, delete the normal Cargo edge in `crates/atm-storage-rusqlite/Cargo.toml`.
+3. Update `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs`, `crates/atm-storage-rusqlite/src/shared_db.rs`, and `crates/atm-storage-rusqlite/src/lib.rs` to implement and return the `atm-storage` contract, not the `atm-core` one.
+4. Update `crates/atm-core/src/lib.rs` and `crates/atm-core/src/boundary/mod.rs` / `store.rs` so the boundary facade keeps re-exporting the moved contract/types during the cutover.
+5. Update all core-side imports in `crates/atm-core/src/send/nudge_template.rs`, `crates/atm-core/src/send/hook.rs`, `crates/atm-core/src/team_admin.rs`, `crates/atm-core/src/service_runtime.rs`, and `crates/atm-core/src/doctor/mod.rs` so they use the moved shared contract or the retained core-local helper, as appropriate.
+6. Update the extra downstream consumers that rely on the current `atm-core` boundary path:
+   - `crates/atm-runtime/src/composition.rs`
+   - `crates/atm-daemon-bootstrap/src/lib.rs`
+   - `crates/atm/src/commands/internal_nudge.rs` test module
+7. After those imports are repointed, the compatibility re-export remains in place, the boundary record/ADR path is updated, and the mailbox-metadata helper no longer reaches into `atm-core`, delete the normal Cargo edge in `crates/atm-storage-rusqlite/Cargo.toml`.
 
 Tests that must move or be updated with the contract move:
 1. `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs`
@@ -75,18 +100,44 @@ Tests that must move or be updated with the contract move:
    - plus the `NoopNudgeTemplateOverrideStore` fixture and `RetainedServiceRuntime::load_nudge_template_override` signatures.
 7. `crates/atm-core/src/doctor/mod.rs`
    - doctor tests compile through `NoopNudgeTemplateOverrideStore`; that fixture must be repointed to the moved shared contract even though the individual doctor assertions are unchanged.
+8. `crates/atm/src/commands/internal_nudge.rs`
+   - `built_in_template_kind_selection_covers_six_paths`
+   - plus any other test helpers in that module that currently call `BuiltInNudgeTemplateKind::from_post_send_event`; those callers must switch to the retained `atm-core` helper once the storage-neutral enum move happens.
+9. `crates/atm-runtime/src/composition.rs`
+   - compile coverage for `RuntimeAssembly.nudge_template_override_store`
+   - `with_default_nudge_template_override_store`
+   - plus any tests or debug fixtures that still spell the old `atm_core::boundary` contract type.
+10. `crates/atm-daemon-bootstrap/src/lib.rs`
+   - compile coverage for `with_default_nudge_template_override_store`
+   - this file remains production scope even if it does not carry its own dedicated unit tests today.
 
 Tests that must be rewritten for the mailbox-metadata helper split:
 1. `crates/atm-storage-rusqlite/src/lib.rs`
    - `query_mailbox_metadata_rejects_invalid_task_id`
-2. Add or update a direct metadata regression that proves the new shared-or-local classifier still computes `requires_ack` and `pending_ack` correctly for:
+2. `crates/atm-core/src/list.rs`
+   - any coverage that asserts `pending_ack` list rendering derived from the classifier
+3. `crates/atm-core/src/service_runtime_store.rs`
+   - coverage around `shared_message_to_metadata_row`
+4. `crates/atm-runtime/src/legacy_storage_adapters.rs`
+   - coverage around `mailbox_row`
+5. `crates/atm-core/src/read/state.rs`
+   - classifier unit coverage remains the source of truth and should be updated only if the classifier itself moves to `atm-storage`
+6. Add or update a direct metadata regression that proves the new shared classifier still computes `requires_ack` and `pending_ack` correctly for:
    - plain messages
    - `requires_ack` messages with no acknowledgement
    - acknowledged messages
-   - task-backed messages, because task presence currently influences ack semantics through the borrowed `derive_ack_requirement` helper.
+   - optionally task-backed messages as ordinary fixtures only, not because task state changes the classifier
 
 Closure condition:
-The fix is not complete until `atm-storage-rusqlite` has no production imports from `atm-core`, no `atm_core::boundary::sealed::Sealed` implementation, no `atm-core` Cargo dependency, and the moved contract plus mailbox-metadata tests are green on the new shared contract path.""" .
+The fix is not complete until:
+- `atm-storage-rusqlite` has no production imports from `atm-core`
+- `atm-storage-rusqlite` has no `atm_core::boundary::sealed::Sealed` implementation
+- the canonical `NudgeTemplateOverrideStore` boundary record and its paired human-readable doc no longer claim `atm-core` ownership
+- the required ADR-021 replacement/ruling for the ownership relocation is recorded
+- `atm-core` compatibility re-exports exist for the moved types until `atm-runtime`, `atm-daemon-bootstrap`, and `atm` no longer rely on the old path
+- the preferred shared ack-classifier move covers the real consumer set (`read/state.rs`, `list.rs`, `service_runtime_store.rs`, `legacy_storage_adapters.rs`, and `mailbox_metadata.rs`)
+- only after those steps are complete is removing the normal `atm-storage-rusqlite -> atm-core` Cargo dependency an achievable and valid closure target
+- the moved contract plus mailbox-metadata tests are green on the new shared contract path.""" .
 
 <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/1>
   a triage:Occurrence ;
@@ -137,6 +188,61 @@ The fix is not complete until `atm-storage-rusqlite` has no production imports f
   triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
   triage:line 516 ;
   triage:snippet "-> Arc<dyn atm_core::boundary::NudgeTemplateOverrideStore + Send + Sync>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "51a8b82e5513fcb54701065fe9ec16db359fcc6d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/51a8b82e> .
+
+<urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 7 ;
+  triage:snippet "use atm_core::error::AtmError;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "51a8b82e5513fcb54701065fe9ec16db359fcc6d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/51a8b82e> .
+
+<urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 8 ;
+  triage:snippet "use atm_core::types::{IsoTimestamp, TeamName};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "51a8b82e5513fcb54701065fe9ec16db359fcc6d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/51a8b82e> .
+
+<urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 312 ;
+  triage:snippet "atm_core::error_codes::AtmErrorCode::EmptyNudgeTemplateBody" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "51a8b82e5513fcb54701065fe9ec16db359fcc6d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/51a8b82e> .
+
+<urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 363 ;
+  triage:snippet "atm_core::types::IsoTimestamp::now().to_string()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "51a8b82e5513fcb54701065fe9ec16db359fcc6d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/51a8b82e> .
+
+<urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 803 ;
+  triage:snippet "atm_core::types::IsoTimestamp::now().to_string()" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-AD" ;
