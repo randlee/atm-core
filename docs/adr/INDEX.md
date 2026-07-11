@@ -33,6 +33,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-022 — Durable Ack Intent](./ADR-022-durable-ack-intent.md)
 - [ADR-023 — Owner-Only Message Mutation](./ADR-023-owner-only-message-mutation.md)
 - [ADR-024 — NudgeTemplateOverrideStore Storage Ownership Relocation](./ADR-024-nudge-template-override-storage-ownership-relocation.md)
+- [ADR-025 — Installed User Documentation Surface](./ADR-025-installed-user-documentation-surface.md)
 
 ## Extracted Crate-Local ADRs
 

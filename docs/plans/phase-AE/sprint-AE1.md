@@ -1,86 +1,79 @@
 ---
 id: AE.1
-title: atm teams remove-member Subcommand And Send Pipeline Fix
+title: User-Doc Contract And Source Tree Baseline
 status: planned
-branch: feature/pAE-s1-remove-member-and-send-pipeline
-worktree: ../atm-core-worktrees/feature/pAE-s1-remove-member-and-send-pipeline
+branch: feature/pAE-s1-user-doc-contract-and-source-tree
+worktree: ../atm-core-worktrees/feature/pAE-s1-user-doc-contract-and-source-tree
 target: integrate/phase-AE
 ---
 
-# Sprint AE.1 — `atm teams remove-member` Subcommand And Send Pipeline Fix
+# Sprint AE.1 — User-Doc Contract And Source Tree Baseline
 
 ## Goal
 
-- add `atm teams remove-member <team> <name>` subcommand
-- fix `atm send` to resolve CLI-local inputs (--stdin, --file) before IPC dispatch
+Define the authoritative installed user-doc contract so later content and
+packaging sprints do not guess at file layout, metadata, or validation shape.
 
 ## Hard Dependencies
 
 - `docs/plans/phase-AE/plan-phase-AE.md`
 - `docs/requirements.md`
-- `docs/atm/requirements.md`
-- `docs/atm-core/requirements.md`
-- `#423`
-- `#448`
+- `docs/architecture.md`
+- `docs/documentation-guidelines.md`
 
 ## Exact Targets
 
-- `crates/atm/src/commands/teams.rs`
-- `crates/atm/src/commands/send.rs`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/send/`
-- `crates/atm-core/src/roster/`
-- `crates/atm-core/src/protocol.rs`
-
-## Interfaces To Add Or Modify
-
-### remove-member subcommand
-
-- add `TeamsCommand::RemoveMember { team: TeamName, name: AgentName }` variant
-- add `atm teams remove-member <team> <name>` CLI parsing
-- caller context: invoking-shell `ATM_IDENTITY` mandatory, `ATM_TEAM` mandatory
-  (positional `team` is the target roster team, not caller team)
-- daemon-backed: send `RemoveMemberRequest { caller_identity, caller_team, target_team, agent_name }`
-- daemon removes member from SQLite roster, updates inbox directory if present
-- on success: emit success message with removed member identity
-- on failure: `MemberNotFound`, `TeamNotFound`, or standard caller-context errors
-
-### send pipeline fix
-
-- `atm send --stdin` reads payload from stdin at CLI boundary before IPC dispatch
-- `atm send --file <path>` reads payload from file at CLI boundary before IPC dispatch
-- `atm send <message>` positional payload remains the default
-- `--stdin` and `--file` are mutually exclusive; error on both
-- payload resolution happens in `crates/atm/src/commands/send.rs` before
-  constructing `SendRequest`
-- `SendRequest` gains `payload_source: PayloadSource` enum:
-  ```rust
-  pub enum PayloadSource {
-      Positional(String),
-      Stdin(Vec<u8>),
-      File(PathBuf),
-  }
-  ```
-- daemon receives resolved payload bytes, not path or stdin reference
-- large payloads (>1MB) warn but do not reject
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/documentation-guidelines.md`
+- `docs/atm/requirements.md`
+- `docs/atm/architecture.md`
+- `docs/atm/commands/help.md`
+- `docs/adr/ADR-025-installed-user-documentation-surface.md`
+- `docs/adr/INDEX.md`
+- `docs/plans/phase-AE/plan-phase-AE.md`
+- `docs/plans/phase-AE/issues.md`
+- `docs/plans/phase-AE/readiness.md`
+- `docs/plans/phase-AE/sprint-AE1.md`
 
 ## Deliverables
 
-- `atm teams remove-member atm-dev test-agent` removes `test-agent` from `atm-dev` roster
-- `atm send --stdin team-lead <<< "message"` sends stdin content
-- `atm send --file .prompts/review.md team-lead` sends file content
-- both `--stdin` and `--file` fail with clear error
-- caller-context enforcement matches AD.1 rules for both surfaces
+- one canonical repo-owned end-user documentation source tree is defined as
+  `docs/user-documents/`
+- the required corpus inventory is fixed as:
+  - `README.md`
+  - `install-layout.md`
+  - `quickstart.md`
+  - `identity-and-team.md`
+  - `mailbox-workflows.md`
+  - `doctor-and-log.md`
+  - `hooks.md`
+  - `nudge-templates.md`
+  - `troubleshooting.md`
+- the required metadata header is fixed as:
+  ```yaml
+  ---
+  title: <document title>
+  audience: end-user
+  reviewed_for_release: 1.3.0
+  ---
+  ```
+- the install destination is fixed as `<install-root>/share/doc/atm/`
+- the contract distinguishes install-tree docs from runtime-state data under
+  `~/.atm/`
+- the contract requires relative links only
+- the contract requires mechanically valid fenced `json`, `xml`, `toml`, and
+  `bash` examples
+
+## Acceptance Criteria
+
+- no top-level requirement, architecture, or help doc still treats long-form
+  operator help as repo-only or ad hoc prose
+- no document leaves the install destination or metadata header open-ended
+- the new ADR states why long-form help lives in installed markdown rather than
+  new help-only commands
 
 ## Required Validation
 
-- `atm teams remove-member` succeeds with valid team and member
-- `atm teams remove-member` fails with `MemberNotFound` for unknown member
-- `atm teams remove-member` fails with `CallerIdentityUnresolved` without `ATM_IDENTITY`
-- `atm send --stdin` pipes payload correctly to daemon
-- `atm send --file <path>` pipes file content correctly
-- `atm send --stdin --file <path>` fails with mutual-exclusion error
-- payload >1MB warns but completes
-- `cargo test --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- `python3 .just/run_lint.py all`
+- `rg -n "docs/user-documents|share/doc/atm|reviewed_for_release" docs/requirements.md docs/architecture.md docs/documentation-guidelines.md docs/atm/requirements.md docs/atm/architecture.md docs/atm/commands/help.md docs/adr/ADR-025-installed-user-documentation-surface.md`
+- `git diff --check`

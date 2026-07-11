@@ -1,82 +1,65 @@
 ---
 id: AE.2
-title: Preflight Crate Metadata Validation
+title: Setup And Identity Corpus
 status: planned
-branch: feature/pAE-s2-preflight-crate-metadata
-worktree: ../atm-core-worktrees/feature/pAE-s2-preflight-crate-metadata
+branch: feature/pAE-s2-setup-and-identity-corpus
+worktree: ../atm-core-worktrees/feature/pAE-s2-setup-and-identity-corpus
 target: integrate/phase-AE
 ---
 
-# Sprint AE.2 — Preflight Crate Metadata Validation
+# Sprint AE.2 — Setup And Identity Corpus
 
 ## Goal
 
-- ensure every publishable crate has crates.io-required metadata before release
+Author the installed user-doc entry path for setup, install layout, and caller
+identity/team usage.
 
 ## Hard Dependencies
 
 - `AE.1` complete
 - `docs/plans/phase-AE/plan-phase-AE.md`
-- `#435`
 
 ## Exact Targets
 
-- `crates/atm/Cargo.toml`
-- `crates/atm-core/Cargo.toml`
-- `crates/atm-daemon/Cargo.toml`
-- `crates/atm-runtime/Cargo.toml`
-- `crates/atm-rusqlite/Cargo.toml`
-- `crates/atm-storage/Cargo.toml`
-- `crates/atm-graft/Cargo.toml`
-- `.just/preflight.py` (new or extended)
-- `release/publish-surface-scope.md`
-
-## Required Metadata Per Crate
-
-Every publishable crate must have:
-
-```toml
-[package]
-description = "..."   # non-empty, crate-specific
-license = "MIT"       # or "MIT OR Apache-2.0"
-repository = "https://github.com/randlee/atm-core"
-homepage = "https://github.com/randlee/atm-core"
-documentation = "https://docs.rs/atm-core"  # or crate-specific
-readme = "README.md"
-keywords = ["atm", "agent", "messaging"]     # crate-specific
-categories = ["development-tools"]            # or appropriate
-```
-
-## Preflight Script
-
-Add or extend `.just/preflight.py` to validate:
-
-1. `cargo publish --dry-run --manifest-path crates/<name>/Cargo.toml` succeeds for every publishable crate
-2. Every publishable crate has non-empty `description`
-3. Every publishable crate has `license` field
-4. Every publishable crate has `repository` field
-5. Non-publishable crates (`publish = false`) are explicitly noted and skipped
-
-The preflight gate runs before any `cargo publish` or release workflow.
-
-## Non-Publishable Crates
-
-These crates carry `publish = false` and are skipped by preflight:
-
-- internal test crates
-- dev-only crates not intended for crates.io
+- `docs/user-documents/README.md`
+- `docs/user-documents/install-layout.md`
+- `docs/user-documents/quickstart.md`
+- `docs/user-documents/identity-and-team.md`
+- `docs/user-documents/examples/quickstart/`
+- `docs/user-documents/examples/identity/`
 
 ## Deliverables
 
-- `python3 .just/preflight.py` exits 0 for all publishable crates
-- every publishable crate has required metadata
-- dry-run publish succeeds for all publishable crates
-- release documentation reflects preflight gate
+- `README.md` is the entry point and links to every sibling document with
+  relative paths
+- `install-layout.md` explains:
+  - install root vs runtime state
+  - where binaries live
+  - where installed docs live
+  - what belongs under `~/.atm/`
+- `quickstart.md` explains:
+  - how to run `atm doctor`
+  - how to send, read, ack, and peek with supported CLI syntax only
+  - how to find the installed docs from the install root
+- `identity-and-team.md` explains:
+  - when `ATM_IDENTITY` and `ATM_TEAM` are required
+  - environment vs explicit CLI arguments
+  - the owner-only mutation rule
+  - why `peek` and `list` differ from mutating commands
+- the document set includes working fenced examples for:
+  - `bash`
+  - `json`
+
+## Acceptance Criteria
+
+- setup/identity docs contain no repo-internal developer instructions
+- identity/team guidance is consistent with the owner-only mutation model from
+  Phase `AD`
+- every example uses supported CLI surface only and does not rely on direct
+  SQLite access
 
 ## Required Validation
 
-- `python3 .just/preflight.py` exits 0
-- `cargo publish --dry-run` succeeds per-crate for every publishable crate
-- `cargo test --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- `python3 .just/run_lint.py all`
+- `find docs/user-documents/examples/identity -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
+- `find docs/user-documents/examples/quickstart docs/user-documents/examples/identity -name '*.sh' -print0 | xargs -0 -n1 bash -n`
+- `git diff --check`

@@ -1,91 +1,67 @@
 ---
 id: AE.3
-title: pi-agent-atm And codex-atm atm-graft Harness Support
+title: Mailbox And Diagnostics Corpus
 status: planned
-branch: feature/pAE-s3-atm-graft-harnesses
-worktree: ../atm-core-worktrees/feature/pAE-s3-atm-graft-harnesses
+branch: feature/pAE-s3-mailbox-and-diagnostics-corpus
+worktree: ../atm-core-worktrees/feature/pAE-s3-mailbox-and-diagnostics-corpus
 target: integrate/phase-AE
 ---
 
-# Sprint AE.3 — pi-agent-atm And codex-atm atm-graft Harness Support
+# Sprint AE.3 — Mailbox And Diagnostics Corpus
 
 ## Goal
 
-- register pi-agent-atm and codex-atm as supported atm-graft harness implementations
-  under the existing `PostSendHookEmitter` trait from Phase AD.6-8
+Author the installed user-doc set for mailbox workflows, diagnostics, and
+operator troubleshooting.
 
 ## Hard Dependencies
 
 - `AE.2` complete
 - `docs/plans/phase-AE/plan-phase-AE.md`
-- Phase AD.6-8 post-send emitter contract
-- `#461`
-- pi-agent-atm running end-to-end (externally validated)
 
 ## Exact Targets
 
-- `crates/atm-graft/src/`
-- `crates/atm-core/src/post_send/` (emitter registry)
-- `crates/atm-daemon/src/post_send/` (emitter dispatch)
-- `docs/atm-graft/`
-- `docs/atm-core/boundaries.md` (if new boundary added)
-
-## Harness Registration
-
-Each harness is an implementation of the `PostSendHookEmitter` trait:
-
-```rust
-pub trait PostSendHookEmitter: sealed::Sealed {
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
-}
-```
-
-### pi-agent-atm emitter
-
-- transport: Unix domain socket (atm-graft protocol)
-- sends `PostSendHookEvent` as JSON over the graft socket
-- pi-agent-atm process receives and handles the nudge (context injection or notification)
-- registration: daemon discovers pi-agent-atm via graft socket handshake
-- failure: `emit()` returns `Err(AtmError::GraftEmitFailed { harness, details })`
-
-### codex-atm emitter
-
-- transport: Unix domain socket (atm-graft protocol), same contract
-- sends `PostSendHookEvent` as JSON over the graft socket
-- codex-atm process receives and handles the nudge
-- registration: same discovery mechanism as pi-agent-atm
-- failure: same error contract
-
-## Emitter Discovery
-
-The daemon maintains an emitter registry keyed by agent identity:
-
-```
-agent "pi-agent-atm" → GraftEmitter { socket_path: "/tmp/atm-graft-pi-agent.sock" }
-agent "codex-atm"     → GraftEmitter { socket_path: "/tmp/atm-graft-codex.sock" }
-```
-
-Discovery flow:
-1. Daemon scans known graft socket paths on startup
-2. Each socket performs handshake → returns agent identity + capabilities
-3. Registered emitters are available for post-send dispatch
-4. Agents that expose `post_send_hook` capability get their emitter invoked on send
+- `docs/user-documents/mailbox-workflows.md`
+- `docs/user-documents/doctor-and-log.md`
+- `docs/user-documents/troubleshooting.md`
+- `docs/user-documents/examples/mailbox/`
+- `docs/user-documents/examples/diagnostics/`
+- `docs/user-documents/examples/troubleshooting/`
 
 ## Deliverables
 
-- pi-agent-atm registered as an atm-graft harness that receives post-send nudges
-- codex-atm registered as an atm-graft harness that receives post-send nudges
-- `atm send team-lead "test"` when team-lead runs in pi-agent-atm → nudge delivered via graft
-- failed graft emission produces sender-visible warning (per AD.6-8 contract)
-- emitter discovery works on daemon startup
+- `mailbox-workflows.md` explains supported workflows for:
+  - `send`
+  - `list`
+  - `peek`
+  - `read`
+  - `ack`
+  - `clear`
+- `doctor-and-log.md` explains:
+  - `atm doctor`
+  - how to interpret high-signal diagnostic output
+  - where retained logs live
+  - supported log-inspection commands
+- `troubleshooting.md` explains supported recovery guidance for:
+  - unresolved caller identity/team
+  - daemon startup/connect failures
+  - post-send warning surfaces
+  - nudge delivery misconfiguration
+- the document set includes working fenced examples for:
+  - `bash`
+  - `json`
+
+## Acceptance Criteria
+
+- mailbox workflow docs reflect the retained split:
+  - `peek`/`list` are inspection-only
+  - `read`/`ack`/`clear` are owner-only mutating commands
+- troubleshooting guidance references supported ATM commands and log files only
+- no troubleshooting step asks the operator to edit the database directly
 
 ## Required Validation
 
-- pi-agent-atm receives post-send event via graft socket after `atm send`
-- codex-atm receives post-send event via graft socket after `atm send`
-- graft socket handshake succeeds on daemon startup
-- failed graft emission logs error and returns sender warning
-- unregistered agent does not attempt graft emission
-- `cargo test --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- `python3 .just/run_lint.py all`
+- `find docs/user-documents/examples/mailbox -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
+- `find docs/user-documents/examples/diagnostics -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
+- `find docs/user-documents/examples/mailbox docs/user-documents/examples/diagnostics docs/user-documents/examples/troubleshooting -name '*.sh' -print0 | xargs -0 -n1 bash -n`
+- `git diff --check`

@@ -34,7 +34,30 @@ Approved additive CLI feature for the Phase `Y` line:
 - the `help` addition stays on the CLI conceptual-help surface only; it does
   not reopen mailbox-truth or boundary-ownership work inside `Y.1`
 
-## 1.1 Documentation Structure
+## 1.1 Installed User Documentation Surface
+
+ATM has two distinct documentation audiences:
+
+- repo/developer documentation under `docs/`
+- installed end-user documentation sourced from `docs/user-documents/`
+
+The installed user-doc surface is part of the product architecture:
+
+- the repo-owned source tree is `docs/user-documents/`
+- packaging copies that tree into `<install-root>/share/doc/atm/`
+- the default local install root is `~/.local/atm/<version>/`
+- runtime state under `~/.atm/` remains separate and must not be presented as
+  the installed document tree
+- long-form operator guidance lives in installed markdown, not in new help-only
+  commands
+- `atm help` remains the concise CLI-owned conceptual-help layer that points
+  users toward the installed corpus
+- installed user docs must survive the copy step unchanged, so inter-document
+  links are relative and validated mechanically
+- fenced `json`, `xml`, `toml`, and `bash` examples in the installed corpus
+  are release artifacts and must be validated before publish
+
+## 1.2 Documentation Structure
 
 Documentation structure is governed by
 [`documentation-guidelines.md`](./documentation-guidelines.md).
