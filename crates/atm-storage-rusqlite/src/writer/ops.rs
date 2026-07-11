@@ -309,20 +309,14 @@ impl<'a> StorageEnvelope<'a> {
             read: envelope.read,
             source_team: &envelope.source_team,
             summary: &envelope.summary,
-            message_id: envelope
-                .message_id
-                .as_ref()
-                .map(|value| value.into_uuid_wire().to_string()),
+            message_id: envelope.message_id.as_ref().map(ToString::to_string),
             pending_ack_at: envelope.pending_ack_at,
             acknowledged_at: envelope.acknowledged_at,
             acknowledges_message_id: envelope
                 .acknowledges_message_id
                 .as_ref()
-                .map(|value| value.into_uuid_wire().to_string()),
-            parent_message_id: envelope
-                .parent_message_id
-                .as_ref()
-                .map(|value| value.into_uuid_wire().to_string()),
+                .map(ToString::to_string),
+            parent_message_id: envelope.parent_message_id.as_ref().map(ToString::to_string),
             thread_mode: &envelope.thread_mode,
             expires_at: envelope.expires_at,
             task_id: &envelope.task_id,

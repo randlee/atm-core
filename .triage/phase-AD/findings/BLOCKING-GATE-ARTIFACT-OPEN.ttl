@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-GATE-ARTIFACT-OPEN>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-GATE-ARTIFACT-OPEN" ;
+  triage:title "Boundary gate artifact still declares status \"planned\" despite landed implementation" ;
+  triage:description "In boundaries/atm-core/nudge-template-override-store.toml:45 on feature/pAD-s21-built-in-nudge-hardening, [status] state = \"planned\" even though the trait, SQLite impl, and a production consumer are already landed on this branch. Per RULE-013 the artifact's own gate governs closure -- the gate file itself must be updated to reflect real status before this can close." ;
+  triage:category "BLOCKING" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-GATE-ARTIFACT-OPEN/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-GATE-ARTIFACT-OPEN/s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21/7543fa72> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/BLOCKING-GATE-ARTIFACT-OPEN/s21/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/nudge-template-override-store.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/7543fa72> .
+
+<urn:atm:triage:occurrence/BLOCKING-GATE-ARTIFACT-OPEN/s22/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/nudge-template-override-store.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:worktree/s21/7543fa72>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 22 .

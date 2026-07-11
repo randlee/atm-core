@@ -1,19 +1,19 @@
 use anyhow::Result;
-use atm_core::home;
 use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
-use atm_core::types::{AckActivationMode, ReadSelection};
+use atm_core::types::ReadSelection;
 use clap::Args;
 
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
 use crate::commands::util::parse_timestamp;
-use crate::composition::CliComposition;
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
 /// Read one ATM mailbox message and optionally update read state.
 pub struct ReadCommand {
-    target: Option<String>,
-
     #[arg(long)]
     team: Option<String>,
 
@@ -51,12 +51,6 @@ pub struct ReadCommand {
     no_since_last_seen: bool,
 
     #[arg(long)]
-    no_mark: bool,
-
-    #[arg(long)]
-    no_update_seen: bool,
-
-    #[arg(long)]
     since: Option<String>,
 
     #[arg(long)]
@@ -67,19 +61,20 @@ pub struct ReadCommand {
 
     #[arg(long)]
     timeout: Option<u64>,
-
-    #[arg(long = "as")]
-    actor: Option<String>,
 }
 
 impl ReadCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
-        let composition = CliComposition::bootstrap("read", observability)?;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
+        let composition = CliComposition::bootstrap(
+            "read",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.receive(query)?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
@@ -93,6 +88,8 @@ impl ReadCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         if let Some(timeout_secs) = self.timeout
             && timeout_secs > MAX_TIMEOUT_SECS
         {
@@ -109,17 +106,12 @@ impl ReadCommand {
         ReadQuery::new(
             home_dir,
             current_dir,
-            self.actor.as_deref(),
-            self.target.as_deref(),
-            self.team.as_deref(),
+            caller_context.caller_identity,
+            None,
+            caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
-            !self.no_update_seen,
-            if self.no_mark {
-                AckActivationMode::ReadOnly
-            } else {
-                AckActivationMode::PromoteDisplayedUnread
-            },
+            true,
             self.message_id.as_deref(),
             self.from.as_deref(),
             timestamp_filter,
@@ -173,7 +165,10 @@ impl ReadCommand {
 
 #[cfg(test)]
 mod tests {
-    use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::test_support::EnvGuard;
+    use atm_core::types::ReadSelection;
+    use clap::Parser;
+    use serial_test::serial;
 
     use super::ReadCommand;
 
@@ -196,22 +191,23 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_query_propagates_filters_and_exact_message_id() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
         let mut command = base_command();
-        command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
-        command.message_id = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
         command.no_since_last_seen = true;
-        command.no_mark = true;
-        command.no_update_seen = true;
         command.timeout = Some(9);
 
         let query = command.build_query(".".into(), ".".into()).expect("query");
 
         assert_eq!(query.selection_mode(), ReadSelection::Actionable);
-        assert_eq!(query.ack_activation_mode(), AckActivationMode::ReadOnly);
         assert!(!query.seen_state_filter());
-        assert!(!query.seen_state_update());
+        assert!(query.seen_state_update());
         assert_eq!(query.timeout_secs(), Some(9));
         assert!(query.message_id_filter().is_some());
     }
@@ -228,9 +224,56 @@ mod tests {
         assert_eq!(warnings.len(), 4);
     }
 
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let query = base_command()
+            .build_query(".".into(), ".".into())
+            .expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("env-team")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.team = Some("override-team".to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(
+            query.team_override().map(|team| team.as_str()),
+            Some("override-team")
+        );
+    }
+
+    #[test]
+    fn cli_rejects_positional_mailbox_target_for_owner_only_read() {
+        let error = crate::commands::Cli::try_parse_from(["atm", "read", "recipient@test-team"])
+            .expect_err("owner-only read must reject positional target");
+
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("unexpected argument 'recipient@test-team'")
+                || rendered.contains("unexpected argument"),
+            "{rendered}"
+        );
+    }
+
     fn base_command() -> ReadCommand {
         ReadCommand {
-            target: None,
             team: None,
             all: false,
             unread: false,
@@ -243,13 +286,10 @@ mod tests {
             contains: None,
             since_last_seen: false,
             no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
             since: None,
             from: None,
             json: false,
             timeout: None,
-            actor: None,
         }
     }
 }

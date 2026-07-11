@@ -1,7 +1,12 @@
+#![cfg(any(test, feature = "test-utils"))]
+
 #[cfg(any(test, feature = "test-utils"))]
 use std::ffi::{OsStr, OsString};
 #[cfg(any(test, feature = "test-utils"))]
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::OnceLock;
+
+#[cfg(any(test, feature = "test-utils"))]
+use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 pub const TEST_TEAM: &str = "test-team";
 pub const TEST_SENDER: &str = "sender-a";
@@ -9,6 +14,7 @@ pub const TEST_RECIPIENT: &str = "recipient";
 pub const TEST_QA: &str = "qa-a";
 pub const TEST_QA_AGENT: &str = TEST_QA;
 pub use crate::roles::ROLE_TEAM_LEAD;
+pub const TEST_ARCH_CTM: &str = "test-arch-member";
 pub const TEST_LEAD: &str = "test-lead";
 pub const TEST_DAEMON: &str = "daemon";
 pub const TEST_ORIGIN: &str = "host-a";
@@ -17,25 +23,23 @@ pub const TEST_RECIPIENT_ADDRESS: &str = "recipient@test-team";
 pub const TEST_LEAD_ADDRESS: &str = "test-lead@test-team";
 
 #[cfg(any(test, feature = "test-utils"))]
-pub fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
+fn env_lock() -> &'static RwLock<()> {
+    static LOCK: OnceLock<RwLock<()>> = OnceLock::new();
+    LOCK.get_or_init(|| RwLock::new(()))
 }
 
 #[cfg(any(test, feature = "test-utils"))]
-fn lock_env() -> MutexGuard<'static, ()> {
-    // Some tests intentionally panic while the env guard is live to prove
-    // restoration behavior. Recover the guard so later serialized env tests do
-    // not fail due to lock poisoning.
-    env_lock()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+pub type EnvLockGuard = RwLockReadGuard<'static, ()>;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub fn lock_env() -> EnvLockGuard {
+    env_lock().read()
 }
 
 #[cfg(any(test, feature = "test-utils"))]
 pub struct EnvGuard {
     restorations: Vec<EnvRestore>,
-    _guard: MutexGuard<'static, ()>,
+    _guard: Option<RwLockUpgradableReadGuard<'static, ()>>,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -55,20 +59,22 @@ impl EnvGuard {
     }
 
     pub fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> Self {
-        let guard = lock_env();
+        let guard = env_lock().write();
+        let restorations = changes
+            .into_iter()
+            .map(|(key, value)| {
+                let original = std::env::var_os(key);
+                match value {
+                    Some(value) => set_env_var(key, value),
+                    None => remove_env_var(key),
+                }
+                EnvRestore { key, original }
+            })
+            .collect();
+        let guard = RwLockWriteGuard::downgrade_to_upgradable(guard);
         Self {
-            restorations: changes
-                .into_iter()
-                .map(|(key, value)| {
-                    let original = std::env::var_os(key);
-                    match value {
-                        Some(value) => set_env_var(key, value),
-                        None => remove_env_var(key),
-                    }
-                    EnvRestore { key, original }
-                })
-                .collect(),
-            _guard: guard,
+            restorations,
+            _guard: Some(guard),
         }
     }
 }
@@ -76,6 +82,8 @@ impl EnvGuard {
 #[cfg(any(test, feature = "test-utils"))]
 impl Drop for EnvGuard {
     fn drop(&mut self) {
+        let guard = self._guard.take().expect("env guard lock");
+        let _guard = RwLockUpgradableReadGuard::upgrade(guard);
         for restore in self.restorations.iter_mut().rev() {
             match restore.original.take() {
                 Some(value) => set_env_var(restore.key, value),

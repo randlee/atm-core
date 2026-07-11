@@ -5,6 +5,7 @@ Owns the retained local team recovery surface:
 - discovered-team listing
 - local member listing
 - `add-member`
+- `update-member`
 - team backup
 - team restore
 
@@ -26,7 +27,7 @@ consolidation rule established in Phase Y Sprint 3.
 fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError>
 ```
 
-Called from `add_member` (line 313) and defined at line 455. Creates the inbox
+Called from `add_member` during member creation. Creates the inbox
 file for a new team member if it does not already exist. This is an initial
 provisioning write: it runs exactly once per member, only during `add-member`,
 and is guarded by an existence check (`inbox_path.exists()` returns early). It
@@ -38,10 +39,9 @@ is **not** part of the normal send / ack / clear message-flow.
 fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmError>
 ```
 
-Called from `add_member` (line 333) and defined at line 486. Persists the
-updated `config.json` after a new member is appended to the in-memory
-`TeamConfig`. Like `ensure_inbox_exists`, this write occurs only during team
-setup commands (`add-member`, team create/restore). It is **not** invoked on
+Called from the retained local team repair paths after ATM roster truth is
+mutated. Persists the updated compatibility `config.json` projection after
+`add-member`, `update-member`, or restore operations. It is **not** invoked on
 the normal send / ack / clear path.
 
 ### Rationale

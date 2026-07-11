@@ -76,7 +76,7 @@ fn build_restore_execution_plan(
     }
 
     let recreated_shell = load_recreated_lead_shell_state(&team_dir)?;
-    let canonical_roster = super::load_team_roster(roster_store, &request.team)?;
+    let canonical_roster = super::projection::load_team_roster(roster_store, &request.team)?;
     if canonical_roster.is_empty() {
         return Err(AtmError::team_not_found(&request.team));
     }
@@ -89,7 +89,7 @@ fn build_restore_execution_plan(
         .collect::<Vec<_>>();
     let inboxes_to_restore = filter_restore_inboxes(&backup_dir, &members_to_restore)?;
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
-    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster);
+    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster)?;
 
     Ok(RestoreExecutionPlan {
         team_dir,
@@ -146,11 +146,11 @@ fn apply_restore_execution_plan(
 ) -> Result<RestoreOutcome, AtmError> {
     apply_restored_inboxes(&plan.team_dir, &plan.backup_dir, &plan.inboxes_to_restore)?;
 
-    let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
+    let tasks_dir = super::filesystem::tasks_dir_from_home(&request.home_dir, &request.team)?;
     restore_task_state_from_backup(&plan.backup_dir.join("tasks"), &tasks_dir)?;
-    super::write_team_config(&plan.team_dir, &plan.updated_config).map_err(|error| {
-        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
-    })?;
+    super::filesystem::write_team_config(&plan.team_dir, &plan.updated_config).map_err(
+        |error| error.with_recovery("Check team config permissions and rerun `atm teams restore`."),
+    )?;
 
     Ok(RestoreOutcome {
         action: "restore",
@@ -202,14 +202,16 @@ fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShell
 fn build_restored_team_config(
     recreated_shell: &RecreatedLeadShellState,
     canonical_roster: &[RosterEntry],
-) -> crate::schema::TeamConfig {
+) -> Result<crate::schema::TeamConfig, AtmError> {
     let non_lead_roster = canonical_roster
         .iter()
         .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
         .cloned()
         .collect::<Vec<_>>();
-    let mut updated_config =
-        super::project_team_config_from_roster(serde_json::Map::new(), &non_lead_roster);
+    let mut updated_config = super::projection::project_team_config_from_roster(
+        serde_json::Map::new(),
+        &non_lead_roster,
+    )?;
     updated_config
         .members
         .insert(0, recreated_shell.lead_member.clone());
@@ -218,7 +220,7 @@ fn build_restored_team_config(
             .extra
             .insert("leadSessionId".to_string(), value);
     }
-    updated_config
+    Ok(updated_config)
 }
 
 fn locate_backup_dir(
@@ -236,7 +238,7 @@ fn locate_backup_dir(
         return Ok(path.to_path_buf());
     }
 
-    let root = super::backup_root_from_home(home_dir, team)?;
+    let root = super::filesystem::backup_root_from_home(home_dir, team)?;
     if !root.exists() {
         return Err(AtmError::missing_document(format!(
             "no backup found for team '{}'",
@@ -370,7 +372,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
-    super::copy_regular_files_strict(src, &staging, |name| {
+    super::filesystem::copy_regular_files_strict(src, &staging, |name| {
         name == ".highwatermark" || name.ends_with(".json")
     })?;
 
@@ -782,6 +784,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: None,
             message_id: None,
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -798,42 +801,8 @@ mod tests {
     }
 
     fn with_env_var_serial<T>(key: &'static str, value: &str, body: impl FnOnce() -> T) -> T {
-        let _env_guard = EnvGuard::set_raw(key, value);
+        let _env_guard = crate::test_support::EnvGuard::set_raw(key, value);
         body()
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: restore tests that mutate process environment run under
-        // `serial_test` and hold the shared env lock for the full mutation
-        // window.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: same serialization guarantee as above.
-        unsafe { std::env::remove_var(key) };
     }
 
     #[test]
@@ -1091,7 +1060,7 @@ mod tests {
         recipient.recipient_pane_id = Some(crate::types::PaneId::from_cli("%12").expect("pane"));
         recipient
             .metadata_json
-            .insert("cwd".to_string(), json!("/repo/recipient"));
+            .insert("home_dir".to_string(), json!("/repo/recipient"));
         roster_store.seed_team(
             TEST_TEAM,
             vec![
@@ -1175,7 +1144,10 @@ mod tests {
             .find(|member| member.name == TEST_RECIPIENT)
             .expect("recipient");
         assert_eq!(recipient.tmux_pane_id.as_deref(), Some("%12"));
-        assert_eq!(recipient.cwd, std::path::PathBuf::from("/repo/recipient"));
+        assert_eq!(
+            recipient.home_dir.as_path(),
+            std::path::PathBuf::from("/repo/recipient").as_path()
+        );
         assert_eq!(config.extra["leadSessionId"], json!("lead-current"));
     }
 

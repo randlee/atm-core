@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-QA-003>
+  a triage:Finding ;
+  triage:findingId "AD30-QA-003" ;
+  triage:title "Historical FTQ-001 finding unreconciled before phase closure" ;
+  triage:description "Historical finding FTQ-001 from phase-Xb (.triage/phase-Xb/findings/FTQ-001.ttl, line 15) records triage:status \"open\" for SqliteRuntimeGuard env-race. However, the code fix (env_lock() acquisition in install() and Drop impl) predates this follow-up phase and is present on all current branches (AD.25-AD.30 confirmed). Plan phase-AD.md (line 155-158) and AD.30 sprint requirements (readiness.md line 40) mandate reconciliation: either update the historical TTL to closed, or record an explicit note explaining why the record remains open as provenance only. As of current s30 state, neither reconciliation action has been recorded in the authoritative artifacts." ;
+  triage:category "AD30-QA" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:patternQueried "historical-finding-unreconciled" ;
+  triage:historicalFindings "phase-Xb/findings/FTQ-001.ttl" ;
+  triage:codeFixVerification "all branches s25-s30 confirmed to have lock_env() guards in SqliteRuntimeGuard::install() and Drop impl" ;
+  triage:highestOpenBranch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:highestFixedBranch "N/A (not a code-pattern finding)" ;
+  triage:promoteTo "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-QA-003/historical-Xb/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD.30/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-QA-003/historical-Xb/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-Xb/findings/FTQ-001.ttl" ;
+  triage:line 15 ;
+  triage:snippet "triage:status \"open\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "historical-phase-Xb" ;
+  triage:headSha "historical" ;
+  triage:notes "SqliteRuntimeGuard env_race: code fix present on all AD.25-AD.30 branches, but triage record status never updated. Reconciliation required per phase-AD closeout gate." ;
+  triage:occursIn <urn:atm:triage:worktree/AD.30/4d86e024> .
+
+<urn:atm:triage:worktree/AD.30/4d86e024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:orderIndex 30 .

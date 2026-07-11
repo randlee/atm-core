@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD16-DROP-001>
+  a triage:Finding ;
+  triage:findingId "AD16-DROP-001" ;
+  triage:title "Undocumented blocking Drop behavior" ;
+  triage:description "Drop impl for GraftSession calls close_internal() which performs blocking thread join (waiting for receive loop thread) without documentation explaining this blocking behavior. Regression: documentation was present in AD.14/15, removed in AD.16/17." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "regressed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DROP-001/AD16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD16-DROP-001/AD17/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/AD17/0996fd33> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD14/2bc4667c> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD15/0ab5d105> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD16-DROP-001/AD16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 548 ;
+  triage:snippet "impl Drop for GraftSession { fn drop(&mut self) { if let Err(error) = self.close_internal()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/AD16/c4653158> .
+
+<urn:atm:triage:occurrence/AD16-DROP-001/AD17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 548 ;
+  triage:snippet "impl Drop for GraftSession { fn drop(&mut self) { if let Err(error) = self.close_internal()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/AD17/0996fd33> .
+
+<urn:atm:triage:worktree/AD14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .

@@ -4,6 +4,13 @@
 
 Accepted
 
+Phase AD supersession note:
+- `ADR-019` retires the former `atm-storage-claude` crate from the accepted
+  product
+  architecture because Claude Code no longer uses that backend
+- this ADR still governs the requirement for a shared storage contract,
+  backend interoperability, and future SQL backend support
+
 ## Context
 
 The original ATM architecture required:
@@ -69,7 +76,6 @@ The approved backend graph is:
 
 ```text
 atm-storage
-atm-storage-claude -> atm-storage
 atm-storage-rusqlite -> atm-storage
 atm-core -> atm-storage
 ```
@@ -86,6 +92,17 @@ Forbidden graph edges:
 - `atm-storage` depending on concrete backend crates
 - daemon/runtime/core owning concrete backend behavior above the approved
   composition seam
+
+Historical note:
+- `AC.2` landed `atm-storage-claude` as a concrete backend before `ADR-019`
+  retired it from the accepted line
+- `ADR-019` later retires that backend from the accepted product architecture
+  because Claude Code no longer uses it
+- that retirement does not weaken the requirement that the shared
+  `atm-storage` contract remain backend-interoperable and future-SQL-ready
+- backend interoperability does not require multiple live concrete backends at
+  every release; it requires that the shared contract stays capable of
+  supporting additional concrete backends without architectural rewrite
 
 ### 3. Storage Traits Are Semantic CRUD Traits
 
@@ -158,14 +175,21 @@ Phase `AC` must therefore not:
 - preserve speculative task-store code as if it were a required compatibility
   line
 
-### 7. Claude Storage Is A First-Class Backend
+### 7. Historical Claude Backend Note
 
-Claude inbox JSON storage is not a legacy or compatibility-only path. It is a
-first-class storage backend and must implement the same shared semantic
-contract as SQLite.
+`AC.2` landed Claude inbox JSON storage as a first-class backend
+implementation of the shared storage contract.
 
-Claude-specific repair, malformed JSON salvage, locking, source discovery, and
-rewrite mechanics remain backend internals below the trait line.
+`ADR-019` retires that concrete backend from the accepted product
+architecture because Claude Code no longer uses it.
+
+The retirement of the Claude backend does not retire:
+
+- the shared semantic `MessageStore` / `RosterStore` contract
+- backend interoperability as an architectural requirement
+- future SQL backend support
+- the ability to add a new concrete backend without redefining the core
+  storage architecture
 
 ### 8. SQLite Is One Backend, Not The Architecture
 
@@ -187,7 +211,8 @@ traits.
 Positive:
 
 - restores the originally intended architecture
-- keeps Claude inbox, SQLite, and future SQL Server on one shared model
+- keeps SQLite and future SQL Server on one shared model through the shared
+  storage contract even as concrete backend count changes over time
 - shrinks the shared storage audit surface
 - reduces DTO proliferation across RPC and storage
 - makes daemon/runtime/backend boundaries easier to enforce mechanically
@@ -222,7 +247,7 @@ This ADR is implemented by Phase `AC`:
 
 - `AC.0` planning-line ADR + violation inventory freeze
 - `AC.1` `atm-storage` contract and canonical domain types
-- `AC.2` `atm-storage-claude`
+- `AC.2` `atm-storage-claude` (historical; retired in `ADR-019`)
 - `AC.3` SQLite backend convergence
 - `AC.4` `atm-core` storage-boundary adoption
 - `AC.5` RPC envelope and domain type unification for message/roster bodies

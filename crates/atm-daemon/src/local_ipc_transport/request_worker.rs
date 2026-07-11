@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use atm_core::boundary::{AdvisoryStreamSink, AtmProtocol, RequestDispatcher};
+use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
     JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
@@ -9,11 +9,17 @@ use atm_core::protocol::{
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
 
-use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+use crate::SubsystemObservability;
+use crate::active_connection_registry::{
+    ActiveConnectionRegistry, DispatchReapSummary, TrackedDispatchHandle,
+};
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
-use super::{MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, write_shutdown_response};
+use super::{
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
+    write_shutdown_response,
+};
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -53,17 +59,12 @@ pub(super) fn handle_connection(
     force_shutdown: &AtomicBool,
     registry: Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
+    observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    let read_deadline_support = configure_request_deadlines(&stream)?;
-
-    let frame = match read_request_frame_with_deadline(
-        stream,
-        force_shutdown,
-        read_deadline_support,
-    )? {
+    let frame = match read_connection_frame(stream, force_shutdown)? {
         ReadRequestFrameResult::EndOfStream => return Ok(()),
         ReadRequestFrameResult::Frame {
             stream: resumed_stream,
@@ -73,6 +74,44 @@ pub(super) fn handle_connection(
             frame
         }
         #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut => return Ok(()),
+    };
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
+    let (request_id, request) = codec.request_from_frame(frame)?;
+    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
+    write_response(&mut stream, &codec, request_id, response)?;
+    emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
+    Ok(())
+}
+
+fn emit_dispatch_panic_recovery(
+    observability: &SubsystemObservability,
+    summary: DispatchReapSummary,
+) {
+    if summary.recovered_panics == 0 {
+        return;
+    }
+    observability.emit_or_warn(
+        "dispatch_worker",
+        "panic_recovered",
+        DISPATCH_PANIC_RECOVERED_MESSAGE,
+    );
+}
+
+fn read_connection_frame(
+    stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    let read_deadline_support = configure_request_deadlines(&stream)?;
+    match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)? {
+        ReadRequestFrameResult::EndOfStream => Ok(ReadRequestFrameResult::EndOfStream),
+        ReadRequestFrameResult::Frame { stream, frame } => {
+            Ok(ReadRequestFrameResult::Frame { stream, frame })
+        }
+        #[cfg(windows)]
         ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
             tracing::info!(
                 subsystem = "local_ipc",
@@ -80,7 +119,7 @@ pub(super) fn handle_connection(
                 outcome = "forced_shutdown",
                 "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
             );
-            return Ok(());
+            Ok(ReadRequestFrameResult::TimedOut)
         }
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
@@ -91,29 +130,9 @@ pub(super) fn handle_connection(
                 deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
                 "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
             );
-            return Ok(());
+            Ok(ReadRequestFrameResult::TimedOut)
         }
-    };
-    tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
-    );
-    let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::AdvisoryStream(request) = request {
-        return dispatch_advisory_stream(
-            &mut stream,
-            dispatcher.as_ref(),
-            force_shutdown,
-            &codec,
-            request_id,
-            request,
-        );
     }
-
-    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
-    write_response(&mut stream, &codec, request_id, response)?;
-    registry.reap_finished_dispatches()?;
-    Ok(())
 }
 
 fn read_request_frame_with_deadline(
@@ -200,36 +219,6 @@ fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSup
         "failed to apply daemon response write deadline",
     )?;
     Ok(read_deadline_support)
-}
-
-fn dispatch_advisory_stream(
-    stream: &mut LocalSocketStream,
-    dispatcher: &dyn RequestDispatcher,
-    force_shutdown: &AtomicBool,
-    codec: &JsonAtmProtocolCodec,
-    request_id: RequestId,
-    request: atm_core::AdvisoryStreamRequest,
-) -> Result<(), AtmError> {
-    apply_deadline_contract(
-        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
-        "failed to apply daemon advisory-stream write deadline",
-    )?;
-    let mut sink = LocalIpcAdvisoryStreamSink {
-        stream,
-        codec,
-        request_id,
-        force_shutdown,
-    };
-    dispatcher.dispatch_advisory_stream(request, &mut sink)
-}
-
-fn apply_deadline_contract(
-    result: std::io::Result<()>,
-    message: &'static str,
-) -> Result<(), AtmError> {
-    match apply_optional_deadline(result, message)? {
-        DeadlineSupport::Applied | DeadlineSupport::Unsupported => Ok(()),
-    }
 }
 
 fn apply_optional_deadline(
@@ -339,16 +328,12 @@ fn await_dispatch_response(
 fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
     match request {
         RequestEnvelope::List(_)
+        | RequestEnvelope::Peek(_)
         | RequestEnvelope::Receive(_)
-        | RequestEnvelope::Doctor(_)
-        | RequestEnvelope::AdvisoryFetch(_) => RequestExecutionRisk::ReadOnly,
-        RequestEnvelope::Send(_)
-        | RequestEnvelope::Heartbeat(_)
-        | RequestEnvelope::Clear(_)
-        | RequestEnvelope::AdvisoryRegister(_)
-        | RequestEnvelope::AdvisoryUnregister(_)
-        | RequestEnvelope::AdvisoryDrain(_)
-        | RequestEnvelope::AdvisoryStream(_) => RequestExecutionRisk::SideEffecting,
+        | RequestEnvelope::Doctor(_) => RequestExecutionRisk::ReadOnly,
+        RequestEnvelope::Send(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
+            RequestExecutionRisk::SideEffecting
+        }
     }
 }
 
@@ -383,40 +368,11 @@ fn write_response(
 
 #[cfg(test)]
 #[cfg_attr(not(unix), allow(dead_code))]
-pub(super) fn install_injected_accept_error_for_test(
+pub(crate) fn install_injected_accept_error_for_test(
     runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
 ) {
     runtime.accept_error_inject = Some(signal);
-}
-
-struct LocalIpcAdvisoryStreamSink<'a> {
-    stream: &'a mut LocalSocketStream,
-    codec: &'a JsonAtmProtocolCodec,
-    request_id: RequestId,
-    force_shutdown: &'a AtomicBool,
-}
-
-impl AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
-    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
-        let frame = self.codec.response_to_frame(self.request_id, response)?;
-        atm_core::protocol::write_frame(
-            self.stream,
-            &frame,
-            "failed to write daemon advisory-stream response frame",
-        )?;
-        std::io::Write::flush(&mut self.stream).map_err(|source| {
-            AtmError::daemon_unavailable("failed to flush daemon advisory-stream response frame")
-                .with_recovery(
-                    "Retry graft activation after atm-daemon returns to a healthy serving state.",
-                )
-                .with_source(source)
-        })
-    }
-
-    fn stop_requested(&self) -> bool {
-        self.force_shutdown.load(Ordering::SeqCst)
-    }
 }
 
 #[cfg(test)]
@@ -451,9 +407,8 @@ mod tests {
         let request = RequestEnvelope::Clear(ClearQuery {
             home_dir: tmp.clone(),
             current_dir: tmp,
-            actor_override: None,
-            target_address: None,
-            team_override: None,
+            caller_identity: atm_core::test_support::TEST_SENDER.parse().expect("caller"),
+            caller_team: atm_core::test_support::TEST_TEAM.parse().expect("team"),
             older_than: None,
             idle_only: false,
             dry_run: false,

@@ -3,17 +3,25 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-017 |
-| Status | accepted |
+| Status | **Superseded** |
 | Date | 2026-06-06 |
 | Deciders | arch-ctm, team-lead |
-| Relates-to | ADR-010, ADR-012 |
+| Relates-to | ADR-010, ADR-012, ADR-019 |
 | Supersedes | — |
+| Superseded by | ADR-019 |
+
+## Supersession Note
+
+`ADR-019` retires Claude inbox-append runtime behavior from the accepted
+runtime. This ADR remains the historical record of the fail-soft read policy
+for the earlier Claude inbox compatibility line only. It is no longer the
+active product contract for accepted send/read behavior.
 
 ## Context
 
-ATM now treats the current Claude `.json` inbox array as the primary shared
-inbox path. That makes malformed current-Claude inbox content an operational
-boundary problem, not a legacy-format edge case.
+Before `ADR-019`, ATM treated the current Claude `.json` inbox array as the
+primary shared inbox path. At that time, malformed current-Claude inbox content
+was an operational boundary problem, not a legacy-format edge case.
 
 One malformed fragment inside a current Claude inbox array could previously
 hide unrelated valid messages behind a whole-file parser error. Missing a
@@ -25,7 +33,10 @@ malformed current-Claude inbox array and discard evidence of corruption.
 
 ## Decision
 
-ATM adopts a fail-soft read policy for current Claude inbox reads.
+Historical decision:
+
+ATM adopted a fail-soft read policy for current Claude inbox reads on the
+earlier compatibility line.
 
 Rules:
 - current Claude inbox reads must salvage segmentable valid message objects

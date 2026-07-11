@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-TEST-LITERALS>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-TEST-LITERALS" ;
+  triage:title "Hardcoded team-lead@atm-dev literals instead of TEST_LEAD/TEST_TEAM constants" ;
+  triage:description "In internal_nudge.rs:529,536 on feature/pAD-s21-built-in-nudge-hardening, two test assertions hardcode \"team-lead@atm-dev\" instead of the TEST_LEAD/TEST_TEAM constants already used correctly elsewhere in the same file. Likely fails .just/check_test_identity_literals.py, a Required Validation gate for this sprint." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-008" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s22/2> ;
+  triage:openOn <urn:atm:triage:worktree/s21/7543fa72> ;
+  triage:openOn <urn:atm:triage:worktree/s22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 529 ;
+  triage:snippet "from: \"team-lead@atm-dev\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/7543fa72> .
+
+<urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 536 ;
+  triage:snippet "assert!(rendered.contains(\"team-lead@atm-dev\"));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/7543fa72> .
+
+<urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 529 ;
+  triage:snippet "from: \"team-lead@atm-dev\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:occurrence/BLOCKING-TEST-LITERALS/s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 536 ;
+  triage:snippet "assert!(rendered.contains(\"team-lead@atm-dev\"));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/4db561aa> .
+
+<urn:atm:triage:worktree/s21/7543fa72>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "7543fa72" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 22 .

@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AD35" ;
+  triage:title "No test exercises peek --as inspection without mutation scenario" ;
+  triage:description "Existing record: no test exercises peek --as inspection without mutation. AD35-QA-2 (PR #507) confirms STILL PARTIALLY OPEN: the regression matrix now exercises peek non-mutation, but only for the mailbox owner as caller -- no test constructs a peek with --as impersonation of another member's mailbox. Re-sweep composition.rs and mailbox_locking.rs for a peek test combined with --as/identity_override impersonation across all 5 branches." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "TEST" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:findingType "absence_of_test" ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false ;
+  triage:sweepNotes "Fixed on fix/phase-AD-pm-owner-only-mutation: crates/atm-core/tests/mailbox_locking.rs now contains peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged(), which exercises a cross-agent peek path against the real retained store and proves read/pending_ack_at/acknowledged_at remain unchanged." ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s31/5891c114b9e913313b46534375f038a2478667e8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
+  triage:highestOpenBranch "AD.35" ;
+  triage:priorStatus "open" ;
+  triage:statusChange "open_to_fixed" .
+
+<urn:atm:triage:worktree/pAD-s31/5891c114b9e913313b46534375f038a2478667e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pAD-s32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pAD-s33/6ef24f32eccc3381e9bc62e32c1701edf13e060e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pAD-s34/05ddab013dea5a71a345bcf20f948b44a0420ed0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 ;
+  triage:branchState "open" .

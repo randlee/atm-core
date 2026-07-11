@@ -1,0 +1,139 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD27-DUPLOGIC-001>
+  a triage:Finding ;
+  triage:findingId "AD27-DUPLOGIC-001" ;
+  triage:title "Duplicated tmux/graft delivery logic and duplicate test-only render helpers in dead-code helper" ;
+  triage:description "crates/atm/src/commands/internal_nudge.rs contains duplicated delivery logic (TmuxNudgeSink::deliver, GraftNudgeSink::deliver) mirroring live daemon-side implementations in crates/atm-daemon/src/post_send_emitter.rs, plus test-only render helpers duplicating nudge_template.rs. Resolution contingent on AD27-ARCH-001." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:dependsOnFinding "AD27-ARCH-001" ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s29/f7a4991f> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 156 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() mirror daemon implementations; render_template/render_values duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 155 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() mirror daemon implementations; render_template/render_values duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 85 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() still mirror daemon implementations; test-only render_values/render_template at lines 85-105, 108-145 duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/33683226> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 85 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() still mirror daemon implementations; test-only render_values/render_template at lines 85-105, 108-145 duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 85 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() still mirror daemon implementations; test-only render_values/render_template at lines 85-105, 108-145 duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s29/f7a4991f> .
+
+<urn:atm:triage:occurrence/AD27-DUPLOGIC-001/pAD-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 85 ;
+  triage:snippet "TmuxNudgeSink::deliver() and GraftNudgeSink::deliver() still mirror daemon implementations; test-only render_values/render_template at lines 85-105, 108-145 duplicate nudge_template.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/5c19cba9> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAD-s29/f7a4991f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAD-s30/5c19cba9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:orderIndex 6 .

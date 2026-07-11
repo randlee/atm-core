@@ -18,7 +18,7 @@ io_owns = ["outbound_protocol_requests", "request_deadlines", "response_decoding
 io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client", "atm-graft", "atm-storage-rusqlite"]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client", "atm-graft"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 

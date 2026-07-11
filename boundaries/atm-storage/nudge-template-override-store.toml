@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-NudgeTemplateOverrideStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "NudgeTemplateOverrideStore"
+
+[public]
+trait = "NudgeTemplateOverrideStore"
+notes = "storage-neutral lookup contract for team-scoped built-in nudge template override rows canonically owned by atm-storage; atm-core retains a compatibility re-export plus the PostSendHookEvent-specific helper"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["built_in_nudge_template_override_lookup_contract", "durable_ack_requirement_classifier"]
+io_forbidden = ["direct_sqlite_io", "socket_io", "process_spawn", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon", "atm-daemon-client", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-daemon", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection", "NotificationSink::deliver"]
+
+[contracts]
+request_types = ["team name", "BuiltInNudgeTemplateKind"]
+response_types = ["Option<TeamNudgeTemplateOverrideRow>", "AckRequirementState"]
+error_types = ["AtmError"]
+notes = ["atm-core retains built_in_nudge_template_kind_from_post_send_event because PostSendHookEvent remains atm-core owned", "built-in template bodies and placeholder substitution remain owned by atm", "the emitter path must receive resolved template text or absence only and must not perform lookup itself"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NUDGE-TEMPLATE-OVERRIDE-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_emitter_side_lookup", "no_backend_to_core_edge_for_override_store"]
+
+[status]
+state = "concrete_landed"
+notes = ["canonical ownership moved from atm-core to atm-storage during the phase-AD postmerge rusqlite coupling fix", "atm-core still re-exports the trait and moved row/kind types until downstream compile-bridge consumers retire the older import path"]

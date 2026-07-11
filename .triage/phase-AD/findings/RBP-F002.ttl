@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "MessageKey, TaskState, and AckTransition duplicate identical non-blank validation boilerplate" ;
+  triage:description "RUSQLITE-COUPLING-FIX-1-QA confirmed the code fix at ef873180 but found the branch-local triage record missing. The actual change extracted the repeated trim/is_empty validation into one shared require_non_blank helper in crates/atm-storage/src/contract.rs and repointed MessageKey::new, TaskState::new, and AckTransition::new to that helper without changing their emitted subject text or recovery guidance." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-11T02:39:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "Resolved on fix/phase-AD-pm-boundary-violation @ ef873180 by introducing require_non_blank in crates/atm-storage/src/contract.rs and making MessageKey::new, TaskState::new, and AckTransition::new delegate to that helper while preserving the existing validation subjects and recovery strings." ;
+  triage:triagedAt "2026-07-11T02:39:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/3> ;
+  triage:openOn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> ;
+  triage:promoteTo <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 19 ;
+  triage:snippet "pub fn new(value: impl Into<String>) -> Result<Self, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 85 ;
+  triage:snippet "pub fn new(value: impl Into<String>) -> Result<Self, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F002/fix-phase-AD-pm-boundary-violation/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 137 ;
+  triage:snippet "pub fn new(value: impl Into<String>) -> Result<Self, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .

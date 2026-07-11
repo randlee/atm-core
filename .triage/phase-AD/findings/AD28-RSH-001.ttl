@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AD28-RSH-001" ;
+  triage:title "Windows ErrorKind::Unsupported silently treated as deadline-honored success" ;
+  triage:description "In crates/atm-graft/src/runtime.rs:511, apply_receiver_deadline silently treats a Windows ErrorKind::Unsupported result (when the transport cannot honor the requested recv/send timeout) as success, leaving that connection with NO I/O deadline at all. A stalled or malicious peer on that path can block the receiver thread indefinitely on Windows -- directly undermines this sprint's stated goal of bounded, fail-fast, non-scheduler-luck deadlines." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "critical" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T17:52:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-001/pAD-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/835a6247f8386b35c4fbb789c4fd384a7335a671> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s28/835a6247f8386b35c4fbb789c4fd384a7335a671> .
+
+<urn:atm:triage:occurrence/AD28-RSH-001/pAD-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 511 ;
+  triage:snippet "Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247f8386b35c4fbb789c4fd384a7335a671" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247f8386b35c4fbb789c4fd384a7335a671> .
+
+<urn:atm:triage:worktree/pAD-s28/835a6247f8386b35c4fbb789c4fd384a7335a671>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247f8386b35c4fbb789c4fd384a7335a671" ;
+  triage:orderIndex 0 .

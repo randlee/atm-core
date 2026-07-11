@@ -29,12 +29,6 @@ Notes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
-  - typed advisory-session envelopes for:
-    - register
-    - unregister
-    - fetch
-    - drain
-    - live advisory stream
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
@@ -61,33 +55,43 @@ Notes:
 - `atm-graft` now lands as one such thin client crate and is expected to stay
   on this boundary plus the shared ATM envelopes rather than on any daemon-
   private request family.
-- Long-lived advisory registration, fetch/drain inspection, and live advisory
-  stream traffic are part of this shared boundary family rather than a
-  plugin-private daemon API.
+- Receiver-private lifecycle, buffering, or wakeup state must not be promoted
+  into shared transport methods or shared request/response DTOs on this
+  boundary.
 
 ## WatchEventSource
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/watch-event-source.toml](../../boundaries/atm-core/watch-event-source.toml)
 
-
+Historical status:
+- retired from the accepted runtime by `ADR-019`
+- any surviving references are deletion-planning or historical boundary records
+  only
 Purpose:
-- Owns filesystem watch event capture and delivery to the runtime reconcile layer.
+- historically owned filesystem watch event capture and delivery to the runtime
+  reconcile layer.
 
 Notes:
-- This keeps raw watch APIs out of store, transport, and service logic.
+- on the earlier compatibility line, this kept raw watch APIs out of store,
+  transport, and service logic.
 
 ## ReconcileCoordinator
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/reconcile-coordinator.toml](../../boundaries/atm-core/reconcile-coordinator.toml)
 
-
+Historical status:
+- retired from the accepted runtime by `ADR-019`
+- any surviving references are deletion-planning or historical boundary records
+  only
 Purpose:
-- Owns watch-driven reconcile policy and ingress triggering above raw watch events.
+- historically owned watch-driven reconcile policy and ingress triggering above
+  raw watch events.
 
 Notes:
-- This closes the missing watch/reconcile boundary gap in the initial Phase R set.
+- on the earlier compatibility line, this closed the missing watch/reconcile
+  boundary gap in the initial Phase R set.
 
 ## ServerTransport
 
@@ -172,6 +176,38 @@ Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
   diagnosis into daemon or CLI code.
 
+## NudgeTemplateOverrideStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/nudge-template-override-store.toml](../../boundaries/atm-storage/nudge-template-override-store.toml)
+
+Purpose:
+- expose the stable `atm-core::boundary` compatibility facade for the
+  storage-owned team-scoped built-in nudge template override contract
+
+Notes:
+- This boundary exists specifically so built-in nudge override lookup resolves
+  upstream of `PostSendHookEmitter`.
+- canonical ownership now lives in `atm-storage`; `atm-core` re-exports the
+  moved trait and storage-neutral row/kind types so retained compile-bridge
+  consumers do not break during cutover
+- `atm-core` retains only
+  `built_in_nudge_template_kind_from_post_send_event(...)` because it depends
+  on the core-owned `PostSendHookEvent`
+- the first concrete implementation remains `atm-storage-rusqlite`
+- [../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md](../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md)
+  supersedes ADR-021's older `atm-core` ownership assumption
+- `atm` remains the owner of the six built-in product template bodies and the
+  bounded placeholder substitution/rendering policy.
+- Accepted row semantics are explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion
+- the durable ack classifier used by mailbox metadata and retained list/read
+  projections now lives beside this contract in `atm-storage`, not in
+  `atm-core`
+
 ## Phase AA Runtime Composition Adjuncts
 
 Purpose:
@@ -217,9 +253,11 @@ Notes:
   `config.json` mismatch in returned warning text, but it must obtain member
   truth from `ProjectionRoster` rather than from `ConfigIngress`
 - approved surviving callers after the `Phase Z` follow-on line are:
-  - watcher / reconcile ingest
+  - historical watcher / reconcile ingest on the pre-`ADR-019` line
   - `doctor` comparison
   - narrow recreated-shell preservation reads during restore
+- watcher/reconcile has since been retired from the accepted runtime; only the
+  explicit comparison/preservation callers remain accepted
 - before `Z.8`, one temporary startup-only bridge was allowed outside the
   trait surface:
   - `atm_core::boundary_support::hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
@@ -319,6 +357,83 @@ Notes:
   - persisted single-message Claude append remains on the existing append-only
     path and is not reopened onto this boundary
 
+## PostSendHookEmitter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/post-send-hook-emitter.toml](../../boundaries/atm-core/post-send-hook-emitter.toml)
+
+
+Purpose:
+- Owns the one accepted post-commit recipient-emission seam for post-send
+  behavior after durable message persistence succeeds.
+
+Notes:
+- Phase `AD` established this boundary as the replacement for
+  `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
+  path.
+- `send` / `ack` remain responsible for:
+  - persistence success
+  - deciding whether the recipient exposes post-send capability
+  - logging emission failure
+  - constructing sender-visible warnings on emission failure
+- accepted send/ack finalization emits post-send directly from persisted
+  logical messages on the accepted runtime with no retained compatibility
+  delivery-plan executor on this path
+- the emitter is responsible only for attempting recipient-side emission and
+  returning typed success/failure.
+- the accepted `AD.25` through `AD.30` follow-up line keeps that attempt-only
+  ownership explicit:
+  - caller-owned send/ack code resolves matching external hooks, built-in
+    fallback eligibility, and the concrete built-in recipient target before
+    invoking this boundary
+  - this boundary does not reopen config lookup, team override lookup, or
+    recipient-capability policy selection
+- local tmux-backed emission may live in `atm-core`; the graft-backed emitter
+  is the explicitly allowlisted out-of-owner implementation
+  `atm_daemon::post_send_emitter::DaemonPostSendHookEmitter`.
+- this boundary must not become a logical-message-delivery, persistence, or
+  generic notification-planning seam.
+- AD18/ARCH-004 scope ruling, governed by
+  `docs/adr/ADR-020-rule001-observability-adapter-exception.md`, is accepted
+  on the `AD.25` through `AD.30` follow-up line:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs` is a sanctioned
+    library-internal adapter module for direct
+    `sc_observability_types::{ActionName, OutcomeLabel}` imports in the dual
+    `lib.rs` + `main.rs` `atm-daemon` crate
+  - `crates/atm-daemon/src/main.rs` may still import those construction types
+    directly as the binary entrypoint
+  - `daemon_runtime_observability.rs` must expose a concrete achievable
+    crate-visible mechanism, such as `pub(crate)` aliases or constructor
+    helpers, so `runtime_sqlite_observer.rs` and `test_observability.rs` stop
+    importing `sc_observability_types` directly
+  - every other file under `crates/atm-daemon/src/` must route those aliases
+    through the sanctioned adapter module; relocating the import to any other
+    daemon source file is a boundary violation
+  - CI enforcement must live in `.just/lint_boundaries.py` with one explicit
+    allowlist entry for the sanctioned adapter module rather than only a manual
+    review-time grep
+
+## GraftPostSendPort
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
+
+
+Purpose:
+- Owns the one accepted graft-backed advisory handoff for post-send events
+  after `atm-core` has already decided that recipient-side graft emission is
+  required.
+
+Notes:
+- This stays narrower than `PostSendHookEmitter`:
+  - `atm-core` still decides whether graft-backed post-send applies
+  - `atm-core` still logs failures and constructs sender-visible warnings
+  - the port only attempts the graft-side advisory delivery
+- the accepted out-of-owner implementation is
+  `atm_daemon::runtime_health::DaemonGraftPostSendPort`.
+- this boundary must not expand into generic notification routing, mailbox
+  compatibility append, tmux delivery, or local process spawning.
+
 ## NotificationSink
 
 Canonical machine-readable boundary source:
@@ -326,26 +441,46 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns outward delivery of notifications, hooks, or plugin-facing events.
+- Historical boundary record only. Phase `AD.5` retired `NotificationSink`
+  from the accepted post-send/send/ack path.
 
 Notes:
-- This replaces direct `Command::new` use in business-flow code.
-- Notification fallback policy for delivery state machines belongs here as a
-  sink-side effect, but event legality still belongs to the event-family state
-  machine rather than to the sink adapter.
-- Phase `Yb` clarifies that this boundary is notification-only:
-  - hook or notifier invocation is not proof of logical message delivery
-  - non-Claude outbound payload delivery must use a dedicated delivery
-    boundary, not NotificationSink as a stand-in
-  - impossible non-Claude append-degraded routing must fail closed before it
-    reaches this sink
-  - the current proof surface for non-Claude delivery lives in
-    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
-- `Phase Yc` finalized the production-path ownership rule:
-  - `Y.13` removed the direct
-    `PostSendNotificationExecutor -> maybe_run_post_send_hook(...)` bypass
-  - the surviving production notification path now executes through
-    `NotificationSink::deliver(...)`
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- Post-send ownership now stays at the send/ack event site:
+  - durable message persistence succeeds first
+  - recipient-specific post-send emission happens directly through the accepted
+    post-send emitter seam
+  - retained notification logging, when enabled, appends directly to the
+    notification log with no `NotificationSink` substitution
+- Non-Claude outbound payload delivery still uses the dedicated
+  `NonClaudeOutbound` boundary rather than any notification surface.
+
+## ClaudeCompatibilityMailboxWriter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml](../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml)
+
+Historical status:
+- retired from the accepted runtime by `AD.3`
+- any surviving references are historical boundary records only
+
+Purpose:
+- Historical boundary record only. Phase `AD.3` retired the
+  `ClaudeCompatibilityMailboxWriter` executor seam from the accepted send/ack
+  runtime.
+
+Notes:
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- The deleted seam previously owned:
+  - `execute_claude_delivery(...)`
+  - direct `append_claude_inbox_message(...)` / recovered message-set append
+    execution
+- Accepted send/ack delivery now routes through the retained
+  `NonClaudeOutbound` seam only.
+- Repair-only inbox rebuild/export support remains outside the live send/ack
+  executor and must not be treated as a surviving delivery boundary.
 
 ## NonClaudeOutbound
 

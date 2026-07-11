@@ -36,6 +36,18 @@ def build_command(repo_root: Path) -> list[str]:
     return ["cargo-shear"]
 
 
+def emit_console_text(text: str, *, stream = sys.stdout) -> None:
+    if not text:
+        return
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    if hasattr(stream, "buffer"):
+        stream.buffer.write(text.encode(encoding, errors="replace"))
+        stream.flush()
+        return
+    stream.write(text.encode(encoding, errors="replace").decode(encoding))
+    stream.flush()
+
+
 def parse_sections(stdout: str) -> list[ShearSection]:
     sections: list[ShearSection] = []
     current_name: str | None = None
@@ -203,9 +215,9 @@ def main(argv: list[str]) -> int:
 
     if completed.returncode != 0:
         if stdout:
-            print(stdout, end="")
+            emit_console_text(stdout)
         if completed.stderr:
-            print(completed.stderr, end="", file=sys.stderr)
+            emit_console_text(completed.stderr, stream=sys.stderr)
         return completed.returncode
 
     if policy_findings:
@@ -218,16 +230,16 @@ def main(argv: list[str]) -> int:
             for line in downgraded:
                 print(line)
         if stdout:
-            print(stdout, end="")
+            emit_console_text(stdout)
         return 1
 
     if downgraded:
         for line in downgraded:
             print(line)
     if stdout:
-        print(stdout, end="")
+        emit_console_text(stdout)
     if completed.stderr:
-        print(completed.stderr, end="", file=sys.stderr)
+        emit_console_text(completed.stderr, stream=sys.stderr)
     return 0
 
 

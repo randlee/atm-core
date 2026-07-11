@@ -27,6 +27,12 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-016 — Claude Config Ingress And Roster Projection Ownership](./ADR-016-claude-config-ingress-and-roster-projection-ownership.md)
 - [ADR-017 — Claude Inbox Fail-Soft Read Policy](./ADR-017-claude-inbox-fail-soft-read-policy.md)
 - [ADR-018 — Storage Contract Reset And Backend Interchangeability](./ADR-018-storage-contract-reset-and-backend-interchangeability.md)
+- [ADR-019 — Direct Post-Send Emission And Claude Backend Retirement](./ADR-019-direct-post-send-and-claude-json-retirement.md)
+- [ADR-020 — RULE-001 Observability Adapter Exception](./ADR-020-rule001-observability-adapter-exception.md)
+- [ADR-021 — NudgeTemplateOverrideStore Dependent Widening (superseded by ADR-024)](./ADR-021-nudge-template-override-store-dependent-widening.md)
+- [ADR-022 — Durable Ack Intent](./ADR-022-durable-ack-intent.md)
+- [ADR-023 — Owner-Only Message Mutation](./ADR-023-owner-only-message-mutation.md)
+- [ADR-024 — NudgeTemplateOverrideStore Storage Ownership Relocation](./ADR-024-nudge-template-override-storage-ownership-relocation.md)
 
 ## Extracted Crate-Local ADRs
 

@@ -12,7 +12,9 @@ use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeSta
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
-    AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
+    AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
+    DisableNudgeTemplateOverrideOutcome, MembersList, RestoreOutcome, RestorePlan,
+    SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.
@@ -160,14 +162,11 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
-        println!(
-            "Acknowledged {} for {}@{} and sent reply {} to {}",
-            outcome.message_id,
-            outcome.agent,
-            outcome.team,
-            outcome.reply_message_id,
-            outcome.reply_target
-        );
+        println!("{}", render_ack_result_line(outcome));
+        if outcome.reply_disposition.is_suppressed_self_ack() {
+            println!("Suppressed reply text:");
+            println!("{}", outcome.reply_text);
+        }
     }
 
     for warning in &outcome.warnings {
@@ -175,6 +174,22 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn render_ack_result_line(outcome: &AckOutcome) -> String {
+    match &outcome.reply_disposition {
+        atm_core::ack::AckReplyDisposition::SuppressedSelfAck => format!(
+            "Acknowledged {} for {}@{} and suppressed the self-ack reply",
+            outcome.message_id, outcome.agent, outcome.team
+        ),
+        atm_core::ack::AckReplyDisposition::Sent {
+            reply_message_id,
+            reply_target,
+        } => format!(
+            "Acknowledged {} for {}@{} and sent reply {} to {}",
+            outcome.message_id, outcome.agent, outcome.team, reply_message_id, reply_target
+        ),
+    }
 }
 
 /// Print one clear result in human-readable or JSON form.
@@ -352,7 +367,16 @@ fn print_doctor_roster(report: &DoctorReport) {
     println!();
     println!("Members: {}", roster.team);
     for member in &roster.members {
-        println!("  - {}", member.name);
+        let home_dir = member.home_dir.as_path().display().to_string();
+        println!(
+            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
+            member.name,
+            empty_dash(&member.agent_type),
+            empty_dash(&member.model),
+            empty_dash(&home_dir),
+            empty_dash_opt(member.live_cwd.as_deref()),
+            empty_dash_opt(member.tmux_pane_id.as_deref())
+        );
     }
 }
 
@@ -401,12 +425,14 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
     }
 
     for member in &outcome.members {
+        let home_dir = member.home_dir.as_path().display().to_string();
         println!(
-            "  {} | type={} model={} cwd={} pane={}",
+            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
             member.name,
             empty_dash(&member.agent_type),
             empty_dash(&member.model),
-            empty_dash(&member.cwd),
+            empty_dash(&home_dir),
+            empty_dash_opt(member.live_cwd.as_deref()),
             empty_dash_opt(member.tmux_pane_id.as_deref())
         );
     }
@@ -421,6 +447,69 @@ pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result
         println!(
             "Added member {} to {} (created_inbox: {})",
             outcome.member, outcome.team, outcome.created_inbox
+        );
+    }
+    Ok(())
+}
+
+/// Print one update-member result in human-readable or JSON form.
+pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    Ok(())
+}
+
+/// Print one set-nudge-template result in human-readable or JSON form.
+pub fn print_set_nudge_template_override_result(
+    outcome: &SetNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Set nudge template override {} for {} at {}",
+            outcome.kind, outcome.team, outcome.updated_at
+        );
+    }
+    Ok(())
+}
+
+/// Print one disable-nudge-template result in human-readable or JSON form.
+pub fn print_disable_nudge_template_override_result(
+    outcome: &DisableNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Disabled nudge template override {} for {} at {}",
+            outcome.kind, outcome.team, outcome.updated_at
+        );
+    }
+    Ok(())
+}
+
+/// Print one clear-nudge-template result in human-readable or JSON form.
+pub fn print_clear_nudge_template_override_result(
+    outcome: &ClearNudgeTemplateOverrideOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        let status = if outcome.cleared {
+            "cleared"
+        } else {
+            "already at product default"
+        };
+        println!(
+            "Clear nudge template override {} for {}: {}",
+            outcome.kind, outcome.team, status
         );
     }
     Ok(())
@@ -526,11 +615,13 @@ fn render_doctor_status(status: DoctorStatus) -> &'static str {
     }
 }
 
-fn render_maintenance_state(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+fn render_maintenance_state(
+    state: atm_core::observability::AtmMaintenanceWorkerState,
+) -> &'static str {
     match state {
-        sc_observability_types::MaintenanceWorkerState::Running => "running",
-        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
-        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+        atm_core::observability::AtmMaintenanceWorkerState::Running => "running",
+        atm_core::observability::AtmMaintenanceWorkerState::Degraded => "degraded",
+        atm_core::observability::AtmMaintenanceWorkerState::Stopped => "stopped",
     }
 }
 
@@ -645,12 +736,14 @@ fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport,
     };
+    use serde_json::json;
 
-    use super::render_bootstrap_trace_section;
+    use super::{render_ack_result_line, render_bootstrap_trace_section};
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -669,5 +762,56 @@ mod tests {
         assert!(rendered.contains("Auto-start: auto_started"));
         assert!(rendered.contains("Connect detail: connect detail"));
         assert!(rendered.contains("Auto-start detail: auto-start detail"));
+    }
+
+    #[test]
+    fn ack_output_renders_suppressed_self_ack_human_line() {
+        let outcome: AckOutcome = serde_json::from_value(json!({
+            "action": "ack",
+            "team": "test-team",
+            "agent": "sender-a",
+            "message_id": "01KX5TEST00000000000000001",
+            "task_id": null,
+            "reply_disposition": {
+                "kind": "suppressed_self_ack"
+            },
+            "reply_text": "already on it",
+            "warnings": []
+        }))
+        .expect("ack outcome");
+
+        let rendered = render_ack_result_line(&outcome);
+        assert!(rendered.contains("suppressed the self-ack reply"));
+        assert!(rendered.contains("01KX5TEST00000000000000001"));
+    }
+
+    #[test]
+    fn ack_output_json_shape_preserves_sent_reply_disposition() {
+        let outcome: AckOutcome = serde_json::from_value(json!({
+            "action": "ack",
+            "team": "test-team",
+            "agent": "sender-a",
+            "message_id": "01KX5TEST00000000000000002",
+            "task_id": null,
+            "reply_disposition": {
+                "kind": "sent",
+                "reply_target": "team-lead@test-team",
+                "reply_message_id": "01KX5TEST00000000000000003"
+            },
+            "reply_text": "received",
+            "warnings": []
+        }))
+        .expect("ack outcome");
+
+        let rendered = serde_json::to_value(&outcome).expect("json outcome");
+        assert_eq!(rendered["reply_disposition"]["kind"], "sent");
+        assert_eq!(
+            rendered["reply_disposition"]["reply_target"],
+            "team-lead@test-team"
+        );
+        assert_eq!(
+            rendered["reply_disposition"]["reply_message_id"],
+            "01KX5TEST00000000000000003"
+        );
     }
 }

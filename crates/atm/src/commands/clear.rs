@@ -1,23 +1,19 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use atm_core::address::AgentAddress;
 use atm_core::clear::ClearQuery;
-use atm_core::home;
 use clap::Args;
 
-use crate::composition::CliComposition;
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
 /// Clear read or acknowledged messages from a mailbox.
 pub struct ClearCommand {
-    target: Option<String>,
-
-    #[arg(long = "as")]
-    actor_override: Option<String>,
-
     #[arg(long)]
     team: Option<String>,
 
@@ -37,12 +33,16 @@ pub struct ClearCommand {
 impl ClearCommand {
     /// Execute the `atm clear` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("clear")?;
         let dry_run = self.dry_run;
         let json = self.json;
-        let composition = CliComposition::bootstrap("clear", observability)?;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
+        let composition = CliComposition::bootstrap(
+            "clear",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.clear(query)?;
         output::print_clear_result(&outcome, dry_run, json)
     }
@@ -52,19 +52,15 @@ impl ClearCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ClearQuery> {
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let older_than = self.older_than.as_deref().map(parse_duration).transpose()?;
-        let target_address = self
-            .target
-            .as_deref()
-            .map(str::parse::<AgentAddress>)
-            .transpose()?;
 
         Ok(ClearQuery {
             home_dir,
             current_dir,
-            actor_override: self.actor_override.map(|value| value.parse()).transpose()?,
-            target_address,
-            team_override: self.team.map(|value| value.parse()).transpose()?,
+            caller_identity: caller_context.caller_identity,
+            caller_team: caller_context.caller_team,
             older_than,
             idle_only: self.idle_only,
             dry_run: self.dry_run,
@@ -108,13 +104,33 @@ fn parse_duration(raw: &str) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::{EnvGuard, TEST_TEAM};
+    use clap::Parser;
+    use serial_test::serial;
+
     use super::ClearCommand;
 
     #[test]
-    fn build_query_rejects_invalid_target_before_core() {
+    fn cli_rejects_positional_mailbox_target_for_owner_only_clear() {
+        let error = crate::commands::Cli::try_parse_from(["atm", "clear", "recipient@test-team"])
+            .expect_err("owner-only clear must reject positional target");
+
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("unexpected argument 'recipient@test-team'")
+                || rendered.contains("unexpected argument"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
         let command = ClearCommand {
-            target: Some("../evil".to_string()),
-            actor_override: None,
             team: None,
             older_than: None,
             idle_only: false,
@@ -122,10 +138,30 @@ mod tests {
             json: false,
         };
 
-        let error = command
-            .build_query(".".into(), ".".into())
-            .expect_err("invalid target");
+        let query = command.build_query(".".into(), ".".into()).expect("query");
 
-        assert!(error.to_string().contains("agent name"));
+        assert_eq!(query.caller_identity.as_str(), "sender-a");
+        assert_eq!(query.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_preserves_environment_identity_with_team_override() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let command = ClearCommand {
+            team: Some(TEST_TEAM.to_string()),
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+            json: false,
+        };
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), "env-sender");
+        assert_eq!(query.caller_team.as_str(), TEST_TEAM);
     }
 }

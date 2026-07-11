@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "atm-storage-rusqlite hand-rolls IsoTimestamp parsing instead of using a shared IsoTimestamp constructor" ;
+  triage:description "RUSQLITE-COUPLING-FIX-1-QA identified that the ef873180 follow-up code was correct but the branch-local triage record was missing. The actual fix centralized RFC3339 timestamp parsing behind IsoTimestamp's shared FromStr constructor in crates/atm-storage/src/types.rs and repointed the rusqlite call sites to that shared parser while preserving each call site's field-specific AtmError context and recovery text." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-11T02:39:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "Resolved on fix/phase-AD-pm-boundary-violation @ ef873180 by adding a shared FromStr constructor for IsoTimestamp in crates/atm-storage/src/types.rs and making the atm-storage-rusqlite timestamp parse helpers delegate to that constructor instead of hand-rolled chrono DateTime<Utc> parsing. The call sites keep their existing field-specific AtmError validation text and recovery guidance." ;
+  triage:triagedAt "2026-07-11T02:39:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/4> ;
+  triage:openOn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> ;
+  triage:promoteTo <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 32 ;
+  triage:snippet "fn parse_optional_timestamp(raw: Option<String>, field_name: &str) -> Result<Option<IsoTimestamp>, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 154 ;
+  triage:snippet "fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn parse_updated_at(raw: String) -> Result<IsoTimestamp, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:occurrence/RBP-F001/fix-phase-AD-pm-boundary-violation/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 205 ;
+  triage:snippet "fn parse_optional_timestamp(raw: Option<String>, field_name: &str) -> Result<Option<IsoTimestamp>, AtmError>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180> .
+
+<urn:atm:triage:worktree/fix-phase-AD-pm-boundary-violation/ef873180>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/phase-AD-pm-boundary-violation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/fix/phase-AD-pm-boundary-violation" ;
+  triage:headSha "ef873180" ;
+  triage:orderIndex 999 .

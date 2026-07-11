@@ -1,0 +1,151 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD18-ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "AD18-ATM-QA-003" ;
+  triage:title "Only 1 of 3 required runtime-root failure-path tests exists" ;
+  triage:description "req-qa ATM-QA-003: RuntimeBootstrapRefused is tested; AtmHomeUnresolved and RuntimeRootInvalid are not." ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-07T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-ATM-QA-003/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-ATM-QA-003/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-ATM-QA-003/s20/1> ;
+  triage:highestFixedBranch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:closureNote "Fixed on s18-s20 (verified: composition.rs has all 3 log-marker tests at lines 1492 ATM_HOME_UNRESOLVED, 1515 ATM_RUNTIME_ROOT_INVALID, 1553 ATM_RUNTIME_BOOTSTRAP_REFUSED). Open on integrate/phase-AD (all 3 tests missing)." .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1492 ;
+  triage:snippet "assert!(logs.contains(\"ATM_HOME_UNRESOLVED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1515 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_ROOT_INVALID\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s18/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1553 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_BOOTSTRAP_REFUSED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1492 ;
+  triage:snippet "assert!(logs.contains(\"ATM_HOME_UNRESOLVED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 ;
+  triage:occursIn <urn:atm:triage:worktree/s19/f5e8732f> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1515 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_ROOT_INVALID\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 ;
+  triage:occursIn <urn:atm:triage:worktree/s19/f5e8732f> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s19/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1553 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_BOOTSTRAP_REFUSED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 ;
+  triage:occursIn <urn:atm:triage:worktree/s19/f5e8732f> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1492 ;
+  triage:snippet "assert!(logs.contains(\"ATM_HOME_UNRESOLVED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1515 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_ROOT_INVALID\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:occurrence/AD18-ATM-QA-003/s20/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1553 ;
+  triage:snippet "assert!(logs.contains(\"ATM_RUNTIME_BOOTSTRAP_REFUSED\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+<urn:atm:triage:worktree/s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/f5e8732f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/5ac7f11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 .

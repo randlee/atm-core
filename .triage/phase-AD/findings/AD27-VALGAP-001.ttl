@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD27-VALGAP-001>
+  a triage:Finding ;
+  triage:findingId "AD27-VALGAP-001" ;
+  triage:title "arch-ctm's self-reported validation suite does not invoke cargo test at all" ;
+  triage:description "arch-ctm's claimed validation suite (python3 .just/run_lint.py all) does not invoke `cargo test` at all, so it could not have caught the two failing tests documented in AD27-TESTLIT-001 even if genuinely run clean. This is a gap in the validation contract itself, not just a one-off human error -- arch-ctm's self-reported \"cargo test --workspace: passed\" claim relayed via ATM does not match reality when independently executed by QA." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "VALGAP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s29/f7a4991f> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/5c19cba9> ;
+  triage:notes "Non-repeatable process-level finding. Validation contract gap affects all branches equally; arch-ctm's Required Validation gate items (dev-template.xml.j2) do not align with self-reported execution. Recommended action: QA to independently re-run Required Validation gate items rather than trusting dev self-report. Already standing QA practice." ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/f7a4991f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "f7a4991f" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/5c19cba9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "5c19cba9" ;
+  triage:orderIndex 30 .

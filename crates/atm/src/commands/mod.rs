@@ -2,12 +2,15 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 pub mod ack;
+pub(crate) mod caller_context;
 pub mod clear;
 pub mod doctor;
 pub mod help;
+pub(crate) mod internal_nudge;
 pub mod list;
 pub mod log;
 pub mod members;
+pub mod peek;
 pub mod read;
 pub(crate) mod retained_roster;
 pub mod send;
@@ -18,9 +21,11 @@ pub use ack::AckCommand;
 pub use clear::ClearCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
+pub(crate) use internal_nudge::InternalNudgeCommand;
 pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
+pub use peek::PeekCommand;
 pub use read::ReadCommand;
 pub use send::SendCommand;
 pub use teams::TeamsCommand;
@@ -63,12 +68,15 @@ impl Cli {
 enum Command {
     Send(SendCommand),
     List(ListCommand),
+    Peek(PeekCommand),
     Read(ReadCommand),
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),
     Doctor(DoctorCommand),
     Help(HelpCommand),
+    #[command(hide = true)]
+    InternalNudge(InternalNudgeCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
 }
@@ -78,12 +86,14 @@ impl Command {
         match self {
             Self::Send(command) => command.run(observability),
             Self::List(command) => command.run(observability),
+            Self::Peek(command) => command.run(observability),
             Self::Read(command) => command.run(observability),
             Self::Ack(command) => command.run(observability),
             Self::Clear(command) => command.run(observability),
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability),
             Self::Help(command) => command.run(observability),
+            Self::InternalNudge(command) => command.run(observability),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
         }

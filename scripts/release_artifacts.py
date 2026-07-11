@@ -210,10 +210,53 @@ def crate_is_publishable(crate_toml: Path) -> bool:
     return True
 
 
+def workspace_package_defaults(workspace_toml: Path) -> dict:
+    data = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
+    package = data.get("workspace", {}).get("package", {})
+    if not isinstance(package, dict):
+        return {}
+    return package
+
+
+def package_field_value(
+    package: dict,
+    field: str,
+    *,
+    workspace_defaults: dict,
+) -> str | None:
+    value = package.get(field)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict) and value.get("workspace") is True:
+        inherited = workspace_defaults.get(field)
+        if isinstance(inherited, str) and inherited.strip():
+            return inherited.strip()
+    return None
+
+
+def missing_publish_metadata_fields(crate_toml: Path, workspace_defaults: dict) -> list[str]:
+    data = tomllib.loads(crate_toml.read_text(encoding="utf-8"))
+    package = data.get("package", {})
+    if not isinstance(package, dict):
+        return ["package"]
+
+    missing: list[str] = []
+    if package_field_value(package, "description", workspace_defaults=workspace_defaults) is None:
+        missing.append("description")
+
+    license_value = package_field_value(package, "license", workspace_defaults=workspace_defaults)
+    license_file_value = package_field_value(package, "license-file", workspace_defaults=workspace_defaults)
+    if license_value is None and license_file_value is None:
+        missing.append("license or license-file")
+    return missing
+
+
 def validate_manifest(args: argparse.Namespace) -> int:
-    manifest_packages = {crate["package"] for crate in load_manifest(Path(args.manifest))["crates"]}
+    manifest = load_manifest(Path(args.manifest))
+    manifest_packages = {crate["package"] for crate in manifest["crates"]}
     workspace_toml = Path(args.workspace_toml)
     workspace_root = workspace_toml.parent
+    workspace_defaults = workspace_package_defaults(workspace_toml)
     missing = []
     for member in workspace_members(workspace_toml):
         crate_toml = workspace_root / member / "Cargo.toml"
@@ -226,7 +269,25 @@ def validate_manifest(args: argparse.Namespace) -> int:
     if missing:
         print(f"\n{len(missing)} publishable crate(s) missing from manifest.", file=sys.stderr)
         return 1
+
+    metadata_errors = []
+    for crate in manifest["crates"]:
+        if not crate["publish"]:
+            continue
+        crate_toml = workspace_root / crate["cargo_toml"]
+        missing_fields = missing_publish_metadata_fields(crate_toml, workspace_defaults)
+        if missing_fields:
+            metadata_errors.append(
+                f"{crate['package']}: missing required publish metadata field(s): {', '.join(missing_fields)}"
+            )
+    if metadata_errors:
+        print("publish metadata violation(s):")
+        for error in metadata_errors:
+            print(f"  - {error}")
+        return 1
+
     print("ok: all publishable workspace crates are present in the manifest")
+    print("ok: all publishable manifest crates define required publish metadata")
     return 0
 
 

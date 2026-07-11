@@ -14,13 +14,24 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
-use crate::config;
+use super::{
+    POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template,
+    qualified_sender_identity,
+};
+use crate::boundary::{
+    BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
+    PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath, PostSendHookEmitter,
+    PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
+};
 use crate::config::types::HookRecipient;
-use crate::error::AtmErrorCode;
+use crate::config::{self, AtmConfig};
+use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
+use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::schema::compatible_home_dir;
+use crate::service_runtime::{RetainedServiceRuntime, append_notification_log};
+use crate::types::{AgentName, TeamName};
 
-use super::{PostSendHookContext, WarningEntry, qualified_sender_identity};
-
-const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -54,55 +65,241 @@ impl HookCancellationToken {
     }
 }
 
+pub(crate) fn emit_post_send_effects<R>(
+    runtime: &R,
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    recipient: &ResolvedRecipient,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    messages: &[crate::delivery_plan::LogicalMessage],
+) where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    for message in messages {
+        let event = post_send_event_from_message(
+            recipient,
+            message,
+            delivery_snapshot.recipient_pane_id.as_ref(),
+        );
+        let outcome = emit_post_send_outcome(
+            runtime,
+            warnings,
+            config,
+            post_send_emitter,
+            delivery_snapshot,
+            &event,
+        );
+        if matches!(outcome, PostSendEmissionOutcome::Delivered { .. })
+            && let Err(error) = append_notification_log(&notification_event(&event))
+        {
+            warnings.push(WarningEntry::with_code(
+                error.code,
+                format!(
+                    "warning: notification delivery failed for {}@{}: {error}",
+                    recipient.agent, recipient.team
+                ),
+                error.primary_recovery().map(str::to_owned),
+            ));
+        }
+    }
+}
+
+fn emit_post_send_outcome<R>(
+    runtime: &R,
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+) -> PostSendEmissionOutcome
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let hook_summary = config
+        .map(|loaded| run_post_send_hooks_for_cli(warnings, loaded, event))
+        .unwrap_or_else(|| HookExecutionSummary::new(0, 0, 0).expect("zero summary"));
+    if hook_summary.succeeded_rules() > 0 {
+        return PostSendEmissionOutcome::Delivered {
+            path: PostSendEmissionPath::ExternalHook,
+            hook_summary,
+        };
+    }
+    if hook_summary.matched_rules() > 0 {
+        let warning = warnings.last().cloned().unwrap_or_else(|| {
+            WarningEntry::with_code(
+                AtmErrorCode::WarningHookExecutionFailed,
+                format!(
+                    "warning: post-send hook execution failed for {}@{} message {}.",
+                    event.recipient, event.recipient_team, event.message_id
+                ),
+                Some(
+                    "Inspect the matching post-send hook command output and retry once the hook exits successfully."
+                        .to_string(),
+                ),
+            )
+        });
+        return PostSendEmissionOutcome::Failed {
+            hook_summary,
+            warning,
+        };
+    }
+    let Some(dispatch) = build_built_in_dispatch(runtime, delivery_snapshot, event) else {
+        return PostSendEmissionOutcome::NoCapability { hook_summary };
+    };
+    let Some(post_send_emitter) = post_send_emitter else {
+        return PostSendEmissionOutcome::NoCapability { hook_summary };
+    };
+    match post_send_emitter.emit_post_send(&dispatch) {
+        Ok(path) => PostSendEmissionOutcome::Delivered { path, hook_summary },
+        Err(error) => {
+            let warning = post_send_warning("post-send emission failed", event, &error);
+            warnings.push(warning.clone());
+            PostSendEmissionOutcome::Failed {
+                hook_summary,
+                warning,
+            }
+        }
+    }
+}
+
+pub(crate) fn load_post_send_config_for_sender<R>(
+    runtime: &R,
+    sender_team: &TeamName,
+    sender: &AgentName,
+) -> Result<Option<AtmConfig>, AtmError>
+where
+    R: crate::service_runtime::RetainedServiceRuntime + ?Sized,
+{
+    let Some(member) = runtime.load_roster_member(sender_team, sender)? else {
+        return Ok(None);
+    };
+    let Some(config_root) = sender_config_root(&member.metadata_json) else {
+        return Ok(None);
+    };
+    runtime.load_config(&config_root)
+}
+
 fn run_post_send_hooks_for_cli(
     warnings: &mut Vec<WarningEntry>,
-    config: Option<&config::AtmConfig>,
-    context: PostSendHookContext<'_>,
-) {
+    config: &AtmConfig,
+    event: &PostSendHookEvent,
+) -> HookExecutionSummary {
     // This helper is intentionally synchronous and may block the caller thread
     // for up to POST_SEND_HOOK_TIMEOUT while supervising one child process.
     // Keep it on the CLI path; do not call it from an async runtime thread.
-    let Some(config) = config else {
-        return;
-    };
-
     let matching_rules: Vec<_> = config
         .post_send_hooks
         .iter()
-        .filter(|rule| hook_matches_recipient(&rule.recipient, &context.recipient.agent))
+        .filter(|rule| hook_matches_recipient(&rule.recipient, &event.recipient))
         .collect();
 
     if matching_rules.is_empty() {
         debug!(
-            sender = %context.sender,
-            recipient = %context.recipient.agent,
-            recipient_team = %context.recipient.team,
+            sender = %event.sender,
+            recipient = %event.recipient,
+            recipient_team = %event.recipient_team,
             "post-send hook had no matching recipient rules"
         );
-        return;
+        return HookExecutionSummary::new(0, 0, 0).expect("zero summary");
     }
 
+    let mut succeeded_rules = 0usize;
+    let mut failed_rules = 0usize;
     for rule in matching_rules {
-        execute_post_send_hook(warnings, config, rule, &context);
+        if execute_post_send_hook(warnings, config, rule, event) {
+            succeeded_rules += 1;
+        } else {
+            failed_rules += 1;
+        }
     }
+    HookExecutionSummary::new(
+        succeeded_rules + failed_rules,
+        succeeded_rules,
+        failed_rules,
+    )
+    .expect("validated hook execution summary")
+}
+
+fn build_built_in_dispatch<R>(
+    runtime: &R,
+    delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+) -> Option<BuiltInPostSendDispatch>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    if delivery_snapshot.local_tmux_post_send {
+        let pane_id = event
+            .recipient_pane_id
+            .clone()
+            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
+        let kind = built_in_nudge_template_kind_from_post_send_event(event);
+        let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
+            Ok(row) => row,
+            Err(error) => {
+                warn!(
+                    code = %error.code,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    %error,
+                    "failed to load built-in nudge template override; falling back to default"
+                );
+                None
+            }
+        };
+        let template = nudge_template::resolve_template(override_row, kind);
+        let template_body = template.body.as_deref()?;
+        let rendered_nudge = match nudge_template::render_built_in_nudge(event, template_body) {
+            Ok(rendered) => rendered,
+            Err(error) => {
+                warn!(
+                    code = %error.code,
+                    recipient = %event.recipient,
+                    recipient_team = %event.recipient_team,
+                    message_id = %event.message_id,
+                    %error,
+                    "failed to render built-in tmux nudge"
+                );
+                return None;
+            }
+        };
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+                pane_id,
+                rendered_nudge,
+            }),
+        });
+    }
+    if delivery_snapshot.graft_post_send {
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: event.recipient.clone(),
+                recipient_team: event.recipient_team.clone(),
+            }),
+        });
+    }
+    None
 }
 
 fn execute_post_send_hook(
     warnings: &mut Vec<WarningEntry>,
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     rule: &config::types::PostSendHookRule,
-    context: &PostSendHookContext<'_>,
-) {
+    event: &PostSendHookEvent,
+) -> bool {
     // This function performs blocking child-process supervision with short
     // sleeps. It is safe for the current CLI call path and must stay off async
     // runtime threads unless wrapped in spawn_blocking by the caller.
-    let Some(execution) = prepare_post_send_hook_execution(config, rule, context) else {
-        return;
+    let Some(execution) = prepare_post_send_hook_execution(config, rule, event) else {
+        return false;
     };
-    let mut child = match spawn_post_send_hook_process(config, &execution, context, rule, warnings)
-    {
+    let mut child = match spawn_post_send_hook_process(config, &execution, event, rule, warnings) {
         Some(child) => child,
-        None => return,
+        None => return false,
     };
     let stdout_cancellation = HookCancellationToken::default();
     let mut stdout_reader =
@@ -117,7 +314,7 @@ fn execute_post_send_hook(
                     stdout_reader.take(),
                     &execution.command_path,
                     warnings,
-                    context,
+                    event,
                     rule,
                 );
             }
@@ -125,18 +322,19 @@ fn execute_post_send_hook(
                 thread::sleep(Duration::from_millis(50));
             }
             Ok(None) => {
-                return handle_post_send_hook_timeout(
+                handle_post_send_hook_timeout(
                     &mut child,
                     stdout_reader.take(),
                     &stdout_cancellation,
                     &execution.command_path,
                     warnings,
-                    context,
+                    event,
                     rule,
                 );
+                return false;
             }
             Err(error) => {
-                return handle_post_send_hook_status_error(
+                handle_post_send_hook_status_error(
                     error,
                     HookStatusFailureArgs {
                         child: &mut child,
@@ -144,10 +342,11 @@ fn execute_post_send_hook(
                         stdout_cancellation: &stdout_cancellation,
                         command_path: &execution.command_path,
                         warnings,
-                        context,
+                        context: event,
                         rule,
                     },
                 );
+                return false;
             }
         }
     }
@@ -160,50 +359,52 @@ struct HookExecution {
 }
 
 fn prepare_post_send_hook_execution(
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     rule: &config::types::PostSendHookRule,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
 ) -> Option<HookExecution> {
     let mut argv = rule.command.iter();
     let command_path = resolve_command_path(config, argv.next()?);
     Some(HookExecution {
         command_path,
         argv: argv.cloned().collect(),
-        payload: post_send_hook_payload(context),
+        payload: post_send_hook_payload(event),
     })
 }
 
-fn post_send_hook_payload(context: &PostSendHookContext<'_>) -> Value {
+fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
-        "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "sender": context.sender.as_str(),
-        "recipient": context.recipient.agent,
-        "team": context.recipient.team,
-        "message_id": context.message_id.to_string(),
-        "requires_ack": context.requires_ack,
-        "is_ack": context.is_ack,
+        "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        "to": format!("{}@{}", event.recipient, event.recipient_team),
+        "sender": event.sender.as_str(),
+        "recipient": event.recipient.as_str(),
+        "team": event.recipient_team.as_str(),
+        "message_id": event.message_id.to_string(),
+        "description": event.description,
+        "message": event.description,
+        "requires_ack": event.requires_ack,
+        "is_ack": event.is_ack,
     });
-    if let Some(task_id) = context.task_id {
+    if let Some(task_id) = &event.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
-    if let Some(recipient_pane_id) = context.recipient_pane_id {
+    if let Some(recipient_pane_id) = &event.recipient_pane_id {
         payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
     }
     payload
 }
 
 fn spawn_post_send_hook_process(
-    config: &config::AtmConfig,
+    config: &AtmConfig,
     execution: &HookExecution,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
     warnings: &mut Vec<WarningEntry>,
 ) -> Option<std::process::Child> {
     debug!(
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %execution.command_path.display(),
         "post-send hook matched recipient rule"
@@ -223,7 +424,7 @@ fn spawn_post_send_hook_process(
             warn_post_send_hook_start_failure(
                 &execution.command_path,
                 &error,
-                context,
+                event,
                 rule,
                 warnings,
             );
@@ -235,21 +436,22 @@ fn spawn_post_send_hook_process(
 fn warn_post_send_hook_start_failure(
     command_path: &Path,
     error: &std::io::Error,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
     warnings: &mut Vec<WarningEntry>,
 ) {
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         %error,
         "post-send hook failed to start"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook failed to start from {}: {error}.",
             command_path.display()
@@ -263,36 +465,39 @@ fn handle_post_send_hook_exit(
     stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
     command_path: &Path,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
-) {
+) -> bool {
     maybe_log_post_send_hook_result(
         command_path,
         finish_post_send_hook_stdout_capture(stdout_reader, command_path),
     );
     if !status.success() {
-        warn_post_send_hook_exit_failure(command_path, status, warnings, context, rule);
+        warn_post_send_hook_exit_failure(command_path, status, warnings, event, rule);
+        return false;
     }
+    true
 }
 
 fn warn_post_send_hook_exit_failure(
     command_path: &Path,
     status: std::process::ExitStatus,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
 ) {
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         %status,
         "post-send hook exited unsuccessfully"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook exited unsuccessfully from {} with status {status}.",
             command_path.display()
@@ -307,22 +512,23 @@ fn handle_post_send_hook_timeout(
     stdout_cancellation: &HookCancellationToken,
     command_path: &Path,
     warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
+    event: &PostSendHookEvent,
     rule: &config::types::PostSendHookRule,
 ) {
     terminate_post_send_hook_process(child, command_path);
     abandon_post_send_hook_stdout_capture(stdout_reader, stdout_cancellation, command_path);
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
+        sender = %event.sender,
+        recipient = %event.recipient,
+        recipient_team = %event.recipient_team,
         hook_recipient = %rule.recipient,
         hook_path = %command_path.display(),
         timeout_seconds = POST_SEND_HOOK_TIMEOUT.as_secs(),
         "post-send hook timed out"
     );
-    warnings.push(WarningEntry::new(
+    warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook timed out after {}s for {}.",
             POST_SEND_HOOK_TIMEOUT.as_secs(),
@@ -338,7 +544,7 @@ struct HookStatusFailureArgs<'a> {
     stdout_cancellation: &'a HookCancellationToken,
     command_path: &'a Path,
     warnings: &'a mut Vec<WarningEntry>,
-    context: &'a PostSendHookContext<'a>,
+    context: &'a PostSendHookEvent,
     rule: &'a config::types::PostSendHookRule,
 }
 
@@ -352,14 +558,15 @@ fn handle_post_send_hook_status_error(error: std::io::Error, args: HookStatusFai
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
         sender = %args.context.sender,
-        recipient = %args.context.recipient.agent,
-        recipient_team = %args.context.recipient.team,
+        recipient = %args.context.recipient,
+        recipient_team = %args.context.recipient_team,
         hook_recipient = %args.rule.recipient,
         hook_path = %args.command_path.display(),
         %error,
         "post-send hook status check failed"
     );
-    args.warnings.push(WarningEntry::new(
+    args.warnings.push(WarningEntry::with_code(
+        AtmErrorCode::WarningHookExecutionFailed,
         format!(
             "warning: post-send hook status check failed for {}: {error}.",
             args.command_path.display()
@@ -401,6 +608,68 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
 
 fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::AgentName) -> bool {
     configured.matches(candidate)
+}
+
+fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
+    NotificationEvent {
+        kind: NotificationKind::Delivery,
+        detail: serde_json::to_string(&json!({
+            "sender": event.sender.as_str(),
+            "sender_team": event.sender_team.as_str(),
+            "message_id": event.message_id.to_string(),
+            "description": event.description,
+            "requires_ack": event.requires_ack,
+            "is_ack": event.is_ack,
+            "task_id": event.task_id.as_ref().map(ToString::to_string),
+            "recipient_pane_id": event.recipient_pane_id.as_ref().map(ToString::to_string),
+        }))
+        .expect("delivery notification detail must serialize to valid JSON"),
+        team: Some(event.recipient_team.clone()),
+        agent: Some(event.recipient.clone()),
+    }
+}
+
+fn post_send_event_from_message(
+    recipient: &ResolvedRecipient,
+    message: &crate::delivery_plan::LogicalMessage,
+    recipient_pane_id: Option<&crate::types::PaneId>,
+) -> PostSendHookEvent {
+    PostSendHookEvent {
+        sender: message.envelope.from.clone(),
+        sender_team: message
+            .envelope
+            .source_team
+            .clone()
+            .unwrap_or_else(|| recipient.team.clone()),
+        recipient: recipient.agent.clone(),
+        recipient_team: recipient.team.clone(),
+        message_id: message.message_id(),
+        description: message
+            .envelope
+            .summary
+            .clone()
+            .filter(|summary| !summary.trim().is_empty())
+            .unwrap_or_else(|| message.envelope.text.clone()),
+        requires_ack: message.requires_ack,
+        is_ack: message.is_ack,
+        task_id: message.envelope.task_id.clone(),
+        recipient_pane_id: recipient_pane_id.cloned(),
+    }
+}
+
+fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
+    compatible_home_dir(metadata).map(Into::into)
+}
+
+fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
+    WarningEntry::with_code(
+        error.code,
+        format!(
+            "warning: {prefix} for {}@{} message {} ({}): {}.",
+            event.recipient, event.recipient_team, event.message_id, error.code, error.message
+        ),
+        error.primary_recovery().map(str::to_owned),
+    )
 }
 
 fn spawn_post_send_hook_stdout_reader(
@@ -614,19 +883,297 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Duration;
 
-    use serde_json::json;
+    use serde_json::{Map, json};
+    use tempfile::tempdir;
     use tracing::Level;
 
     use super::{
         HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
-        hook_result_log_level, parse_post_send_hook_result,
+        emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
+        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
+        parse_post_send_hook_result, sender_config_root,
     };
-    use crate::config::types::HookRecipient;
+    use crate::boundary::{
+        self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
+        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
+    };
+    use crate::config::AtmConfig;
+    use crate::config::types::{HookRecipient, PostSendHookRule};
+    use crate::delivery_plan::LogicalMessage;
+    use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
+    use crate::error::AtmError;
+    use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::test_support::TEST_SENDER;
+    use crate::schema::AckIntentFields;
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
+    )]
+    use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
+    use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
+    use crate::send::ResolvedRecipient;
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::test_support::{EnvGuard, TEST_SENDER};
+    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::workflow::WorkflowStateFile;
+
+    struct ConfigLookupRuntime {
+        roster_entry: Option<RosterEntry>,
+        config_lookup_root: PathBuf,
+        config: Option<AtmConfig>,
+    }
+
+    impl crate::boundary::sealed::Sealed for ConfigLookupRuntime {}
+
+    impl RetainedServiceRuntime for ConfigLookupRuntime {
+        fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok((current_dir == self.config_lookup_root)
+                .then_some(self.config.clone())
+                .flatten())
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, AtmError> {
+            unreachable!("config lookup test does not read team config")
+        }
+
+        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            unreachable!("config lookup test does not resolve team dirs")
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            unreachable!("config lookup test does not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not rebuild projections")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            unreachable!("config lookup test does not deliver outbound payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(self.roster_entry.clone())
+        }
+
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            unreachable!("config lookup test does not commit workflow state")
+        }
+    }
+
+    struct HookEmissionRuntime {
+        override_row: Option<TeamNudgeTemplateOverrideRow>,
+    }
+
+    impl HookEmissionRuntime {
+        fn new(override_row: Option<TeamNudgeTemplateOverrideRow>) -> Self {
+            Self { override_row }
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for HookEmissionRuntime {}
+
+    impl RetainedServiceRuntime for HookEmissionRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_nudge_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(self.override_row.clone())
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, AtmError> {
+            unreachable!("hook emission test does not read team config")
+        }
+
+        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            unreachable!("hook emission test does not resolve team dirs")
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            unreachable!("hook emission test does not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            unreachable!("hook emission test does not deliver non-claude payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            unreachable!("hook emission test does not commit workflow state")
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEmitter {
+        emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
+    }
+
+    impl RecordingEmitter {
+        fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
+            self.emitted.lock().expect("emitter lock").clone()
+        }
+    }
+
+    impl boundary::sealed::Sealed for RecordingEmitter {}
+
+    impl PostSendHookEmitter for RecordingEmitter {
+        fn emit_post_send(
+            &self,
+            dispatch: &BuiltInPostSendDispatch,
+        ) -> Result<PostSendEmissionPath, AtmError> {
+            self.emitted
+                .lock()
+                .expect("emitter lock")
+                .push(dispatch.clone());
+            Ok(match dispatch.target {
+                PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
+                PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
+            })
+        }
+    }
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
@@ -694,5 +1241,399 @@ mod tests {
     fn bounded_stdout_teardown_returns_promptly_for_completed_reader() {
         let handle = std::thread::spawn(|| Ok::<Vec<u8>, std::io::Error>(Vec::new()));
         finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally exercises the retained legacy cwd compatibility fallback."
+    )]
+    fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
+        let home_dir_metadata =
+            Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), json!("/repo/home"))]);
+        assert_eq!(
+            sender_config_root(&home_dir_metadata),
+            Some(PathBuf::from("/repo/home"))
+        );
+
+        let cwd_only_metadata =
+            Map::from_iter([(LEGACY_CWD_METADATA_KEY.to_string(), json!("/repo/cwd"))]);
+        assert_eq!(
+            sender_config_root(&cwd_only_metadata),
+            Some(PathBuf::from("/repo/cwd"))
+        );
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "Phase AD obsolete: test fixture intentionally seeds legacy cwd metadata to verify the bounded compatibility read."
+    )]
+    fn load_post_send_config_uses_sender_roster_metadata_not_caller_cwd() {
+        let config_root = PathBuf::from("/repo/home");
+        let runtime = ConfigLookupRuntime {
+            roster_entry: Some(RosterEntry {
+                team_name: TeamName::from_validated("test-team"),
+                agent_name: AgentName::from_validated(TEST_SENDER),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::from_iter([(
+                    LEGACY_CWD_METADATA_KEY.to_string(),
+                    json!(config_root.display().to_string()),
+                )]),
+            }),
+            config_lookup_root: config_root.clone(),
+            config: Some(AtmConfig {
+                config_root: config_root.clone(),
+                ..Default::default()
+            }),
+        };
+
+        let loaded = load_post_send_config_for_sender(
+            &runtime,
+            &TeamName::from_validated("test-team"),
+            &AgentName::from_validated(TEST_SENDER),
+        )
+        .expect("config lookup");
+
+        assert_eq!(
+            loaded.as_ref().map(|config| &config.config_root),
+            Some(&config_root)
+        );
+    }
+
+    fn logical_message(text: &str) -> LogicalMessage {
+        let ack_intent = AckIntentFields::not_required();
+        LogicalMessage::new(
+            InboxMessage {
+                from: AgentName::from_validated(TEST_SENDER),
+                text: text.to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TeamName::from_validated("test-team")),
+                summary: Some(text.to_string()),
+                message_id: Some(AtmMessageId::new()),
+                requires_ack: ack_intent.requires_ack,
+                pending_ack_at: ack_intent.pending_ack_at,
+                acknowledged_at: ack_intent.acknowledged_at,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+            false,
+            false,
+        )
+        .expect("logical message")
+    }
+
+    fn install_test_home(home_dir: &Path) -> EnvGuard {
+        EnvGuard::set_many([
+            ("HOME", home_dir.to_str()),
+            ("USERPROFILE", None),
+            ("ATM_LOG_DIR", None),
+        ])
+    }
+
+    fn read_notification_events(home_dir: &Path) -> Vec<crate::protocol::NotificationEvent> {
+        let notification_path =
+            crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl");
+        match fs::read_to_string(notification_path) {
+            Ok(contents) => contents
+                .lines()
+                .map(|line| serde_json::from_str(line).expect("notification event"))
+                .collect(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => panic!("failed to read notification log: {error}"),
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn built_in_fallback_dispatches_local_tmux_through_emitter() {
+        let tempdir = tempdir().expect("tempdir");
+        let _env = install_test_home(tempdir.path());
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            None,
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert!(warnings.is_empty());
+        let emitted = emitter.emitted();
+        assert_eq!(emitted.len(), 1);
+        let dispatch = &emitted[0];
+        match &dispatch.target {
+            PostSendBuiltInTarget::LocalTmux(target) => {
+                assert_eq!(target.pane_id, PaneId::from_cli("%9").expect("pane"));
+                assert!(target.rendered_nudge.contains("read atm --team test-team"));
+                assert!(
+                    target
+                        .rendered_nudge
+                        .contains(&dispatch.event.message_id.to_string())
+                );
+                assert!(target.rendered_nudge.contains("hello"));
+            }
+            other => panic!("expected local tmux dispatch, got {other:?}"),
+        }
+
+        let notifications = read_notification_events(tempdir.path());
+        assert_eq!(notifications.len(), 1);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn external_post_send_hook_takes_precedence_over_built_in_nudge() {
+        let tempdir = tempdir().expect("tempdir");
+        let hook_capture = tempdir.path().join("hook-capture.txt");
+        #[cfg(windows)]
+        let hook_path = tempdir.path().join("hook.cmd");
+        #[cfg(not(windows))]
+        let hook_path = tempdir.path().join("hook");
+        #[cfg(windows)]
+        fs::write(
+            &hook_path,
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo !ATM_POST_SEND!\r\nexit /b 0\r\n",
+        )
+        .expect("write hook shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &hook_path,
+            "#!/bin/sh\nprintf '%s\\n' \"$ATM_POST_SEND\" > \"$ATM_TEST_HOOK_CAPTURE\"\nexit 0\n",
+        )
+        .expect("write hook shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&hook_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&hook_path, perms).expect("chmod");
+        }
+
+        let hook_capture_value = hook_capture.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("ATM_TEST_HOOK_CAPTURE", Some(hook_capture_value.as_str())),
+            ("ATM_HOME", tempdir.path().to_str()),
+            ("ATM_CONFIG_HOME", tempdir.path().to_str()),
+            ("HOME", tempdir.path().to_str()),
+        ]);
+
+        let config = AtmConfig {
+            config_root: tempdir.path().to_path_buf(),
+            post_send_hooks: vec![PostSendHookRule {
+                recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                command: vec![hook_path.display().to_string()],
+            }],
+            ..Default::default()
+        };
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            Some(&config),
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        let captured = fs::read_to_string(&hook_capture).expect("hook capture");
+        assert!(captured.contains("\"description\":\"hello\""));
+        assert!(emitter.emitted().is_empty());
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn mixed_success_hook_accounting_preserves_delivery_and_warning() {
+        let tempdir = tempdir().expect("tempdir");
+        let hook_capture = tempdir.path().join("hook-capture.txt");
+        #[cfg(windows)]
+        let hook_ok = tempdir.path().join("hook-ok.cmd");
+        #[cfg(not(windows))]
+        let hook_ok = tempdir.path().join("hook-ok");
+        #[cfg(windows)]
+        let hook_fail = tempdir.path().join("hook-fail.cmd");
+        #[cfg(not(windows))]
+        let hook_fail = tempdir.path().join("hook-fail");
+        #[cfg(windows)]
+        fs::write(
+            &hook_ok,
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\n> \"%ATM_TEST_HOOK_CAPTURE%\" echo !ATM_POST_SEND!\r\nexit /b 0\r\n",
+        )
+        .expect("write ok hook");
+        #[cfg(not(windows))]
+        fs::write(
+            &hook_ok,
+            "#!/bin/sh\nprintf '%s\\n' \"$ATM_POST_SEND\" > \"$ATM_TEST_HOOK_CAPTURE\"\nexit 0\n",
+        )
+        .expect("write ok hook");
+        #[cfg(windows)]
+        fs::write(&hook_fail, "@echo off\r\nexit /b 7\r\n").expect("write failing hook");
+        #[cfg(not(windows))]
+        fs::write(&hook_fail, "#!/bin/sh\nexit 7\n").expect("write failing hook");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [&hook_ok, &hook_fail] {
+                let mut perms = fs::metadata(path).expect("metadata").permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(path, perms).expect("chmod");
+            }
+        }
+
+        let hook_capture_value = hook_capture.display().to_string();
+        let _env = EnvGuard::set_many([
+            ("ATM_TEST_HOOK_CAPTURE", Some(hook_capture_value.as_str())),
+            ("ATM_HOME", tempdir.path().to_str()),
+            ("ATM_CONFIG_HOME", tempdir.path().to_str()),
+            ("HOME", tempdir.path().to_str()),
+        ]);
+
+        let config = AtmConfig {
+            config_root: tempdir.path().to_path_buf(),
+            post_send_hooks: vec![
+                PostSendHookRule {
+                    recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                    command: vec![hook_ok.display().to_string()],
+                },
+                PostSendHookRule {
+                    recipient: HookRecipient::Named("recipient".parse().expect("recipient")),
+                    command: vec![hook_fail.display().to_string()],
+                },
+            ],
+            ..Default::default()
+        };
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
+            local_tmux_post_send: true,
+            graft_post_send: false,
+            roster_backed: true,
+        };
+        let runtime = HookEmissionRuntime::new(None);
+        let emitter = RecordingEmitter::default();
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            Some(&config),
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert_eq!(emitter.emitted().len(), 0);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            warnings[0].code,
+            Some(AtmErrorCode::WarningHookExecutionFailed)
+        );
+        let notifications = read_notification_events(tempdir.path());
+        assert_eq!(notifications.len(), 1);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn graft_fallback_dispatches_through_emitter_without_tmux_fields() {
+        let tempdir = tempdir().expect("tempdir");
+        let _env = install_test_home(tempdir.path());
+        let runtime = HookEmissionRuntime::new(Some(TeamNudgeTemplateOverrideRow {
+            team_name: TeamName::from_validated("test-team"),
+            kind: BuiltInNudgeTemplateKind::Delivery,
+            mode: TeamNudgeTemplateOverrideMode::Override {
+                template_body: "<ignored/>".to_string(),
+            },
+            updated_at: IsoTimestamp::now(),
+        }));
+        let emitter = RecordingEmitter::default();
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+        let snapshot = DeliveryRecipientSnapshot {
+            agent: recipient.agent.clone(),
+            team: recipient.team.clone(),
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: true,
+            roster_backed: true,
+        };
+        let mut warnings = Vec::new();
+
+        emit_post_send_effects(
+            &runtime,
+            &mut warnings,
+            None,
+            Some(&emitter),
+            &recipient,
+            &snapshot,
+            &[logical_message("hello")],
+        );
+
+        assert!(warnings.is_empty());
+        let emitted = emitter.emitted();
+        assert_eq!(emitted.len(), 1);
+        match &emitted[0].target {
+            PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient,
+                recipient_team,
+            }) => {
+                assert_eq!(recipient, &AgentName::from_validated("recipient"));
+                assert_eq!(recipient_team, &TeamName::from_validated("test-team"));
+            }
+            other => panic!("expected graft dispatch, got {other:?}"),
+        }
     }
 }

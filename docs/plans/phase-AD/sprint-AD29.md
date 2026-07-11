@@ -1,0 +1,117 @@
+---
+id: AD.29
+title: Phase AD Post-Send Smoke Matrix Closeout
+status: complete
+branch: feature/pAD-s29-phase-ad-post-send-smoke-matrix
+worktree: ../atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix
+target: integrate/phase-AD
+---
+
+# Sprint AD.29 — Phase AD Post-Send Smoke Matrix Closeout
+
+## Goal
+
+- close the phase-end post-send proof gap with one authoritative
+  smoke/service-hardening lane for the repaired post-send matrix only; the
+  separate Windows daemon integration-depth evidence remains `AD.30` scope
+
+## Hard Dependencies
+
+- `AD.24` sibling smoke-harness plan accepted
+- `AD.25` complete
+- `AD.26` complete
+- `AD.27` complete
+- `AD.28` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+
+`AD.28` is a functional dependency, not just numeric merge order: this smoke
+matrix includes graft-backed post-send delivery, and that case would remain
+flaky until the host-nudge timing race from `AD.28` is closed.
+
+## Exact Targets
+
+- `scripts/smoke/run.py`
+- `scripts/smoke/run_thorough.py`
+- `reports/smoke/smoke.md`
+- `reports/smoke/smoke-thorough.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/project-plan.md`
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/plans/phase-AD/sprint-AD29.md`
+
+## Interfaces To Add Or Modify
+
+The authoritative Phase AD post-send smoke matrix after this sprint is the
+Python `SuiteRowSpec` row set owned by:
+
+- `scripts/smoke/run.py`
+- `scripts/smoke/run_thorough.py`
+
+The five authoritative Phase AD closure rows are:
+
+- `AD29-POSTSEND-EXTERNAL-001`
+- `AD29-POSTSEND-PARTIAL-001`
+- `AD29-POSTSEND-BUILTIN-001`
+- `AD29-POSTSEND-RESET-001`
+- `AD29-POSTSEND-DISABLE-001`
+
+Each row remains authoritative through:
+
+- a stable row id
+- one or more exact command invocations
+- a pass note recorded into the smoke report output
+
+The accepted smoke ownership after this sprint is:
+
+- `AD.24` owns any shared smoke harness, environment orchestration, or
+  cross-branch smoke scaffolding
+- `AD.29` consumes that harness and adds only Phase AD end-gate cases
+- the accepted Phase AD end-gate matrix must cover:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback when no external hook matches for both tmux and graft
+    recipients
+  - reset-to-default after deleting a prior explicit override row
+  - explicit disable behavior if the retained product design keeps that state
+
+## Paths To Delete
+
+- ad hoc Phase AD smoke checks that prove only one post-send happy path
+- duplicate smoke-plan scope that belongs to the sibling `AD.24` harness sprint
+- `scripts/smoke/run_thorough_graft.py` deleted after its graft-only checks are
+  folded into the retained authoritative matrix
+
+## Deliverables
+
+- one authoritative Phase AD smoke matrix proves the repaired post-send states
+  end-to-end
+- readiness evidence authored later by `AD.30` cites the accepted smoke lane
+  directly instead of scattering proof across unrelated PR notes
+- docs distinguish clearly between shared smoke harness ownership (`AD.24`) and
+  Phase AD closure-case ownership (`AD.29`)
+
+## This Sprint Does Not Close
+
+- override lifecycle semantics by themselves
+- boundary wiring/accounting by themselves
+- template-resolution extraction by itself
+- the `atm-graft` deadline-race fix by itself
+- Windows daemon integration-depth closure from `RSH-AD-END-001`
+
+## Acceptance Criteria
+
+- the authoritative smoke lane passes with evidence for all five Phase AD
+  post-send cases
+- `AD.30` can cite one accepted smoke/service-hardening evidence line for
+  final closure without duplicating harness logic or reopening this sprint
+- no duplicated smoke scope remains between `AD.24` and `AD.29`
+
+## Required Validation
+
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `python3 .just/run_lint.py all`
+- `just smoke normal`
+- `just smoke thorough`
+- `git diff --check`

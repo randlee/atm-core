@@ -1,24 +1,11 @@
 [atm]
 default_team = "atm-dev"
-identity = "team-lead"
 
 [atm.idle_notify]
 recipient = "team-lead"
 
 [atm.idle_notify.agent.arch-ctm]
 seconds = 60
-
-[[atm.post_send_hooks]]
-recipient = "arch-ctm"
-command = ["scripts/atm-nudge.py", "arch-ctm"]
-
-[[atm.post_send_hooks]]
-recipient = "quality-mgr"
-command = ["scripts/atm-nudge.py", "quality-mgr"]
-
-[[atm.post_send_hooks]]
-recipient = "team-lead"
-command = ["scripts/atm-nudge.py", "team-lead"]
 
 [plugins.atm-agent-mcp]
 codex_bin = "codex"
@@ -27,7 +14,18 @@ sandbox = "workspace-write"
 approval_policy = "on-failure"
 
 [startup.team-lead]
-all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md"]
+all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md",
+       "Use atm_send or atm_ack for all messages to arch-ctm or quality-mgr",
+       "Use atm_read to read messages from team-members" ]
+
+[startup.arch-ctm]
+all = ["Use atm_send or atm_ack for all messages to team-lead or quality-mgr",
+       "Use atm_read to read messages from team-members" ]
+
+[startup.quality-mgr]
+all = ["read .claude/agents/quality-mgr.md for directive",
+       "Use atm_send or atm_ack for all messages to team-lead or arch-ctm",
+       "Use atm_read to read messages from team-members" ]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
 [rmux]
@@ -39,22 +37,17 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "team-lead"
-tmux_pane_id = "%7"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "arch-ctm"
-tmux_pane_id = "%8"
-command = "codex -c features.codex_hooks=true --yolo"
+command = "codex -c features.hooks=true --yolo"
 env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "quality-mgr"
-tmux_pane_id = "%9"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
-
-

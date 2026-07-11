@@ -83,6 +83,17 @@ impl HostOwnershipAdapter {
     }
 
     #[cfg(test)]
+    pub(crate) fn acquire_at_home_for_test(
+        &self,
+        home_dir: &Path,
+    ) -> Result<HostOwnershipGuard, AtmError> {
+        self.acquire_at_with_observability(atm_core::home::host_runtime_lock_path_from_home(
+            home_dir,
+            HOST_RUNTIME_OWNER_LOCK_FILE,
+        ))
+    }
+
+    #[cfg(test)]
     pub(crate) fn acquire_at(
         lock_path: std::path::PathBuf,
     ) -> Result<HostOwnershipGuard, AtmError> {
