@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-103>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-103" ;
+  triage:title "2 of 6 named Exact Target docs never updated for AD.33 self-addressed-send-rejection behavior" ;
+  triage:description "docs/atm/requirements.md and docs/atm/architecture.md were named Exact Targets for documenting the new self-addressed-send-rejection rule but were not updated (4 of 6 named targets were updated correctly; these 2 were missed)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AD33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AD34/2> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/06623b11> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/06623b11> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD34/06623b11> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AD33/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing self-addressed-send-rejection behavior documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "06623b11" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/06623b11> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AD33/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing self-addressed-send-rejection behavior documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "06623b11" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/06623b11> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AD34/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing self-addressed-send-rejection behavior documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "06623b11" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/06623b11> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AD34/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing self-addressed-send-rejection behavior documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "06623b11" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/06623b11> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246ee" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/06623b11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "06623b11" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/06623b11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "06623b11" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbb" ;
+  triage:orderIndex 35 .

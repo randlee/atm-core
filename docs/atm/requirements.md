@@ -111,8 +111,65 @@ Initial crate requirement IDs:
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings
 - keeping `atm --help` / `atm send --help` aligned with the active post-send
-  hook config surface; the CLI help references the ATM-owned hook semantics,
-  while `atm-core` owns the underlying matching and migration behavior
+  hook and built-in nudge surface; the CLI help references the shipped
+  built-in behavior plus the retained `atm internal-nudge` helper and the
+  external override semantics, while `atm-core` owns the underlying matching
+  and migration behavior
+
+## 3.1 Built-In Nudge Surface
+
+Requirement ID:
+- `REQ-ATM-NUDGE-001`
+
+Required rules:
+- `atm` owns the retained hidden `atm internal-nudge` helper surface
+- the shipped built-in post-send implementation stays on the in-process daemon
+  / emitter line
+- `atm internal-nudge`, when invoked, must consume one resolved built-in
+  template envelope
+  carrying exactly one built-in template kind:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- `atm` owns direct placeholder substitution for those templates; no Jinja or
+  conditional template language is allowed on the built-in path
+- `atm internal-nudge` must read the resolved built-in envelope from
+  `ATM_INTERNAL_NUDGE`; that envelope carries:
+  - the canonical `PostSendHookEvent`
+  - the concrete sink target
+  - the resolved template kind
+  - the resolved template body or explicit disabled state
+- the accepted built-in path is bounded to six default template bodies, but any
+  team-scoped override lookup for those bodies must cross the storage-neutral
+  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  rather than performing direct SQLite access or runtime/store reopening in
+  the CLI crate
+- `atm` must preserve the shared self-addressed-send rejection contract across
+  every CLI send entry path, including `--dry-run`; when the canonical sender
+  and resolved recipient are the same same-team member, the CLI surfaces the
+  typed validation failure returned by `atm-core` instead of reporting send
+  success
+- built-in precedence is:
+  - matching external `[[atm.post_send_hooks]]` command
+  - resolved team-scoped template row returned through the upstream
+  `NudgeTemplateOverrideStore` contract for the selected template kind
+  - built-in product default template body for that kind when no row exists
+- resolved row semantics are:
+  - no row => built-in product default
+  - override row => use the stored non-empty template body
+  - disabled row => emit no built-in nudge
+  - clear/reset => delete the row so the next lookup returns product default
+- empty-string template bodies are invalid; operators must use explicit
+  disable or clear commands instead
+- the default built-in acknowledge template bodies are:
+  - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}"/>`
+  - `<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>`
+- the built-in path must not access SQLite directly; the first concrete
+  host-scoped override storage remains `atm-storage-rusqlite` implementation
+  detail behind the accepted `atm-core` contract
 
 ## 4. Command Ownership
 
@@ -135,6 +192,20 @@ Each command document defines:
 - CLI-to-core mapping
 - output rendering behavior
 - references to the relevant product and `atm-core` requirements
+
+## 4.1 Mailbox Inspection And Mutation Split
+
+Requirement ID:
+- `REQ-ATM-CMD-002`
+
+Required rules:
+- `atm peek` is the explicit non-mutating mailbox inspection command
+- `atm list` remains a non-mutating mailbox metadata query
+- only inspection-only surfaces may accept `--as`
+- `atm send`, `atm read`, `atm ack`, and `atm clear` are owner-only mutating
+  commands and must not expose mutating impersonation flags
+- CLI request mapping must preserve that split when it constructs
+  `atm-core` request DTOs
 
 ## 5. Required References
 

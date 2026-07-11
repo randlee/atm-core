@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 import sys
 import tempfile
@@ -11,207 +13,309 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
+from lint_common import LintReport
 from lint_common import build_report
 from lint_common import classify_rust_test_scope
-from lint_common import LintDirectivePolicy
+from lint_common import discover_repo_root
+from lint_common import format_duration
+from lint_common import is_code_line
+from lint_common import is_comment_line
+from lint_common import iter_string_literal_contents
 from lint_common import lint_slug
-from lint_common import line_is_suppressed
 from lint_common import load_lint_config
 from lint_common import make_log_path
+from lint_common import print_report
 from lint_common import relative_log_path
 from lint_common import render_workspace_crate_table
-from lint_common import workspace_crate_section_lines
+from lint_common import rust_file_test_scope
+from lint_common import strip_negated_cfg_segments
 from lint_common import workspace_crates
+from lint_common import workspace_manifest_paths
+from lint_common import workspace_target_args
 
 
 ROOT_MANIFEST = """\
 [workspace]
-members = ["crates/atm", "crates/atm-core"]
+members = ["crates/lib-crate", "crates/bin-crate", "excluded/*"]
+exclude = ["excluded/skip-me"]
 resolver = "2"
-
-[workspace.package]
-version = "1.1.2"
 """
 
 
 class LintCommonTests(unittest.TestCase):
-    def test_lint_slug_normalizes_names(self) -> None:
-        self.assertEqual(lint_slug("Rule 8 / identities"), "rule-8-identities")
+    def write_workspace(self, repo_root: Path) -> None:
+        (repo_root / ".just").mkdir()
+        (repo_root / ".just/lint-config.toml").write_text(
+            "[identities]\nforbidden_literals = [\"team-lead\"]\n",
+            encoding="utf-8",
+        )
+        (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
 
-    def test_build_report_writes_log(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            started_at = datetime(2026, 5, 4, 3, 15, 0, tzinfo=timezone.utc)
-            report = build_report(
-                lint_name="manifests",
-                repo_root=repo_root,
-                passed=True,
-                summary="manifest policy satisfied",
-                findings=[],
-                transcript_lines=["no manifest violations found"],
-                started_at=started_at,
-                duration_seconds=0.42,
-            )
-
-            self.assertTrue(report.log_path.is_file())
-            self.assertIn("summary: manifest policy satisfied", report.log_path.read_text(encoding="utf-8"))
-            self.assertEqual(relative_log_path(repo_root, report.log_path), ".just/logs/20260504031500-manifests.log")
-
-    def test_make_log_path_uses_timestamp_and_slug(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            started_at = datetime(2026, 5, 4, 3, 16, 0, tzinfo=timezone.utc)
-            path = make_log_path(repo_root, "Boundary Check", started_at)
-            self.assertEqual(path, repo_root / ".just/logs/20260504031600-boundary-check.log")
-
-    def test_load_lint_config_reads_repo_policy(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            just_dir = repo_root / ".just"
-            just_dir.mkdir()
-            (just_dir / "lint-config.toml").write_text(
-                "[identities]\nforbidden_literals = [\"team-lead\"]\n",
-                encoding="utf-8",
-            )
-
-            config = load_lint_config(repo_root)
-
-            self.assertEqual(config["identities"]["forbidden_literals"], ["team-lead"])
-
-    def test_workspace_crates_reads_package_and_crate_path(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
-            crates_dir = repo_root / "crates"
-            atm_core_dir = crates_dir / "atm-core"
-            atm_core_dir.mkdir(parents=True)
-            (atm_core_dir / "Cargo.toml").write_text(
-                """\
+        lib_dir = repo_root / "crates/lib-crate"
+        lib_dir.mkdir(parents=True)
+        (lib_dir / "Cargo.toml").write_text(
+            """\
 [package]
-name = "agent-team-mail-core"
-version = "1.1.2"
+name = "lib-crate"
+version = "0.1.0"
 
 [lib]
-name = "atm_core"
+name = "lib_crate_custom"
 """,
-                encoding="utf-8",
-            )
-            atm_dir = crates_dir / "atm"
-            atm_dir.mkdir(parents=True)
-            (atm_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail"
-version = "1.1.2"
-""",
-                encoding="utf-8",
-            )
+            encoding="utf-8",
+        )
+        (lib_dir / "src").mkdir()
+        (lib_dir / "src/lib.rs").write_text("pub fn lib_fn() {}\n", encoding="utf-8")
+        (lib_dir / "tests").mkdir()
+        (lib_dir / "tests/lib_tests.rs").write_text("#[test]\nfn ok() {}\n", encoding="utf-8")
 
-            crates = workspace_crates(repo_root)
+        bin_dir = repo_root / "crates/bin-crate"
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "Cargo.toml").write_text(
+            """\
+[package]
+name = "bin-crate"
+version = "0.1.0"
+""",
+            encoding="utf-8",
+        )
+        (bin_dir / "src").mkdir()
+        (bin_dir / "src/main.rs").write_text("fn main() {}\n", encoding="utf-8")
+
+        excluded_dir = repo_root / "excluded/skip-me"
+        excluded_dir.mkdir(parents=True)
+        (excluded_dir / "Cargo.toml").write_text(
+            """\
+[package]
+name = "skip-me"
+version = "0.1.0"
+""",
+            encoding="utf-8",
+        )
+
+    def test_discover_repo_root_and_load_config_use_explicit_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_workspace(repo_root)
+
+            discovered = discover_repo_root(str(repo_root))
+            loaded = load_lint_config(discovered)
+
+            self.assertEqual(discovered, repo_root.resolve())
+            self.assertEqual(loaded["identities"]["forbidden_literals"], ["team-lead"])
+
+    def test_workspace_manifest_paths_respect_excludes(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_workspace(repo_root)
+
+            manifests = [path.relative_to(repo_root).as_posix() for path in workspace_manifest_paths(repo_root)]
 
             self.assertEqual(
-                [(crate.crate_dir, crate.package_name, crate.crate_path_name) for crate in crates],
+                manifests,
                 [
-                    ("atm", "agent-team-mail", "atm"),
-                    ("atm-core", "agent-team-mail-core", "atm_core"),
+                    "crates/bin-crate/Cargo.toml",
+                    "crates/lib-crate/Cargo.toml",
                 ],
             )
 
-    def test_render_workspace_crate_table_supports_extra_columns(self) -> None:
+    def test_workspace_crates_and_target_args_capture_lib_and_bin_shapes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(
-                ROOT_MANIFEST.replace('"crates/atm", ', ""),
-                encoding="utf-8",
-            )
-            crate_dir = repo_root / "crates" / "atm-core"
-            crate_dir.mkdir(parents=True)
-            (crate_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail-core"
-version = "1.1.2"
+            self.write_workspace(repo_root)
 
-[lib]
-name = "atm_core"
-""",
-                encoding="utf-8",
-            )
+            crates = workspace_crates(repo_root)
+            by_dir = {crate.crate_dir: crate for crate in crates}
 
-            lines = render_workspace_crate_table(
-                repo_root,
-                extra_columns=[("lint_mode", "lint_mode", lambda _crate: "check")],
+            self.assertEqual(by_dir["lib-crate"].crate_path_name, "lib_crate_custom")
+            self.assertEqual(by_dir["bin-crate"].crate_path_name, "bin_crate")
+
+            self.assertEqual(
+                workspace_target_args(repo_root / "crates/lib-crate/Cargo.toml"),
+                ["--lib"],
+            )
+            self.assertEqual(
+                workspace_target_args(repo_root / "crates/bin-crate/Cargo.toml"),
+                ["--bin", "bin-crate"],
             )
 
-            self.assertIn("crate", lines[0])
-            self.assertIn("lint_mode", lines[0])
-            self.assertTrue(any("atm-core" in line and "check" in line for line in lines))
-
-    def test_workspace_crate_section_lines_wraps_table(self) -> None:
+    def test_render_workspace_crate_table_lists_workspace_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(
-                ROOT_MANIFEST.replace('"crates/atm", ', ""),
-                encoding="utf-8",
+            self.write_workspace(repo_root)
+
+            lines = render_workspace_crate_table(repo_root)
+            rendered = "\n".join(lines)
+
+            self.assertIn("crate", rendered)
+            self.assertIn("package", rendered)
+            self.assertIn("lib-crate", rendered)
+            self.assertIn("bin-crate", rendered)
+
+    def test_make_log_path_relative_display_and_duration_are_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            started_at = datetime(2026, 7, 7, 18, 45, 0, tzinfo=timezone.utc)
+
+            log_path = make_log_path(repo_root, "Lint Common!", started_at)
+
+            self.assertEqual(log_path.name, "20260707184500-lint-common.log")
+            self.assertEqual(relative_log_path(repo_root, log_path), ".just/logs/20260707184500-lint-common.log")
+            self.assertEqual(lint_slug("Lint Common!"), "lint-common")
+            self.assertEqual(format_duration(0.25), "0.25s")
+            self.assertEqual(format_duration(2.0), "2.0s")
+
+    def test_build_report_writes_log_and_print_report_uses_preview_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            started_at = datetime(2026, 7, 7, 18, 45, 0, tzinfo=timezone.utc)
+
+            report = build_report(
+                lint_name="example",
+                repo_root=repo_root,
+                passed=False,
+                summary="failed",
+                findings=["first issue", "second issue", "third issue", "fourth issue"],
+                transcript_lines=["command: demo"],
+                started_at=started_at,
+                duration_seconds=1.25,
             )
-            crate_dir = repo_root / "crates" / "atm-core"
-            crate_dir.mkdir(parents=True)
-            (crate_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail-core"
-version = "1.1.2"
-""",
-                encoding="utf-8",
-            )
 
-            lines = workspace_crate_section_lines(repo_root, title="inventory:")
+            self.assertTrue(report.log_path.exists())
+            self.assertIn("lint: example", report.log_path.read_text(encoding="utf-8"))
 
-            self.assertEqual(lines[0], "inventory:")
-            self.assertIn("crate", lines[1])
-            self.assertIn("manifest", lines[1])
-            self.assertEqual(lines[-1], "")
+            output = StringIO()
+            with redirect_stdout(output):
+                print_report(report, repo_root=repo_root, preview_limit=2, direct_threshold=3)
 
-    def test_line_is_suppressed_supports_tool_key_and_rule_aliases(self) -> None:
+            rendered = output.getvalue()
+            self.assertIn("example failed", rendered)
+            self.assertIn("first issue", rendered)
+            self.assertIn("second issue", rendered)
+            self.assertIn("[4] errors in .just/logs/20260707184500-example.log", rendered)
+
+    def test_print_report_passed_reports_single_line(self) -> None:
+        report = LintReport(
+            lint_name="example",
+            passed=True,
+            summary="ok",
+            findings=[],
+            transcript=[],
+            duration_seconds=0.5,
+            log_path=Path("/tmp/example.log"),
+        )
+
+        output = StringIO()
+        with redirect_stdout(output):
+            print_report(report, repo_root=Path("/tmp"))
+
+        self.assertEqual(output.getvalue().strip(), "example passed [0.50s]")
+
+    def test_comment_and_code_helpers_classify_expected_lines(self) -> None:
+        self.assertTrue(is_comment_line("// hello"))
+        self.assertTrue(is_comment_line("/* block start"))
+        self.assertFalse(is_comment_line("let x = 1;"))
+        self.assertFalse(is_code_line("   "))
+        self.assertTrue(is_code_line("let x = 1;"))
+
+    def test_classify_rust_test_scope_marks_cfg_test_blocks(self) -> None:
         lines = [
-            "// lint-identities: allow-next-line",
-            "let _ = \"team-lead\";",
-            "// rule-009: allow-start",
-            "let _ = \"arch-ctm\";",
-            "// lint-identities: allow-end",
-            "let _ = \"quality-mgr\";",
-        ]
-        policy = LintDirectivePolicy(tool_key="identities", aliases=("rule-008", "rule-009"))
-
-        self.assertTrue(line_is_suppressed(2, lines, policy))
-        self.assertTrue(line_is_suppressed(4, lines, policy))
-        self.assertFalse(line_is_suppressed(6, lines, policy))
-
-    def test_line_is_suppressed_supports_multiline_comment_directives(self) -> None:
-        lines = [
-            "/* lint-identities: allow-start */",
-            "let _ = \"team-lead\";",
-            "* lint-identities: allow-end",
-            "let _ = \"arch-ctm\";",
-        ]
-        policy = LintDirectivePolicy(tool_key="identities", aliases=("rule-008", "rule-009"))
-
-        self.assertTrue(line_is_suppressed(2, lines, policy))
-        self.assertFalse(line_is_suppressed(4, lines, policy))
-
-    def test_classify_rust_test_scope_marks_cfg_test_block_only(self) -> None:
-        lines = [
-            "pub fn production() {}",
+            "pub fn production() {",
+            "    do_work();",
+            "}",
             "#[cfg(test)]",
             "mod tests {",
             "    #[test]",
-            "    fn example() {}",
+            "    fn example() {",
+            "        assert!(true);",
+            "    }",
             "}",
         ]
 
         scope = classify_rust_test_scope(lines)
 
-        self.assertEqual(scope, [False, True, True, True, True, True])
+        self.assertEqual(scope[:3], [False, False, False])
+        self.assertEqual(scope[3:], [True, True, True, True, True, True, True])
+
+    def test_classify_rust_test_scope_marks_cfg_any_test_utils_items(self) -> None:
+        lines = [
+            "pub fn production() {}",
+            '#[cfg(any(test, feature = "test-utils"))]',
+            'pub const TEST_ARCH_CTM: &str = "arch-ctm";',
+            "pub fn still_production() {}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope, [False, True, True, False])
+
+    def test_classify_rust_test_scope_marks_inner_cfg_any_test_file(self) -> None:
+        lines = [
+            '#![cfg(any(test, feature = "test-utils"))]',
+            'pub const TEST_ARCH_CTM: &str = "arch-ctm";',
+            "pub fn helper() {}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope, [True, True, True])
+
+    def test_rust_file_test_scope_marks_tests_and_src_paths(self) -> None:
+        src_lines = ["pub fn production() {}", "#[cfg(test)]", "mod tests {", "}"]
+        tests_lines = ["#[test]", "fn ok() {}"]
+
+        self.assertEqual(
+            rust_file_test_scope(Path("crates/lib-crate/src/lib.rs"), src_lines),
+            [False, True, True, True],
+        )
+        self.assertEqual(
+            rust_file_test_scope(Path("crates/lib-crate/tests/lib_tests.rs"), tests_lines),
+            [True, True],
+        )
+        self.assertEqual(
+            rust_file_test_scope(Path("scripts/tool.py"), ["print('hi')"]),
+            [False],
+        )
+
+    def test_strip_negated_cfg_segments_removes_negated_test_tokens(self) -> None:
+        self.assertEqual(strip_negated_cfg_segments("not(test)"), " ")
+        self.assertEqual(
+            strip_negated_cfg_segments('any(not(test), feature = "test-utils")'),
+            'any( , feature = "test-utils")',
+        )
+        self.assertEqual(
+            strip_negated_cfg_segments('all(unix, not(any(test, feature = "test-utils")))'),
+            "all(unix,  )",
+        )
+
+    def test_classify_rust_test_scope_ignores_cfg_not_test_after_cfg_test_field(self) -> None:
+        lines = [
+            "struct TailArgs {",
+            "    poll_interval_ms: u64,",
+            "    #[cfg(test)]",
+            "    max_polls: Option<usize>,",
+            "}",
+            "",
+            "impl TailArgs {",
+            "    #[cfg(not(test))]",
+            "    fn run(self) {",
+            "        thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));",
+            "    }",
+            "}",
+        ]
+
+        scope = classify_rust_test_scope(lines)
+
+        self.assertEqual(scope[:5], [False, False, True, True, False])
+        self.assertEqual(scope[7:], [False, False, False, False, False])
+
+    def test_iter_string_literal_contents_handles_escaped_and_raw_literals(self) -> None:
+        line = 'let a = "hello"; let b = r#"raw value"#;'
+
+        self.assertEqual(
+            iter_string_literal_contents(line),
+            ["hello", "raw value"],
+        )
 
 
 if __name__ == "__main__":

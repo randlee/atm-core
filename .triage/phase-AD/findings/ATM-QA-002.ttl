@@ -1,0 +1,206 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "Test fixture uses raw production identity literals" ;
+  triage:description "New test fixture base_event() in crates/atm-core/src/send/nudge_template.rs uses AgentName::from_validated(\"team-lead\"), TeamName::from_validated(\"atm-dev\") (x2), and rendered string \"team-lead@atm-dev\". Trips the identities lint gate (RULE-008/RULE-009). Standing convention: use non-production test identities like \"test-sender\"/\"test-team\" instead." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/6> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s27/0c8606f3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 115 ;
+  triage:snippet "sender: AgentName::from_validated(\"team-lead\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 116 ;
+  triage:snippet "sender_team: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 118 ;
+  triage:snippet "recipient_team: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 139 ;
+  triage:snippet "team_name: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 154 ;
+  triage:snippet "\"team-lead@atm-dev\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s26/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 158 ;
+  triage:snippet "assert!(rendered.contains(\"team-lead@atm-dev\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 151 ;
+  triage:snippet "sender: AgentName::from_validated(\"team-lead\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 152 ;
+  triage:snippet "sender_team: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 154 ;
+  triage:snippet "recipient_team: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 175 ;
+  triage:snippet "team_name: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 189 ;
+  triage:snippet "team_name: TeamName::from_validated(\"atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pAD-s27/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 205 ;
+  triage:snippet "assert_eq!(qualified_sender_identity(&base_event()), \"team-lead@atm-dev\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s27/0c8606f3> .
+
+<urn:atm:triage:worktree/pAD-s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAD-s26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/pAD-s27/0c8606f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAD-s28/75df80a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAD-s29/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAD-s30/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 30 .

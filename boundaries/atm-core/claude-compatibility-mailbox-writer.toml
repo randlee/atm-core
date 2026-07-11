@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-ClaudeCompatibilityMailboxWriter"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ClaudeCompatibilityMailboxWriter"
+
+[public]
+trait = "ClaudeCompatibilityMailboxWriter"
+notes = "Historical boundary record only. Phase AD AD.3 removed the accepted executor seam that appended directly into Claude compatibility inbox files during send/ack delivery."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["historical_claude_compatibility_inbox_append"]
+io_forbidden = ["sqlite", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon", "atm-runtime"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["ClaudeCompatibilityMailboxWriter", "execute_claude_delivery", "append_compat_inbox_message", "append_compat_inbox_message_set"]
+
+[contracts]
+request_types = ["historical logical message append requests"]
+response_types = ["compatibility inbox append results"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["execute_claude_delivery"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CLAUDE-COMPATIBILITY-MAILBOX-WRITER-REFERENCES"]
+review_gates = ["no_direct_claude_compat_delivery_executor"]
+
+[status]
+state = "retired"
+notes = ["Phase AD AD.3 deleted the accepted Claude-compatibility delivery executor and its retained-runtime append seam.", "Explicit inbox rebuild/export helpers remain separate repair-only compatibility support and are not part of the live send or ack delivery path."]

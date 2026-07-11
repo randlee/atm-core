@@ -87,6 +87,24 @@ CREATE TABLE IF NOT EXISTS team_roster (
     PRIMARY KEY (team_name, agent_name)
 );
 
+CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
+    team_name TEXT NOT NULL,
+    template_kind TEXT NOT NULL
+        CHECK(template_kind IN (
+            'delivery',
+            'delivery_ack',
+            'delivery_task',
+            'delivery_task_ack',
+            'acknowledge',
+            'acknowledge_task'
+        )),
+    mode TEXT NOT NULL DEFAULT 'override'
+        CHECK(mode IN ('override', 'disabled')),
+    template_body TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (team_name, template_kind)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -109,6 +127,9 @@ CREATE INDEX IF NOT EXISTS idx_daemon_remote_replay_mailbox
 
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
+
+CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
+    ON team_nudge_template_overrides(team_name);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
@@ -458,6 +479,7 @@ pub(crate) fn ensure_schema(
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
+    ensure_team_nudge_template_override_columns(connection, target)?;
     Ok(())
 }
 
@@ -541,6 +563,34 @@ fn ensure_team_roster_columns(
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )
+}
+
+fn ensure_team_nudge_template_override_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "team_nudge_template_overrides",
+        "mode",
+        "ALTER TABLE team_nudge_template_overrides ADD COLUMN mode TEXT NOT NULL DEFAULT 'override';",
+    )?;
+    connection
+        .execute(
+            "UPDATE team_nudge_template_overrides
+             SET mode = 'disabled'
+             WHERE mode = 'override' AND template_body = '';",
+            [],
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to normalize legacy empty nudge-template override rows",
+                error,
+            )
+        })?;
+    Ok(())
 }
 
 fn ensure_mail_messages_message_id_compat(
@@ -714,5 +764,67 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
         Some(ThreadMode::AddDetails) => Some("add-details"),
         Some(ThreadMode::Supersede) => Some("supersede"),
         None => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_team_nudge_template_override_columns_migrates_legacy_empty_rows_to_disabled() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE team_nudge_template_overrides (
+                    team_name TEXT NOT NULL,
+                    template_kind TEXT NOT NULL,
+                    template_body TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (team_name, template_kind)
+                );",
+            )
+            .expect("create pre-migration table");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides(
+                    team_name, template_kind, template_body, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4);",
+                rusqlite::params![
+                    "test-team",
+                    "delivery_ack",
+                    "",
+                    atm_storage::types::IsoTimestamp::now().to_string()
+                ],
+            )
+            .expect("insert legacy empty-body row");
+
+        ensure_team_nudge_template_override_columns(&connection, &target)
+            .expect("migrate override table");
+
+        let mode_exists = connection
+            .prepare("PRAGMA table_info(team_nudge_template_overrides);")
+            .expect("prepare pragma")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query pragma")
+            .filter_map(Result::ok)
+            .any(|column| column == "mode");
+        assert!(mode_exists, "schema upgrade should add the mode column");
+
+        let mode: String = connection
+            .query_row(
+                "SELECT mode FROM team_nudge_template_overrides
+                 WHERE team_name = ?1 AND template_kind = ?2;",
+                rusqlite::params!["test-team", "delivery_ack"],
+                |row| row.get(0),
+            )
+            .expect("query migrated mode");
+        assert_eq!(mode, "disabled");
     }
 }

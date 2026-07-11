@@ -21,6 +21,10 @@ Rules:
 - `atm-daemon-client` owns `resolve_daemon_local_ipc_endpoint()` and
   `resolve_daemon_bin()` as the shared thin-client bootstrap seam consumed by
   both `atm` and `atm-graft`
+- `atm-daemon` and `atm-daemon-bootstrap` are not consumers of this seam;
+  after `AC.8`, `atm-daemon-bootstrap` remains only the retained-runtime /
+  roster transitional shim and must not reappear in this boundary's consumer
+  list
 - `atm-daemon-client` may depend on `atm-core` specifically for canonical
   ATM-owned environment/config and daemon-endpoint resolution needed by that
   shared seam; it must not use that edge to acquire runtime assembly or
@@ -51,7 +55,10 @@ Rules:
 - protocol v1 may still carry `RequestEnvelope` / `ResponseEnvelope` values
   inside `RpcEnvelope.body`, but new message or roster body clones must not be
   introduced under that wrapper
-- `atm-daemon-client` must not depend on `atm-storage-rusqlite` or
-  `atm-storage-claude`
+- graft-only advisory/session local IPC is not an accepted
+  `atm-daemon-client` boundary surface and must not be reintroduced under
+  `RpcEnvelope`
+- `atm-daemon-client` must not depend on `atm-storage-rusqlite` or any
+  retired backend crate
 - backend-specific persistence concerns stay below the storage seam and must not
   leak into the transport envelope

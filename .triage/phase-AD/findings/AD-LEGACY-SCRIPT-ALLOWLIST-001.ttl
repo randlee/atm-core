@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-LEGACY-SCRIPT-ALLOWLIST-001>
+  a triage:Finding ;
+  triage:findingId "AD-LEGACY-SCRIPT-ALLOWLIST-001" ;
+  triage:title "scripts/check-legacy-mailbox-paths.py ALLOWED_LEGACY_LITERALS references list.rs / read/mod.rs entries with zero remaining 'legacy' text" ;
+  triage:description "Discovered during the Phase-AD phase-ending review's follow-up 'legacy message key' investigation. scripts/check-legacy-mailbox-paths.py maintains an ALLOWED_LEGACY_LITERALS allow-list referencing crates/atm-core/src/list.rs and crates/atm-core/src/read/mod.rs for a 'legacy:' prefix pattern, but both files no longer contain any 'legacy' text at all (confirmed via direct grep — zero hits). The stale allow-list entries reference code that has already been deleted; harmless (entries just never match) but inaccurate. Repo owner explicitly directed that this be pruned in the next cleanup pass; recorded here so it is tracked rather than forgotten." ;
+  triage:category "doc/script-hygiene" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-LEGACY-SCRIPT-ALLOWLIST-001/integrate-phase-AD/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AD/10202628> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:occurrence/AD-LEGACY-SCRIPT-ALLOWLIST-001/integrate-phase-AD/1>
+  a triage:Occurrence ;
+  triage:file "scripts/check-legacy-mailbox-paths.py" ;
+  triage:line 0 ;
+  triage:snippet "ALLOWED_LEGACY_LITERALS entries for crates/atm-core/src/list.rs and crates/atm-core/src/read/mod.rs — both files confirmed to contain zero 'legacy' text via direct grep" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AD/10202628> .
+
+<urn:atm:triage:worktree/integrate-phase-AD/10202628>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "10202628" ;
+  triage:orderIndex 9999 .

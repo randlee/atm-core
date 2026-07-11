@@ -73,6 +73,21 @@ The accepted model is:
 - `atm send` persists the message to durable ATM state
 - if the recipient exposes a post-send hook capability, ATM emits one
   post-send event
+- the shipped default post-send path is the built-in in-process daemon-owned
+  delivery path rather than a repo-local Python or shell script
+- external `[[atm.post_send_hooks]]` commands remain the explicit override
+  path when configured
+- the built-in renderer is bounded to six named template kinds only:
+  - `delivery`
+  - `delivery_ack`
+  - `delivery_task`
+  - `delivery_task_ack`
+  - `acknowledge`
+  - `acknowledge_task`
+- any team-scoped built-in template override lookup must cross the accepted
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; neither `atm` nor `atm-core` may perform direct
+  SQLite lookup in the emitter path
 - emission failure is logged and surfaced as a sender-visible warning
 - `atm read` reads durable ATM state only
 
@@ -83,6 +98,31 @@ pub trait PostSendHookEmitter: sealed::Sealed {
     fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
 }
 ```
+
+The accepted ownership rule around that seam is equally important:
+
+- caller-owned send/ack logic decides whether the recipient exposes post-send
+  capability
+- caller-owned send/ack logic resolves external-hook matches, built-in fallback
+  eligibility, and any team-scoped built-in override row before invoking the
+  emitter
+- `PostSendHookEmitter` performs the chosen recipient-side emission attempt
+  only; it does not reopen config/store lookup or own caller-facing warning
+  policy
+- `GraftPostSendPort` is the receiver-specific leaf handoff used when the
+  chosen built-in target is graft-backed
+
+### AD.25-AD.30 closeout note
+
+The accepted architecture above stayed fixed while implementation converged:
+
+- `AD.26` made `PostSendHookEmitter` and `GraftPostSendPort` live on the
+  production send/ack path and removed the subprocess bypass
+- `AD.27` completed the remaining cleanup by moving retained built-in template
+  resolution fully upstream of the live emitter path
+- the hidden built-in helper, when invoked directly, consumes a resolved
+  envelope only; no accepted implementation path is allowed to reopen
+  template-override lookup below `PostSendHookEmitter`
 
 ### 5. Notification logging, if retained, is direct append only
 
@@ -95,7 +135,15 @@ pub trait PostSendHookEmitter: sealed::Sealed {
 ### 6. Receiver-side handoff stays capability-specific
 
 - local tmux-backed recipients use a local post-send emitter
-- graft-backed recipients use the graft advisory/session handoff
+- graft-backed recipients use a graft receiver implementation behind the same
+  post-send capability seam
+- the concrete built-in sink names are `TmuxNudgeSink` and `GraftNudgeSink`
+- graft receiver details such as host wakeup, temporary buffering, or
+  active/inactive runtime state stay private to `atm-graft` and must not leak
+  into shared daemon request/response families
+- the accepted architecture does not require daemon-owned graft session
+  registration, daemon-owned per-session nudge queues, or a dedicated shared
+  advisory-stream packet family
 - ATM owns emission, logging, and sender warning behavior
 - ATM does not own receiver-side consumption after successful emission
 

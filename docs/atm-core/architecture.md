@@ -52,9 +52,9 @@ Consequences:
 - Client and server transports share one contract family.
 - The `atm-graft` crate is allowed only as a thin consumer of that shared
   contract family; it must not introduce a second daemon-specific client API.
-- Thin plugin crates must stay on the shared contract family; if advisory
-  registration or notification streaming is added later, it must extend this
-  shared line rather than introducing a graft-private daemon API.
+- Thin plugin crates must stay on the shared contract family for unary
+  command/request behavior and must not introduce receiver-private stream or
+  session APIs into the shared daemon contract.
 
 Alternatives considered:
 - Keep the protocol modeled as daemon API types.
@@ -102,8 +102,8 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
-- Shared core request and query surfaces must resolve both ULID text and UUID
-  wire text to the same `AtmMessageId`.
+- Shared core request and query surfaces must resolve ULID text only to
+  `AtmMessageId`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
@@ -142,11 +142,11 @@ Follow-up work:
 - retained mailbox runtime selection must be fail-closed and store-backed only;
   `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
   cutover line lands
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line; retained command/runtime logic
-  must not treat mailbox JSON append as a second durable or governing runtime
-  backend, and the shared backend contract remains the required seam for
-  future backend implementations
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line;
+  retained command/runtime logic must not treat mailbox JSON append as a
+  second durable or governing runtime backend, and the shared backend
+  contract remains the required seam for future backend implementations
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -248,9 +248,9 @@ Phase R redesign notes:
   but it must not reimplement backend-specific diagnosis logic
 
 Phase AC supersession note:
-- `AC.2` moved the concrete Claude inbox storage backend into
+- `AC.2` moved the concrete Claude inbox storage backend into the now-retired
   `crates/atm-storage-claude`
-- `ADR-019` later retires that concrete backend from the accepted line because
+- `ADR-019` later retired that concrete backend from the accepted line because
   Claude Code no longer uses it
 - `atm-core` still owns generic source/projection boundary traits and helper
   request/response shapes during the cutover window, but it no longer owns the
@@ -275,11 +275,6 @@ Phase AC supersession note:
   - clear
   - doctor
   - heartbeat
-  - advisory register
-  - advisory unregister
-  - advisory fetch
-  - advisory drain
-  - advisory stream
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
@@ -408,6 +403,11 @@ Identity-specific policy:
   daemon dispatch
 - downstream caller-owned request DTOs must carry resolved caller identity as a
   required field
+- `atm-core` owns the service-layer mailbox split:
+  - `peek` and `list` are inspection-only queries
+  - `send`, `read`, `ack`, and `clear` are owner-only mutating operations
+- mutating mailbox/message service operations must not expose caller
+  impersonation
 - `atm-core` must not treat hook files, repo-local config, or daemon ambient
   `ATM_IDENTITY` as fallback caller identity
 - `atm-core` must not derive a normal sender/actor identity from repo-local
@@ -420,6 +420,8 @@ Identity-specific policy:
 - cross-team messages may project an alias-oriented `from` field only when the
   canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
+- the shared send-context builder rejects canonical same-team self-addressed
+  sends before any message persistence or `dry-run` success outcome is built
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
 - hook matching is recipient-scoped only
@@ -432,20 +434,23 @@ Identity-specific policy:
   payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload contains:
   - `from`
-  - `to`
   - `sender`
   - `recipient`
-- `team`
-- `message_id`
-- `requires_ack`
-- `is_ack`
-- optional `task_id` when present
-- optional `recipient_pane_id` when authoritative roster truth includes a
-  pane mapping for the recipient
+  - `team`
+  - `message_id`
+  - `description`
+  - `task_id` as a string; it may be empty
+  - `requires_ack`
+  - `is_ack`
+  - optional `to`
+  - optional `recipient_pane_id` when authoritative roster truth includes a
+    pane mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
+- hook configuration lookup must come from authoritative sender roster home
+  `home_dir` metadata
 - recipient non-match is silent
 - hook-decision evaluation must preserve sender, recipient, matched rule
   selector, and execution outcome for troubleshooting
@@ -453,9 +458,23 @@ Identity-specific policy:
   successful send into a command failure
 - the hook fires for successful outbound mailbox writes from `atm send` and
   `atm ack`; `is_ack = false` for send and `is_ack = true` for ack
+- historical self-addressed pending-ack cleanup is handled in the shared ack
+  path by suppressing reply emission while still completing the source
+  acknowledgement state transition
+- suppressed self-ack completion emits no ack hook because no outbound reply
+  write exists
 - after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
+- any retained built-in helper does not consume `ATM_POST_SEND`; it consumes
+  one resolved `ATM_INTERNAL_NUDGE` envelope carrying:
+  - the canonical post-send event
+  - the concrete sink target
+  - the resolved template kind
+  - the resolved template body or explicit disabled state
+- committed `.atm.toml` pane ids are not live routing truth; any retained
+  compatibility helper must consume authoritative roster/payload pane metadata
+  or an explicit operator-provided pane id
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should compare the live `config.json` roster against canonical ATM
@@ -525,6 +544,9 @@ Architectural rules:
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
 - `add-member` remains create-only
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the accepted repair path for mutable existing roster
   metadata such as `home_dir`, `recipient_pane_id`, `harness`, `agent_type`,
   and `model`
@@ -532,10 +554,13 @@ Architectural rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
-- `live_cwd` is runtime-roster state, not operator-settable or durable roster
-  metadata
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
+- `live_cwd` is runtime-only caller-member state, not operator-settable or
+  durable roster metadata
 - `launch_cwd` is log-only startup context and must not become durable roster
   metadata
 - accepted implementations must prefer direct roster-row and runtime-roster
@@ -564,12 +589,34 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - durable store state is the primary forward-write contract for ATM 1.2
-- Claude inbox-append runtime behavior is retired from the accepted runtime
-  and must not be a live forward-write contract
+- Claude inbox-append runtime behavior is retired from the accepted governing
+  runtime and must not be the live forward-write contract
+- if a retained Claude mailbox compatibility export helper survives
+  temporarily, it is explicit obsolete-only scaffolding rather than the
+  governing delivery contract
 - write-affecting mail events persist first, then emit direct post-send
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through
   `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+- `atm-core` owns one canonical post-send event model carrying sender/team,
+  message id, description, task id, ack flags, and authoritative
+  `recipient_pane_id` when known
+- any team-scoped built-in template override lookup must cross a
+  storage-neutral `NudgeTemplateOverrideStore` contract upstream of
+  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  only and must not grow SQLite lookup behavior
+- any retained built-in CLI helper receives the already-resolved template
+  through `InternalNudgeEnvelope`; the live production path stays in-process,
+  and the helper must not reopen runtime/store lookup
+- that boundary returns an explicit row lifecycle, not hidden control strings:
+  no row => product default, override row => stored text, disabled row => no
+  emission, clear/reset => row deletion
+- `atm-core` owns the shared resolved-template helper for built-in nudges, but
+  it does not own built-in XML template bodies, template override storage,
+  tmux injection, or graft host-wakeup mechanics
+- the concrete receiver sinks behind that seam are:
+  - `TmuxNudgeSink` for local tmux-backed recipients
+  - `GraftNudgeSink` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

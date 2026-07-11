@@ -124,6 +124,18 @@ Required rules:
     split `ack_state` / `mail_visibility_states` storage is not permitted
   - one canonical roster/member store with explicit behavioral fields such as
     `member_kind` and `harness`
+  - one team-scoped built-in nudge template override table named
+    `team_nudge_template_overrides` with:
+    - `team_name TEXT NOT NULL`
+    - `template_kind TEXT NOT NULL`
+    - `mode TEXT NOT NULL`
+    - `template_body TEXT NOT NULL`
+    - `updated_at TEXT NOT NULL`
+    - primary key `(team_name, template_kind)`
+    - template-kind values constrained to the six built-in template kinds
+      accepted in `AD.21`
+    - `mode` values constrained to `override` or `disabled`
+    - reset-to-default modeled as row deletion, not as a third persisted mode
 - weak provenance round-trip fields such as `imported_from` must not be part
   of the enduring `MailStoreMessageRecord` contract
 - if ingest timing is retained for health/reporting, it must be store-owned
@@ -153,3 +165,8 @@ Required rules:
 - every SQLite schema change must be treated as a contract change and requires
   explicit user approval plus synchronized requirements/architecture/boundary
   doc updates before landing
+- the `team_nudge_template_overrides` schema step is owned by
+  `atm-storage-rusqlite` and must land by extending
+  `crates/atm-storage-rusqlite/src/shared_db.rs::DB_MIGRATIONS`; because this
+  crate centralizes bootstrap SQL in that constant today, no separate SQL file
+  is the accepted migration shape unless the migration architecture changes

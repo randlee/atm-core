@@ -8,12 +8,10 @@ from pathlib import Path
 import sys
 
 from lint_common import build_report
-from lint_common import LintDirectivePolicy
 from lint_common import discover_repo_root
 from lint_common import iter_string_literal_contents
 from lint_common import iter_workspace_rust_files
 from lint_common import is_code_line
-from lint_common import line_is_suppressed
 from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
@@ -22,10 +20,6 @@ from lint_common import workspace_crate_section_lines
 
 
 LINT_NAME = "identities"
-DIRECTIVE_POLICY = LintDirectivePolicy(
-    tool_key=LINT_NAME,
-    aliases=("rule-008", "rule-009"),
-)
 
 
 @dataclass(frozen=True)
@@ -84,8 +78,6 @@ def collect_identity_violations(
         for line_number, (line, in_test_scope) in enumerate(zip(lines, scope, strict=True), start=1):
             if not is_code_line(line):
                 continue
-            if line_is_suppressed(line_number, lines, DIRECTIVE_POLICY):
-                continue
             literal_contents = set(iter_string_literal_contents(line))
             if in_test_scope:
                 if not any(literal in literal_contents for literal in forbidden_literals):
@@ -100,9 +92,11 @@ def collect_identity_violations(
                 )
                 continue
 
+            handled_literals: set[str] = set()
             for literal, allowed_paths in production_canonical_literals.items():
                 if literal not in literal_contents:
                     continue
+                handled_literals.add(literal)
                 if rel_path.as_posix() in allowed_paths:
                     continue
                 violations.append(
@@ -111,6 +105,17 @@ def collect_identity_violations(
                         line_number=line_number,
                         line=line.strip(),
                         kind="production_scope_canonical_literal",
+                    )
+                )
+            for literal in forbidden_literals:
+                if literal not in literal_contents or literal in handled_literals:
+                    continue
+                violations.append(
+                    IdentityViolation(
+                        path=rel_path.as_posix(),
+                        line_number=line_number,
+                        line=line.strip(),
+                        kind="production_scope_forbidden_literal",
                     )
                 )
                 break
@@ -166,9 +171,7 @@ def main(argv: list[str]) -> int:
 
     if not report.passed:
         print("RULE-008/RULE-009 violation: raw production literals found in Rust code.")
-        print(
-            "Use centralized reserved-role constants, canonical production definition sites, or explicit lint suppressions."
-        )
+        print("Use centralized reserved-role constants or canonical production definition sites.")
         for finding in report.findings:
             print(finding)
         print(f"total violations: {len(report.findings)}")

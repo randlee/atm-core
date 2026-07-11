@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DEBUG-ASSERT-REDUNDANT-001>
+  a triage:Finding ;
+  triage:findingId "DEBUG-ASSERT-REDUNDANT-001" ;
+  triage:title "redundant debug_assert! in apply_display_mutations_to_store strictly subsumed by following debug_assert_eq!" ;
+  triage:description "Prior finding reported a redundant debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly) at apply_display_mutations_to_store that was strictly subsumed by the following debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly). Current sweep confirms the redundant assertion has been removed across all branches. The own_inbox parameter is now marked unused (_own_inbox). Only the debug_assert_eq! remains at line 859." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "CODE" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/AD32/46be50b0> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD33/6ef24f32> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD34/05ddab01> ;
+  triage:fixedOn <urn:atm:triage:worktree/AD35/afdaf3c5> ;
+  triage:notes "CONFLICT RESOLVED - INDEPENDENT VERIFICATION (2026-07-10): AD35-QA-2 incorrectly reported finding 'confirmed still present at read/mod.rs:859', but independent verification confirms TRIAGE-3 summary was correct: finding is CLOSED on AD.32-35. The confusion arose from misinterpreting the correct debug_assert_eq!(ack_activation_mode, AckActivationMode::ReadOnly) at line 859 as the redundant assertion still being present. FACTS: (1) Redundant assertion debug_assert!(own_inbox || ack_activation_mode == AckActivationMode::ReadOnly) is ABSENT from all four branches; (2) Function parameter own_inbox renamed to _own_inbox (marked unused) on all branches; (3) Only correct debug_assert_eq! remains at line 859 on all branches; (4) Pattern consistent across AD.32 (46be50b0), AD.33 (6ef24f32), AD.34 (05ddab01), AD.35 (afdaf3c5). Severity dispute noted in prior triage (AD32-QA-2 marked BLOCKING, AD34-QA-1 and AD35-QA-2 mark MINOR). Finding definitively fixed and propagated across all phase-AD branches. Status: FIXED." .
+
+<urn:atm:triage:worktree/AD31/5891c114>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46be50b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/6ef24f32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/05ddab01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/afdaf3c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 .

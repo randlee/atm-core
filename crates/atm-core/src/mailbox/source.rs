@@ -1,6 +1,6 @@
 #![allow(
     dead_code,
-    reason = "AC.2 preserves crate-private source-discovery helpers until all Claude compatibility callers move into atm-storage-claude."
+    reason = "Phase AD obsolete: retained only for historical Claude compatibility paths until the later deletion sprint removes the remaining helpers."
 )]
 
 use std::fs;
@@ -40,15 +40,13 @@ pub(crate) struct ResolvedTarget {
 pub(crate) fn resolve_target(
     target_address: Option<&AgentAddress>,
     actor: &AgentName,
-    team_override: Option<&TeamName>,
+    caller_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedTarget, AtmError> {
     let Some(target_address) = target_address else {
-        let team = config::resolve_team(team_override.map(TeamName::as_str), config)
-            .ok_or_else(AtmError::team_unavailable)?;
         return Ok(ResolvedTarget {
             agent: actor.clone(),
-            team,
+            team: caller_team.clone(),
             explicit: false,
         });
     };
@@ -57,12 +55,10 @@ pub(crate) fn resolve_target(
         .team
         .as_deref()
         .and_then(|team| team.parse().ok())
-        .or_else(|| config::resolve_team(team_override.map(TeamName::as_str), config))
+        .or_else(|| Some(caller_team.clone()))
         .ok_or_else(AtmError::team_unavailable)?;
-    let agent = config::aliases::resolve_agent(&target_address.agent, config);
-
     Ok(ResolvedTarget {
-        agent: AgentName::from_validated(agent),
+        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
         team,
         explicit: true,
     })
@@ -281,12 +277,33 @@ mod tests {
         let target = resolve_target(
             Some(&"tl".parse().expect("address")),
             &TEST_SENDER.parse().expect("agent"),
-            None,
+            &TEST_TEAM.parse().expect("team"),
             Some(&config),
         )
         .expect("target");
         assert_eq!(target.agent, ROLE_TEAM_LEAD);
         assert!(target.explicit);
+    }
+
+    #[test]
+    fn resolve_target_rejects_invalid_alias_target() {
+        let mut aliases = BTreeMap::new();
+        aliases.insert("tl".to_string(), "../bad-agent".to_string());
+        let config = AtmConfig {
+            default_team: Some(TEST_TEAM.parse().expect("team")),
+            aliases,
+            ..Default::default()
+        };
+
+        let error = resolve_target(
+            Some(&"tl".parse().expect("address")),
+            &TEST_SENDER.parse().expect("agent"),
+            &TEST_TEAM.parse().expect("team"),
+            Some(&config),
+        )
+        .expect_err("invalid alias target");
+
+        assert!(error.is_address());
     }
 
     #[test]

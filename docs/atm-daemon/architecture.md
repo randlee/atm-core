@@ -41,8 +41,6 @@ tags:
 related_boundaries:
   - BOUNDARY-ServerTransport-Socket
   - BOUNDARY-RequestDispatcher-Daemon
-  - BOUNDARY-WatchEventSource-File
-  - BOUNDARY-ReconcileCoordinator-Daemon
 code_references:
   - docs/atm-daemon/boundaries.md
   - docs/atm-rusqlite/boundaries.md
@@ -127,20 +125,20 @@ Current packet-supported daemon surface:
 - clear
 - doctor
 - heartbeat
-- advisory register
-- advisory unregister
-- advisory fetch
-- advisory drain
-- advisory stream
 
-Advisory-surface rule:
-- the daemon-owned advisory surface is generic, not graft-specific
-- the daemon may own:
-  - registration / unregistration
-  - one bounded pending advisory queue per active session
-  - optional fetch/drain inspection over the shared ICD
-  - one live advisory stream per active session
-- `atm-graft` is one consumer of that surface, not a daemon-owned subsystem
+Receiver-handoff rule:
+- the daemon may emit one post-send event after durable message commit
+- receiver-specific delivery details stay behind receiver implementations such
+  as local tmux and `atm-graft`
+- when the retained built-in helper is used directly, it must consume one
+  pre-resolved `ATM_INTERNAL_NUDGE` envelope rather than re-querying template
+  override state from inside daemon-owned code; the shipped daemon path
+  otherwise resolves, renders, and delivers built-in nudges in-process
+- the accepted daemon architecture must not require daemon-owned graft session
+  registration, per-session nudge queues, fetch/drain inspection, or a
+  dedicated advisory-stream request family
+- transport receive loops remain thin request dispatch paths rather than
+  homes for receiver-specific session behavior
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
@@ -177,8 +175,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon worker lanes with active queue/debounce/completion state must use one
   worker-owned command-channel or actor ownership model rather than exposing
   shared mutable coordination locks to callers
-- daemon watch/reconcile and notification-runtime lanes are historical only and
-  are not part of the accepted runtime architecture
+- daemon watch/reconcile lanes are historical only and are not part of the
+  accepted runtime architecture
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
@@ -187,6 +185,15 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - same-host local IPC and cross-host daemon transport must use one shared ATM
   frame header and request/response packet family rather than separate local
   and remote message systems, as defined by `protocol-icd.md`
+- the accepted same-host Windows local-IPC depth contract is fail-fast and
+  unary:
+  - a dispatcher panic during shutdown must record one panic-path failure and
+    complete bounded shutdown without hanging the serve path
+  - an injected listener accept failure must record one accept-path failure and
+    terminate the affected serve path with a typed bounded error; the daemon
+    must not invent retry/backoff behavior for that injected failure contract
+  - a new connection attempt after terminate must fail quickly with a typed
+    shutdown/unavailable outcome rather than hanging on a dead endpoint
 - same-host local IPC endpoint naming and same-user access-control semantics
   must be owned by the local-IPC adapter rather than by callers constructing
   platform-specific socket paths, pipe names, or ACL details
@@ -437,7 +444,7 @@ Privacy boundary:
   crate-private
 - status-cache submodules expose only the boundary needed for daemon health and
   routing decisions; cache internals and mutation helpers remain crate-private
-- post-send/advisory submodules expose only the owned post-send/advisory
+- post-send receiver-handoff submodules expose only the owned post-send
   boundary traits or façades required by runtime composition; delivery
   internals remain
   crate-private
@@ -471,10 +478,7 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
 - `advisory_runtime.rs`
-- `notification_runtime.rs`
 - `peer_transport.rs`
-- `watch_runtime.rs`
-- `reconcile_runtime.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
 - `runtime_status_cache.rs`
@@ -495,7 +499,7 @@ Transport dispatcher rule:
   - encode a typed response
 - they may not:
   - run SQL directly
-  - invoke watcher reconciliation directly
+  - invoke historical watch/reconcile logic directly
   - emit notifications directly
   - embed workflow/business-state transitions
 - the same dispatcher/handler contract must back the in-process `test-socket`
@@ -547,7 +551,6 @@ Accepted daemon-private partitions:
 Historical-only retired partitions:
 - `watch_runtime`
 - `reconcile_runtime`
-- `notification_runtime`
 
 Phase `AD` rule:
 - these retired lanes may survive temporarily only as deletion scaffolding

@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD11-SMOKETRACE-001>
+  a triage:Finding ;
+  triage:findingId "AD11-SMOKETRACE-001" ;
+  triage:title "smoke report tables lack per-command traceability naming" ;
+  triage:description "reports/smoke/smoke.md and reports/smoke/smoke-thorough.md use scenario IDs (AD11-ENV-001, AD11-DOCTOR-001, etc.) rather than literally enumerating all 12 retained ATM commands (send/read/ack/list/clear/log/members/teams/teams add-member/teams update-member/teams backup/teams restore) as individually named rows. Functional coverage appears present; traceability naming is the gap." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-SMOKETRACE-001/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-SMOKETRACE-001/s11/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s11/2506a2b4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s11/2506a2b4> .
+
+<urn:atm:triage:occurrence/AD11-SMOKETRACE-001/s11/1>
+  a triage:Occurrence ;
+  triage:file "reports/smoke/smoke.md" ;
+  triage:line 9 ;
+  triage:snippet "| Row | Flow | Verdict | Notes | - table uses scenario IDs (AD11-ENV-001, etc.) not per-command rows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "2506a2b4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s11/2506a2b4> .
+
+<urn:atm:triage:occurrence/AD11-SMOKETRACE-001/s11/2>
+  a triage:Occurrence ;
+  triage:file "reports/smoke/smoke-thorough.md" ;
+  triage:line 9 ;
+  triage:snippet "| Row | Flow | Verdict | Notes | - table uses scenario IDs (AD11-ENV-001, etc.) not per-command rows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "2506a2b4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s11/2506a2b4> .
+
+<urn:atm:triage:worktree/pAD-s11/2506a2b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "2506a2b4" ;
+  triage:orderIndex 11 .

@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD4-OBS-001>
+  a triage:Finding ;
+  triage:findingId "AD4-OBS-001" ;
+  triage:title "retained dead reconcile/watch protocol DTOs missing sprint's own required obsolescence marker" ;
+  triage:description "crates/atm-core/src/protocol.rs:744-880 -- sprint AD.4's own Obsolescence Instructions require any retained reconcile/watch DTO that cannot be deleted immediately to be marked `Phase AD obsolete: historical reconcile/watch only`. The retained WatchSubscriptionRequest, WatchEventBatch, ReconcileRequest, ReconcileResult structs and NotificationKind::ReconcileComplete variant have zero construction/call sites workspace-wide (confirmed by 3 independent reviewers) but carry no obsolescence marker -- unlike DaemonInboxIngress in crates/atm-daemon/src/boundary_adapters.rs:88-93, which correctly carries #[deprecated(note = \"Phase AD obsolete: ...\")]." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "OBS" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/protocol.rs:744-880" ;
+  triage:severity "important" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot." ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 746 ;
+  triage:snippet "#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]\npub enum NotificationKind {\n    Delivery,\n    ReconcileComplete,  # Missing #[deprecated] marker\n}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s4" ;
+  triage:headSha "unresolved" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 855 ;
+  triage:snippet "pub struct WatchSubscriptionRequest {  # Missing #[deprecated] marker\n    pub home_dir: PathBuf,\n    pub team: TeamName,\n    pub agent: AgentName,\n}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s4" ;
+  triage:headSha "unresolved" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 863 ;
+  triage:snippet "pub struct WatchEventBatch {  # Missing #[deprecated] marker\n    pub paths: Vec<PathBuf>,\n}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s4" ;
+  triage:headSha "unresolved" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 869 ;
+  triage:snippet "pub struct ReconcileRequest {  # Missing #[deprecated] marker\n    pub home_dir: PathBuf,\n    pub team: TeamName,\n    pub agent: AgentName,\n}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s4" ;
+  triage:headSha "unresolved" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:occurrence/AD4-OBS-001/pAD-s4/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 877 ;
+  triage:snippet "pub struct ReconcileResult {  # Missing #[deprecated] marker\n    pub observed_paths: usize,\n    pub imported_sources: usize,\n}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAD-s4" ;
+  triage:headSha "unresolved" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s4> .
+
+<urn:atm:triage:worktree/pAD-s4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "unresolved" ;
+  triage:orderIndex 4 .

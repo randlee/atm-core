@@ -1,0 +1,86 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD5-MINOR-001>
+  a triage:Finding ;
+  triage:findingId "AD5-MINOR-001" ;
+  triage:title "WarningEntry drops AtmError's stable code; undocumented magic-number timeouts in service_runtime.rs" ;
+  triage:description "rust-best-practices-agent RBP-F002 -- WarningEntry drops AtmError's stable code on notification/append warning paths (should preserve the stable error code for machine-readability). rust-service-hardening-agent RSH-001/RSH-002 -- two undocumented magic-number timeouts in crates/atm-daemon/src/service_runtime.rs (should be named constants with a comment on why that value was chosen). Found during AD.5-QA-1 on PR #453." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T17:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-MINOR-001/AD5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-MINOR-001/AD5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-MINOR-001/AD5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-MINOR-001/AD5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-MINOR-001/AD5/5> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/8f17a12a> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-MINOR-001/AD5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_execution.rs" ;
+  triage:line 132 ;
+  triage:snippet "warnings.push(WarningEntry::new(format!(\"warning: notification delivery failed for {}@{}: {error}\", recipient.agent, recipient.team), recovery_hint))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-MINOR-001/AD5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 306 ;
+  triage:snippet "let _ = wake_read.set_read_timeout(Some(Duration::from_millis(100)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-MINOR-001/AD5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 25 ;
+  triage:snippet "const STREAM_IDLE_WAIT: Duration = Duration::from_millis(100)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-MINOR-001/AD5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-MINOR-001/AD5/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1011 ;
+  triage:snippet "graceful_drain_deadline: Duration::from_millis(500)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:worktree/AD5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 .

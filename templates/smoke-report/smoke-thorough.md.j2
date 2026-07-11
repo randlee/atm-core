@@ -5,6 +5,9 @@
 - binary SHA: `{{ report.binary_sha }}`
 - duration secs: `{{ report.duration_secs }}`
 - summary: `pass={{ report.summary.pass }}`, `fail={{ report.summary.fail }}`, `skip={{ report.summary.skip }}`
+- row semantics: `PASS` means every command in the row exited `0`; `FAIL`
+  records the first failing command only and does not claim sibling commands in
+  that row were executed after the failure
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |

@@ -8,6 +8,8 @@ pub mod boundary;
 /// adapter crates.
 #[doc(hidden)]
 pub mod boundary_support;
+/// Shared caller-context resolution and ATM-owned environment parsing helpers.
+pub mod caller_context;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
@@ -27,7 +29,7 @@ pub mod doctor;
 pub mod error;
 /// Stable ATM-owned error-code registry used by core and CLI layers.
 pub mod error_codes;
-/// Thin graft-facing daemon client traits and typed session DTOs.
+/// Thin graft-facing daemon client traits.
 pub mod graft;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
@@ -71,6 +73,7 @@ pub(crate) mod service_runtime_store;
 pub mod team_admin;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
@@ -87,35 +90,29 @@ pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, ClientTransport, ConfigDoctor, ConfigDoctorReport, ConfigIngress,
-    ConfigLoadRequest, ConfigLoadResponse, DoctorFinding, LoadMailMessageStateRequest,
+    AckTransition, AtmProtocol, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ClientTransport,
+    ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
+    DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NotificationSink, ReconcileCoordinator, ReconcileRequest,
-    ReconcileResult, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher, RosterEntry,
-    RosterHarness, RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
-    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, RuntimeStorageFinalizer, ServerTransport,
-    StatusSource, TaskState, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
-    WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
+    PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
+    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
+    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use config::types::GraftConfig;
-/// Canonical stable import path for the public graft-facing client/session
-/// boundary. External consumers, including `atm-graft`, should import these
-/// types from `atm_core::...` rather than reaching into the module path.
-pub use graft::{
-    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
-    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
-    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionState, AdvisorySessionUnregistrationRequest,
-    AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
-    AtmGraftClient,
-};
+/// Canonical stable import path for the retained thin graft-facing client
+/// boundary. Shared advisory/session protocol DTOs are not part of the
+/// accepted `atm-core` surface.
+pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-};
+pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};

@@ -87,8 +87,17 @@ Phase-AD planning note:
   Claude/reconcile/notification-runtime paths
 - the authoritative planning document is
   [`docs/plans/phase-AD/plan-phase-AD.md`](./plans/phase-AD/plan-phase-AD.md)
-- the planning branch is `plan/post-send-hook-fix`
+- the planning branch is `plan/daemon-graft-boundary-reset`
 - the execution integration branch is `integrate/phase-AD`
+- the corrective release line extends beyond `AD.11`; `AD.12` through `AD.20`
+  are required closure sprints for the graft-boundary reset, ULID-only
+  identity cleanup, raw CLI runtime-root unification, and read-path
+  consistency repair
+- the corrective release line extends again through `AD.25` to `AD.30` for
+  post-send closeout and Windows daemon-depth proof
+- the corrective release line extends again through `AD.31` to `AD.35` for
+  the mailbox peek surface, owner-only mutation reset, durable ack intent,
+  self-address/self-ack closure, and final messaging regression closeout
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -483,6 +492,8 @@ The rewrite is ready when:
   testing
 - `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
   known
+- repo-tracked dogfood config does not carry live `[[atm.post_send_hooks]]`
+  defaults or committed `tmux_pane_id` routing truth
 - retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged
@@ -622,20 +633,57 @@ Acceptance / Phase Entry Gate:
 - the phase does not close until both disposable and copied-state cross-host
   smoke lanes pass with retained evidence
 
-## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [PLANNED]
+## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [COMPLETE]
 
 Status summary:
-- `Phase AD` is the active release-blocking correction line for the accepted
-  `1.2.3` baseline.
+- `Phase AD` is complete on `integrate/phase-AD` as the release-blocking
+  correction line for the accepted `1.2.3` baseline.
 - it restores caller-owned identity handling so the CLI fails closed when
   identity is absent and the daemon never guesses identity
 - it narrows post-send behavior back to a direct persist-then-emit seam with
   sender-visible warnings on emission failure
 - it deletes retired Claude inbox, reconcile, and notification-runtime paths
   that no longer belong on the accepted line
+- `AD.1` (`feature/pAD-s1-caller-identity-ownership-restore`) is complete:
+  retained caller-owned CLI commands now resolve caller identity and caller
+  team at the CLI boundary, fail closed when either is missing, and carry both
+  fields explicitly to daemon-backed request DTOs.
+- `AD.2` (`feature/pAD-s2-config-identity-removal-and-doctor-repair`) is
+  complete: obsolete config-driven caller identity fallback is retired, doctor
+  remains the identity-free diagnostic exception, and the accepted caller
+  context contract is reflected in CLI and doctor behavior.
+- `AD.3` (`feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`) is
+  complete: the retired Claude backend and Claude JSON inbox nudge path are no
+  longer part of the accepted runtime line.
+- `AD.4` (`feature/pAD-s4-reconcile-runtime-removal`) is complete:
+  `ReconcileRuntime` and the watched-source/import runtime lane are removed
+  from accepted daemon behavior.
+- `AD.5` (`feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`)
+  is complete: daemon notification queue/worker delivery was removed and
+  post-send warning ownership was detached from the old notification-runtime
+  path.
+- `AD.6` (`feature/pAD-s6-post-send-nudge-contract-simplification`) is
+  complete: post-send ownership is reduced to explicit emitter seams with one
+  stable sender-warning contract for emission failure.
+- `AD.7` (`feature/pAD-s7-local-tmux-post-send-emitter`) is complete: local
+  tmux nudges use authoritative SQLite roster pane metadata instead of repo
+  config assumptions.
+- `AD.8` (`feature/pAD-s8-graft-post-send-emitter`) is complete: graft-backed
+  post-send emission is isolated behind the graft advisory boundary with
+  matching governance records and readiness evidence.
+- `AD.9` (`feature/pAD-s9-update-member-cli-and-roster-repair-path`) is
+  complete: `atm teams update-member` is the accepted repair path for pane and
+  member metadata, with `MemberNotFound` aligned to the not-found error family.
+- `AD.10` (`feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`)
+  is complete: durable `home_dir`, runtime `live_cwd`, and log-only
+  `launch_cwd` terminology and doctor projections are cleaned up and made
+  consistent.
+- `AD.11` (`feature/pAD-s11-smoke-and-readiness-closeout`) is complete: smoke
+  artifacts, readiness validation, and closeout evidence converge on one
+  accepted branch tip for the phase release gate.
 
 Planning branch:
-- `plan/post-send-hook-fix`
+- `plan/daemon-graft-boundary-reset`
 
 Integration branch:
 - `integrate/phase-AD`
@@ -656,23 +704,87 @@ Deliverables:
   notification queue/worker runtime
 - `atm teams update-member` as the accepted repair path for existing member
   metadata
+- corrective `AD.12` through `AD.22` closure of:
+  - ULID-only retained message identity
+  - graft advisory boundary reset
+  - raw CLI runtime-root unification
+  - read-mutation and read-selector output consistency
+  - shipped built-in post-send nudge plus bounded template override support
+  - pane-routing ownership cleanup out of committed repo config
+- follow-up `AD.25` through `AD.30` closure of:
+  - explicit built-in template override lifecycle/reset semantics
+  - real post-send boundary wiring plus mixed-success hook accounting
+  - upstream extraction of built-in template resolution out of the built-in
+    delivery path, with any retained `atm internal-nudge` helper reduced to a
+    resolved-envelope render/deliver leaf rather than the shipped default
+  - deterministic `atm-graft` host-nudge race closure
+  - one authoritative Phase AD post-send smoke matrix covering exactly:
+    - external hook success
+    - external hook partial failure
+    - built-in fallback
+    - override reset-to-default
+    - explicit disable behavior when retained
+  - separate Windows daemon integration-depth proof for the remaining local IPC
+    shutdown/error/rejection cases
+- follow-up `AD.31` through `AD.35` closure of:
+  - explicit split between non-mutating `atm peek` inspection and owner-only
+    mutating `atm read`
+  - owner-only mutation for `send`, `read`, `ack`, and `clear`, with no
+    mutating impersonation path
+  - durable sender-owned `requires_ack` message state and deletion of
+    read-time ack creation
+  - self-addressed send rejection and self-ack poison termination
+  - operator-protocol/help/regression closeout for the repaired messaging
+    model
 
 Sprint line:
-- `AD.1` `feature/pAD-s1-caller-identity-ownership-restore`
-- `AD.2` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
-- `AD.3` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
-- `AD.4` `feature/pAD-s4-reconcile-runtime-removal`
-- `AD.5` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
-- `AD.6` `feature/pAD-s6-post-send-nudge-contract-simplification`
-- `AD.7` `feature/pAD-s7-local-tmux-post-send-emitter`
-- `AD.8` `feature/pAD-s8-graft-post-send-emitter`
-- `AD.9` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
-- `AD.10` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
-- `AD.11` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.1 [COMPLETE]` `feature/pAD-s1-caller-identity-ownership-restore`
+- `AD.2 [COMPLETE]` `feature/pAD-s2-config-identity-removal-and-doctor-repair`
+- `AD.3 [COMPLETE]` `feature/pAD-s3-claude-backend-and-inbox-nudge-retirement`
+- `AD.4 [COMPLETE]` `feature/pAD-s4-reconcile-runtime-removal`
+- `AD.5 [COMPLETE]` `feature/pAD-s5-notification-runtime-removal-and-post-send-detachment`
+- `AD.6 [COMPLETE]` `feature/pAD-s6-post-send-nudge-contract-simplification`
+- `AD.7 [COMPLETE]` `feature/pAD-s7-local-tmux-post-send-emitter`
+- `AD.8 [COMPLETE]` `feature/pAD-s8-graft-post-send-emitter`
+- `AD.9 [COMPLETE]` `feature/pAD-s9-update-member-cli-and-roster-repair-path`
+- `AD.10 [COMPLETE]` `feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup`
+- `AD.11 [COMPLETE]` `feature/pAD-s11-smoke-and-readiness-closeout`
+- `AD.12` `feature/pAD-s12-graft-boundary-reset-planning`
+- `AD.13` `feature/pAD-s13-ulid-message-identity-reset`
+- `AD.14` `feature/pAD-s14-shared-graft-boundary-surface-reset`
+- `AD.15` `feature/pAD-s15-daemon-advisory-runtime-deletion`
+- `AD.16` `feature/pAD-s16-thin-graft-receiver-reset`
+- `AD.17` `feature/pAD-s17-boundary-reset-verification-closeout`
+- `AD.18` `feature/pAD-s18-raw-cli-runtime-root-unification`
+- `AD.19` `feature/pAD-s19-read-mutation-output-consistency-repair`
+- `AD.20` `feature/pAD-s20-read-body-search-metadata-consistency-repair`
+- `AD.21` `feature/pAD-s21-built-in-post-send-nudge-and-template-overrides`
+- `AD.22` `feature/pAD-s22-nudge-routing-state-and-dogfood-transition-cleanup`
+- `AD.25` `feature/pAD-s25-post-send-hook-emitter-live-wiring`
+- `AD.26` `feature/pAD-s26-rule001-observability-seam-closure`
+- `AD.27` `feature/pAD-s27-upstream-built-in-template-resolution`
+- `AD.28` `feature/pAD-s28-atm-graft-timing-independent`
+- `AD.29` `feature/pAD-s29-phase-ad-post-send-smoke-matrix`
+- `AD.30` `feature/pAD-s30-windows-daemon-integration-depth`
+- `AD.31` `feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset`
+- `AD.32` `feature/pAD-s32-durable-ack-intent-and-read-semantics-reset`
+- `AD.33` `feature/pAD-s33-self-addressed-send-rejection`
+- `AD.34` `feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup`
+- `AD.35` `feature/pAD-s35-messaging-protocol-and-regression-closeout`
 
 Acceptance:
 - the phase closes only through
   [`docs/plans/phase-AD/readiness.md`](./plans/phase-AD/readiness.md)
+- readiness is valid only if `AD.1` through `AD.11`, `AD.12` through
+  `AD.22`, `AD.25` through `AD.30`, and `AD.31` through `AD.35` all pass on
+  the accepted line
+- `AD.30` is the sole sprint allowed to author the Windows/post-send
+  sub-line closeout record in `docs/plans/phase-AD/readiness.md`, while
+  `AD.35` is the sole sprint allowed to author the final Phase `AD` messaging
+  follow-up verdict after `AD.31` through `AD.35` are complete
+- `AD.24` is reserved in the sibling smoke-test planning worktree and is
+  consumed by `AD.29`; its harness scope must not be duplicated in the
+  follow-up line
 
 ## 39. Chore: ADR Rationale Audit [COMPLETE]
 

@@ -1,7 +1,7 @@
 ---
 id: AD.7
 title: Local Tmux Post-Send Emitter
-status: planned
+status: complete
 branch: feature/pAD-s7-local-tmux-post-send-emitter
 worktree: ../atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter
 target: integrate/phase-AD

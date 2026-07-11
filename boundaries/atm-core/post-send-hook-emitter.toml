@@ -5,7 +5,7 @@ name = "PostSendHookEmitter"
 
 [public]
 trait = "PostSendHookEmitter"
-notes = "sealed post-commit emission contract planned in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft"
+notes = "sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-daemon via DaemonPostSendHookEmitter"
 
 [implementation]
 visibility = "trait_only"
@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-POST-SEND-HOOK-EMITTER-REFERENCES"]
 review_gates = ["no_notification_sink_substitution", "no_delivery_plan_post_send"]
 
 [status]
-state = "planned"
-notes = ["Phase AD AD.6 introduces the canonical post-send emission seam.", "atm-graft is an allowlisted out-of-owner implementation site for the graft-backed emitter planned in AD.8."]
+state = "active"
+notes = ["Phase AD AD.6 established the canonical post-send emission seam.", "atm-daemon::post_send_emitter::DaemonPostSendHookEmitter is the allowlisted out-of-owner implementation site for the graft-backed emitter landed in AD.8."]

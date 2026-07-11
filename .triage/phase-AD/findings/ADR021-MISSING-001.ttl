@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ADR021-MISSING-001>
+  a triage:Finding ;
+  triage:findingId "ADR021-MISSING-001" ;
+  triage:title "Required ADR-021 owner-only-message-mutation.md does not exist" ;
+  triage:description "Followup from initial pass on AD.31. Re-sweep of all 5 sprint branches (AD.31-35) confirms the required ADR-021-owner-only-message-mutation.md deliverable is still missing. ADR-021 slot is occupied by unrelated ADR-021-nudge-template-override-store-dependent-widening.md across all branches, creating a collision. Renumbering needed to resolve conflict and provide slot for owner-only-message-mutation ADR." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "DOC" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:openOn <urn:atm:triage:worktree/AD31/5891c114> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46be50b0> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/6ef24f32> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/05ddab01> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/afdaf3c5> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/afdaf3c5> ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/AD31/5891c114>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46be50b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/6ef24f32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/05ddab01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab01" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/afdaf3c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5" ;
+  triage:orderIndex 35 .

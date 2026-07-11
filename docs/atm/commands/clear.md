@@ -3,13 +3,19 @@
 CLI ownership for `atm clear`:
 
 - clear-mode flag parsing
-- actor override parsing
+- caller-team resolution plus owner-only caller-identity enforcement
 - conversion into `atm-core` clear requests
 - dry-run rendering
 - human-readable output
 - JSON output
 
 Clear eligibility remains owned by `atm-core`.
+
+Owner contract:
+
+- `atm clear` is owner-only and does not accept `--as`
+- it removes only non-actionable messages and never clears pending-ack work by
+  default
 
 References:
 

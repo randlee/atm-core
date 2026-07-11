@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
+use crate::caller_context::{read_cli_identity_from_env, read_cli_team_from_env};
 use crate::doctor::report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorSeverity, DoctorStatus,
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
-use crate::types::{AgentName, TeamName};
+use crate::types::TeamName;
 
 pub fn unavailable_snapshot(detail: String) -> AtmObservabilityHealth {
     AtmObservabilityHealth {
@@ -27,14 +28,8 @@ pub fn environment_visibility(
         atm_home: std::env::var_os("ATM_HOME")
             .map(PathBuf::from)
             .or(Some(home_dir)),
-        atm_team: std::env::var("ATM_TEAM")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .map(TeamName::from_validated),
-        atm_identity: std::env::var("ATM_IDENTITY")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .map(AgentName::from_validated),
+        atm_team: read_cli_team_from_env().ok().flatten(),
+        atm_identity: read_cli_identity_from_env().ok().flatten(),
         team_override,
     }
 }

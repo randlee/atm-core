@@ -29,3 +29,18 @@ pub fn with_default_roster_store<T>(
 ) -> Result<T, AtmError> {
     atm_runtime::with_default_roster_store(f)
 }
+
+/// Open the default SQLite boundary and expose only the approved built-in
+/// nudge-template override lookup seam.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
+/// assemble its canonical override-store boundary state.
+pub fn with_default_nudge_template_override_store<T>(
+    f: impl FnOnce(
+        &(dyn atm_core::boundary::NudgeTemplateOverrideStore + Send + Sync),
+    ) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    atm_runtime::with_default_nudge_template_override_store(f)
+}

@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::error::AtmError;
-use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters,
     metadata_selection::{
-        bucket_counts_for, classify_mailbox_metadata_rows, logical_current_messages,
-        select_messages, sort_and_limit_selected,
+        bucket_counts_for, classify_mailbox_metadata_rows,
+        filter_metadata_backed_contains_candidates, logical_current_messages, select_messages,
+        sort_and_limit_selected,
     },
     normalize_contains_filter,
 };
@@ -27,9 +27,9 @@ const MAX_LIST_LIMIT: usize = 10_000;
 pub struct ListQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub target_address: Option<AgentAddress>,
-    pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
     pub limit: Option<usize>,
@@ -44,9 +44,9 @@ impl ListQuery {
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        actor_override: Option<&str>,
+        caller_identity: AgentName,
         target_address: Option<&str>,
-        team_override: Option<&str>,
+        caller_team: TeamName,
         selection_mode: ReadSelection,
         seen_state_filter: bool,
         limit: Option<usize>,
@@ -59,9 +59,9 @@ impl ListQuery {
         Ok(Self {
             home_dir,
             current_dir,
-            actor_override: actor_override.map(str::parse).transpose()?,
+            caller_identity,
+            caller_team,
             target_address: target_address.map(str::parse).transpose()?,
-            team_override: team_override.map(str::parse).transpose()?,
             selection_mode,
             seen_state_filter,
             limit,
@@ -139,12 +139,13 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     _observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ListOutcome, AtmError> {
+    let contains_needle = query.contains_filter.as_deref();
     let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = query.caller_identity.clone();
     let target = resolve_target(
         query.target_address.as_ref(),
         &actor,
-        query.team_override.as_ref(),
+        &query.caller_team,
         config.as_ref(),
     )?;
     let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
@@ -172,9 +173,17 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         query.sender_filter.as_ref(),
         query.timestamp_filter,
         query.task_filter.as_ref(),
-        query.contains_filter.as_deref(),
     );
-    let mut selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let mut selected = filter_metadata_backed_contains_candidates(
+        runtime,
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        &metadata_rows,
+        selected,
+        contains_needle,
+    )?;
     sort_and_limit_selected(&mut selected, query.limit);
 
     let rows = selected
@@ -222,17 +231,14 @@ fn apply_list_filters(
     sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&TaskId>,
-    contains_filter: Option<&str>,
 ) -> Vec<ClassifiedMessage> {
-    let filtered = filters::apply_task_filter(
+    filters::apply_task_filter(
         filters::apply_timestamp_filter(
             filters::apply_sender_filter(messages, sender_filter),
             timestamp_filter,
         ),
         task_filter,
-    );
-
-    filters::apply_contains_filter(filtered, contains_filter)
+    )
 }
 
 fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
@@ -247,15 +253,20 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
-        pending_ack: message.envelope.pending_ack_at.is_some()
-            && message.envelope.acknowledged_at.is_none(),
+        pending_ack: matches!(
+            atm_storage::derive_ack_requirement(&message.envelope),
+            atm_storage::AckRequirementState::RequiredPending
+        ),
         task_id: message.envelope.task_id.clone(),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     use serde_json::Map;
@@ -264,10 +275,11 @@ mod tests {
     use super::{
         ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages,
     };
-    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::read::ClassifiedMessage;
+    use crate::read::filters;
     use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -297,6 +309,7 @@ mod tests {
                 source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
                 summary: None,
                 message_id: Some(message_id),
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -344,7 +357,10 @@ mod tests {
             ),
         ]);
 
-        let filtered = apply_list_filters(current, None, None, None, Some("root context"));
+        let filtered = filters::apply_contains_filter(
+            apply_list_filters(current, None, None, None),
+            Some("root context"),
+        );
 
         assert!(filtered.is_empty());
     }
@@ -352,15 +368,12 @@ mod tests {
     struct ListRuntime {
         team_dir: PathBuf,
         roster_present: bool,
+        metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+        message_records: HashMap<MessageKey, boundary::Message>,
+        load_message_record_count: Arc<AtomicUsize>,
     }
 
     impl crate::boundary::sealed::Sealed for ListRuntime {}
-
-    impl crate::boundary::NotificationSink for ListRuntime {
-        fn deliver(&self, _event: crate::protocol::NotificationEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for ListRuntime {
         fn load_config(
@@ -424,23 +437,6 @@ mod tests {
             unreachable!("list roster-truth tests do not rebuild projections")
         }
 
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not append compat inbox messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not append compat inbox message sets")
-        }
-
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -498,7 +494,7 @@ mod tests {
             _agent: &AgentName,
             _limit: Option<usize>,
         ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-            Ok(Vec::new())
+            Ok(self.metadata_rows.clone())
         }
 
         fn load_message_record(
@@ -506,9 +502,11 @@ mod tests {
             _home_dir: &Path,
             _team: &TeamName,
             _agent: &AgentName,
-            _message_key: &boundary::MessageKey,
+            message_key: &boundary::MessageKey,
         ) -> Result<Option<boundary::Message>, AtmError> {
-            unreachable!("list roster-truth tests do not load message records")
+            self.load_message_record_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(self.message_records.get(message_key).cloned())
         }
 
         fn persist_message_record(&self, _record: boundary::Message) -> Result<(), AtmError> {
@@ -528,9 +526,9 @@ mod tests {
         ListQuery::new(
             home_dir,
             current_dir,
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some(&target),
-            None,
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,
             None,
@@ -542,6 +540,81 @@ mod tests {
         .expect("list query")
     }
 
+    fn metadata_row(
+        text: &str,
+        summary: Option<&str>,
+        from: &str,
+    ) -> (boundary::MailStoreMailboxMetadataRow, boundary::Message) {
+        let message_id = AtmMessageId::new();
+        let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
+        let envelope = InboxMessage {
+            from: from.parse::<AgentName>().expect("agent"),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            summary: summary.map(str::to_string),
+            message_id: Some(message_id),
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        (
+            boundary::MailStoreMailboxMetadataRow {
+                message_key: message_key.clone(),
+                message_id: Some(message_id),
+                parent_message_id: None,
+                thread_mode: None,
+                from_agent: from.parse::<AgentName>().expect("agent"),
+                summary: summary.map(str::to_string),
+                message_at: envelope.timestamp,
+                read: false,
+                requires_ack: false,
+                pending_ack: false,
+                acknowledged_at: None,
+                expires_at: None,
+                task_id: None,
+            },
+            boundary::Message {
+                team: TEST_TEAM.parse::<TeamName>().expect("team"),
+                agent: "recipient".parse::<AgentName>().expect("agent"),
+                message_key,
+                envelope,
+            },
+        )
+    }
+
+    fn runtime_with_messages(
+        tempdir: &tempfile::TempDir,
+        rows_and_messages: Vec<(boundary::MailStoreMailboxMetadataRow, boundary::Message)>,
+        roster_present: bool,
+    ) -> (ListRuntime, Arc<AtomicUsize>) {
+        let load_message_record_count = Arc::new(AtomicUsize::new(0));
+        let (metadata_rows, message_records): (Vec<_>, Vec<_>) = rows_and_messages
+            .into_iter()
+            .map(|(row, message)| {
+                let key = row.message_key.clone();
+                (row, (key, message))
+            })
+            .unzip();
+        (
+            ListRuntime {
+                team_dir: tempdir.path().join(".claude").join("teams").join(TEST_TEAM),
+                roster_present,
+                metadata_rows,
+                message_records: message_records.into_iter().collect(),
+                load_message_record_count: load_message_record_count.clone(),
+            },
+            load_message_record_count,
+        )
+    }
+
     #[test]
     fn list_mail_uses_atm_roster_truth_for_explicit_targets() {
         let tempdir = tempdir().expect("tempdir");
@@ -550,6 +623,9 @@ mod tests {
         let runtime = ListRuntime {
             team_dir,
             roster_present: true,
+            metadata_rows: Vec::new(),
+            message_records: HashMap::new(),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
         };
 
         let outcome = list_mail_with_runtime_impl(
@@ -572,6 +648,9 @@ mod tests {
         let runtime = ListRuntime {
             team_dir,
             roster_present: false,
+            metadata_rows: Vec::new(),
+            message_records: HashMap::new(),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
         };
 
         let error = list_mail_with_runtime_impl(
@@ -582,5 +661,59 @@ mod tests {
         .expect_err("missing ATM roster member should fail");
 
         assert!(error.is_agent_not_found(), "{error:?}");
+    }
+
+    #[test]
+    fn metadata_backed_contains_fetches_durable_body_only_for_surviving_summary_miss_rows() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (summary_row, summary_message) = metadata_row(
+            "durable body with needle",
+            Some("summary needle"),
+            TEST_SENDER,
+        );
+        let (body_row, body_message) = metadata_row(
+            "durable body with needle",
+            Some("summary miss"),
+            TEST_SENDER,
+        );
+        let (rejected_row, rejected_message) = metadata_row(
+            "durable body with needle",
+            Some("summary miss"),
+            "other-sender",
+        );
+        let (runtime, load_count) = runtime_with_messages(
+            &tempdir,
+            vec![
+                (summary_row, summary_message),
+                (body_row, body_message),
+                (rejected_row, rejected_message),
+            ],
+            true,
+        );
+        let outcome = list_mail_with_runtime_impl(
+            ListQuery::new(
+                tempdir.path().to_path_buf(),
+                tempdir.path().to_path_buf(),
+                TEST_SENDER.parse().expect("caller"),
+                Some(&format!("recipient@{TEST_TEAM}")),
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                None,
+                Some(TEST_SENDER),
+                None,
+                None,
+                Some("needle"),
+            )
+            .expect("list query"),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("list outcome");
+
+        assert_eq!(outcome.count, 2);
+        assert_eq!(load_count.load(Ordering::SeqCst), 1);
     }
 }

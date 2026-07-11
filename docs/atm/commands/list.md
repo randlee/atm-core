@@ -24,6 +24,12 @@ Supported filters/flags:
 - `--json`
 - `--as`
 
+Caller-context note:
+
+- `atm list` is inspection-only, so it may resolve caller identity from
+  `--as`
+- mutating commands do not share that impersonation surface
+
 Output contract:
 
 - `atm list` never renders multiple full message bodies

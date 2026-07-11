@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-RECONCILE-COORDINATOR-REFERENCES"]
 review_gates = ["no_store_or_transport_bypass_in_reconcile"]
 
 [status]
-state = "stub_landed"
-notes = ["callable reconcile trait and named reconcile request/result DTOs landed in atm_core::boundary", "reconcile owns coalescing and trigger policy, not raw watch APIs"]
+state = "retired"
+notes = ["Phase AD removed the accepted atm_core boundary trait and daemon construction path for reconcile coordination.", "Named reconcile DTOs remain historical-only protocol scaffolding until a later cleanup sprint deletes them."]

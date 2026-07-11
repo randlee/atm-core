@@ -7,9 +7,10 @@ It is a planning/specification document until the S.9 implementation lands.
 
 ATM-owned retained logs default to:
 
-- `~/.atm/logs/atm.log.jsonl`
+- `{ATM_HOME}/.atm/logs/atm.log.jsonl`
 
-The retained log directory is host-scoped and independent of `ATM_HOME`.
+Without `ATM_LOG_DIR`, the retained log directory is derived from the accepted
+`ATM_HOME` root for the active installation.
 
 ## Override
 
@@ -18,7 +19,7 @@ The retained log directory is host-scoped and independent of `ATM_HOME`.
 Examples:
 
 - default:
-  - `~/.atm/logs/atm.log.jsonl`
+  - `{ATM_HOME}/.atm/logs/atm.log.jsonl`
 - override:
   - `ATM_LOG_DIR=~/atm-test-logs`
   - retained log path: `~/atm-test-logs/atm.log.jsonl`
@@ -29,7 +30,7 @@ Examples:
 
 - it resolves to an absolute path
 - empty string is treated as unset
-- it does not overlap with `~/.atm/daemon/`
+- it does not overlap with `{ATM_HOME}/.atm/daemon/`
 - it does not resolve under `~/.claude/`
 - it targets a local filesystem
 
@@ -123,13 +124,14 @@ the fail-closed bootstrap and fail-open mid-run behavior required by ADR-011.
 
 ## Watcher / Reconcile Exclusion
 
-Retained-log writes under `~/.atm/logs/` must not trigger mailbox watcher or
+Retained-log writes under `{ATM_HOME}/.atm/logs/` must not trigger mailbox watcher or
 reconcile events.
 
 The implementation sprint must therefore prove:
 
 - log-directory paths are excluded from watcher trigger roots
-- appending to `~/.atm/logs/atm.log.jsonl` does not create a reconcile event
+- appending to `{ATM_HOME}/.atm/logs/atm.log.jsonl` does not create a
+  reconcile event
   during ordinary daemon operation
 
 ## Console Sink

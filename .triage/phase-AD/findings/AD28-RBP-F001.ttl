@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AD28-RBP-F001" ;
+  triage:title "GraftNudgeSink::deliver silently discards read_snapshot errors" ;
+  triage:description "In crates/atm-graft/src/nudge_sink.rs:19,25, GraftNudgeSink::deliver silently discards read_snapshot errors on both the success and failure paths (if let Ok(snapshot) = ... with no else). A poisoned snapshot lock produces zero diagnostic output -- neither the nudge_delivered nor session_error observability calls fire, and nothing is logged." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F001/pAD-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F001/pAD-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/835a6247> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F001/pAD-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/nudge_sink.rs" ;
+  triage:line 19 ;
+  triage:snippet "if let Ok(snapshot) = read_snapshot(self.snapshot) { self.observability.nudge_delivered(&snapshot, &event); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F001/pAD-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/nudge_sink.rs" ;
+  triage:line 25 ;
+  triage:snippet "if let Ok(snapshot) = read_snapshot(self.snapshot) { self.observability.session_error(&snapshot, \"inject_nudge\", &error); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:worktree/pAD-s28/835a6247>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:orderIndex 0 .

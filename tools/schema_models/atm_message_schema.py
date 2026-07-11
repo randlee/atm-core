@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal
-from uuid import UUID
+from typing import Annotated, Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, StringConstraints
 
 from .claude_code_message_schema import ClaudeCodeInboxMessage
+
+UlidString = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-7][0-9A-HJKMNP-TV-Z]{25}$"),
+]
 
 
 class AtmInboxMessage(ClaudeCodeInboxMessage):
@@ -19,8 +23,8 @@ class AtmInboxMessage(ClaudeCodeInboxMessage):
 
     model_config = ConfigDict(extra="allow")
 
-    message_id: UUID | None = None
-    parentMessageId: UUID | None = None
+    message_id: UlidString | None = None
+    parentMessageId: UlidString | None = None
     threadMode: Literal["add-details", "supersede"] | None = None
     taskId: str | None = None
 

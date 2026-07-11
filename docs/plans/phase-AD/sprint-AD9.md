@@ -1,7 +1,7 @@
 ---
 id: AD.9
 title: Update-Member CLI And Roster Repair Path
-status: planned
+status: complete
 branch: feature/pAD-s9-update-member-cli-and-roster-repair-path
 worktree: ../atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path
 target: integrate/phase-AD

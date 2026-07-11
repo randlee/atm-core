@@ -1,0 +1,250 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ACK-INTENT-DUP-CONSTRUCTION-001>
+  a triage:Finding ;
+  triage:findingId "ACK-INTENT-DUP-CONSTRUCTION-001" ;
+  triage:title "three-field ack-intent invariant hand-duplicated at every construction site instead of one constructor" ;
+  triage:description "The three-field ack-intent invariant (requires_ack, pending_ack_at, acknowledged_at) is hand-duplicated at multiple construction sites across ack/mod.rs, threading.rs, send/mod.rs and related modules instead of being derived from a single centralized constructor. This lacks compile-time protection against future drift." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP-F002" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T22:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-417> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1108> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1201> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1280> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1367> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1472> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1543> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/threading-202> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-53> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-397> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-574> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-mod-565> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-mod-584> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-persistence-111> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-missing-config-156> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-hook-1317> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-417>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 417 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1108>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1108 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1201>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1201 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1280>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1280 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1367>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1367 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1472>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1472 ;
+  triage:snippet "requires_ack: true, pending_ack_at: Some(IsoTimestamp::now()), acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/ack-1543>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1543 ;
+  triage:snippet "requires_ack: true, pending_ack_at: Some(IsoTimestamp::now()), acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/threading-202>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/threading.rs" ;
+  triage:line 202 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-53>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 53 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-397>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 397 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-tests-574>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 574 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-mod-565>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 565 ;
+  triage:snippet "pending_ack_at: requires_ack.then_some(timestamp), acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-mod-584>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 584 ;
+  triage:snippet "pending_ack_at: requires_ack.then_some(timestamp), acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-persistence-111>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 111 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-missing-config-156>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/missing_config_notice.rs" ;
+  triage:line 156 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:occurrence/ACK-INTENT-DUP-CONSTRUCTION-001/AD32/send-hook-1317>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 1317 ;
+  triage:snippet "requires_ack: false, pending_ack_at: None, acknowledged_at: None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b> .
+
+<urn:atm:triage:worktree/AD31/6ad246eebf909c8dfbd886d4f51cd5f763f9c6df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD32/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD33/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD34/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD35/46f44bbbbe9ee6305c9a2b4858182b44f89d204b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 5 .
