@@ -71,4 +71,5 @@ Make the end-user document corpus ship in local-install and release outputs.
 - `python3 scripts/release_artifacts.py stage-install-docs --manifest release/publish-artifacts.toml --output-root target/phase-ae/staged-install-root`
 - `python3 scripts/validate_release.py manifest --staged-install-root target/phase-ae/staged-install-root`
 - `python3 -c "from pathlib import Path; assert Path('target/phase-ae/staged-install-root/share/doc/atm/README.md').is_file()"`
+- `rg -n "share/doc/atm|README.md" release/release-notes.md`
 - `git diff --check`

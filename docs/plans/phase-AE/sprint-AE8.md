@@ -38,14 +38,20 @@ for the release version.
   - the field does not match the release version
   - a referenced linked document is missing
 - the failure output clearly names the offending file and expected version
+- `release/publish-surface-scope.md` records the user-doc freshness gate as a
+  required publish-surface check, including the `reviewed_for_release` contract
+  and the validation entrypoint used to enforce it
 
 ## Acceptance Criteria
 
 - stale user docs are treated as a release blocker, not a warning
 - the freshness gate reuses the verifier from `AE.7` instead of inventing a
   second partial validation path
+- the publish-surface scope doc names the same freshness gate inputs and
+  validation entrypoint implemented by this sprint
 
 ## Required Validation
 
 - `python3 scripts/validate_release.py validate`
+- `rg -n "reviewed_for_release|docs/user-documents|validate_release.py validate" release/publish-surface-scope.md`
 - `git diff --check`
