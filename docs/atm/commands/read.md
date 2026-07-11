@@ -13,7 +13,6 @@ CLI ownership for `atm read`:
 
 Supported selectors/filters:
 
-- target inbox / agent
 - `--team`
 - `--all`
 - `--unread` and legacy alias `--unread-only`

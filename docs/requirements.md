@@ -1209,7 +1209,10 @@ Shared rules:
   commands, not message matching
 - `--json` changes output format only and is not a message-selection filter
 - all three commands must verify target team exists
-- all three commands must verify explicit target agent exists in team config
+- `atm list` and `atm peek` must verify an explicit target agent exists in the
+  team config before inspection proceeds
+- `atm read` must reject explicit cross-agent mailbox targets on the mutating
+  path and may only operate on the caller's own mailbox
 - all three commands must support the same semantic message filters even when
   their output shapes differ
 - `--contains` must search both summary text and full message body text

@@ -6,9 +6,11 @@ use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     SendResponseEnvelope, next_request_id,
 };
+use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use std::io::Write;
 use std::sync::Arc;
@@ -56,6 +58,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
     let db_path = tempdir.path().join("mail.db");
     write_team_config(&atm_home, &[]);
+    write_workspace_config(&workspace_dir);
 
     add_member_via_retained_admin(
         &db_path,
@@ -193,6 +196,58 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
 
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(error.is_validation());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
+
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Receive(
+            ReadQuery::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                Some("qa-a@test-team"),
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query"),
+        ))
+        .expect_err("cross-agent daemon read must fail");
+
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
 }
 
 #[test]

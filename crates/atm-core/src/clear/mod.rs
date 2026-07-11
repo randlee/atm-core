@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use crate::address::AgentAddress;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::ResolvedTarget;
@@ -25,7 +24,6 @@ pub struct ClearQuery {
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
     pub caller_team: TeamName,
-    pub target_address: Option<AgentAddress>,
     pub older_than: Option<Duration>,
     pub idle_only: bool,
     pub dry_run: bool,
@@ -141,12 +139,7 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
 ) -> Result<ClearRuntimeContext, AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
     let actor = query.caller_identity.clone();
-    let target = resolve_target(
-        query.target_address.as_ref(),
-        &actor,
-        &query.caller_team,
-        config.as_ref(),
-    )?;
+    let target = resolve_target(None, &actor, &query.caller_team, config.as_ref())?;
 
     validate_clear_target(runtime, &query.home_dir, &target)?;
 
@@ -180,30 +173,6 @@ fn validate_clear_target<R: RetainedServiceRuntime>(
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm clear`.",
         ));
-    }
-
-    validate_clear_target_member_in_roster(runtime, target)?;
-
-    Ok(())
-}
-
-fn validate_clear_target_member_in_roster<R: RetainedServiceRuntime>(
-    runtime: &R,
-    target: &ResolvedTarget,
-) -> Result<(), AtmError> {
-    if !target.explicit {
-        return Ok(());
-    }
-
-    if runtime
-        .load_roster_member(&target.team, &target.agent)?
-        .is_none()
-    {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Repair or reload the ATM roster, or clear a different mailbox target.",
-            ),
-        );
     }
 
     Ok(())
@@ -522,13 +491,11 @@ mod tests {
     }
 
     fn clear_query(home_dir: PathBuf, current_dir: PathBuf) -> ClearQuery {
-        let target = format!("recipient@{TEST_TEAM}");
         ClearQuery {
             home_dir,
             current_dir,
             caller_identity: AgentName::from_validated(TEST_SENDER),
             caller_team: TeamName::from_validated(TEST_TEAM),
-            target_address: Some(target.parse().expect("target")),
             older_than: None,
             idle_only: false,
             dry_run: true,
@@ -536,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn clear_mail_uses_atm_roster_truth_for_explicit_targets() {
+    fn clear_mail_targets_only_the_owner_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         std::fs::create_dir_all(&team_dir).expect("team dir");
@@ -553,27 +520,7 @@ mod tests {
         .expect("clear outcome");
 
         assert_eq!(outcome.team, TeamName::from_validated(TEST_TEAM));
-        assert_eq!(outcome.agent, AgentName::from_validated("recipient"));
+        assert_eq!(outcome.agent, AgentName::from_validated(TEST_SENDER));
         assert_eq!(outcome.removed_total, 0);
-    }
-
-    #[test]
-    fn clear_mail_rejects_explicit_targets_missing_from_atm_roster() {
-        let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
-        let runtime = ClearRuntime {
-            team_dir,
-            roster_present: false,
-        };
-
-        let error = clear_mail_with_runtime_impl(
-            clear_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
-            &NullObservability,
-            &runtime,
-        )
-        .expect_err("missing ATM roster member should fail");
-
-        assert!(error.is_agent_not_found(), "{error:?}");
     }
 }

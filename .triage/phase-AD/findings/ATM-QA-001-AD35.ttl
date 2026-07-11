@@ -12,7 +12,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s31/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s32/1> ;
@@ -35,8 +35,8 @@
   triage:file "README.md" ;
   triage:line 104 ;
   triage:snippet "atm read --all --no-mark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
   triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
   triage:occursIn <urn:atm:triage:worktree/s31/5891c11> .
@@ -46,8 +46,8 @@
   triage:file "README.md" ;
   triage:line 104 ;
   triage:snippet "atm read --all --no-mark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
   triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
   triage:occursIn <urn:atm:triage:worktree/s32/46be50b> .
@@ -57,8 +57,8 @@
   triage:file "README.md" ;
   triage:line 104 ;
   triage:snippet "atm read --all --no-mark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
   triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
   triage:occursIn <urn:atm:triage:worktree/s33/6ef24f3> .
@@ -68,8 +68,8 @@
   triage:file "README.md" ;
   triage:line 104 ;
   triage:snippet "atm read --all --no-mark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
   triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
   triage:occursIn <urn:atm:triage:worktree/s34/05ddab0> .
@@ -79,8 +79,8 @@
   triage:file "README.md" ;
   triage:line 104 ;
   triage:snippet "atm read --all --no-mark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
   triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
   triage:occursIn <urn:atm:triage:worktree/s35/afdaf3c> .

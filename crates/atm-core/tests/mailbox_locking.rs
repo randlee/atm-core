@@ -1219,7 +1219,6 @@ impl Fixture {
             current_dir: self.tempdir.path().to_path_buf(),
             caller_identity: actor.parse().expect("caller"),
             caller_team: PRIMARY_TEAM.parse().expect("team"),
-            target_address: None,
             older_than: None,
             idle_only: false,
             dry_run: false,

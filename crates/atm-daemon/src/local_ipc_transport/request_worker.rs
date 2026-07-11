@@ -409,7 +409,6 @@ mod tests {
             current_dir: tmp,
             caller_identity: atm_core::test_support::TEST_SENDER.parse().expect("caller"),
             caller_team: atm_core::test_support::TEST_TEAM.parse().expect("team"),
-            target_address: None,
             older_than: None,
             idle_only: false,
             dry_run: false,

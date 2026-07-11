@@ -12,9 +12,9 @@
   triage:severity "medium" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
-  triage:notes "Status baseline: ATM-QA-001-AD35.ttl status=open but finding is actually fixed on current branch (README updated). ATM-QA-002-AD35.ttl status=open (still valid). PEEK-TEST-MOCK-ONLY-001-AD31.ttl status=open (still valid). This finding serves as documentation triage to update readiness.md and clarify phase closure status once OWNER-ONLY-MUTATION-LEAK-001-AD31 is addressed." .
+  triage:notes "Fixed on fix/phase-AD-pm-owner-only-mutation: readiness.md now names the owner-only mutation fix as the real closeout dependency, and the stale AD.35 status records were refreshed to match the branch state." .
 
 <urn:atm:triage:worktree/integrate-AD/ced7ff66>
   a triage:WorktreeSnapshot ;

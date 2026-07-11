@@ -370,7 +370,7 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         actor_team,
         target,
         seen_watermark,
-    } = resolve_read_context(&synthesized, runtime)?;
+    } = resolve_read_context(&synthesized, runtime, false)?;
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?;
     let display = resolve_read_display(
@@ -427,7 +427,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         actor_team,
         target,
         seen_watermark,
-    } = resolve_read_context(&query, runtime)?;
+    } = resolve_read_context(&query, runtime, true)?;
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let selection = load_read_selection(runtime, &query, &target, seen_watermark)?;
     let display = resolve_read_display(
@@ -758,6 +758,7 @@ struct ReadRuntimeContext {
 fn resolve_read_context<R: RetainedServiceRuntime>(
     query: &ReadQuery,
     runtime: &R,
+    owner_only: bool,
 ) -> Result<ReadRuntimeContext, AtmError> {
     let config = runtime.load_config(&query.mailbox.current_dir)?;
     let actor = query.caller_identity.clone();
@@ -768,6 +769,10 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
         &query.caller_team,
         config.as_ref(),
     )?;
+
+    if owner_only {
+        ensure_owner_only_read_target(&actor, &query.caller_team, &target)?;
+    }
 
     let team_dir = runtime.team_dir(&query.mailbox.home_dir, &target.team)?;
     if !team_dir.exists() {
@@ -810,6 +815,29 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
                 "Repair or reload the ATM roster, or read a different mailbox target.",
             ),
         );
+    }
+
+    Ok(())
+}
+
+fn ensure_owner_only_read_target(
+    actor: &AgentName,
+    actor_team: &TeamName,
+    target: &crate::mailbox::source::ResolvedTarget,
+) -> Result<(), AtmError> {
+    if target.explicit
+        && (!actor.as_str().eq_ignore_ascii_case(target.agent.as_str())
+            || !actor_team
+                .as_str()
+                .eq_ignore_ascii_case(target.team.as_str()))
+    {
+        return Err(AtmError::validation(format!(
+            "owner-only `atm read` may not target '{}' in team '{}'; run the command as the mailbox owner or use `atm peek --as` for inspection",
+            target.agent, target.team
+        ))
+        .with_recovery(
+            "Rerun `atm read` without a mailbox target as the owner, or use `atm peek --as <member>` for non-mutating inspection.",
+        ));
     }
 
     Ok(())
@@ -1939,8 +1967,8 @@ mod tests {
         let query = ReadQuery::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            TEST_SENDER.parse().expect("caller"),
-            Some(&format!("recipient@{TEST_TEAM}")),
+            "recipient".parse().expect("caller"),
+            None,
             TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,
@@ -2012,7 +2040,7 @@ mod tests {
     }
 
     #[test]
-    fn read_mail_uses_atm_roster_truth_for_explicit_targets() {
+    fn read_mail_rejects_explicit_cross_agent_targets_on_mutating_path() {
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         std::fs::create_dir_all(&team_dir).expect("team dir");
@@ -2029,20 +2057,19 @@ mod tests {
             fail_load_message_record: false,
         };
 
-        let outcome = read_mail_with_runtime_impl(
+        let error = read_mail_with_runtime_impl(
             explicit_read_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
             &NullObservability,
             &runtime,
         )
-        .expect("read outcome");
+        .expect_err("cross-agent owner-only read must fail");
 
-        assert_eq!(outcome.team, TeamName::from_validated(TEST_TEAM));
-        assert_eq!(outcome.agent, AgentName::from_validated("recipient"));
-        assert_eq!(outcome.count, 0);
+        assert!(error.is_validation(), "{error:?}");
+        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
     }
 
     #[test]
-    fn read_mail_rejects_explicit_targets_missing_from_atm_roster() {
+    fn peek_mail_rejects_explicit_targets_missing_from_atm_roster() {
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         std::fs::create_dir_all(&team_dir).expect("team dir");
@@ -2059,14 +2086,15 @@ mod tests {
             fail_load_message_record: false,
         };
 
-        let error = read_mail_with_runtime_impl(
-            explicit_read_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+        let error = peek_mail_with_runtime_impl(
+            explicit_peek_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
             &NullObservability,
             &runtime,
         )
-        .expect_err("missing ATM roster member should fail");
+        .expect_err("peek with explicit missing roster target must fail");
 
-        assert!(error.is_agent_not_found(), "{error:?}");
+        assert_eq!(error.code, crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(error.message.contains("recipient"), "{error:?}");
     }
 
     #[test]
@@ -2094,8 +2122,8 @@ mod tests {
         let query = ReadQuery::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            TEST_SENDER.parse().expect("caller"),
-            Some(&format!("recipient@{TEST_TEAM}")),
+            "recipient".parse().expect("caller"),
+            None,
             TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,

@@ -7,7 +7,7 @@ use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
-    clear::clear_mail,
+    clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
         DoctorStatus, DoctorSummary,
@@ -24,7 +24,7 @@ use atm_core::{
         RuntimeLivenessState, RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    read::{peek_mail, read_mail},
+    read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
     send::send_mail_with_runtime_and_post_send_emitter,
 };
@@ -611,17 +611,16 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                 query,
                 self.observability.as_ref(),
             )?)),
-            RequestEnvelope::Peek(query) => Ok(ResponseEnvelope::Peek(Box::new(peek_mail(
+            RequestEnvelope::Peek(query) => Ok(ResponseEnvelope::Peek(Box::new(
+                peek_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
+            ))),
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(
+                read_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
+            ))),
+            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail_with_runtime(
                 query,
                 self.observability.as_ref(),
-            )?))),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(read_mail(
-                query,
-                self.observability.as_ref(),
-            )?))),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
-                query,
-                self.observability.as_ref(),
+                &self.service_runtime,
             )?)),
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
