@@ -854,7 +854,7 @@ mod tests {
         }
     }
 
-    impl crate::boundary::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
 
     impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
         fn load_template_override(

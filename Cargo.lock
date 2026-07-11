@@ -221,7 +221,6 @@ dependencies = [
 name = "atm-storage-rusqlite"
 version = "1.2.3"
 dependencies = [
- "agent-team-mail-core",
  "atm-storage",
  "chrono",
  "rusqlite",

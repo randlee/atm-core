@@ -1,12 +1,10 @@
 use crate::shared_db::SharedDb;
 use crate::{SqliteMailboxMetadataCounts, SqliteMailboxMetadataRow};
-use atm_core::derive_ack_requirement;
-use atm_core::schema::InboxMessage;
-use atm_core::types::AckRequirementState;
 use atm_storage::AtmError;
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::{AckRequirementState, InboxMessage, derive_ack_requirement};
 use rusqlite::params;
 use serde_json::Map;
 

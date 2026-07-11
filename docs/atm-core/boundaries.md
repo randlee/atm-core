@@ -179,22 +179,24 @@ Purpose:
 ## NudgeTemplateOverrideStore
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/nudge-template-override-store.toml](../../boundaries/atm-core/nudge-template-override-store.toml)
+- [../../boundaries/atm-storage/nudge-template-override-store.toml](../../boundaries/atm-storage/nudge-template-override-store.toml)
 
 Purpose:
-- Own the storage-neutral lookup contract for team-scoped built-in nudge
-  template override rows.
+- expose the stable `atm-core::boundary` compatibility facade for the
+  storage-owned team-scoped built-in nudge template override contract
 
 Notes:
 - This boundary exists specifically so built-in nudge override lookup resolves
   upstream of `PostSendHookEmitter`.
-- `atm-core` owns the contract and selection semantics, but does not own the
-  concrete SQLite table or any direct SQLite calls.
-- The first concrete implementation is `atm-storage-rusqlite`.
-- `docs/adr/ADR-021-nudge-template-override-store-dependent-widening.md`
-  governs the accepted Phase AD dependent widening that added
-  `atm-daemon-bootstrap` and `atm` as compile-bridge dependents on this
-  contract, mirroring the retained `RosterStore` precedent.
+- canonical ownership now lives in `atm-storage`; `atm-core` re-exports the
+  moved trait and storage-neutral row/kind types so retained compile-bridge
+  consumers do not break during cutover
+- `atm-core` retains only
+  `built_in_nudge_template_kind_from_post_send_event(...)` because it depends
+  on the core-owned `PostSendHookEvent`
+- the first concrete implementation remains `atm-storage-rusqlite`
+- [../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md](../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md)
+  supersedes ADR-021's older `atm-core` ownership assumption
 - `atm` remains the owner of the six built-in product template bodies and the
   bounded placeholder substitution/rendering policy.
 - Accepted row semantics are explicit:
@@ -202,9 +204,9 @@ Notes:
   - override row => stored non-empty template body
   - disabled row => no built-in nudge emission
   - clear/reset => row deletion
-- That same ADR also governs removal of the earlier
-  `atm::commands::internal_nudge` forbidden reference, so the human-readable
-  boundary record matches the machine-readable TOML contract.
+- the durable ack classifier used by mailbox metadata and retained list/read
+  projections now lives beside this contract in `atm-storage`, not in
+  `atm-core`
 
 ## Phase AA Runtime Composition Adjuncts
 

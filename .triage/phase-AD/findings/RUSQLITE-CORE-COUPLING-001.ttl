@@ -12,8 +12,11 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-11T01:20:17Z"^^xsd:dateTime ;
+  triage:resolutionNote "Implemented on fix/phase-AD-pm-boundary-violation by moving the storage-neutral nudge-template override contract family plus the durable ack-requirement classifier into atm-storage, adding an atm-storage-owned sealed seam, keeping atm-core as a compatibility re-export plus PostSendHookEvent-specific helper only, removing the normal atm-storage-rusqlite -> atm-core Cargo edge, relocating the canonical machine-readable boundary record to boundaries/atm-storage/nudge-template-override-store.toml with ADR-024 superseding ADR-021, and deleting stale atm-storage-rusqlite allowed-dependent entries from atm-core boundary records so boundary lint matches the new graph." ;
+  triage:rationale "Validation on this branch passed through the real repo closure lanes: cargo test -p atm-storage, cargo test -p atm-storage-rusqlite, cargo test -p agent-team-mail-core, cargo test --workspace --quiet, python3 .just/lint_boundaries.py, just lint, and just test. Child occurrences remain the original first-observed integrate/phase-AD evidence rather than being rewritten to the fix branch snapshot." ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RUSQLITE-CORE-COUPLING-001/integrate-AD/2> ;

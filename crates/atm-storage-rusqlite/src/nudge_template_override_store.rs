@@ -1,11 +1,11 @@
 use super::SqliteNudgeTemplateOverrideStore;
 use crate::shared_db::{SharedDb, SqliteConnection};
-use atm_core::boundary::{
+use atm_storage::error::AtmError;
+use atm_storage::types::{IsoTimestamp, TeamName};
+use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow,
 };
-use atm_core::error::AtmError;
-use atm_core::types::{IsoTimestamp, TeamName};
 use rusqlite::{OptionalExtension, params};
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ impl SqliteNudgeTemplateOverrideStore {
     }
 }
 
-impl atm_core::boundary::sealed::Sealed for SqliteNudgeTemplateOverrideStore {}
+impl atm_storage::contract::sealed::Sealed for SqliteNudgeTemplateOverrideStore {}
 
 impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
     fn load_template_override(
@@ -207,8 +207,8 @@ fn normalize_loaded_override_mode(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::BuiltInNudgeTemplateKind;
-    use atm_core::boundary::TeamNudgeTemplateOverrideMode;
+    use atm_storage::BuiltInNudgeTemplateKind;
+    use atm_storage::TeamNudgeTemplateOverrideMode;
     use rusqlite::params;
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
 
         assert_eq!(
             error.code,
-            atm_core::error_codes::AtmErrorCode::EmptyNudgeTemplateBody
+            atm_storage::error_codes::AtmErrorCode::EmptyNudgeTemplateBody
         );
     }
 
@@ -360,7 +360,7 @@ mod tests {
                     rusqlite::params![
                         "test-team",
                         "delivery_ack",
-                        atm_core::types::IsoTimestamp::now().to_string()
+                        atm_storage::types::IsoTimestamp::now().to_string()
                     ],
                 )
                 .map_err(|error| db.error("insert legacy row", error))?;

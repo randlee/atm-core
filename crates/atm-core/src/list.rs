@@ -254,8 +254,8 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
         pending_ack: matches!(
-            crate::read::state::derive_ack_requirement(&message.envelope),
-            crate::types::AckRequirementState::RequiredPending
+            atm_storage::derive_ack_requirement(&message.envelope),
+            atm_storage::AckRequirementState::RequiredPending
         ),
         task_id: message.envelope.task_id.clone(),
     }

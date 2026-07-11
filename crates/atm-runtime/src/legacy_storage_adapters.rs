@@ -13,15 +13,13 @@ use atm_core::boundary::{
     RosterStoreDoctor, RosterStoreDoctorReport, UpsertMailMessageStateRequest,
     UpsertMailMessageStateResponse,
 };
-use atm_core::derive_ack_requirement;
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
-use atm_core::types::AckRequirementState;
 use atm_storage::contract::{
     Message as SharedMessage, MessageQuery, MessageStore as SharedMessageStore, RosterSnapshot,
     RosterStore as SharedRosterStore,
 };
-use atm_storage::{AgentName, TeamName};
+use atm_storage::{AckRequirementState, AgentName, TeamName, derive_ack_requirement};
 
 #[derive(Clone)]
 pub(crate) struct StorageBackends<M, R>

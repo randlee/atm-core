@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+pub use atm_storage::derive_ack_requirement;
+
 use crate::schema::InboxMessage;
 use crate::types::{
     AckRequirementState, AckState, DisplayBucket, MessageClass, NoAckState, PendingAckState,
@@ -89,16 +91,6 @@ pub fn derive_read_state(message: &InboxMessage) -> ReadState {
         ReadState::Read
     } else {
         ReadState::Unread
-    }
-}
-
-pub fn derive_ack_requirement(message: &InboxMessage) -> AckRequirementState {
-    if !message.requires_ack {
-        AckRequirementState::NotRequired
-    } else if message.acknowledged_at.is_some() {
-        AckRequirementState::RequiredAcknowledged
-    } else {
-        AckRequirementState::RequiredPending
     }
 }
 

@@ -513,7 +513,7 @@ impl SqliteStorageBackend {
 
     pub fn nudge_template_override_store(
         &self,
-    ) -> Arc<dyn atm_core::boundary::NudgeTemplateOverrideStore + Send + Sync> {
+    ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
     }
 
