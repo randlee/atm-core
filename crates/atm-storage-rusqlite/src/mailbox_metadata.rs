@@ -33,7 +33,7 @@ fn parse_optional_timestamp(
     raw: Option<String>,
     field_name: &str,
 ) -> Result<Option<IsoTimestamp>, AtmError> {
-    raw.map(|value| value.parse::<chrono::DateTime<chrono::Utc>>())
+    raw.map(|value| value.parse::<IsoTimestamp>())
         .transpose()
         .map_err(|error| {
             AtmError::validation(format!(
@@ -44,7 +44,6 @@ fn parse_optional_timestamp(
             )
             .with_source(error)
         })
-        .map(|value| value.map(IsoTimestamp::from_datetime))
 }
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
@@ -152,16 +151,15 @@ fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmErro
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
-    value.parse::<chrono::DateTime<chrono::Utc>>()
-        .map(IsoTimestamp::from_datetime)
-        .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to parse sqlite mailbox metadata timestamp: {error}"
-            ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
-            )
-        })
+    value.parse::<IsoTimestamp>().map_err(|error| {
+        AtmError::validation(format!(
+            "failed to parse sqlite mailbox metadata timestamp: {error}"
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
+        )
+        .with_source(error)
+    })
 }
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]

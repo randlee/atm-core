@@ -155,16 +155,15 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
 }
 
 fn parse_updated_at(raw: String) -> Result<IsoTimestamp, AtmError> {
-    raw.parse::<chrono::DateTime<chrono::Utc>>()
-        .map(IsoTimestamp::from_datetime)
-        .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to parse team_nudge_template_overrides.updated_at `{raw}`: {error}"
-            ))
-            .with_recovery(
-                "Repair the malformed team_nudge_template_overrides.updated_at row before retrying the override lookup.",
-            )
-        })
+    raw.parse::<IsoTimestamp>().map_err(|error| {
+        AtmError::validation(format!(
+            "failed to parse team_nudge_template_overrides.updated_at `{raw}`: {error}"
+        ))
+        .with_recovery(
+            "Repair the malformed team_nudge_template_overrides.updated_at row before retrying the override lookup.",
+        )
+        .with_source(error)
+    })
 }
 
 fn normalize_loaded_override_mode(

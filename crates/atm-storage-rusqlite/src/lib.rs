@@ -206,7 +206,7 @@ impl SqliteMessageStore {
         raw: Option<String>,
         field_name: &str,
     ) -> Result<Option<IsoTimestamp>, AtmError> {
-        raw.map(|value| value.parse::<chrono::DateTime<chrono::Utc>>())
+        raw.map(|value| value.parse::<IsoTimestamp>())
             .transpose()
             .map_err(|error| {
                 AtmError::validation(format!(
@@ -217,7 +217,6 @@ impl SqliteMessageStore {
                 )
                 .with_source(error)
             })
-            .map(|value| value.map(IsoTimestamp::from_datetime))
     }
 
     fn load_message_state_row(
