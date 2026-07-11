@@ -31,6 +31,8 @@ be trusted without opening the repo or reading implementation docs.
   - `develop` after Phase `AD` merged on `2026-07-11`
 - default install-root assumption for local installs:
   - `~/.local/atm/<version>/`
+- deterministic packaging validation root:
+  - `target/phase-ae/staged-install-root/`
 - required installed user-doc root:
   - `~/.local/atm/<version>/share/doc/atm/`
 - required installed user-doc entrypoint:
@@ -92,6 +94,14 @@ See [`issues.md`](./issues.md) for sprint mapping.
   show complete copy-pastable examples
 - publisher/release validation must fail closed when the installed user-doc set
   is missing, stale, or structurally broken
+- sprint ownership is fixed as:
+  - `AE.5` owns install-copy packaging, the deterministic staged install root
+    at `target/phase-ae/staged-install-root/`, and the release-note wording
+    that documents the installed doc location
+  - `AE.7` owns `scripts/verify_user_docs.py` and all source-tree/installed-copy
+    document-content validation
+  - `AE.9` owns only the accepted-line proof artifact and verification that the
+    already-authored release notes still describe the installed doc surface
 
 ## Scope Rules
 
@@ -160,3 +170,5 @@ line:
 - publisher/release preflight fails closed when the corpus is stale or missing
 - the phase-close artifact proves the installed archive/output contains the
   expected user-doc tree and that the copied links/examples still validate
+- the accepted-line proof artifact is
+  `reports/smoke/phase-AE-installed-docs-proof.md`

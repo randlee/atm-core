@@ -22,8 +22,8 @@ ships and validates on the accepted line.
 ## Exact Targets
 
 - `docs/plans/phase-AE/readiness.md`
-- `release/release-notes.md`
-- `reports/smoke/`
+- `scripts/validate_release.py`
+- `reports/smoke/phase-AE-installed-docs-proof.md`
 
 ## Deliverables
 
@@ -31,16 +31,23 @@ ships and validates on the accepted line.
   - the installed archive/output contains `share/doc/atm/`
   - the copied corpus matches the repo-owned source tree
   - the copied corpus still passes link and fenced-example validation
-- release notes mention the installed user-doc location and scope
+- the accepted-line proof artifact path is fixed as
+  `reports/smoke/phase-AE-installed-docs-proof.md`
+- release notes authored in `AE.5` are re-verified here for installed-doc
+  location/scope, but not re-authored
 
 ## Acceptance Criteria
 
 - this sprint is the only phase-close source of truth for installed-doc proof
 - the final artifact names the exact corpus files verified
 - the final artifact records the release version reviewed
+- the final artifact records whether `release/release-notes.md` still names the
+  installed doc location
 
 ## Required Validation
 
 - `just test`
-- `python3 scripts/validate_release.py validate`
+- `python3 scripts/validate_release.py validate --proof-output reports/smoke/phase-AE-installed-docs-proof.md`
+- `python3 -c "from pathlib import Path; assert Path('reports/smoke/phase-AE-installed-docs-proof.md').is_file()"`
+- `python3 -c "from pathlib import Path; text = Path('reports/smoke/phase-AE-installed-docs-proof.md').read_text(); assert 'share/doc/atm' in text and 'README.md' in text and 'release version' in text and 'release/release-notes.md' in text"`
 - `git diff --check`
