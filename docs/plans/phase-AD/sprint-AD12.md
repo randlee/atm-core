@@ -125,8 +125,13 @@ pub trait AtmGraftClient: Send + Sync {
   `docs/atm-daemon/{requirements,architecture,boundaries}.md`
 - `AD.16` owns `atm-graft` runtime deletion plus final closure of
   `docs/atm-graft/{requirements,architecture,boundaries}.md`
-- `AD.17` owns only final verification, readiness evidence, and phase-close
-  documentation updates after `AD.13` through `AD.20` land
+- `AD.17` owns final verification, readiness evidence, and phase-close
+  documentation updates for `AD.12` through `AD.16`, plus the Windows
+  `atm-daemon` CI restoration gate; it runs before `AD.18`, `AD.19`, and
+  `AD.20` and does not depend on their completion (see `sprint-AD17.md`'s
+  Scope Note). End-to-end readiness evidence for the full `AD.12`-`AD.20`
+  corrective line is completed at phase-end, after `AD.18`/`AD.19`/`AD.20`
+  each close via their own QA gate
 
 ## Acceptance Criteria
 

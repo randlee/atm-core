@@ -133,6 +133,10 @@ Required rules:
 - in embedded mode, `atm-graft` must automatically surface daemon-originated
   nudges into the host's between-tool-call context flow; manual polling is not
   sufficient for `atm-graft` acceptance
+- same-host host-nudge delivery tests must use explicit receiver-readiness
+  signaling before asserting injection success; acceptance must not depend on
+  scheduler luck or on a shorter `#[cfg(test)]` delivery deadline than the
+  accepted production path
 - if the host is idle when a nudge arrives, `atm-graft` must enqueue the
   received nudge or retain equivalent receiver-local state until host
   consumption and fire a host wake/event signal so the host takes follow-on

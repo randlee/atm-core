@@ -179,20 +179,34 @@ Purpose:
 ## NudgeTemplateOverrideStore
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/nudge-template-override-store.toml](../../boundaries/atm-core/nudge-template-override-store.toml)
+- [../../boundaries/atm-storage/nudge-template-override-store.toml](../../boundaries/atm-storage/nudge-template-override-store.toml)
 
 Purpose:
-- Own the storage-neutral lookup contract for team-scoped built-in nudge
-  template override rows.
+- expose the stable `atm-core::boundary` compatibility facade for the
+  storage-owned team-scoped built-in nudge template override contract
 
 Notes:
 - This boundary exists specifically so built-in nudge override lookup resolves
   upstream of `PostSendHookEmitter`.
-- `atm-core` owns the contract and selection semantics, but does not own the
-  concrete SQLite table or any direct SQLite calls.
-- The first concrete implementation is planned in `atm-storage-rusqlite`.
+- canonical ownership now lives in `atm-storage`; `atm-core` re-exports the
+  moved trait and storage-neutral row/kind types so retained compile-bridge
+  consumers do not break during cutover
+- `atm-core` retains only
+  `built_in_nudge_template_kind_from_post_send_event(...)` because it depends
+  on the core-owned `PostSendHookEvent`
+- the first concrete implementation remains `atm-storage-rusqlite`
+- [../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md](../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md)
+  supersedes ADR-021's older `atm-core` ownership assumption
 - `atm` remains the owner of the six built-in product template bodies and the
   bounded placeholder substitution/rendering policy.
+- Accepted row semantics are explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion
+- the durable ack classifier used by mailbox metadata and retained list/read
+  projections now lives beside this contract in `atm-storage`, not in
+  `atm-core`
 
 ## Phase AA Runtime Composition Adjuncts
 
@@ -354,7 +368,7 @@ Purpose:
   behavior after durable message persistence succeeds.
 
 Notes:
-- Phase `AD` introduces this boundary as the replacement for
+- Phase `AD` established this boundary as the replacement for
   `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
   path.
 - `send` / `ack` remain responsible for:
@@ -362,6 +376,9 @@ Notes:
   - deciding whether the recipient exposes post-send capability
   - logging emission failure
   - constructing sender-visible warnings on emission failure
+- accepted send/ack finalization emits post-send directly from persisted
+  logical messages on the accepted runtime with no retained compatibility
+  delivery-plan executor on this path
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
 - the accepted `AD.25` through `AD.30` follow-up line keeps that attempt-only
@@ -372,7 +389,8 @@ Notes:
   - this boundary does not reopen config lookup, team override lookup, or
     recipient-capability policy selection
 - local tmux-backed emission may live in `atm-core`; the graft-backed emitter
-  is an explicitly allowlisted out-of-owner implementation in `atm-graft`.
+  is the explicitly allowlisted out-of-owner implementation
+  `atm_daemon::post_send_emitter::DaemonPostSendHookEmitter`.
 - this boundary must not become a logical-message-delivery, persistence, or
   generic notification-planning seam.
 - AD18/ARCH-004 scope ruling, governed by
@@ -397,34 +415,24 @@ Notes:
 
 ## GraftPostSendPort
 
-Planned machine-readable boundary source:
-- `AD.26` creates `boundaries/atm-core/graft-post-send-port.toml` when the
-  accepted runtime actually routes graft-backed built-in post-send delivery
-  through that seam.
-- the planning branch does not install the TOML record early, because boundary
-  lint treats new records as live enforcement and the accepted line still
-  contains the advisory-session references that `AD.26` is explicitly tasked
-  to remove.
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
 
 
 Purpose:
-- Owns the graft-specific built-in recipient handoff used after caller-owned
-  send/ack logic has already selected graft as the concrete post-send target.
+- Owns the one accepted graft-backed advisory handoff for post-send events
+  after `atm-core` has already decided that recipient-side graft emission is
+  required.
 
 Notes:
-- this boundary is a receiver-specific leaf handoff, not a second policy layer
-- caller-owned send/ack logic and `PostSendHookEmitter` remain responsible for:
-  - deciding whether a built-in graft nudge should be attempted at all
-  - matching external hooks
-  - deciding when built-in fallback is legal
-  - constructing warnings/log records from typed success/failure
-- this boundary must not own or reintroduce:
-  - daemon-owned graft session registration
-  - daemon-owned per-session nudge queues
-  - shared advisory stream packet families
-  - fetch/drain/register/unregister semantics on the accepted line
-- only graft-backed built-in delivery details live here; shared ATM request,
-  persistence, and caller-context semantics stay out of scope.
+- This stays narrower than `PostSendHookEmitter`:
+  - `atm-core` still decides whether graft-backed post-send applies
+  - `atm-core` still logs failures and constructs sender-visible warnings
+  - the port only attempts the graft-side advisory delivery
+- the accepted out-of-owner implementation is
+  `atm_daemon::runtime_health::DaemonGraftPostSendPort`.
+- this boundary must not expand into generic notification routing, mailbox
+  compatibility append, tmux delivery, or local process spawning.
 
 ## NotificationSink
 
@@ -433,26 +441,46 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns outward delivery of notifications, hooks, or plugin-facing events.
+- Historical boundary record only. Phase `AD.5` retired `NotificationSink`
+  from the accepted post-send/send/ack path.
 
 Notes:
-- This replaces direct `Command::new` use in business-flow code.
-- Notification fallback policy for delivery state machines belongs here as a
-  sink-side effect, but event legality still belongs to the event-family state
-  machine rather than to the sink adapter.
-- Phase `Yb` clarifies that this boundary is notification-only:
-  - hook or notifier invocation is not proof of logical message delivery
-  - non-Claude outbound payload delivery must use a dedicated delivery
-    boundary, not NotificationSink as a stand-in
-  - impossible non-Claude append-degraded routing must fail closed before it
-    reaches this sink
-  - the current proof surface for non-Claude delivery lives in
-    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
-- `Phase Yc` finalized the production-path ownership rule:
-  - `Y.13` removed the direct
-    `PostSendNotificationExecutor -> maybe_run_post_send_hook(...)` bypass
-  - the surviving production notification path now executes through
-    `NotificationSink::deliver(...)`
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- Post-send ownership now stays at the send/ack event site:
+  - durable message persistence succeeds first
+  - recipient-specific post-send emission happens directly through the accepted
+    post-send emitter seam
+  - retained notification logging, when enabled, appends directly to the
+    notification log with no `NotificationSink` substitution
+- Non-Claude outbound payload delivery still uses the dedicated
+  `NonClaudeOutbound` boundary rather than any notification surface.
+
+## ClaudeCompatibilityMailboxWriter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml](../../boundaries/atm-core/claude-compatibility-mailbox-writer.toml)
+
+Historical status:
+- retired from the accepted runtime by `AD.3`
+- any surviving references are historical boundary records only
+
+Purpose:
+- Historical boundary record only. Phase `AD.3` retired the
+  `ClaudeCompatibilityMailboxWriter` executor seam from the accepted send/ack
+  runtime.
+
+Notes:
+- The retired boundary remains documented only so historical plan/ADR
+  references still resolve.
+- The deleted seam previously owned:
+  - `execute_claude_delivery(...)`
+  - direct `append_claude_inbox_message(...)` / recovered message-set append
+    execution
+- Accepted send/ack delivery now routes through the retained
+  `NonClaudeOutbound` seam only.
+- Repair-only inbox rebuild/export support remains outside the live send/ack
+  executor and must not be treated as a surviving delivery boundary.
 
 ## NonClaudeOutbound
 

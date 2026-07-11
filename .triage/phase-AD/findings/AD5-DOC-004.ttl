@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD5-DOC-004>
+  a triage:Finding ;
+  triage:findingId "AD5-DOC-004" ;
+  triage:title "docs/architecture.md stale present-progressive tense describing already-landed AD.5 work" ;
+  triage:description "docs/architecture.md:2861 uses stale present-progressive tense describing work that has already landed on this branch (should read as completed/past state, not in-progress). Found during AD.5-QA-1 on PR #453 (req-qa ATM-QA-002)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-03T17:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD5-DOC-004/AD5/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/8f17a12a> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:occurrence/AD5-DOC-004/AD5/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2861 ;
+  triage:snippet "the historical `R.17` daemon-owned queued notifier worker is being retired by `AD.5`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/8f17a12a> .
+
+<urn:atm:triage:worktree/AD5/8f17a12a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "8f17a12a" ;
+  triage:orderIndex 5 .

@@ -29,12 +29,14 @@ Two classes of message exist. Handling differs per class.
 {
   "class": "informational",
   "examples": ["status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
-  "read_with": "atm read --no-mark",
+  "read_with": "atm peek",
   "respond_with": "atm send <to> \"<reply>\" (omit --requires-ack; never use atm ack)"
 }
 ```
 
-Never use `atm ack` on an informational message.
+Never use `atm ack` on an informational message. `atm ack` is reserved for
+messages that actually entered the pending-ack queue because the sender set
+`--requires-ack` or sent a task-linked message.
 
 ## Good Patterns
 

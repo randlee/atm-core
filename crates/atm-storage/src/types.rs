@@ -26,6 +26,14 @@ impl IsoTimestamp {
     }
 }
 
+impl FromStr for IsoTimestamp {
+    type Err = chrono::ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value.parse::<DateTime<Utc>>().map(Self::from_datetime)
+    }
+}
+
 impl From<DateTime<Utc>> for IsoTimestamp {
     fn from(datetime: DateTime<Utc>) -> Self {
         Self(datetime)
@@ -251,7 +259,7 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentName};
+    use super::{AgentId, AgentName, IsoTimestamp};
 
     #[test]
     fn agent_id_new_matches_agent_name_validation_for_valid_value() {
@@ -281,6 +289,13 @@ mod tests {
 
         let error = serde_json::from_str::<AgentId>("\"bad/name\"").expect_err("invalid id");
         assert!(error.to_string().contains("path separators"));
+    }
+
+    #[test]
+    fn iso_timestamp_from_str_round_trips_rfc3339_input() {
+        let timestamp: IsoTimestamp = "2026-07-11T01:20:17Z".parse().expect("timestamp");
+
+        assert_eq!(timestamp.to_string(), "2026-07-11T01:20:17+00:00");
     }
 }
 

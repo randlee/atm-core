@@ -89,6 +89,7 @@ pub struct MailStoreMailboxMetadataRow {
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
     pub read: bool,
+    pub requires_ack: bool,
     pub pending_ack: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledged_at: Option<IsoTimestamp>,

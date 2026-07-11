@@ -1,7 +1,7 @@
 ---
 id: AD.17
 title: Boundary Reset Verification Closeout
-status: planned
+status: complete
 branch: feature/pAD-s17-boundary-reset-verification-closeout
 worktree: ../atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout
 target: integrate/phase-AD
@@ -11,8 +11,25 @@ target: integrate/phase-AD
 
 ## Goal
 
-- prove the graft boundary reset on the accepted line and close the added
-  `AD.12` through `AD.20` corrective scope
+- prove the graft boundary reset on the accepted line through `AD.16`,
+  and restore the Windows `atm-daemon` CI lane
+
+## Scope Note
+
+Per `violation-inventory.md`'s sprint ordering (`AD.17` listed "for
+verification/readiness only", ahead of `AD.18`-`AD.20`), `AD.17` runs before
+`AD.18`, `AD.19`, and `AD.20` and cannot depend on their completion. Final
+end-to-end closeout across the full `AD.12`-`AD.20` corrective line is
+confirmed by each of `AD.18`/`AD.19`/`AD.20`'s own QA gate plus the
+phase-end post-mortem review
+(`.claude/skills/triaging-findings/references/post-mortem.md`) on
+`integrate/phase-AD` — not by this sprint. QA findings raised against
+`AD.17` that actually concern `AD.18`/`AD.19`/`AD.20` scope (e.g. the
+`ReadOutcome` read-mutation consistency work owned by `AD.19`) should be
+promoted to those sprints' own branches and closed via their own QA, not
+treated as open `AD.17` blockers. This sprint's own Windows CI restoration
+gate and open triage dependencies below are unaffected by this note and
+remain in force.
 
 ## Hard Dependencies
 
@@ -20,9 +37,6 @@ target: integrate/phase-AD
 - `AD.14` complete
 - `AD.15` complete
 - `AD.16` complete
-- `AD.18` complete
-- `AD.19` complete
-- `AD.20` complete
 - `docs/plans/phase-AD/plan-phase-AD.md`
 - `.triage/phase-T/findings/FTQ-001.ttl`
 - `.triage/phase-T/findings/FTQ-003.ttl`

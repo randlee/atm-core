@@ -128,11 +128,14 @@ Required rules:
     `team_nudge_template_overrides` with:
     - `team_name TEXT NOT NULL`
     - `template_kind TEXT NOT NULL`
+    - `mode TEXT NOT NULL`
     - `template_body TEXT NOT NULL`
     - `updated_at TEXT NOT NULL`
     - primary key `(team_name, template_kind)`
     - template-kind values constrained to the six built-in template kinds
       accepted in `AD.21`
+    - `mode` values constrained to `override` or `disabled`
+    - reset-to-default modeled as row deletion, not as a third persisted mode
 - weak provenance round-trip fields such as `imported_from` must not be part
   of the enduring `MailStoreMessageRecord` contract
 - if ingest timing is retained for health/reporting, it must be store-owned

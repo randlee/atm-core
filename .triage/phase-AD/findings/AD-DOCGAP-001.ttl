@@ -1,0 +1,133 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD-DOCGAP-001>
+  a triage:Finding ;
+  triage:findingId "AD-DOCGAP-001" ;
+  triage:title "Authoritative sprint doc + project-plan.md AD.12-AD.20 extension absent from feature branches" ;
+  triage:description "docs/plans/phase-AD/sprint-ADxx.md for the sprint in question, and the docs/project-plan.md AD.12-AD.20 extension, are absent from each AD.13-AD.16 feature branch even though both exist on integrate/phase-AD and the AD.12 planning branch. QA-1 policy requires the sprint doc present with status: complete and project-plan.md carrying the sprint entry. Reported identically by quality-mgr on AD13-QA-1 (PR #477, as ATM-QA-001/ARCH-001, blocking), AD14-QA-1 (PR #478), AD15-QA-1 (PR #480, as 'known systemic AD-DOCGAP-001', blocking), and AD16-QA-1 (PR #481, same pattern plus branch's own plan-phase-AD.md frontmatter self-contradictorily saying status: complete)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA-001/ARCH-001" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "docs/plans/phase-AD/sprint-ADxx.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s12/503c1590> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s13/5e30c20f> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667c> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD12.md" ;
+  triage:snippet "Missing: docs/plans/phase-AD/sprint-AD12.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s12-graft-boundary-reset-planning" ;
+  triage:headSha "503c1590" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s12/503c1590> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD13.md" ;
+  triage:snippet "Missing: docs/plans/phase-AD/sprint-AD13.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s13/5e30c20f> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s14/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD14.md" ;
+  triage:snippet "Missing: docs/plans/phase-AD/sprint-AD14.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD15.md" ;
+  triage:snippet "Missing: docs/plans/phase-AD/sprint-AD15.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s16/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD16.md" ;
+  triage:snippet "Missing: docs/plans/phase-AD/sprint-AD16.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD-DOCGAP-001/pAD-s17/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD17.md and docs/project-plan.md AD.12-AD.20 section" ;
+  triage:snippet "Found sprint-AD17.md but missing docs/project-plan.md AD.12-AD.20 section and sprint-AD12-AD16 files" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s12/503c1590>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s12-graft-boundary-reset-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s12-graft-boundary-reset-planning" ;
+  triage:headSha "503c1590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s13/5e30c20f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "5e30c20f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 6 .

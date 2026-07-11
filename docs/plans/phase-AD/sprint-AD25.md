@@ -1,9 +1,9 @@
 ---
 id: AD.25
 title: Built-In Nudge Override Lifecycle And Reset Semantics
-status: planned
-branch: feature/pAD-s25-built-in-nudge-override-lifecycle
-worktree: ../atm-core-worktrees/feature/pAD-s25-built-in-nudge-override-lifecycle
+status: complete
+branch: feature/pAD-s25-post-send-hook-emitter-live-wiring
+worktree: ../atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring
 target: integrate/phase-AD
 ---
 
@@ -29,7 +29,7 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
-- `boundaries/atm-core/nudge-template-override-store.toml`
+- `boundaries/atm-storage/nudge-template-override-store.toml`
 - `crates/atm-core/src/boundary/store.rs`
 - `crates/atm-core/src/team_admin.rs`
 - `crates/atm/src/commands/teams.rs`
@@ -51,6 +51,14 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD25.md`
 
 ## Interfaces To Add Or Modify
+
+Postmerge ownership note:
+
+- the canonical machine-readable boundary record for
+  `NudgeTemplateOverrideStore` now lives at
+  `boundaries/atm-storage/nudge-template-override-store.toml`
+- any follow-up fix or review work against this sprint should treat the old
+  `atm-core` boundary file as retired historical context only
 
 The override-store contract after this sprint is explicit about all four
 operator-visible states:

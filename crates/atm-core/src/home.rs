@@ -1,10 +1,12 @@
 use std::env;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
+const MAX_ATM_HOME_UTF8_BYTES: usize = 4096;
 const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
 
 /// Resolve the ATM home directory for the current process.
@@ -13,13 +15,15 @@ const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
 ///
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::ConfigHomeUnavailable`] when neither
-/// `ATM_HOME` nor the OS user-home environment variables can be resolved.
+/// `ATM_HOME` nor the OS user-home environment variables can be resolved, or a
+/// config-shaped [`AtmError`] when the `ATM_HOME` override is non-UTF-8,
+/// overlong, or not absolute.
 pub fn atm_home() -> Result<PathBuf, AtmError> {
     if let Some(home) = env::var_os("ATM_HOME").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(home));
+        return validate_atm_home_os(home.as_os_str());
     }
 
-    resolve_user_home()
+    validate_atm_home_path(resolve_user_home()?)
 }
 
 /// Resolve the current OS user home directory without consulting `ATM_HOME`.
@@ -32,70 +36,82 @@ pub fn user_home() -> Result<PathBuf, AtmError> {
     resolve_user_home()
 }
 
-/// Resolve the host-scoped ATM runtime directory independent of `ATM_HOME`.
+/// Resolve the invocation directory for the active ATM command process.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
-pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_dir_from_home(&resolve_user_home()?))
+/// Returns [`AtmError`] when the process working directory cannot be resolved.
+pub fn command_invocation_dir() -> Result<PathBuf, AtmError> {
+    env::current_dir().map_err(|source| {
+        AtmError::runtime_root_invalid("failed to resolve the ATM command invocation directory")
+            .with_recovery(
+                "Run the ATM command from a readable working directory or repair the workspace path before retrying.",
+            )
+            .with_source(source)
+    })
 }
 
-/// Resolve the host-scoped ATM runtime directory from an explicit user-home root.
+/// Resolve the host-scoped ATM runtime directory from the accepted ATM home.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
+pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_dir_from_home(&atm_home()?))
+}
+
+/// Resolve the host-scoped ATM runtime directory from an explicit ATM home root.
 pub fn host_runtime_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("daemon")
 }
 
-/// Resolve the host-scoped ATM runtime lock-file path independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM runtime lock-file path from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(
-        &resolve_user_home()?,
-        file_name,
-    ))
+    Ok(host_runtime_lock_path_from_home(&atm_home()?, file_name))
 }
 
-/// Resolve the host-scoped ATM runtime lock-file path from an explicit user-home root.
+/// Resolve the host-scoped ATM runtime lock-file path from an explicit ATM home root.
 pub fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
     host_runtime_dir_from_home(home_dir).join(file_name)
 }
 
-/// Resolve the host-scoped ATM durable-state directory independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM durable-state directory from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_db_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_db_dir_from_home(&resolve_user_home()?))
+    Ok(host_db_dir_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM durable-state directory from an explicit user-home root.
+/// Resolve the host-scoped ATM durable-state directory from an explicit ATM home root.
 pub fn host_db_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("db")
 }
 
-/// Resolve the host-scoped ATM durable mailbox database path independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM durable mailbox database path from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_mail_db_path() -> Result<PathBuf, AtmError> {
-    Ok(host_mail_db_path_from_home(&resolve_user_home()?))
+    Ok(host_mail_db_path_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM durable mailbox database path from an explicit user-home root.
+/// Resolve the host-scoped ATM durable mailbox database path from an explicit ATM home root.
 pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
     host_db_dir_from_home(home_dir).join("mail.db")
 }
 
-/// Resolve the host-scoped ATM retained log directory independent of `ATM_HOME`.
+/// Resolve the host-scoped ATM retained log directory from the accepted ATM home.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+/// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_log_dir() -> Result<PathBuf, AtmError> {
     if let Some(raw_path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
         let raw_path = raw_path.to_str().ok_or_else(|| {
@@ -128,10 +144,10 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
         return Ok(path);
     }
 
-    Ok(host_log_dir_from_home(&resolve_user_home()?))
+    Ok(host_log_dir_from_home(&atm_home()?))
 }
 
-/// Resolve the host-scoped ATM retained log directory from an explicit user-home root.
+/// Resolve the host-scoped ATM retained log directory from an explicit ATM home root.
 pub fn host_log_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("logs")
 }
@@ -220,57 +236,91 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
         .ok_or_else(AtmError::home_directory_unavailable)
 }
 
+fn validate_atm_home_os(raw_path: &OsStr) -> Result<PathBuf, AtmError> {
+    let raw_path = raw_path.to_str().ok_or_else(|| {
+        AtmError::atm_home_unresolved("ATM_HOME must be valid UTF-8").with_recovery(
+            "Set ATM_HOME to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
+        )
+    })?;
+    if raw_path.len() > MAX_ATM_HOME_UTF8_BYTES {
+        return Err(
+            AtmError::atm_home_unresolved(format!(
+                "ATM_HOME must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+            ))
+            .with_recovery(
+                "Shorten ATM_HOME to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
+            ),
+        );
+    }
+    validate_atm_home_path(PathBuf::from(raw_path))
+}
+
+fn validate_atm_home_path(path: PathBuf) -> Result<PathBuf, AtmError> {
+    let utf8_path = path.to_str().ok_or_else(|| {
+        AtmError::atm_home_unresolved("ATM home path must be valid UTF-8").with_recovery(
+            "Set ATM_HOME or the OS home directory to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
+        )
+    })?;
+    if utf8_path.len() > MAX_ATM_HOME_UTF8_BYTES {
+        return Err(
+            AtmError::atm_home_unresolved(format!(
+                "ATM home path must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+            ))
+            .with_recovery(
+                "Shorten ATM_HOME or the OS home directory path to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
+            ),
+        );
+    }
+    if !path.is_absolute() {
+        return Err(
+            AtmError::atm_home_unresolved(format!(
+                "ATM home path must be an absolute path: {}",
+                path.display()
+            ))
+            .with_recovery(
+                "Set ATM_HOME or the OS home directory to an absolute local filesystem path before retrying the ATM command.",
+            ),
+        );
+    }
+    Ok(path)
+}
+
 /// Unix-only ATM_LOG_DIR validation tests cover non-UTF-8 and path-shape cases.
 /// Windows keeps these invariants compile-checked here, and cross-target CI verifies the
 /// shared `host_log_dir()` contract even though the path-shape override cases below stay Unix-only.
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
-    use std::sync::{Mutex, MutexGuard, OnceLock};
 
     use tempfile::TempDir;
 
+    use super::MAX_ATM_HOME_UTF8_BYTES;
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        atm_home, host_db_dir_from_home, host_log_dir, host_log_dir_from_home,
-        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
-        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
+        host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
+        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
+        team_dir_from_home, workflow_state_path_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{
+        EnvLockGuard, TEST_SENDER, TEST_TEAM, lock_env, remove_env_var, set_env_var,
+    };
     use crate::types::{AgentName, TeamName};
-
-    /// Process-wide mutex that serializes `std::env::set_var` / `remove_var`
-    /// calls in tests. Required because these functions are unsafe in
-    /// multi-threaded processes; concurrent env mutation produces undefined
-    /// behavior.
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn lock_env() -> MutexGuard<'static, ()> {
-        env_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
 
     struct LocalEnvGuard {
         key: &'static str,
         original: Option<OsString>,
-        _guard: MutexGuard<'static, ()>,
+        _guard: EnvLockGuard,
     }
 
     impl LocalEnvGuard {
         fn set_raw(key: &'static str, value: &str) -> Self {
             let guard = lock_env();
             let original = std::env::var_os(key);
-            // SAFETY: this helper serializes all environment mutation with the
-            // local process-wide mutex it holds for the full guard lifetime.
-            unsafe { std::env::set_var(key, value) };
+            set_env_var(key, value);
             Self {
                 key,
                 original,
@@ -286,14 +336,30 @@ mod tests {
                 .map(|(key, value)| {
                     let original = std::env::var_os(key);
                     match value {
-                        Some(value) => {
-                            // SAFETY: serialized by the local env mutex above.
-                            unsafe { std::env::set_var(key, value) };
-                        }
-                        None => {
-                            // SAFETY: serialized by the local env mutex above.
-                            unsafe { std::env::remove_var(key) };
-                        }
+                        Some(value) => set_env_var(key, value),
+                        None => remove_env_var(key),
+                    }
+                    (key, original)
+                })
+                .collect();
+            LocalEnvSet {
+                restorations,
+                _guard: guard,
+            }
+        }
+
+        #[cfg(unix)]
+        fn set_many_os<const N: usize>(
+            changes: [(&'static str, Option<OsString>); N],
+        ) -> LocalEnvSet {
+            let guard = lock_env();
+            let restorations = changes
+                .into_iter()
+                .map(|(key, value)| {
+                    let original = std::env::var_os(key);
+                    match value {
+                        Some(value) => set_env_var(key, value),
+                        None => remove_env_var(key),
                     }
                     (key, original)
                 })
@@ -308,20 +374,14 @@ mod tests {
     #[cfg(unix)]
     struct LocalEnvSet {
         restorations: Vec<(&'static str, Option<OsString>)>,
-        _guard: MutexGuard<'static, ()>,
+        _guard: EnvLockGuard,
     }
 
     impl Drop for LocalEnvGuard {
         fn drop(&mut self) {
             match self.original.take() {
-                Some(value) => {
-                    // SAFETY: the guard still holds the local env mutex.
-                    unsafe { std::env::set_var(self.key, value) }
-                }
-                None => {
-                    // SAFETY: the guard still holds the local env mutex.
-                    unsafe { std::env::remove_var(self.key) }
-                }
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
             }
         }
     }
@@ -331,21 +391,15 @@ mod tests {
         fn drop(&mut self) {
             for (key, original) in self.restorations.iter_mut().rev() {
                 match original.take() {
-                    Some(value) => {
-                        // SAFETY: the guard still holds the local env mutex.
-                        unsafe { std::env::set_var(key, value) }
-                    }
-                    None => {
-                        // SAFETY: the guard still holds the local env mutex.
-                        unsafe { std::env::remove_var(key) }
-                    }
+                    Some(value) => set_env_var(key, value),
+                    None => remove_env_var(key),
                 }
             }
         }
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn atm_home_prefers_atm_home_env() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_home =
@@ -355,9 +409,33 @@ mod tests {
         assert_eq!(resolved, tempdir.path());
     }
 
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_relative_atm_home_override() {
+        let _env = LocalEnvGuard::set_raw("ATM_HOME", "relative/home");
+
+        let error = atm_home().expect_err("relative ATM_HOME should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_overlong_atm_home_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let overlong = tempdir.path().join("a".repeat(MAX_ATM_HOME_UTF8_BYTES));
+        let _env = LocalEnvGuard::set_raw("ATM_HOME", overlong.to_str().expect("utf8 path"));
+
+        let error = atm_home().expect_err("overlong ATM_HOME should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("must not exceed"));
+    }
+
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn atm_home_falls_back_to_home_dir() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -370,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn team_and_inbox_paths_use_claude_team_layout() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_home =
@@ -411,8 +489,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
-    fn host_runtime_dir_uses_os_home_not_atm_home() {
+    #[serial_test::serial(env)]
+    fn host_runtime_dir_uses_atm_home_when_present() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home_dir = TempDir::new().expect("atm home tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -424,7 +502,7 @@ mod tests {
         ]);
 
         let resolved = host_runtime_dir().expect("host runtime dir");
-        assert_eq!(resolved, tempdir.path().join(".atm").join("daemon"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("daemon"));
     }
 
     #[test]
@@ -438,8 +516,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
-    fn host_db_dir_uses_os_home_not_atm_home() {
+    #[serial_test::serial(env)]
+    fn host_db_dir_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -454,7 +532,7 @@ mod tests {
         ]);
 
         let resolved = host_db_dir().expect("host db dir");
-        assert_eq!(resolved, os_home_dir.path().join(".atm").join("db"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("db"));
     }
 
     #[test]
@@ -468,8 +546,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
-    fn host_mail_db_path_uses_os_home_not_atm_home() {
+    #[serial_test::serial(env)]
+    fn host_mail_db_path_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -486,7 +564,7 @@ mod tests {
         let resolved = host_mail_db_path().expect("host mail db path");
         assert_eq!(
             resolved,
-            os_home_dir.path().join(".atm").join("db").join("mail.db")
+            atm_home_dir.path().join(".atm").join("db").join("mail.db")
         );
     }
 
@@ -509,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_prefers_atm_log_dir_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_log_dir =
@@ -521,7 +599,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_succeeds_without_home_env() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -539,8 +617,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
-    fn host_log_dir_uses_os_home_not_atm_home() {
+    #[serial_test::serial(env)]
+    fn host_log_dir_uses_atm_home_when_present() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -556,7 +634,15 @@ mod tests {
         ]);
 
         let resolved = host_log_dir().expect("host log dir");
-        assert_eq!(resolved, os_home_dir.path().join(".atm").join("logs"));
+        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("logs"));
+    }
+
+    #[test]
+    fn command_invocation_dir_matches_process_working_directory() {
+        let expected = std::env::current_dir().expect("current dir");
+        let resolved = command_invocation_dir().expect("command invocation dir");
+
+        assert_eq!(resolved, expected);
     }
 
     #[test]
@@ -606,7 +692,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_non_absolute_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -623,7 +709,7 @@ mod tests {
     /// (`cargo xwin check`) rather than native test execution.
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_does_not_require_home_relative_claude_validation() {
         let home_dir = TempDir::new().expect("home");
         let override_dir = home_dir.path().join(".claude").join("logs");
@@ -641,7 +727,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_override_does_not_require_home_relative_daemon_overlap_validation() {
         let home_dir = TempDir::new().expect("home");
         let override_dir = home_dir.path().join(".atm").join("daemon").join("logs");
@@ -659,18 +745,21 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_non_utf8_override() {
         use std::os::unix::ffi::OsStringExt;
 
         let home_dir = TempDir::new().expect("home");
-        let _home = LocalEnvGuard::set_raw("HOME", home_dir.path().to_str().expect("utf8 path"));
-        let _atm_log_dir = Utf8EnvGuard {
-            key: "ATM_LOG_DIR",
-            original: std::env::var_os("ATM_LOG_DIR"),
-        };
-        // SAFETY: the test helper serializes environment mutation in-process.
-        unsafe { std::env::set_var("ATM_LOG_DIR", OsString::from_vec(vec![0x66, 0x6f, 0x80])) };
+        let _env = LocalEnvGuard::set_many_os([
+            (
+                "HOME",
+                Some(OsString::from(home_dir.path().to_str().expect("utf8 path"))),
+            ),
+            (
+                "ATM_LOG_DIR",
+                Some(OsString::from_vec(vec![0x66, 0x6f, 0x80])),
+            ),
+        ]);
 
         let error = host_log_dir().expect_err("non-utf8 override should fail");
         assert!(error.is_config());
@@ -679,7 +768,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn host_log_dir_rejects_overlong_override() {
         let home_dir = TempDir::new().expect("home");
         let too_long = format!("/{}", "a".repeat(MAX_HOST_LOG_DIR_UTF8_BYTES));
@@ -694,24 +783,53 @@ mod tests {
     }
 
     #[cfg(unix)]
-    struct Utf8EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_non_absolute_override() {
+        let home_dir = TempDir::new().expect("home");
+        let _env = LocalEnvGuard::set_many([
+            ("ATM_HOME", Some("relative/home")),
+            ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = atm_home().expect_err("relative ATM_HOME should fail");
+        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message.contains("absolute path"));
     }
 
     #[cfg(unix)]
-    impl Drop for Utf8EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => {
-                    // SAFETY: the shared test env guard serializes process environment mutation.
-                    unsafe { std::env::set_var(self.key, value) }
-                }
-                None => {
-                    // SAFETY: the shared test env guard serializes process environment mutation.
-                    unsafe { std::env::remove_var(self.key) }
-                }
-            }
-        }
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_non_utf8_override() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let home_dir = TempDir::new().expect("home");
+        let _env = LocalEnvGuard::set_many_os([
+            (
+                "HOME",
+                Some(OsString::from(home_dir.path().to_str().expect("utf8 path"))),
+            ),
+            ("ATM_HOME", Some(OsString::from_vec(vec![0x66, 0x6f, 0x80]))),
+        ]);
+
+        let error = atm_home().expect_err("non-utf8 ATM_HOME should fail");
+        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message.contains("UTF-8"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial(env)]
+    fn atm_home_rejects_overlong_override() {
+        let home_dir = TempDir::new().expect("home");
+        let too_long = format!("/{}", "a".repeat(MAX_ATM_HOME_UTF8_BYTES));
+        let _env = LocalEnvGuard::set_many([
+            ("ATM_HOME", Some(too_long.as_str())),
+            ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = atm_home().expect_err("overlong ATM_HOME should fail");
+        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message.contains("4096"));
     }
 }

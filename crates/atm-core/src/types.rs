@@ -1,3 +1,4 @@
+pub use atm_storage::AckRequirementState;
 pub use atm_storage::types::{
     AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName,
 };
@@ -88,17 +89,11 @@ pub enum ReadSelection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AckActivationMode {
-    PromoteDisplayedUnread,
-    ReadOnly,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum CommandAction {
     Ack,
     Clear,
     List,
+    Peek,
     Read,
     Send,
 }

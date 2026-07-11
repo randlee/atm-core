@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-107-AD30>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-107" ;
+  triage:title "AD30-FIX-3 closure report cited a nonexistent independent finding" ;
+  triage:description "The AD30-FIX-3 completion report claimed ATM-QA-107 was closed by refreshing AD30-QA-2.ttl from stale snapshot 3d13246c to reviewed snapshot 75cc3dd9, but no repository-backed ATM-QA-107 record existed anywhere in the Phase AD ledger. AD30-FIX-4 records the correction: ATM-QA-107 is withdrawn as a mislabeled duplicate of the AD30-QA-2 snapshot/headSha refresh, not a separate repo finding." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-09T19:43:27Z"^^xsd:dateTime ;
+  triage:resolutionNote "Withdrawal record: ATM-QA-107 did not correspond to a distinct file:line defect on this branch. The real repo-backed issue was the stale snapshot metadata in AD30-QA-2.ttl, which remains tracked and fixed there. This record exists so later closeout reports cannot treat ATM-QA-107 as an independently closed branch finding." ;
+  triage:rationale "Use a dedicated withdrawal record instead of repeating the incorrect closure claim in prose. That preserves the audit trail, keeps AD30-QA-2 as the sole source for the snapshot-refresh fix, and makes the report-only mistake explicit in the phase ledger." ;
+  triage:triagedAt "2026-07-09T19:43:27Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:worktree/pAD-s30/77c30bb3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:orderIndex 30 ;
+  triage:status "open" .

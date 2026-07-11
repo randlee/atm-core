@@ -432,12 +432,23 @@ Path resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
+Runtime-root rule:
+- the invocation directory is not a selector for the retained ATM runtime root;
+  socket, lock, database, and retained-log paths derive from the accepted
+  `ATM_HOME` root, not from the shell working directory
+- after `ATM_HOME` resolves the canonical host runtime root, the invocation
+  directory is used only for workspace config discovery
+
 Required canonical paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`
 - `{ATM_HOME}/.claude/teams/{team}`
 - `{ATM_HOME}/.claude/teams/{team}/config.json`
 - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
+- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
+- `{ATM_HOME}/.atm/daemon/launch.lock`
+- `{ATM_HOME}/.atm/db/mail.db`
+- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
 - `{ATM_HOME}/.config/atm/config.toml`
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`
@@ -615,8 +626,9 @@ Supported optional config fields:
 - `[[atm.post_send_hooks]]`
 
 Runtime caller-context rules:
-- repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
-  fallback for the retained multi-agent ATM model
+- repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`
+  key are not valid runtime identity fallback for the retained multi-agent ATM
+  model
 - repo-local `.atm.toml` `[atm].default_team` is not a valid runtime caller
   team fallback for commands that require caller context
 - the authoritative command-by-command caller-context matrix is
@@ -639,9 +651,9 @@ Runtime caller-context rules:
   required request data when the command requires caller team
 - the daemon must not consult hook files, repo-local config, roster state, or
   daemon ambient `ATM_IDENTITY` / `ATM_TEAM` to fill missing caller context
-- an obsolete config `[atm].identity` field may remain temporarily for
-  migration, but ATM must ignore it for runtime identity resolution and
-  `atm doctor` must flag it for removal
+- obsolete config identity fields (`[atm].identity` and legacy top-level
+  `identity`) may remain temporarily for migration, but ATM must ignore them
+  for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
@@ -761,7 +773,8 @@ Caller context means:
 
 Global caller-context rules:
 
-- repo-local `.atm.toml` `[atm].identity` is not valid runtime caller identity
+- repo-local `.atm.toml` `[atm].identity` and legacy top-level `identity` are
+  not valid runtime caller identity
 - repo-local `.atm.toml` `[atm].default_team` is not valid runtime caller team
   for commands that require explicit caller context
 - daemon ambient `ATM_IDENTITY` / `ATM_TEAM` are not valid fallback sources
@@ -779,11 +792,12 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--from`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context |
-| `atm read` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
-| `atm ack` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
+| `atm send` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context; mutating identity impersonation is forbidden |
+| `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
+| `atm read` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
+| `atm ack` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
 | `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
-| `atm clear` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target inbox/member selection is not caller context |
+| `atm clear` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating clear path |
 | `atm log` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit caller override surface |
 | `atm members` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--team` scopes the roster being inspected and may also satisfy caller-team requirement |
 | `atm teams` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit override surface |
@@ -795,9 +809,9 @@ Global caller-context rules:
 
 ### 4.2 Command-Specific Notes
 
-- `--from` on `send` is caller identity override
+- `--from` on `send` is not an accepted caller-identity override
 - `--from` on `read` / `list` is a sender filter only
-- `--as` changes caller identity only; it does not change target matching
+- `--as` is accepted only on inspection-only surfaces such as `peek` and `list`
 - any command without an explicit caller override surface must rely on the
   invoking shell when caller context is required
 - `atm doctor` may inspect `ATM_IDENTITY` visibility and team override
@@ -846,7 +860,7 @@ Alias rules:
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:
-  `atm internal-nudge`
+  the built-in in-process delivery path
 - `[[atm.post_send_hooks]]` is the supported external override shape for
   post-send behavior
 - each rule binds exactly one `recipient` selector and one `command` argv
@@ -879,14 +893,19 @@ Post-send-hook rules:
 - Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
-- built-in `atm internal-nudge` must use this same `ATM_POST_SEND` payload
-  contract
+- any retained built-in `atm internal-nudge` helper must not reuse
+  `ATM_POST_SEND` as its control contract; it consumes a separate resolved
+  `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
+  resolved template kind, and resolved template body or explicit disabled
+  state
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must use the sender's authoritative ATM roster
+  `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
-  must still attempt the shipped built-in `atm internal-nudge` path
+  must still attempt the shipped built-in in-process post-send path
 - the built-in shipped nudge path must support exactly six named template
   cases:
   - `delivery`
@@ -900,12 +919,18 @@ Post-send-hook rules:
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - teams may override any subset of those six built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
-  storage-neutral `NudgeTemplateOverrideStore` contract; any unset case falls
-  back to the product default body for that case
+  storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
   - matching external `[[atm.post_send_hooks]]` command
   - resolved team override row for the selected template kind
-  - built-in product default template body for that kind
+  - built-in product default template body for that kind when no row exists
+- template lifecycle is explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => row deletion back to product default
+- empty-string template bodies are invalid and must not be used as a hidden
+  disable signal
 - example payload:
   ```json
   {
@@ -987,6 +1012,8 @@ Retired from the current implementation:
 - when a cross-team alias-oriented sender is projected into `from`, also
   persist the canonical sender identity in SQLite-owned state and use it for
   validation, self-send checks, routing, and audit behavior
+- reject canonical same-team self-addressed sends before any persistence or
+  `--dry-run` success reporting
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -1009,8 +1036,8 @@ Retired from the current implementation:
 - match rules only by resolved recipient identity
 - support `recipient = "*"` wildcard matching for all recipients
 - execute all matching post-send-hook rules in config order
-- if no matching external rule exists, execute the built-in `atm internal-nudge`
-  path instead of silently skipping post-send emission
+- if no matching external rule exists, execute the built-in in-process
+  post-send path instead of silently skipping post-send emission
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
@@ -1120,7 +1147,7 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 7. Queue Inspection Surfaces (`atm list` and `atm read`)
+## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
 Product requirement IDs:
 - `REQ-P-LIST-001` `atm list` must satisfy the bounded queue/search contract.
@@ -1139,10 +1166,11 @@ Satisfied by:
 
 ### 7.1 Shared Purpose
 
-Queue inspection is split into two commands:
+Queue inspection is split into three commands:
 
 - `atm list` finds messages without returning full message bodies
-- `atm read` opens one full message
+- `atm peek` opens one full message without mutation
+- `atm read` opens one full message with owner-only mutation
 
 The split exists so ATM can keep default queue inspection bounded even when
 SQLite-backed mailbox history grows without a practical fixed upper bound.
@@ -1162,24 +1190,37 @@ Shared queue filters:
 
 Shared command options:
 - `--json`
-- `--as <name>`
+
+Inspection-only command option:
+- `--as <name>` on `atm list` and `atm peek`
 
 Shared rules:
-- both commands must default to the caller's own inbox when no target agent is
-  provided
-- both commands must resolve identity and target address using the defined
-  precedence
-- if caller identity cannot be resolved from `--as` or invoking-shell
-  `ATM_IDENTITY`, fail before daemon dispatch
-- `--as <name>` changes caller identity resolution, not message matching
+- all three commands must default to the caller's own inbox when no target
+  agent is provided
+- all three commands must resolve identity and target address using the
+  defined precedence
+- `atm list` and `atm peek` may resolve caller identity from `--as`, else the
+  invoking-shell `ATM_IDENTITY`
+- `atm read` must resolve caller identity from invoking-shell `ATM_IDENTITY`
+  only
+- if required caller identity cannot be resolved from the documented source
+  for that command, fail before daemon dispatch
+- `--as <name>` changes caller identity resolution on inspection-only
+  commands, not message matching
 - `--json` changes output format only and is not a message-selection filter
-- both commands must verify target team exists
-- both commands must verify explicit target agent exists in team config
-- both commands must support the same semantic message filters even when their
-  output shapes differ
+- all three commands must verify target team exists
+- `atm list` and `atm peek` must verify an explicit target agent exists in the
+  team config before inspection proceeds
+- `atm read` must reject explicit cross-agent mailbox targets on the mutating
+  path and may only operate on the caller's own mailbox
+- all three commands must support the same semantic message filters even when
+  their output shapes differ
 - `--contains` must search both summary text and full message body text
-- both commands must preserve origin-inbox visibility when bridge remotes are
-  configured
+- on metadata-backed read/list/peek paths, `--contains` must stay full-body
+  correct without widening the bounded metadata query into an eager full-body
+  scan
+- all three commands must preserve origin-inbox visibility when bridge remotes
+  are configured
 
 Legacy `atm read` flag migration:
 - `--unread-only` is a deprecated alias for `--unread`
@@ -1198,6 +1239,9 @@ Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
 - query logical current messages rather than superseded predecessors
 - return compact rows only, not full message bodies
+- when `--contains` is present, apply sender/timestamp/task and logical-current
+  filtering on bounded metadata rows first, then reload durable body text only
+  for surviving summary-miss candidates that still need a body check
 - support the canonical row fields:
   - `message_id`
   - `summary`
@@ -1214,18 +1258,18 @@ Required behavior:
 - keep default output bounded to actionable/head results rather than
   materializing full history by default
 
-### 7.4 `atm read`
+### 7.4 `atm peek`
 
 Additional supported flags:
 - `--message-id <id>`
 - `--timeout <seconds>`
 - `--since-last-seen`
 - `--no-since-last-seen`
-- `--no-mark`
-- `--no-update-seen`
+- `--as <name>`
 
 Required behavior:
 - return exactly one full message
+- perform no read-state, seen-state, or ack-state mutation
 - when `--message-id <id>` is present, resolve that exact message when present
 - collapse successor/update chains to their terminal node before selector-based
   matching so superseded predecessors do not appear as separate current
@@ -1236,6 +1280,45 @@ Required behavior:
 - when selectors such as `--task`, `--from`, `--since`, `--contains`,
   `--unread`, or `--pending-ack` match multiple messages, return the most
   recent match
+- when `--contains` is present on the metadata-backed path, selector
+  correctness must be preserved by checking bounded summary text first and
+  reloading durable body text only for surviving summary-miss candidates
+- when multiple matches exist, include:
+  - `selected_message_id`
+  - `match_count`
+  - `additional_match_count`
+- `match_count` is the total number of logical current-message matches after
+  all filters and successor-chain collapse are applied
+- `additional_match_count` is `match_count - 1` for a successful peek
+- when no selector is provided, return the most recent unread actionable
+- when no selector is provided, prioritize pending-ack messages ahead of
+  unread messages that do not require acknowledgement
+- support optional wait mode with timeout
+
+### 7.5 `atm read`
+
+Additional supported flags:
+- `--message-id <id>`
+- `--timeout <seconds>`
+- `--since-last-seen`
+- `--no-since-last-seen`
+
+Required behavior:
+- return exactly one full message
+- mutate owner-visible seen/read state when a message is selected
+- when `--message-id <id>` is present, resolve that exact message when present
+- collapse successor/update chains to their terminal node before selector-based
+  matching so superseded predecessors do not appear as separate current
+  messages
+- when `--task <task-id>` is present, find task-linked messages, collapse each
+  successor chain to its terminal node, then select the most recent logical
+  current message
+- when selectors such as `--task`, `--from`, `--since`, `--contains`,
+  `--unread`, or `--pending-ack` match multiple messages, return the most
+  recent match
+- when `--contains` is present on the metadata-backed path, selector
+  correctness must be preserved by checking bounded summary text first and
+  reloading durable body text only for surviving summary-miss candidates
 - when multiple matches exist, include:
   - `selected_message_id`
   - `match_count`
@@ -1252,8 +1335,15 @@ Required behavior:
 - persist read-triggered state changes back to the physical inbox file that
   owns the selected displayed message when origin inbox files are present in
   the merged surface
+- when a read-side mutation is applied, the returned `message` payload and
+  `selected_message_id` must still refer to that same mutated durable message;
+  `atm read` must not mark one message read and then silently swap the output
+  payload to a different unread message
+- `bucket_counts` in the read outcome must describe the post-mutation mailbox
+  state produced by that command execution rather than stale pre-mutation
+  counts
 
-### 7.5 Shared Message Classification And Deduplication
+### 7.6 Shared Message Classification And Deduplication
 
 - load messages from the merged inbox surface
 - deduplicate entries by `message_id` before bucket selection and output
@@ -1272,7 +1362,7 @@ Deduplication order:
 - when timestamps are equal, keep the later record encountered in inbox order
 - do not emit suppressed duplicates in either human or JSON output
 
-### 7.6 Display Buckets
+### 7.7 Display Buckets
 
 The shared queue model exposes three display buckets:
 - `unread`
@@ -1288,14 +1378,15 @@ Bucket mapping from the derived message class:
 The display buckets are a presentation contract. They are not the canonical
 two-axis model.
 
-### 7.7 Default Selection And Historical Expansion
+### 7.8 Default Selection And Historical Expansion
 
 Default queue inspection behavior:
 - `atm list` returns a bounded actionable/head view
+- bare `atm peek` returns one selected actionable message without mutation
 - bare `atm read` returns one selected actionable message
 - `--all` is the explicit full-surface override and may be slower
 
-### 7.8 Seen-State Rules
+### 7.9 Seen-State Rules
 
 Seen-state is enabled by default unless `--no-since-last-seen` is set.
 
@@ -1330,9 +1421,9 @@ both constraints apply independently.
 `--from <name>` is a sender filter: it restricts matched messages to those
 sent by the named agent. It does not override the caller's identity.
 
-### 7.9 Wait Mode Rules
+### 7.10 Wait Mode Rules
 
-When `--timeout <seconds>` is set on `atm read`:
+When `--timeout <seconds>` is set on `atm peek` or `atm read`:
 - establish the read selection baseline after actor resolution, inbox loading,
   workflow classification, and filter application
 - if the requested selection already contains an eligible message at wait
@@ -1353,33 +1444,33 @@ Timeout failure condition:
 - the initial selection is empty and no newly eligible message arrives before
   the timeout expires
 
-### 7.10 Mutation Rules
+### 7.11 Mutation Rules
 
-Base display mutation:
-- any selected message is written back with `read = true`
+Peek mutation rule:
+- `atm peek` never mutates mailbox state
 
-Ack-axis activation on display happens only when:
-- the caller is reading their own inbox
-- `--no-mark` is not set
-- the message is displayed
-- the message is currently `Unread`
-- the message does not already require acknowledgement
+Read mutation rules:
+- any selected `atm read` message is written back with `read = true`
+- `atm read` must never create a new pending-ack obligation on display
+- displaying a message never promotes acknowledgement state
+- only sender-owned durable `requires_ack` intent may create `pending_ack_at`
+- only explicit `atm ack` handling may clear pending acknowledgement into
+  `acknowledged_at`
+- when a selected message already requires acknowledgement, it remains
+  pending-ack after display
+- when a selected message does not require acknowledgement, it remains
+  `NoAckRequired` after display
+- required transition on read of a normal unread message:
+  - `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
+- required transition on read of an ack-required unread message:
+  - `(Unread, PendingAck) -> (Read, PendingAck)`
+- no additional ack-axis mutation happens when:
+  - the message is `NoAckRequired`
+  - the message is already `PendingAck`
+  - the message is already `Acknowledged`
+  - the message is already `Read`
 
-Required transition on read of a normal unread message:
-- `(Unread, NoAckRequired) -> (Read, PendingAck)`
-
-Required transition on read of an ack-required unread message:
-- `(Unread, PendingAck) -> (Read, PendingAck)`
-
-Required transition on read with `--no-mark` or when reading another inbox:
-- `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
-
-No additional ack-axis mutation happens when:
-- the message is already `PendingAck`
-- the message is already `Acknowledged`
-- the message is already `Read`
-
-### 7.11 Output Contract
+### 7.12 Output Contract
 
 `atm list` human-readable output must remain metadata-only.
 
@@ -1410,10 +1501,23 @@ Every list row must include:
 - `additional_match_count`
 - `bucket_counts`
 
-Human-readable `atm read` output must render one message body only. When
-additional matches exist, it must state that more matches were found and direct
-the operator to `atm list` for metadata inspection instead of emitting
-additional full bodies.
+`atm peek` JSON output must include the same shape as `atm read`, except:
+- `action = "peek"`
+- `mutation_applied = false`
+
+When `mutation_applied = true` and `message` is present:
+- `message.message_id` and `selected_message_id` must identify the same
+  durable message
+- `bucket_counts` must reflect the mailbox state after the read-side mutation
+  completes
+- the read-side mutation contract is distinct from `atm ack`; read may mark a
+  message `read = true`, but only ack clears `pending_ack_at` and sets
+  `acknowledged_at`
+
+Human-readable `atm peek` and `atm read` output must render one message body
+only. When additional matches exist, they must state that more matches were
+found and direct the operator to `atm list` for metadata inspection instead of
+emitting additional full bodies.
 
 ## 8. `atm ack`
 
@@ -1437,13 +1541,11 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
 - positional `message-id`
 - positional reply text
 - `--team <name>`
-- `--as <name>`
 - `--json`
 
 ### 8.3 Required Behavior
 
-- resolve the caller's own inbox using explicit `--as` or invoking-shell
-  `ATM_IDENTITY`
+- resolve the caller's own inbox using invoking-shell `ATM_IDENTITY`
 - fail before daemon dispatch if caller identity is unavailable
 - locate the target message in the merged inbox surface
 - require the target message to be in the pending-ack ack state
@@ -1452,12 +1554,16 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - set `read = true`
   - remove `pendingAckAt`
   - set `acknowledgedAt`
-  - append a reply message to the original sender's inbox
+  - append a reply message to the original sender's inbox unless the
+    acknowledged pending-ack message is already self-addressed to the current actor
 - preserve `acknowledgesMessageId` on the emitted reply
 - hardcode `requires_ack = false` on the emitted reply
 - do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
+- when the pending-ack message is self-addressed to the current actor, mark it
+  acknowledged, suppress reply emission, and report the suppression explicitly
+  in the ack output contract
 
 Phase R continuation semantics:
 - one successful acknowledgement clears the chain-level acknowledgement
@@ -1555,10 +1661,14 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_message_id` (ULID of the reply message sent)
-- `reply_text` (String body of the reply message sent)
+- `reply_disposition`
+  - `kind = "sent"` with `reply_message_id` and `reply_target` when a reply
+    message was emitted
+  - `kind = "suppressed_self_ack"` when the historical pending-ack message was
+    self-addressed and no reply message was emitted
+- `reply_text` (validated reply body; retained even when self-ack suppression
+  prevents reply emission)
 - `task_id` (optional String, present when the source message has `taskId`)
-- `reply_target`
 - `warnings` (array of strings, omitted when empty)
 
 ## 9. `atm clear`
@@ -1582,7 +1692,6 @@ Remove non-actionable messages from one inbox without touching actionable work.
 ### 9.2 Supported Flags
 
 - optional target agent: `agent` or `agent@team`
-- `--as <name>` override actor identity for this clear operation
 - `--team <name>`
 - `--older-than <duration>`
 - `--idle-only`
@@ -1738,7 +1847,8 @@ The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - caller identity/team visibility and optional diagnostic scope behavior
-- obsolete `[atm].identity` configuration drift detection
+- obsolete config identity drift detection (`[atm].identity` and legacy
+  top-level `identity`)
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when the current runtime is
@@ -1839,6 +1949,8 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- persist the member's durable `home_dir` on the canonical ATM roster row and
+  project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
 
 `atm teams update-member` must:
@@ -1947,19 +2059,24 @@ follow-up without depending on daemon-only or hook-only state.
 
 `atm members` must:
 - resolve the effective team using the retained team-resolution rules
-- load the local team roster from `config.json`
-- return a structured error when the team or team config is missing
-- show all configured members deterministically, with `team-lead` first when
+- load the local team roster from canonical ATM roster state
+- return a structured error when the team is missing from canonical ATM roster
+  state
+- show all rostered members deterministically, with `team-lead` first when
   present and remaining members in stable local order
 - use these names distinctly:
   - `home_dir`: durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd`: runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd`: startup-only current-directory snapshot used for logging
+  - `live_cwd`: runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to the
+    displayed member; never durable roster metadata
+  - `launch_cwd`: startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id
+  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
+  the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -2125,21 +2242,17 @@ Send task-linked message
   -> (Unread, PendingAck)
 
 Read own inbox with marking enabled, normal unread message
-  (Unread, NoAckRequired) -> (Read, PendingAck)
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
 
 Read own inbox with marking enabled, ack-required unread message
   (Unread, PendingAck) -> (Read, PendingAck)
 
-Read own inbox with --no-mark
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
-
-Read another inbox
-  (Unread, NoAckRequired) -> (Read, NoAckRequired)
-  (Unread, PendingAck) -> (Read, PendingAck)
+Peek any inbox
+  (Unread, NoAckRequired) -> (Unread, NoAckRequired)
+  (Unread, PendingAck) -> (Unread, PendingAck)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
   (Read, PendingAck) -> (Read, PendingAck)
   (Read, Acknowledged) -> (Read, Acknowledged)
-  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
   (Read, PendingAck) -> (Read, Acknowledged)
@@ -3118,8 +3231,9 @@ The intentionally forbidden shape is:
   - the identical helper currently present in `ack/mod.rs`, `clear/mod.rs`, and
     `read/mod.rs` must be moved to `identity/mod.rs` as `pub(crate)`
 
-- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key must be
-  documented in a `# Deprecated` section in the config module documentation.
+- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key and
+  legacy top-level `identity` key must be documented in a `# Deprecated`
+  section in the config module documentation.
 
   Required behavior:
   - migration guidance: use `ATM_IDENTITY` environment variable instead
@@ -3499,14 +3613,16 @@ mail correctness.
 
 ### 22.5 Direct Post-Send And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the
-  `atm-storage-claude` backend are retired from the accepted line.
+- `REQ-CORE-COMPAT-001` Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line.
 
   Required behavior:
   - no retained production path may use Claude inbox `.json` or `.jsonl` files
-    for mailbox delivery, context injection, compatibility export, or
-    background ingress
-  - the accepted line must not ship the `atm-storage-claude` crate or its
+    for context injection or background ingress
+  - if a retained Claude mailbox compatibility export helper survives
+    temporarily, it must be explicit historical/obsolete-only scaffolding and
+    must not define current send/read/post-send semantics
+  - the accepted line must not ship the former `atm-storage-claude` crate or its
     boundary records as a production backend
   - the shared backend contract remains required after Claude backend
     retirement; SQLite is one backend implementation and future SQL backend
@@ -3532,13 +3648,20 @@ mail correctness.
   - `atm ack` persists the reply to durable ATM state
   - after successful persistence, ATM emits post-send behavior only when the
     recipient exposes that capability
-  - the shipped default post-send path is the built-in `atm internal-nudge`
+  - the shipped default post-send path is the built-in in-process
     implementation
   - teams may override any subset of the six built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
   - post-send emission must not redefine send success after persistence
+  - the authoritative Phase AD release smoke lane for post-send behavior must
+    prove exactly these closure cases:
+    - external hook success
+    - external hook partial failure
+    - built-in fallback
+    - override reset-to-default after a prior stored override row
+    - explicit disable behavior when that retained state is supported
 
 - `REQ-CORE-COMPAT-004` Post-send capability resolution must not depend on
   caller working directory or retired mailbox/config side channels.
@@ -3546,11 +3669,16 @@ mail correctness.
   Required behavior:
   - running `atm send` from another repository or working directory must not
     silently change whether post-send emission is attempted
-  - authoritative `recipient_pane_id`, when known, must come from canonical ATM
-    roster state rather than from rediscovering live pane routing through local
-    mailbox files
-  - live pane routing for built-in tmux nudge must not depend on committed
-    `.atm.toml` `tmux_pane_id` values
+  - hook configuration lookup must follow the sender's canonical roster
+    `home_dir` metadata
+- authoritative `recipient_pane_id`, when known, must come from canonical ATM
+  roster state rather than from rediscovering live pane routing through local
+  mailbox files
+- live pane routing for built-in tmux nudge must not depend on committed
+  `.atm.toml` `tmux_pane_id` values
+- retained repo-local compatibility helpers may use only authoritative
+  `recipient_pane_id` payload/roster data or an explicit operator-provided
+  `--pane`; they must not revive committed `.atm.toml` pane lookup
 
 - `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
   typed delivery-plan execution are not the governing send-path contract.

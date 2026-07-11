@@ -23,7 +23,7 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
-- `boundaries/atm-core/nudge-template-override-store.toml`
+- `boundaries/atm-storage/nudge-template-override-store.toml`
 - `crates/atm-core/src/send/hook.rs`
 - `crates/atm-core/src/config/mod.rs`
 - `crates/atm-core/src/config/types.rs`
@@ -56,6 +56,14 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD21.md`
 
 ## Interfaces To Add Or Modify
+
+Postmerge ownership note:
+
+- the canonical machine-readable boundary record for
+  `NudgeTemplateOverrideStore` now lives at
+  `boundaries/atm-storage/nudge-template-override-store.toml`
+- any follow-up fix or review work against this sprint should treat the old
+  `atm-core` boundary file as retired historical context only
 
 The built-in nudge renderer is case-based, not logic-programmable:
 

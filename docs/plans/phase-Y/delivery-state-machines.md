@@ -36,7 +36,8 @@ But the write/nudge behavior is still spread across:
 
 - `send`
 - `ack`
-- compatibility export
+- historical compatibility export (retired from the accepted runtime after
+  `ADR-019`)
 - post-send-hook execution
 
 That is the policy leakage Phase `Y` must remove.
@@ -45,7 +46,7 @@ Current `Y.4` landing points:
 
 - coordinator + state inventory:
   - `crates/atm-core/src/delivery_policy.rs`
-- retained runtime roster snapshot + compatibility export gate:
+- retained runtime roster snapshot + historical compatibility export gate:
   - `crates/atm-core/src/service_runtime.rs`
 - retained send integration:
   - `crates/atm-core/src/send/mod.rs`
@@ -60,13 +61,15 @@ Current `Y.5` export contract:
   - `parentMessageId`
   - `threadMode`
   - `taskId`
-- mutable workflow and lifecycle fields are stripped from compatibility export:
+- mutable workflow and lifecycle fields are stripped from historical
+  compatibility export:
   - `source_team`
   - `pendingAckAt`
   - `acknowledgedAt`
   - `acknowledgesMessageId`
   - `expiresAt`
-- compatibility export loads the stored message record, not the workflow-joined
+- historical compatibility export loads the stored message record, not the
+  workflow-joined
   projected envelope, so export no longer depends on read/ack projection state
 
 ## Synchronization Minimization
@@ -78,7 +81,8 @@ Required direction:
 
 - roster resolution uses a short-lived snapshot read only
 - SQLite transaction scope is the durable mutation boundary
-- compatibility export / nudge side effects happen after the durable decision
+- historical compatibility export / nudge side effects happen after the durable
+  decision
   point
 - no machine or coordinator design may require a new long-lived cross-domain
   lock spanning roster state, SQLite durability, and compatibility mailbox
@@ -141,7 +145,8 @@ Synchronization rule:
 - the only approved execution shape is:
   - read canonical roster snapshot
   - perform the SQLite durability step
-  - perform compatibility export / outward nudge side effects afterward
+  - perform historical compatibility export / outward nudge side effects
+    afterward
 - any legacy mailbox/workflow lock that still exists during transition work is
   strictly a temporary compatibility-side implementation detail to be shrunk or
   isolated, not a new correctness boundary for message truth
@@ -194,7 +199,7 @@ enum DeliveryHarnessPath {
   copied routing facts and the exact machine dispatch target
 - no coordinator-level lock may be held across:
   - SQLite writes
-  - compatibility append/export I/O
+  - historical compatibility append/export I/O
   - nudge or post-send-hook execution
 - implementers should prefer per-request state plus immutable shared config
   over `Arc<Mutex<DeliveryPolicyCoordinator>>` style coordination
@@ -350,7 +355,8 @@ Why it is separate:
 Coordinator execution contract:
 
 - `ResolveHarness` uses a canonical roster snapshot and must not hold that
-  snapshot read scope across later SQLite persistence or compatibility export
+  snapshot read scope across later SQLite persistence or historical
+  compatibility export
   side effects
 - the coordinator may pass copied routing facts into the machine, but not live
   lock guards or mutable roster handles
@@ -654,7 +660,7 @@ Helper layers may be shared for:
 
 - SQLite message persistence
 - SQLite message-state persistence
-- compatibility append/export
+- historical compatibility append/export
 - post-send-hook fallback execution
 - observability emission
 
@@ -709,7 +715,8 @@ Harness selection is based on canonical roster `harness`, not model.
 
 - `nudge` means the harness-specific notification side effect that occurs after
   the message path for that harness
-- for `Claude Code`, that includes the compatibility append-driven user-visible
+- for historical `Claude Code` compatibility, that included the
+  compatibility-append-driven user-visible
   wake-up behavior
 - for non-Claude harnesses, that means the harness-native notification path
 - the state machines should model the nudge abstractly; adapter-specific

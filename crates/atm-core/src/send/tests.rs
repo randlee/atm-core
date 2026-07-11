@@ -12,26 +12,27 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    NonClaudeOutboundDeliveryRequest, ProjectionAppendMode, RosterEntry, RosterHarness,
-    RosterMemberKind,
+    BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
+    Message, MessageKey, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
+    PostSendEmissionPath, PostSendHookEmitter, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
+use crate::error_codes::AtmErrorCode;
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
 use crate::process::process_is_alive;
-use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::protocol::NotificationEvent;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::test_support::{TEST_SENDER, TEST_TEAM};
+use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::WorkflowStateFile;
 
@@ -41,6 +42,7 @@ fn message(
     parent_message_id: Option<AtmMessageId>,
     thread_mode: Option<ThreadMode>,
 ) -> InboxMessage {
+    let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: "hello".to_string(),
@@ -49,8 +51,9 @@ fn message(
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id,
         thread_mode,
@@ -60,8 +63,26 @@ fn message(
     }
 }
 
-fn notification_detail(event: &NotificationEvent) -> Value {
+pub(super) fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
+}
+
+pub(super) fn read_notification_events(home_dir: &Path) -> Vec<NotificationEvent> {
+    fs::read_to_string(
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl"),
+    )
+    .expect("notifications")
+    .lines()
+    .map(|line| serde_json::from_str(line).expect("notification event"))
+    .collect()
+}
+
+pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
+    EnvGuard::set_many([
+        ("HOME", Some(home_dir.to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+        ("ATM_LOG_DIR", None),
+    ])
 }
 
 fn assert_recovered_payload_texts(
@@ -80,48 +101,80 @@ fn assert_recovered_payload_texts(
     );
 }
 
-struct TestRuntime {
+pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
-    append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    appended_messages: Mutex<Vec<InboxMessage>>,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
-    // Mutex required because concurrent send-path tests share the same runtime.
-    notification_events: Mutex<Vec<NotificationEvent>>,
+    pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
+    pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+}
+
+pub(super) struct RecordingPostSendEmitter {
+    fail_code: Option<AtmErrorCode>,
+    emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
+}
+
+impl RecordingPostSendEmitter {
+    pub(super) fn succeed() -> Self {
+        Self {
+            fail_code: None,
+            emitted: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(super) fn fail(code: AtmErrorCode) -> Self {
+        Self {
+            fail_code: Some(code),
+            emitted: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(super) fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
+        self.emitted.lock().expect("post-send emitter lock").clone()
+    }
 }
 
 impl TestRuntime {
-    fn new(
+    pub(super) fn new(
         commit_error_message: Option<&'static str>,
-        append_error_message: Option<&'static str>,
         recipient_harness: DeliveryHarnessPath,
     ) -> Self {
         Self {
             commit_error_message,
-            append_error_message,
             recipient_harness,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
-            notification_events: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
+impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
-impl crate::boundary::NotificationSink for TestRuntime {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_events
+impl PostSendHookEmitter for RecordingPostSendEmitter {
+    fn emit_post_send(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Result<PostSendEmissionPath, AtmError> {
+        self.emitted
             .lock()
-            .expect("notification events lock")
-            .push(event);
-        Ok(())
+            .expect("post-send emitter lock")
+            .push(dispatch.clone());
+        if let Some(code) = self.fail_code {
+            return Err(AtmError::new_with_code(
+                code,
+                AtmErrorKind::DaemonUnavailable,
+                "test post-send emitter failure",
+            )
+            .with_recovery("Repair the test post-send emitter and retry."));
+        }
+        Ok(match dispatch.target {
+            PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
+            PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
+        })
     }
 }
 
@@ -181,37 +234,6 @@ impl RetainedServiceRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
     ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn append_compat_inbox_message(
-        &self,
-        _inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError> {
-        if let Some(message) = self.append_error_message {
-            return Err(AtmError::mailbox_write(message));
-        }
-        self.appended_messages
-            .lock()
-            .expect("append captures lock")
-            .push(message.clone());
-        Ok(())
-    }
-
-    fn append_compat_inbox_message_set(
-        &self,
-        _inbox_path: &Path,
-        _mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
-    ) -> Result<(), AtmError> {
-        if let Some(message) = self.append_error_message {
-            return Err(AtmError::mailbox_write(message));
-        }
-        self.appended_messages
-            .lock()
-            .expect("append captures lock")
-            .extend(messages.iter().cloned());
         Ok(())
     }
 
@@ -358,11 +380,14 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
         team: TeamName::from_validated(TEST_TEAM),
         harness,
         recipient_pane_id: None,
+        local_tmux_post_send: false,
+        graft_post_send: false,
         roster_backed: true,
     }
 }
 
 fn outbound_message() -> InboxMessage {
+    let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
         text: "hello".to_string(),
@@ -371,8 +396,9 @@ fn outbound_message() -> InboxMessage {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
@@ -382,13 +408,13 @@ fn outbound_message() -> InboxMessage {
     }
 }
 
-fn send_request(home_dir: &Path) -> SendRequest {
+pub(super) fn send_request(home_dir: &Path) -> SendRequest {
     SendRequest {
         home_dir: home_dir.to_path_buf(),
         current_dir: home_dir.to_path_buf(),
-        sender_override: Some(AgentName::from_validated(TEST_SENDER)),
+        caller_identity: AgentName::from_validated(TEST_SENDER),
+        caller_team: TeamName::from_validated(TEST_TEAM),
         to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
-        team_override: None,
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),
         requires_ack: false,
@@ -400,14 +426,22 @@ fn send_request(home_dir: &Path) -> SendRequest {
     }
 }
 
+fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
+    let mut request = send_request(home_dir);
+    request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
+        .parse()
+        .expect("self address");
+    request
+}
+
 fn send_runtime_with_missing_claude_member() -> TestRuntime {
-    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.claude_roster_members.clear();
     runtime
 }
 
 fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
-    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.roster_member_missing = true;
     runtime
 }
@@ -448,26 +482,9 @@ impl ObservabilityPort for RecordingObservability {
 }
 
 #[test]
-fn load_send_alert_state_parse_errors_are_config_errors() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = alert_state::state_path(tempdir.path());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("state dir");
-    }
-    fs::write(&path, "{not-json").expect("state file");
-
-    let error = alert_state::load(&path).expect_err("malformed state");
-    assert!(error.is_config());
-}
-
-#[test]
 fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
     let outbound = outbound_message();
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::ClaudeCode,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -497,11 +514,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
 #[test]
 fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
     let outbound = outbound_message();
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::NonClaude,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -528,18 +541,18 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
 }
 
 #[test]
-fn append_failure_after_sqlite_commit_is_execution_only() {
-    let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
+#[serial_test::serial(env)]
+fn claude_harness_delivery_no_longer_has_append_degradation_path() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
         },
-        sender_team: Some(TeamName::from_validated(TEST_TEAM)),
         canonical_sender: AgentName::from_validated(TEST_SENDER),
-        display_sender: AgentName::from_validated(TEST_SENDER),
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         delivery_family: DeliveryEventFamily::NewMessage,
@@ -547,20 +560,20 @@ fn append_failure_after_sqlite_commit_is_execution_only() {
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
     let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
-    let execution =
-        execute_delivery_plan(&runtime, None, &plan).expect("append degraded execution");
+    let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
     assert_eq!(
         execution.disposition,
-        DeliveryExecutionDisposition::AppendDegraded
+        DeliveryExecutionDisposition::Delivered
     );
-    assert_eq!(execution.warnings.len(), 1);
+    assert!(execution.warnings.is_empty());
 }
 
 #[test]
 fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let tempdir = tempdir().expect("tempdir");
     let original = outbound_message();
+    let ack_intent = AckIntentFields::not_required();
     let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
         text: "sqlite failed".to_string(),
@@ -569,8 +582,9 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
-        pending_ack_at: None,
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
@@ -584,14 +598,13 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         WarningEntry::new("sqlite failed", Some("repair sqlite")),
     );
     let base_context = SendExecutionContext {
-        config: None,
+        command_config: None,
+        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
         },
-        sender_team: Some(TeamName::from_validated(TEST_TEAM)),
         canonical_sender: AgentName::from_validated(TEST_SENDER),
-        display_sender: AgentName::from_validated(TEST_SENDER),
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         delivery_family: DeliveryEventFamily::NewMessage,
@@ -609,7 +622,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
     assert_eq!(claude_plan.messages, non_claude_plan.messages);
     assert!(matches!(
         claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::ClaudeCode { .. }
+        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
     ));
     assert!(matches!(
         non_claude_plan.delivery_target,
@@ -618,21 +631,27 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
 }
 
 #[test]
-fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        Some("append failed"),
-        DeliveryHarnessPath::ClaudeCode,
-    );
+#[serial_test::serial(env)]
+fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
-    let error =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect_err("recovered Claude append failure must fail hard");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
-    assert!(error.is_mailbox_write());
-    assert!(error.message.contains("append failed"));
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    assert_eq!(outcome.warnings.len(), 1);
+    assert_non_claude_sqlite_failure_delivery(&runtime);
+    assert_notification_log_absent(&home_dir);
+    assert_non_claude_sqlite_failure_observability(&observability);
 }
 
 fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
@@ -658,56 +677,12 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
     );
 }
 
-fn assert_non_claude_sqlite_failure_notifications(runtime: &TestRuntime) {
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
-    assert_eq!(events.len(), 2);
+fn assert_notification_log_absent(home_dir: &Path) {
+    let notification_path =
+        crate::home::host_runtime_dir_from_home(home_dir).join("notifications.jsonl");
     assert!(
-        events
-            .iter()
-            .all(|event| event.kind == NotificationKind::Delivery)
-    );
-    assert!(events.iter().any(|event| {
-        notification_detail(event)
-            .get("sender")
-            .and_then(Value::as_str)
-            == Some(TEST_SENDER)
-    }));
-    assert!(events.iter().any(|event| {
-        notification_detail(event)
-            .get("sender")
-            .and_then(Value::as_str)
-            == Some("atm-system")
-    }));
-    let original_event = events
-        .iter()
-        .find(|event| {
-            notification_detail(event)
-                .get("sender")
-                .and_then(Value::as_str)
-                == Some(TEST_SENDER)
-        })
-        .expect("original notification");
-    let original_detail = notification_detail(original_event);
-    assert_eq!(
-        original_event.team.as_ref().map(TeamName::as_str),
-        Some(TEST_TEAM)
-    );
-    assert_eq!(
-        original_event.agent.as_ref().map(AgentName::as_str),
-        Some("recipient")
-    );
-    assert!(
-        original_detail
-            .get("message_id")
-            .and_then(Value::as_str)
-            .is_some()
-    );
-    assert_eq!(
-        original_detail.get("task_id").and_then(Value::as_str),
-        Some("task-123")
+        !notification_path.exists(),
+        "notification log should stay absent when no post-send emitter succeeds"
     );
 }
 
@@ -724,35 +699,61 @@ fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObser
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::NonClaude,
-    );
+    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
+    let post_send_emitter = RecordingPostSendEmitter::succeed();
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        Some(&post_send_emitter),
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_non_claude_sqlite_failure_notifications(&runtime);
+    let events = read_notification_events(&home_dir);
+    assert_eq!(events.len(), 1);
     assert_non_claude_sqlite_failure_observability(&observability);
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);
+    assert!(!emitted[0].event.is_ack);
+    match &emitted[0].target {
+        PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+            recipient,
+            recipient_team,
+        }) => {
+            assert_eq!(recipient.as_str(), "recipient");
+            assert_eq!(recipient_team.as_str(), TEST_TEAM);
+        }
+        other => panic!("expected graft post-send target, got {other:?}"),
+    }
 }
 
 #[test]
-fn send_non_claude_success_delivers_original_via_outbound_boundary() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
+#[serial_test::serial(env)]
+fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert!(outcome.warnings.is_empty());
@@ -771,78 +772,38 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
-}
-
-#[test]
-fn send_claude_success_appends_original_via_compat_inbox_writer() {
-    let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
-    let observability = RecordingObservability::default();
-    let tempdir = tempdir().expect("tempdir");
-
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert!(outcome.warnings.is_empty());
-    let appended_messages = runtime.appended_messages.lock().expect("append lock");
-    assert_eq!(appended_messages.len(), 1);
-    assert_eq!(appended_messages[0].from.as_str(), TEST_SENDER);
-    drop(appended_messages);
-    assert!(
-        runtime
-            .non_claude_deliveries
-            .lock()
-            .expect("non-claude deliveries lock")
-            .is_empty()
-    );
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
-    );
-    drop(events);
+    assert_notification_log_absent(&home_dir);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.compat_append_original"
+            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_original"
     }));
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z6_post_write_warning_uses_store_backed_claude_roster() {
     let runtime = send_runtime_with_missing_claude_member();
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     fs::write(tempdir.path().join("config.json"), r#"{"members":[]}"#).expect("config");
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let outcome = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect("send outcome");
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(
-        runtime.appended_messages.lock().expect("append lock").len(),
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
         1
     );
     assert_eq!(outcome.warnings.len(), 1);
@@ -854,14 +815,19 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     let runtime = send_runtime_with_missing_atm_roster_member();
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
 
-    let error =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect_err("empty atm roster must fail");
+    let error = super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect_err("empty atm roster must fail");
 
     assert!(error.is_agent_not_found());
     assert_eq!(
@@ -889,36 +855,109 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
 }
 
 #[test]
-fn send_append_failure_routes_to_post_send_hook_fallback() {
-    let runtime = TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
+#[serial_test::serial(env)]
+fn self_addressed_plain_send_is_rejected_before_persistence() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.task_id = None;
+    request.summary_override = None;
+
+    let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect_err("self-addressed send must fail");
+
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(
+        error
+            .message
+            .contains("self-addressed messages are invalid ATM input")
+    );
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_task_send_is_rejected_before_persistence() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
 
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+    let error = super::send_mail_with_runtime_impl(
+        self_addressed_send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        None,
+    )
+    .expect_err("self-addressed task send must fail");
 
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert_eq!(outcome.warnings.len(), 1);
-    let events = runtime
-        .notification_events
-        .lock()
-        .expect("notification events lock");
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert_eq!(
-        notification_detail(&events[0])
-            .get("sender")
-            .and_then(Value::as_str),
-        Some(TEST_SENDER)
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
     );
-    drop(events);
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+}
 
-    let events = observability.events.lock().expect("events lock");
-    assert!(events.iter().any(|event| {
-        event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.post_send_hook_fallback"
-    }));
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_dry_run_is_rejected_before_reporting_success() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.to = format!(
+        "{}@{}",
+        TEST_SENDER.to_ascii_uppercase(),
+        TEST_TEAM.to_ascii_uppercase()
+    )
+    .parse()
+    .expect("case-variant self address");
+    request.dry_run = true;
+
+    let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect_err("self-addressed dry-run must fail");
+
+    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -965,9 +1004,9 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
     let error = SendRequest::new(
         tempdir.path().to_path_buf(),
         tempdir.path().to_path_buf(),
-        Some(ROLE_TEAM_LEAD),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
         "../evil",
-        Some(TEST_TEAM),
+        TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("hello".to_string()),
         None,
         false,
@@ -980,29 +1019,36 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
 }
 
 #[test]
-fn send_request_new_rejects_invalid_team_override_before_command_execution() {
-    let tempdir = tempdir().expect("tempdir");
-    let error = SendRequest::new(
-        tempdir.path().to_path_buf(),
-        tempdir.path().to_path_buf(),
-        Some(ROLE_TEAM_LEAD),
-        TEST_SENDER,
-        Some("../evil"),
-        SendMessageSource::Inline("hello".to_string()),
-        None,
-        false,
-        None,
-        false,
-    )
-    .expect_err("invalid team");
+fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
+    let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
     assert!(error.message.contains("team name"));
+}
+
+#[test]
+fn resolve_recipient_rejects_invalid_alias_target() {
+    let mut aliases = std::collections::BTreeMap::new();
+    aliases.insert("tl".to_string(), "../bad-agent".to_string());
+    let config = AtmConfig {
+        aliases,
+        ..Default::default()
+    };
+
+    let error = super::resolve_recipient(
+        &"tl".parse().expect("address"),
+        &TEST_TEAM.parse().expect("team"),
+        Some(&config),
+    )
+    .expect_err("invalid alias target");
+
+    assert!(error.is_address());
 }
 
 #[test]
 fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
     let root_id = AtmMessageId::new();
     let mut root = message(TEST_SENDER, root_id, None, None);
+    root.requires_ack = true;
     root.acknowledged_at = Some(IsoTimestamp::now());
     let mut update = message(
         TEST_SENDER,
@@ -1021,6 +1067,7 @@ fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
 fn prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread() {
     let root_id = AtmMessageId::new();
     let mut root = message(TEST_SENDER, root_id, None, None);
+    root.requires_ack = true;
     root.acknowledged_at = Some(IsoTimestamp::now());
     let mut update = message(
         TEST_SENDER,

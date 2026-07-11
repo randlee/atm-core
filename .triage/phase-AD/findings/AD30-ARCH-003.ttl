@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD30-ARCH-003>
+  a triage:Finding ;
+  triage:findingId "AD30-ARCH-003" ;
+  triage:title "sprint-AD30.md declares WindowsLocalIpcDepthCase enum that doesn't exist (doc/code naming gap, dedup)" ;
+  triage:description "docs/plans/phase-AD/sprint-AD30.md:46 declares pub enum WindowsLocalIpcDepthCase with three variants as the accepted interface; this type does not exist anywhere in the workspace. Unlike AD29-ARCH-001 (undelivered interface), the underlying behavior IS genuinely implemented via three real, deterministic, #[cfg(windows)]-gated, CI-wired tests in s30 matching the three variants' semantics. This is a doc/code naming-fidelity gap (dedup issue), not an unimplemented-interface gap. Scored Important per both reviewers' converging assessment." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD30-ARCH-003/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/s29/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/s30/4d86e024> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/818f7bce> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/33683226> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/88558576> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/4d86e024> .
+
+<urn:atm:triage:occurrence/AD30-ARCH-003/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD30.md" ;
+  triage:line 46 ;
+  triage:snippet "pub enum WindowsLocalIpcDepthCase { DispatcherPanicDuringShutdown, AcceptErrorInjection, PostTerminateConnectionRejection, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/818f7bce> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s29/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s30/4d86e024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "4d86e024" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate/818f7bce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "818f7bce" ;
+  triage:orderIndex 7 .

@@ -107,6 +107,11 @@ Follow-up work:
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns mapping of CLI commands to the daemon/service request boundary in
   production.
+- `atm` owns the explicit mailbox-surface split where `peek` and `list` are
+  inspection-only, while `send`, `read`, `ack`, and `clear` are owner-only
+  mutating commands.
+- `atm` must not expose caller impersonation on mutating mailbox/message
+  commands.
 - `atm` owns bootstrap of shared observability implementations used by
   `atm-core`.
 - `atm` owns the concrete published-crate bootstrap against
@@ -122,12 +127,26 @@ Follow-up work:
 - `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
-- `atm` owns the shipped built-in `internal-nudge` command, the six bounded
-  template bodies, direct placeholder substitution for those templates, and
-  the final built-in sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- `atm` owns the shipped built-in `internal-nudge` command, the hidden-command
+  compatibility parsing around its resolved envelope, and the final built-in
+  sink dispatch into `TmuxNudgeSink` or `GraftNudgeSink`.
+- the accepted built-in template catalog and placeholder renderer are shared
+  helper semantics supplied through `atm-core`; `atm` must not fork that
+  catalog or reintroduce a second selection path
+- retained `atm internal-nudge` helper invocations consume one resolved
+  envelope from `ATM_INTERNAL_NUDGE`; they render and deliver only and must
+  not reopen `NudgeTemplateOverrideStore`, SQLite, or runtime bootstrap
+  composition.
+- the self-addressed-send rejection rule remains `atm-core` business logic;
+  `atm` must route all send entry paths, including `--dry-run`, through that
+  shared validation contract and render the returned typed failure rather than
+  introducing a CLI-local mailbox-equality rule
 - `atm` may consume a team-scoped built-in template override body only through
   the storage-neutral upstream contract accepted for Phase `AD`; it must not
   perform direct SQLite lookup itself.
+- `atm` resolves built-in template lifecycle through that upstream contract as:
+  no row => product default, override row => stored body, disabled row => no
+  emission, clear/reset => row deletion back to product default.
 - `atm` owns `TmuxNudgeSink`, including the current tmux-injection sequence:
   paste rendered text, send `Enter`, wait about `250ms` to `300ms`, then send
   a second `Enter`; the exact delay remains implementation-tunable but the

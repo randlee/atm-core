@@ -1,0 +1,243 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD11-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AD11-BOUNDARY-001" ;
+  triage:title "post-send-hook-emitter boundary self-declares 'planned' despite full implementation" ;
+  triage:description "boundaries/atm-core/post-send-hook-emitter.toml self-declares status.state='planned' despite the post-send-hook emitter being fully implemented, tested, and wired into production, and despite being named an explicit AD.11 exact target in the sprint doc. Reported independently by both arch-qa (as ARCH-AD11-001) and req-qa (as ATM-QA-002) on AD.11-QA-1, corroborating each other." ;
+  triage:category "boundary-declaration-status-mismatch" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot. The dispatch-tracking fields are likewise historical here: highestOpenBranch still records the last branch that carried the pre-closure occurrence, while highestFixedBranch remains `none` because no branch-local dispatch closed this record before the later integration-line verification closed it as stale triage metadata." ;
+  triage:triagedAt "2026-07-03T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD11/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD1/2e151d21> ;
+  triage:openOn <urn:atm:triage:worktree/AD2/490c9d23> ;
+  triage:openOn <urn:atm:triage:worktree/AD3/4ff7cfbc> ;
+  triage:openOn <urn:atm:triage:worktree/AD4/29b96dd3> ;
+  triage:openOn <urn:atm:triage:worktree/AD5/2122e5c6> ;
+  triage:openOn <urn:atm:triage:worktree/AD6/a4c29c74> ;
+  triage:openOn <urn:atm:triage:worktree/AD7/6d94eab9> ;
+  triage:openOn <urn:atm:triage:worktree/AD8/65fe3a65> ;
+  triage:openOn <urn:atm:triage:worktree/AD9/3e1c4d99> ;
+  triage:openOn <urn:atm:triage:worktree/AD10/634feabb> ;
+  triage:openOn <urn:atm:triage:worktree/AD11/2506a2b4> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD11/2506a2b4> ;
+  triage:highestOpenBranch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:highestFixedBranch "none" .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD1/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD1/2e151d21> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD2/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:occursIn <urn:atm:triage:worktree/AD2/490c9d23> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD3/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:occursIn <urn:atm:triage:worktree/AD3/4ff7cfbc> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD4/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AD4/29b96dd3> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD5/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "2122e5c6" ;
+  triage:occursIn <urn:atm:triage:worktree/AD5/2122e5c6> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD6/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "a4c29c74" ;
+  triage:occursIn <urn:atm:triage:worktree/AD6/a4c29c74> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD7/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "6d94eab9" ;
+  triage:occursIn <urn:atm:triage:worktree/AD7/6d94eab9> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD8/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "65fe3a65" ;
+  triage:occursIn <urn:atm:triage:worktree/AD8/65fe3a65> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD9/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "3e1c4d99" ;
+  triage:occursIn <urn:atm:triage:worktree/AD9/3e1c4d99> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD10/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "634feabb" ;
+  triage:occursIn <urn:atm:triage:worktree/AD10/634feabb> .
+
+<urn:atm:triage:occurrence/AD11-BOUNDARY-001/AD11/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 45 ;
+  triage:snippet "state = \"planned\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "2506a2b4" ;
+  triage:occursIn <urn:atm:triage:worktree/AD11/2506a2b4> .
+
+<urn:atm:triage:worktree/AD1/2e151d21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "2e151d21" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AD2/490c9d23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "490c9d23" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AD3/4ff7cfbc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "4ff7cfbc" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AD4/29b96dd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "29b96dd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AD5/2122e5c6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "2122e5c6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AD6/a4c29c74>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "a4c29c74" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AD7/6d94eab9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "6d94eab9" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AD8/65fe3a65>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "65fe3a65" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AD9/3e1c4d99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "3e1c4d99" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/AD10/634feabb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "634feabb" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/AD11/2506a2b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "2506a2b4" ;
+  triage:orderIndex 11 .

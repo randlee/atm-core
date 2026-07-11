@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- complete the `AD.13` through `AD.30` corrective line by tightening caller
+  identity ownership, restoring direct post-send emission, and deleting
+  retired daemon-side Claude/reconcile paths
+- restore Windows daemon CI depth coverage for same-host local IPC shutdown,
+  injected accept-failure, and post-terminate rejection without accepting
+  flaky or hang-prone test behavior
+
 ## 1.2.3
 
 - recover the interrupted `v1.2.2` publish by cutting a clean `release/v1.2.3`

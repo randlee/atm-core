@@ -505,12 +505,13 @@ pub enum ReadSelection {
 }
 ```
 
-Ack activation mode:
+Ack requirement state:
 
 ```rust
-pub enum AckActivationMode {
-    PromoteDisplayedUnread,
-    ReadOnly,
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
 }
 ```
 
@@ -518,6 +519,8 @@ Display mapping is fixed:
 - `MessageClass::Unread` -> `DisplayBucket::Unread`
 - `MessageClass::PendingAck` -> `DisplayBucket::PendingAck`
 - `MessageClass::Acknowledged` -> `DisplayBucket::History`
+- displaying a message may mark it read, but it must never promote pending
+  acknowledgement; ADR-022 keeps ack state sender-owned and durable
 - `MessageClass::Read` -> `DisplayBucket::History`
 
 ### 4.3 Typestate Transition Model
@@ -658,6 +661,8 @@ Architectural rules:
   canonical sender identity in SQLite-owned state
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
+- the shared send-context path must reject canonical same-team self-addressed
+  sends before message-body persistence and before `dry-run` can report success
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send or ack; it fires
@@ -717,8 +722,9 @@ ATM config and team-launch config are distinct concerns:
   surface
 - retired flat hook keys and `[atm].post_send_hook_members` must fail fast
   with migration guidance
-- `[atm].identity` is obsolete in the retained multi-agent model and must not
-  participate in runtime identity resolution
+- `[atm].identity` and the legacy top-level `identity` key are obsolete in the
+  retained multi-agent model and must not participate in runtime identity
+  resolution
 
 Team config loading must follow a narrow-scope recovery policy:
 - compatibility-only schema drift may use deterministic defaults at the schema
@@ -739,8 +745,9 @@ Diagnostics for team config failures must preserve:
 
 ### 5.1.1 Deprecated `[atm].identity`
 
-`[atm].identity` remains parse-compatible only as an obsolete migration field.
-It is no longer part of runtime sender or actor resolution.
+`[atm].identity` and the legacy top-level `identity` key remain
+parse-compatible only as obsolete migration fields. They are no longer part of
+runtime sender or actor resolution.
 
 Current runtime contract:
 - caller-context-owned commands resolve required caller identity/team according
@@ -748,14 +755,15 @@ Current runtime contract:
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch
 - `atm doctor` remains the explicit identity-free, optional-team exception
-- `[atm].identity` is ignored for runtime resolution even when still present in
-  `.atm.toml`
+- `[atm].identity` and legacy top-level `identity` are ignored for runtime
+  resolution even when still present in `.atm.toml`
 
 Deprecation and migration contract:
-- `atm doctor` reports stale `[atm].identity` with
+- `atm doctor` reports stale config identity fields with
   `ATM_WARNING_IDENTITY_DRIFT`
-- operator migration path is: remove `[atm].identity` and set `ATM_IDENTITY`
-  in the active agent environment instead
+- operator migration path is: remove `[atm].identity` and any legacy top-level
+  `identity` key, then set `ATM_IDENTITY` in the active agent environment
+  instead
 - keeping the obsolete key temporarily is tolerated for migration diagnostics
   only; it must not change runtime behavior
 
@@ -981,7 +989,7 @@ Shared query model:
 `ReadQuery` adds:
 - optional exact `message_id`
 - optional timeout
-- read-mutation controls such as seen-state update and ack activation
+- read-mutation controls such as seen-state update
 
 `ListOutcome` contains:
 - action
@@ -1011,6 +1019,17 @@ Each list row contains:
 - `mutation_applied`
 - bucket_counts
 
+Read-mutation output invariants:
+- when `mutation_applied = true` and a selected message is present, that
+  message and `selected_message_id` must identify the same durable message
+- read-side mutation may mark the selected message `read = true`, but it must
+  still return that same message in the payload instead of re-running unread
+  selection and swapping in a different unread message
+- `bucket_counts` must describe the post-mutation mailbox state produced by
+  that command execution
+- ack-side mutation remains separate; only `atm ack` clears
+  `pending_ack_at` and sets `acknowledged_at`
+
 Queue-inspection architectural rules:
 - default `atm list` must stay bounded by query behavior rather than
   materializing full mailbox history and truncating it at render time
@@ -1025,6 +1044,10 @@ Queue-inspection architectural rules:
   logical task thread does not surface as several superseded matches
 - `--contains` applies to both summary text and full durable message body text
 - summary/count queries must remain separable from full-body detail fetch
+- metadata-backed `--contains` evaluation must remain summary-first and bounded:
+  rows rejected by earlier metadata-only filters or already matched by summary
+  must not trigger durable-body reload, and only surviving summary-miss
+  candidates may fetch durable body text for the final contains check
 
 Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
@@ -1063,10 +1086,10 @@ Public entrypoint:
 - resolved agent
 - source message id
 - optional task id from the acknowledged message
-- reply target
-- reply message id
-`AckOutcome.reply_message_id` uses the one logical message identity in the
-retained CLI/output ULID form
+- reply disposition
+  - `Sent { reply_message_id, reply_target }` when a reply message was emitted
+  - `SuppressedSelfAck` when a historical self-addressed pending-ack was
+    acknowledged without emitting a replacement reply
 - reply text
 - warnings: Vec<String>
 - Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -1077,6 +1100,9 @@ The ack service is responsible for the legal transition from `(Read, PendingAck)
 Phase R continuation rules:
 - `atm ack` emits exactly one visible reply and that reply must hardcode
   `requires_ack = false`
+- historical self-addressed pending-ack messages are the explicit exception:
+  they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`
+  and no replacement reply message
 - acknowledgement replies must never request acknowledgement themselves
 - compatibility/export surfaces encode successor metadata with
   `parentMessageId` and `threadMode`
@@ -1201,7 +1227,8 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
-- current team member roster from `config.json`
+- current team member roster projected from canonical ATM roster truth and
+  ordered against the live `config.json` baseline
 - observability health
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
@@ -1256,14 +1283,20 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- `add-member` persists the member's durable `home_dir` on the canonical ATM
+  roster row and projects that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` is the retained local roster-metadata repair path for
   existing members and must not create new members implicitly
 - accepted terminology must distinguish:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - operator repair paths may repair `home_dir` but must not treat `live_cwd` or
   `launch_cwd` as durable roster metadata
 - accepted implementations must prefer direct roster-row and runtime-roster
@@ -1310,8 +1343,8 @@ Historical note:
 - the earlier file-backed/reconcile-fed line is historical only
 - the accepted runtime does not use `ingest/reconcile -> SQLite projection` as
   a live read pipeline
-- AD.4 removes the remaining daemon watch/reconcile lane from the accepted
-  runtime
+- AD.4 removed the remaining daemon watch/reconcile lane from the accepted
+  runtime and retired the corresponding daemon/core boundary traits
 
 The accepted read pipeline stages are:
 1. resolve caller identity and target mailbox from the accepted CLI/runtime
@@ -1471,14 +1504,23 @@ uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
 optionally emit one structured stdout result for observability, and never rolls
 back a successful message write on failure or timeout.
 
+Hook configuration lookup note:
+- send/ack must resolve post-send hook configuration from the sender's
+  authoritative ATM roster `home_dir` metadata
+
 Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
   file rediscovery when it is present
-- the shipped built-in `atm internal-nudge` path must consume this same payload
-  contract so ATM does not carry separate external-hook and built-in nudge
-  event shapes
+- external hook commands consume `ATM_POST_SEND`
+- any retained built-in `atm internal-nudge` helper consumes one separate
+  `ATM_INTERNAL_NUDGE` envelope carrying the canonical event, sink target,
+  resolved template kind, and resolved template body or explicit disabled
+  state; the live production built-in path remains in-process
+- retained compatibility helpers must treat committed `.atm.toml` pane ids as
+  non-authoritative and use roster/payload pane truth or explicit `--pane`
+  only
 
 Supported structured hook-result levels remain:
 - `debug`
@@ -1498,6 +1540,10 @@ The accepted command contract is:
   supported, otherwise from invoking-shell `ATM_IDENTITY`
 - commands that require caller team resolve it from explicit override when
   supported, otherwise from invoking-shell `ATM_TEAM`
+- `atm peek` and `atm list` are inspection-only mailbox/message surfaces and
+  may inspect another member only through the documented `--as` override path
+- `atm send`, `atm read`, `atm ack`, and `atm clear` are owner-only mutating
+  surfaces and must not expose caller impersonation
 - if required caller context is unavailable, the CLI fails before daemon
   dispatch or retained command execution
 - downstream caller-owned request DTOs carry required resolved caller context
@@ -1509,6 +1555,13 @@ The accepted command contract is:
 
 An obsolete `[atm].identity` field may be diagnosed by doctor, but it must not
 control sender/actor resolution.
+
+The accepted mailbox split is explicit:
+- `atm peek` inspects one selected message without mutating mailbox state
+- `atm list` inspects queue metadata without mutating mailbox state
+- `atm read` is the owner-only mutating detail view
+- mailbox inspection paths must not change read, seen, or acknowledgement
+  state
 
 ### 13.3 File Policy
 
@@ -1596,9 +1649,16 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
-- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- the default ATM-owned retained log file is
+  `{ATM_HOME}/.atm/logs/atm.log.jsonl`
 - `ATM_LOG_DIR` overrides the exact retained log directory
-- retained log path ownership is host-scoped and independent of `ATM_HOME`
+- without `ATM_LOG_DIR`, the retained log path is derived from the accepted
+  `ATM_HOME` root for the active installation
+- the invocation directory is not a daemon/socket/database selector; daemon
+  socket, lock, database, and retained-log paths remain anchored to the
+  accepted `ATM_HOME` root
+- after `ATM_HOME` resolves the canonical host runtime root, the invocation
+  directory is used only for workspace config discovery
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version
@@ -2185,11 +2245,13 @@ Single-write-path guardrail:
   write path
 
 Current owner-layer boundaries:
-- Claude-owned inbox compatibility surface:
-  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
-  delegate through injected store adapters; low-level source-file discovery,
-  lock/reload orchestration, and persistence remain internal leaf helpers
-  behind that seam during the Phase R store transition
+- Historical Claude-owned inbox compatibility surface:
+  AD.3 retired the Claude inbox append backend and the old nudge/context
+  injection path. The retained mailbox commands now cross the
+  `RetainedServiceRuntime` seam and delegate through injected store adapters;
+  low-level source-file discovery, lock/reload orchestration, and persistence
+  remain internal leaf helpers behind that seam during the Phase R store
+  transition.
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -2509,13 +2571,14 @@ Historical Claude-owned shared inbox compatibility previously existed for:
   top-level JSON array of inbox messages
 
 Phase `AD` rule:
-- Claude context injection through inbox append is retired per `ADR-019`
+- Phase `AD.3` completes retirement of Claude context injection through inbox
+  append per `ADR-019`
 - no accepted runtime path requires Claude-owned shared inbox files
 
 Architectural rule:
-- Claude inbox-append runtime behavior and the concrete `atm-storage-claude`
-  backend are retired from the accepted line because Claude Code no longer
-  uses them
+- Claude inbox-append runtime behavior and the former
+  `crates/atm-storage-claude` backend are retired from the accepted line
+  because Claude Code no longer uses them
 - durable SQLite state is ATM's authoritative mail state
 - send/ack must not depend on Claude `.json` or `.jsonl` mailbox writes
 - the shared backend contract remains required so SQLite stays one backend
@@ -2594,24 +2657,38 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
-- the shipped default emitter path is `atm internal-nudge`
+- the shipped default emitter path is the built-in in-process
+  `PostSendHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
-  SQLite lookup for this feature
+  SQLite lookup for this feature, and any retained `atm internal-nudge`
+  helper must not reopen the lookup after it receives resolved input
+- the authoritative Phase AD post-send smoke lane is fixed to five closure
+  cases only:
+  - external hook success
+  - external hook partial failure
+  - built-in fallback across both tmux and graft sinks
+  - override reset-to-default after deleting a prior stored override row
+  - explicit disable behavior when the retained design keeps that state
+- resolved built-in template lifecycle is explicit: no row => product
+  default, override row => stored text, disabled row => no emission,
+  clear/reset => row deletion
 - external `[[atm.post_send_hooks]]` commands remain the explicit full-override
   path
 - post-send emission failure is logged and returned as a sender-visible warning
 - post-send emission is not durable message delivery and does not redefine send
   success
-- the accepted seam is a dedicated post-send emitter, not
-  `DeliveryPlan`/`NotificationSink`
 - the accepted compact built-in acknowledge forms are:
   - `<atm kind="ack" from="..." message-id="..."/>`
   - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
+- the accepted seam is a dedicated post-send emitter with optional direct
+  notification-log append at the event site, not
+  `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
+  worker/runtime
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -2871,7 +2948,7 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- the historical `R.17` daemon-owned queued notifier worker is being retired by
+- the historical `R.17` daemon-owned queued notifier worker was retired by
   `AD.5`
 - the accepted runtime must not require a daemon notification queue/worker just
   to append one post-send event or warning

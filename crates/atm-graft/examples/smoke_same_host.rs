@@ -5,20 +5,23 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use atm_core::ack::AckRequest;
+use atm_core::boundary::PostSendHookEvent;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
-use atm_core::types::{AckActivationMode, AgentName, ReadSelection, TeamName};
-use atm_graft::{Event, GraftClient, GraftSession, GraftSessionOptions, HostNudgeInjector};
+use atm_core::types::{AgentName, ReadSelection, TeamName};
+use atm_graft::{
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+};
 use serde_json::json;
 
 #[derive(Debug)]
 struct RecordingInjector {
-    nudges: Mutex<Vec<Event>>,
+    nudges: Mutex<Vec<PostSendHookEvent>>,
     delivered_tx: mpsc::Sender<()>,
 }
 
 impl RecordingInjector {
-    fn first_nudge(&self) -> Option<Event> {
+    fn first_nudge(&self) -> Option<PostSendHookEvent> {
         self.nudges.lock().expect("nudges lock").first().cloned()
     }
 
@@ -28,8 +31,8 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: Event) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge);
+    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
+        self.nudges.lock().expect("nudges lock").push(nudge.clone());
         let _ = self.delivered_tx.send(());
         Ok(())
     }
@@ -126,9 +129,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let activation_snapshot = session.snapshot()?;
-    if activation_snapshot.state != atm_core::graft::AdvisorySessionState::Registered {
+    if activation_snapshot.state != GraftSessionState::Listening {
         return Err(io::Error::other(format!(
-            "expected registered graft session, found {:?}",
+            "expected listening graft session, found {:?}",
             activation_snapshot.state
         ))
         .into());
@@ -147,22 +150,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let nudge = injector
         .first_nudge()
         .ok_or_else(|| io::Error::other("graft injector delivered no nudge payload"))?;
-    if nudge.from != args.expected_sender {
+    if nudge.sender != args.expected_sender {
         return Err(io::Error::other(format!(
             "expected nudge sender {}, found {}",
-            args.expected_sender, nudge.from
+            args.expected_sender, nudge.sender
         ))
         .into());
     }
     if !nudge
-        .message
+        .description
         .as_str()
         .contains(&args.expected_nudge_substring)
     {
         return Err(io::Error::other(format!(
-            "expected nudge message to contain {:?}, found {:?}",
+            "expected nudge description to contain {:?}, found {:?}",
             args.expected_nudge_substring,
-            nudge.message.as_str()
+            nudge.description.as_str()
         ))
         .into());
     }
@@ -172,13 +175,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let read_outcome = session.read(ReadQuery::new(
         home_dir.clone(),
         args.workspace_root.clone(),
-        Some(args.agent.as_str()),
+        args.agent.parse().expect("caller"),
         Some(target_address.as_str()),
-        Some(args.team.as_str()),
+        args.team.parse().expect("team"),
         ReadSelection::All,
         false,
         false,
-        AckActivationMode::ReadOnly,
         Some(nudge_message_id.as_str()),
         None,
         None,
@@ -200,8 +202,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ack_outcome = session.ack(AckRequest {
         home_dir: home_dir.clone(),
         current_dir: args.workspace_root.clone(),
-        actor_override: Some(args.agent.clone()),
-        team_override: Some(args.team.clone()),
+        caller_identity: args.agent.parse().expect("caller"),
+        caller_team: args.team.parse().expect("team"),
         message_id: nudge.message_id,
         reply_body: "graft smoke ack reply".to_string(),
     })?;
@@ -209,9 +211,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let follow_up_outcome = session.send(SendRequest::new(
         home_dir,
         args.workspace_root.clone(),
-        Some(args.agent.as_str()),
+        args.agent.parse().expect("caller"),
         args.reply_target.as_str(),
-        Some(args.team.as_str()),
+        args.team.parse().expect("team"),
         SendMessageSource::Inline("graft smoke follow-up".to_string()),
         None,
         false,
@@ -232,15 +234,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         serde_json::to_string_pretty(&json!({
             "status": "passed",
-            "session_state_before_close": activation_snapshot.state,
+            "session_state_before_close": format!("{:?}", activation_snapshot.state),
             "nudge_count": injector.count(),
-            "nudge_message_id": nudge.message_id,
-            "nudge_from": nudge.from,
-            "nudge_text": nudge.message.as_str(),
-            "read_selected_message_id": read_selected_message_id,
-            "ack_message_id": ack_outcome.message_id,
-            "ack_reply_message_id": ack_outcome.reply_message_id,
-            "follow_up_message_id": follow_up_outcome.message_id,
+            "injected_nudge": {
+                "sender": nudge.sender.to_string(),
+                "sender_team": nudge.sender_team.to_string(),
+                "recipient": nudge.recipient.to_string(),
+                "recipient_team": nudge.recipient_team.to_string(),
+                "message_id": nudge.message_id.to_string(),
+                "description": nudge.description,
+                "requires_ack": nudge.requires_ack,
+                "is_ack": nudge.is_ack,
+                "task_id": nudge.task_id.map(|task_id| task_id.to_string()),
+            },
+            "read_selected_message_id": read_selected_message_id.to_string(),
+            "ack_message_id": ack_outcome.message_id.to_string(),
+            "ack_reply_disposition": ack_outcome.reply_disposition,
+            "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );
 

@@ -1,0 +1,97 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CASE-SENSITIVITY-SELF-ADDRESS-001>
+  a triage:Finding ;
+  triage:findingId "CASE-SENSITIVITY-SELF-ADDRESS-001" ;
+  triage:title "Case-sensitive comparisons in self-address/self-ack detection: two independent occurrences" ;
+  triage:description "Two DISTINCT case-sensitivity gaps, independently introduced on different branches: (a) validate_non_self_recipient (send/mod.rs:642) — case-sensitive == operator on AD.33, NO regression test coverage, NO fix yet. (b) is_self_ack_reply_target (ack/mod.rs:765) — case-sensitive == operator first appears on AD.34, carried forward to AD.35, NO fix yet. Each occurrence must be fixed on its earliest branch independently. AD.33's gap does NOT depend on AD.34; AD.33 must not merge-forward-defer to a later branch." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "SECURITY" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> ;
+  triage:notes "AD.33 occurrence (a) is IMMEDIATE dispatch target for AD33-FIX-3. AD.34/AD.35 occurrence (b) is FYI-only for this triage pass; team-lead will handle separately in addendum. Each branch must fix its own occurrence; no merge-forward deferral." .
+
+<urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 642 ;
+  triage:snippet "if sender == &recipient.agent && sender_team == &recipient.team {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21> ;
+  triage:notes "validate_non_self_recipient (AD.33): case-sensitive == operator; no eq_ignore_ascii_case, no case-variant regression test. Must be fixed on AD.33 independently; no merge-forward deferral to AD.34. This is DISTINCT from AD.34's is_self_ack_reply_target." .
+
+<urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 765 ;
+  triage:snippet "actor == &reply_target.agent && team == &reply_target.team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "ffe281ef16c7742b0042e21185965a50d0cc470f" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f> ;
+  triage:notes "is_self_ack_reply_target (AD.34): case-sensitive == operator; no eq_ignore_ascii_case. First introduced on AD.34. FYI-only for this triage pass; team-lead will flag separately for later dispatch in addendum (not part of AD33-FIX-3 batch)." .
+
+<urn:atm:triage:occurrence/CASE-SENSITIVITY-SELF-ADDRESS-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 765 ;
+  triage:snippet "actor == &reply_target.agent && team == &reply_target.team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68> ;
+  triage:notes "is_self_ack_reply_target (AD.35): same case-sensitive gap as AD.34; commit carried forward without fix. Will be closed when AD.34's fix is merge-forwarded." .
+
+<urn:atm:triage:worktree/AD31/5891c114b9e913313b46534375f038a2478667e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46be50b0322ab6e6be5860bb989ad66dc5bc87ad>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/f6b219178de77ebc100402fd66653c73c7c27e21>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "f6b219178de77ebc100402fd66653c73c7c27e21" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/ffe281ef16c7742b0042e21185965a50d0cc470f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "ffe281ef16c7742b0042e21185965a50d0cc470f" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "ff9b4a1bb6faf48f9b9a976b44f6d99edb029a68" ;
+  triage:orderIndex 35 .

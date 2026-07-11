@@ -1,10 +1,14 @@
 use anyhow::Result;
-use atm_core::home;
 use atm_core::list::ListQuery;
 use clap::Args;
 
+use crate::commands::caller_context::{
+    CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
+};
 use crate::commands::util::parse_timestamp;
-use crate::composition::CliComposition;
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -49,11 +53,15 @@ pub struct ListCommand {
 
 impl ListCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("list")?;
         let json = self.json;
-        let composition = CliComposition::bootstrap("list", observability)?;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
+        let composition = CliComposition::bootstrap(
+            "list",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
         let outcome = composition.list(query)?;
         output::print_list_result(&outcome, json)
     }
@@ -63,14 +71,18 @@ impl ListCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ListQuery> {
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
         ListQuery::new(
             home_dir,
             current_dir,
-            self.actor.as_deref(),
+            caller_context.caller_identity,
             self.target.as_deref(),
-            self.team.as_deref(),
+            caller_context.caller_team,
             selection_mode,
             selection_mode != atm_core::types::ReadSelection::All,
             self.limit,
@@ -97,7 +109,10 @@ impl ListCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::ROLE_TEAM_LEAD;
     use atm_core::types::ReadSelection;
+    use serial_test::serial;
 
     use super::ListCommand;
 
@@ -124,6 +139,7 @@ mod tests {
         let mut command = base_command();
         command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
         command.limit = Some(12);
         command.task = Some("TASK-22".to_string());
         command.contains = Some("needle".to_string());
@@ -137,6 +153,39 @@ mod tests {
             Some("TASK-22")
         );
         assert_eq!(query.contains_filter.as_deref(), Some("needle"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+
+        let query = base_command()
+            .build_query(".".into(), ".".into())
+            .expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), "sender-a");
+        assert_eq!(query.caller_team.as_str(), "env-team");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_prefers_cli_overrides_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.team = Some("override-team".to_string());
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(query.caller_team.as_str(), "override-team");
     }
 
     fn base_command() -> ListCommand {

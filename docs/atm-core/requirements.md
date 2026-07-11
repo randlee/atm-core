@@ -299,8 +299,10 @@ Required `atm-core` crate rules:
   - inbox ingress
   - inbox export
   - config ingress
-  - watcher / reconcile (historical only; retired per `ADR-019`, see §10.1)
   - notifier-facing service integration
+- `atm-core` must not retain watch/reconcile as accepted boundary traits after
+  `AD.4`; any surviving watch/reconcile DTOs are historical-only protocol
+  scaffolding until a later deletion sprint removes them
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - one unified mutable message-state surface
@@ -461,14 +463,20 @@ Required config rules:
   `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
   fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
   treated as compatibility aliases
-- `[atm].identity` is obsolete and must not participate in runtime identity
-  resolution; doctor should report it as configuration drift when present
+- `[atm].identity` and the legacy top-level `identity` key are obsolete and
+  must not participate in runtime identity resolution; doctor should report
+  them as configuration drift when present
 
 Required caller-context rules:
 - the authoritative command-by-command caller-context matrix is
   `docs/requirements.md` §4.1
 - `atm-core` must implement that matrix exactly; crate-local code must not
   widen accepted caller identity/team sources beyond the product matrix
+- `atm-core` owns the service-layer mailbox split:
+  - `peek` and `list` are inspection-only queries
+  - `send`, `read`, `ack`, and `clear` are owner-only mutating operations
+- only inspection-only service calls may accept an
+  impersonation-equivalent caller-context override
 - where a command requires caller identity, runtime identity must come from the
   documented explicit command override when supported or invoking-shell
   `ATM_IDENTITY`
@@ -496,6 +504,8 @@ Required caller-context rules:
   in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
+- canonical same-team self-addressed sends must fail in the shared `atm-core`
+  send path before persistence and before any `dry-run` success result
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
   `command` argv
 - `recipient` must be one concrete recipient name or `*`
@@ -523,10 +533,17 @@ Required caller-context rules:
     pane mapping for the recipient
 - the hook must run after successful non-`dry-run` `atm send`
 - the hook must also run after successful `atm ack`, using the reply message as
-  the hook subject
+  the hook subject when ack emitted a reply
+- if `atm ack` suppresses a historical self-addressed reply, the
+  acknowledgement still succeeds but no ack hook fires because no outbound
+  reply message exists
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
+- hook configuration lookup must resolve from the sender's authoritative ATM
+  roster `home_dir` metadata
 - if no matching external rule is configured, `atm-core` must still hand off
-  the same canonical event to the shipped built-in `atm internal-nudge` path
+  the canonical post-send event to the shipped built-in in-process delivery
+  path; any retained `atm internal-nudge` helper uses the same resolved event
+  shape through `InternalNudgeEnvelope`
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
@@ -536,13 +553,29 @@ Required caller-context rules:
 - once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
-- `atm-core` owns canonical post-send event construction, but it must not own
-  built-in XML template storage, placeholder substitution policy, or sink-local
-  transport behavior
+- repo-tracked `.atm.toml` is dogfood/bootstrap config only; it must not carry
+  live post-send pane-routing authority through committed
+  `[[rmux.windows.panes]].tmux_pane_id` values
+- `atm-core` owns canonical post-send event construction plus the shared
+  resolved-template helper used by retained built-in nudge paths, but it must
+  not own sink-local transport behavior
 - any team-scoped built-in template override lookup must cross a dedicated
   storage-neutral `NudgeTemplateOverrideStore` boundary before
   `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
   inside the emitter path
+- the accepted built-in template lifecycle is explicit:
+  - no row => product default
+  - override row => stored non-empty template body
+  - disabled row => no built-in nudge emission
+  - clear/reset => delete the row and fall back to product default
+- empty-string template bodies are invalid ATM input and must not be used as a
+  hidden disable signal at any layer
+- any retained built-in helper envelope is separate from the external hook
+  payload:
+  - external hooks receive `ATM_POST_SEND`
+  - retained `atm internal-nudge` helper receives `ATM_INTERNAL_NUDGE`
+  - `ATM_INTERNAL_NUDGE` carries the canonical event, sink target, resolved
+    template kind, and resolved template body or explicit disabled state
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for
@@ -550,8 +583,8 @@ Required caller-context rules:
   identity fallback
 
 Required doctor rules:
-- `atm doctor` must flag obsolete `[atm].identity` when present with
-  `ATM_WARNING_IDENTITY_DRIFT`
+- `atm doctor` must flag obsolete config identity fields (`[atm].identity` and
+  legacy top-level `identity`) when present with `ATM_WARNING_IDENTITY_DRIFT`
 - `atm doctor` must compare canonical ATM roster truth against
   `config.json.members`
 - ATM roster members missing from `config.json` are findings
@@ -586,6 +619,9 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `add-member` must persist the member's durable `home_dir` on the canonical
+  ATM roster row and project that same `home_dir` into compatibility
+  `config.json.members`
 - `update-member` must validate team existence and require an existing member
   before mutating canonical ATM roster truth
 - `update-member` must be the accepted repair path for mutable canonical member
@@ -597,8 +633,11 @@ Required service rules:
   - `home_dir` = durable SQL-backed agent-home directory for the member; for
     worktree-backed members it preserves the worktree home and the canonical
     association back to the owning main repo
-  - `live_cwd` = runtime-observed in-memory working directory after any `cd`
-  - `launch_cwd` = startup-only current-directory snapshot used for logging
+  - `live_cwd` = runtime-only working-directory overlay for the invoking ATM
+    member when the active CLI/doctor process can bind `ATM_IDENTITY` to that
+    displayed member; it is not durable roster metadata
+  - `launch_cwd` = startup-only current-directory snapshot emitted to ATM CLI
+    startup logs; it is not durable roster metadata
 - no accepted `atm-core` surface may use bare `cwd` when `live_cwd` or
   `launch_cwd` is the real meaning
 - `atm-core` must prefer extending existing roster-row and runtime-roster

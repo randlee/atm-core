@@ -1,0 +1,241 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DOC-001>
+  a triage:Finding ;
+  triage:findingId "DOC-001" ;
+  triage:title "CLAUDE.md still documents .atm.toml [atm].identity fallback, contradicting AD.2's own acceptance criterion" ;
+  triage:description "CLAUDE.md:150 says '.atm.toml at repo root sets identity ... no need to prefix with ATM_IDENTITY=' -- directly contradicts AD.2's acceptance criterion that ATM_IDENTITY (env or explicit override) is the only accepted runtime identity source. CLAUDE.md was an explicit Exact Target in sprint-AD2.md left unmodified. Found by quality-mgr during AD.2-QA-1 on PR #450." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001/S11/1> ;
+  triage:openOn <urn:atm:triage:worktree/S1/b7ee355> ;
+  triage:openOn <urn:atm:triage:worktree/S2/be70a13> ;
+  triage:openOn <urn:atm:triage:worktree/S3/94e75df> ;
+  triage:openOn <urn:atm:triage:worktree/S4/a41348f> ;
+  triage:openOn <urn:atm:triage:worktree/S5/e3a9093> ;
+  triage:openOn <urn:atm:triage:worktree/S6/836bd91> ;
+  triage:openOn <urn:atm:triage:worktree/S7/448de22> ;
+  triage:openOn <urn:atm:triage:worktree/S8/345ab8c> ;
+  triage:openOn <urn:atm:triage:worktree/S9/57f1d35> ;
+  triage:openOn <urn:atm:triage:worktree/S10/5563bba> ;
+  triage:openOn <urn:atm:triage:worktree/S11/d709cb7> ;
+  triage:promoteTo <urn:atm:triage:worktree/S11/d709cb7> ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot." ;
+  triage:triagedAt "2026-07-03T15:30:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/DOC-001/S1/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee355" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/b7ee355> .
+
+<urn:atm:triage:occurrence/DOC-001/S2/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/be70a13> .
+
+<urn:atm:triage:occurrence/DOC-001/S3/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/94e75df> .
+
+<urn:atm:triage:occurrence/DOC-001/S4/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/a41348f> .
+
+<urn:atm:triage:occurrence/DOC-001/S5/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a9093" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/e3a9093> .
+
+<urn:atm:triage:occurrence/DOC-001/S6/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd91" ;
+  triage:occursIn <urn:atm:triage:worktree/S6/836bd91> .
+
+<urn:atm:triage:occurrence/DOC-001/S7/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de22" ;
+  triage:occursIn <urn:atm:triage:worktree/S7/448de22> .
+
+<urn:atm:triage:occurrence/DOC-001/S8/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8c" ;
+  triage:occursIn <urn:atm:triage:worktree/S8/345ab8c> .
+
+<urn:atm:triage:occurrence/DOC-001/S9/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35" ;
+  triage:occursIn <urn:atm:triage:worktree/S9/57f1d35> .
+
+<urn:atm:triage:occurrence/DOC-001/S10/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/5563bba> .
+
+<urn:atm:triage:occurrence/DOC-001/S11/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 150 ;
+  triage:snippet ".atm.toml at repo root sets `identity = \"team-lead\"` and `default_team = \"atm-dev\"`, so all ATM CLI commands automatically use the correct identity and team. No need to prefix with `ATM_IDENTITY=` or `--team`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb7" ;
+  triage:occursIn <urn:atm:triage:worktree/S11/d709cb7> .
+
+<urn:atm:triage:worktree/S1/b7ee355>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s1-caller-identity-ownership-restore" ;
+  triage:headSha "b7ee355" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S2/be70a13>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair" ;
+  triage:headSha "be70a13" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S3/94e75df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement" ;
+  triage:headSha "94e75df" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/a41348f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal" ;
+  triage:headSha "a41348f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S5/e3a9093>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment" ;
+  triage:headSha "e3a9093" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/S6/836bd91>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "836bd91" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/S7/448de22>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "448de22" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/S8/345ab8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "345ab8c" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/S9/57f1d35>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "57f1d35" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/S10/5563bba>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "5563bba" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/S11/d709cb7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "d709cb7" ;
+  triage:orderIndex 11 .

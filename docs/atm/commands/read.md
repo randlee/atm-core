@@ -13,7 +13,6 @@ CLI ownership for `atm read`:
 
 Supported selectors/filters:
 
-- target inbox / agent
 - `--team`
 - `--all`
 - `--unread` and legacy alias `--unread-only`
@@ -24,15 +23,16 @@ Supported selectors/filters:
 - `--since`
 - `--from`
 - `--since-last-seen` and `--no-since-last-seen`
-- `--no-mark`
-- `--no-update-seen`
 - `--timeout`
 - `--json`
-- `--as`
 
 Selection/rendering contract:
 
 - `atm read` returns one full message only
+- `atm read` is owner-only and may mutate read / seen state
+- `atm read` never creates new pending-ack state on display
+- use `atm peek` for non-mutating mailbox inspection, including inspection of
+  another member with `--as`
 - exact `--message-id` selection bypasses logical terminal-node collapse so the
   addressed physical message is returned directly
 - task/from/contains/queue filters otherwise operate on logical current

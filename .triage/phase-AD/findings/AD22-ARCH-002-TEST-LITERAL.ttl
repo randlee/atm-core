@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD22-ARCH-002-TEST-LITERAL>
+  a triage:Finding ;
+  triage:findingId "AD22-ARCH-002-TEST-LITERAL" ;
+  triage:title "Hardcoded team-lead@atm-dev literal in scripts/test_atm_nudge.py" ;
+  triage:description "RULE-008 violation: scripts/test_atm_nudge.py hardcodes production literal \"team-lead@atm-dev\" in two ack-shape tests (lines 305, 311, 319, 326), despite TEST_TEAM_LEAD/TEST_TEAM constants being defined for exactly this purpose." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "BLOCKING-TEST-LITERALS" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T17:11:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/4> ;
+  triage:openOn <urn:atm:triage:worktree/S22/4db561aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/S22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/1>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 305 ;
+  triage:snippet "\"from\": \"team-lead@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/2>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 311 ;
+  triage:snippet "'<atm from=\"team-lead@atm-dev\" message-id=\"01JACKTEST00000000000000000\" kind=\"ack\"/>'," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/3>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 319 ;
+  triage:snippet "\"from\": \"team-lead@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/4db561aa> .
+
+<urn:atm:triage:occurrence/AD22-ARCH-002-TEST-LITERAL/S22/4>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 326 ;
+  triage:snippet "'<atm from=\"team-lead@atm-dev\" message-id=\"01JACKTASK0000000000000000\" kind=\"ack\" task-id=\"AD.22\"/>'," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/4db561aa> .
+
+<urn:atm:triage:worktree/S21/66fcea4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/S22/4db561aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "4db561aa" ;
+  triage:orderIndex 22 .

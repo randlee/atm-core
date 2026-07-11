@@ -1,0 +1,86 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AD28-RBP-F002" ;
+  triage:title "No rationale comment for Arc<RwLock<SessionSnapshot>> choice" ;
+  triage:description "In crates/atm-graft/src/runtime.rs, multiple uses of Arc<RwLock<SessionSnapshot>> lack rationale comments explaining why this concurrency primitive was chosen over alternatives (Mutex, parking_lot variants, etc.) for shared cross-thread session state." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-graft/src/runtime.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T17:51:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/5> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/835a6247> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 308 ;
+  triage:snippet "pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 187 ;
+  triage:snippet "snapshot: &Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 200 ;
+  triage:snippet "snapshot: &Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 213 ;
+  triage:snippet "snapshot: &Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F002/pAD-s28/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 588 ;
+  triage:snippet "Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:worktree/pAD-s28/835a6247>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:orderIndex 0 .

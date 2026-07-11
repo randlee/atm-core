@@ -1,9 +1,9 @@
 ---
 id: AD.26
 title: Post-Send Boundary Wiring And Hook Accounting Repair
-status: planned
-branch: feature/pAD-s26-post-send-boundary-wiring-and-accounting
-worktree: ../atm-core-worktrees/feature/pAD-s26-post-send-boundary-wiring-and-accounting
+status: complete
+branch: feature/pAD-s26-rule001-observability-seam-closure
+worktree: ../atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure
 target: integrate/phase-AD
 ---
 

@@ -59,7 +59,7 @@ after the command entrypoint resolves them once:
 ```rust
 pub fn command_invocation_dir() -> Result<PathBuf, AtmError>;
 
-pub enum CliBootstrapError {
+pub(crate) enum CliBootstrapError {
     AtmHomeUnresolved {
         command: &'static str,
     },
@@ -75,7 +75,7 @@ pub enum CliBootstrapError {
     },
 }
 
-pub fn bootstrap(
+pub(crate) fn bootstrap(
     command: &'static str,
     observability: &CliObservability,
     invocation_dir: &Path,

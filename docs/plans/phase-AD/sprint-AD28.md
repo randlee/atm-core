@@ -1,9 +1,9 @@
 ---
 id: AD.28
 title: atm-graft Host-Nudge Deadline Race Hardening
-status: planned
-branch: feature/pAD-s28-graft-host-nudge-deadline-race-hardening
-worktree: ../atm-core-worktrees/feature/pAD-s28-graft-host-nudge-deadline-race-hardening
+status: complete
+branch: feature/pAD-s28-atm-graft-timing-independent
+worktree: ../atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent
 target: integrate/phase-AD
 ---
 
@@ -51,6 +51,10 @@ impl TestReceiverReadyLatch {
     pub(crate) fn wait_until_listening(&self, timeout: Duration) -> Result<(), AtmError>;
 }
 ```
+
+The accepted implementation may keep the latch wait-side in the test harness
+and clone only the signal sender into the receiver-loop context, as long as the
+receiver loop signals readiness exactly once after the listener bind succeeds.
 
 Required runtime/test meaning after this sprint:
 

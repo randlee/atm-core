@@ -1,0 +1,141 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD10-CWDFALLBACK-001>
+  a triage:Finding ;
+  triage:findingId "AD10-CWDFALLBACK-001" ;
+  triage:title "Unmarked legacy 'cwd' compatibility fallback still live in sender_config_root(), contradicting sprint's own obsolescence instructions" ;
+  triage:description "AD.10-QA-1 verdict (blocking, ARCH-AD10-001, PR #458) reports crates/atm-core/src/send/hook.rs sender_config_root() still contains a legacy 'cwd' compatibility fallback path that AD.10's own obsolescence instructions required removing or marking obsolete. Both arch-qa (blocking) and rust-qa-agent (important) flagged this as a violation of sprint AD.10's own documented requirements. According to sprint-AD10.md (line 73), any compatibility field must be marked 'Phase AD obsolete: derived compatibility field only', but this fallback bears no such marking." ;
+  triage:category "AD10" ;
+  triage:phaseId "phase-AD" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-04T19:43:08Z"^^xsd:dateTime ;
+  triage:resolutionNote "TTL housekeeping closure: quality-mgr's Phase AD phase-ending review confirmed this finding was already resolved on integrate/phase-AD @ 102026285f45ba8685a8b787379c2769753add0d after the accepted Phase AD sprint and postmortem-fix merge wave. This record remained open only as stale triage metadata." ;
+  triage:rationale "Closure headSha records the later integrate/phase-AD verification commit used during the phase-ending review. Child occurrences and worktree snapshots intentionally remain as historical first-observed evidence on earlier branch heads and are not retroactively rewritten unless that exact occurrence was re-verified closed on the same branch snapshot." ;
+  triage:triagedAt "2026-07-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s6/0704764e> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s7/0b13b7eb> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s8/f90f04f6> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s9/138e85ea> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s10/634feabb> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s11/1dc4f9a0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s10/634feabb> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 524 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s6/0704764e> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 670 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s7/0b13b7eb> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 706 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s8/f90f04f6> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 706 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s9/138e85ea> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 706 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "634feabb" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s10/634feabb> .
+
+<urn:atm:triage:occurrence/AD10-CWDFALLBACK-001/S11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 706 ;
+  triage:snippet "metadata.get(\"cwd\").and_then(Value::as_str) — unmarked legacy fallback in sender_config_root() or_else block" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s11/1dc4f9a0> .
+
+<urn:atm:triage:worktree/pAD-s6/0704764e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification" ;
+  triage:headSha "0704764e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAD-s7/0b13b7eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter" ;
+  triage:headSha "0b13b7eb" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAD-s8/f90f04f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s8-graft-post-send-emitter" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter" ;
+  triage:headSha "f90f04f6" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAD-s9/138e85ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path" ;
+  triage:headSha "138e85ea" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAD-s10/634feabb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s10-directory-metadata-and-doctor-contract-cleanup" ;
+  triage:headSha "634feabb" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/pAD-s11/1dc4f9a0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s11-smoke-and-readiness-closeout" ;
+  triage:headSha "1dc4f9a0" ;
+  triage:orderIndex 11 .

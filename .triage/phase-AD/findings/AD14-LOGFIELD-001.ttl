@@ -1,0 +1,422 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD14-LOGFIELD-001>
+  a triage:Finding ;
+  triage:findingId "AD14-LOGFIELD-001" ;
+  triage:title "Structured-logging gate gaps in tracing::warn! calls (RSH-003/004/005)" ;
+  triage:description "Several tracing::warn! calls in advisory_runtime.rs, local_ipc_transport.rs, and runtime_health.rs touched by AD.14 omit the mandated subsystem=/action=/outcome= fields required by the ATM-daemon logging advisory, inconsistent with compliant calls elsewhere in the same files. Reported on AD14-QA-1 (PR #478) as three findings (RSH-003/004/005), consolidated here as one repeatable pattern. Note advisory_runtime.rs was deleted entirely in AD.15 (PR #480), so any occurrence in that file is now moot; check local_ipc_transport.rs and runtime_health.rs for remaining occurrences." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/runtime_health/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/runtime_health/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/runtime_health/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/runtime_health/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/runtime_health/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/runtime_health/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/runtime_health/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/runtime_health/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667c> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s17/0996fd33> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 184 ;
+  triage:snippet "tracing::warn!(%source, \"failed to spawn advisory-session sweep worker\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 547 ;
+  triage:snippet "tracing::warn!(\"advisory-session sweep worker panicked during shutdown\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/advisory_runtime/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 580 ;
+  triage:snippet "tracing::warn!(%error, \"advisory-session sweep failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 150 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC endpoint cleanup failed during drop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 740 ;
+  triage:snippet "tracing::warn!(error_code = %error.code, error_message = %error.message, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 769 ;
+  triage:snippet "tracing::warn!(subsystem = ..., action = ..., deadline_ms = ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 845 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC connection handling failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/local_ipc_transport/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 848 ;
+  triage:snippet "tracing::warn!(\"daemon local IPC connection worker panicked...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/runtime_health/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 307 ;
+  triage:snippet "tracing::warn!(subsystem = \"runtime_health\", action = \"shutdown_join_helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s14/runtime_health/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 775 ;
+  triage:snippet "tracing::warn!(%error, \"failed to hydrate test runtime status cache...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667c> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 149 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC endpoint cleanup failed during drop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 731 ;
+  triage:snippet "tracing::warn!(error_code = %error.code, error_message = %error.message, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 760 ;
+  triage:snippet "tracing::warn!(subsystem = ..., action = ..., deadline_ms = ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 833 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC connection handling failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/local_ipc_transport/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 836 ;
+  triage:snippet "tracing::warn!(\"daemon local IPC connection worker panicked...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/runtime_health/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 332 ;
+  triage:snippet "tracing::warn!(subsystem = \"runtime_health\", action = \"shutdown_join_helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s15/runtime_health/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 727 ;
+  triage:snippet "tracing::warn!(%error, \"failed to hydrate test runtime status cache...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s15/0ab5d105> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 149 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC endpoint cleanup failed during drop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 731 ;
+  triage:snippet "tracing::warn!(error_code = %error.code, error_message = %error.message, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 760 ;
+  triage:snippet "tracing::warn!(subsystem = ..., action = ..., deadline_ms = ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 833 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC connection handling failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/local_ipc_transport/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 836 ;
+  triage:snippet "tracing::warn!(\"daemon local IPC connection worker panicked...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/runtime_health/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 332 ;
+  triage:snippet "tracing::warn!(subsystem = \"runtime_health\", action = \"shutdown_join_helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s16/runtime_health/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 727 ;
+  triage:snippet "tracing::warn!(%error, \"failed to hydrate test runtime status cache...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s16/c4653158> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 149 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC endpoint cleanup failed during drop\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 731 ;
+  triage:snippet "tracing::warn!(error_code = %error.code, error_message = %error.message, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 760 ;
+  triage:snippet "tracing::warn!(subsystem = ..., action = ..., deadline_ms = ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 833 ;
+  triage:snippet "tracing::warn!(%error, \"daemon local IPC connection handling failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/local_ipc_transport/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 836 ;
+  triage:snippet "tracing::warn!(\"daemon local IPC connection worker panicked...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/runtime_health/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 332 ;
+  triage:snippet "tracing::warn!(subsystem = \"runtime_health\", action = \"shutdown_join_helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:occurrence/AD14-LOGFIELD-001/pAD-s17/runtime_health/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 727 ;
+  triage:snippet "tracing::warn!(%error, \"failed to hydrate test runtime status cache...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s17/0996fd33> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAD-s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAD-s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 4 .

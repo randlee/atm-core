@@ -1,7 +1,7 @@
 ---
 id: AD.8
 title: Graft Post-Send Emitter
-status: planned
+status: complete
 branch: feature/pAD-s8-graft-post-send-emitter
 worktree: ../atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter
 target: integrate/phase-AD
@@ -23,34 +23,32 @@ target: integrate/phase-AD
 ## Exact Targets
 
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/send/tests.rs`
 - `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/graft.rs`
-- `crates/atm-daemon/src/advisory_runtime.rs`
-- `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-graft/src/lib.rs`
 - `crates/atm-graft/src/runtime.rs`
-- `crates/atm-graft/src/transport.rs`
 
 ## Interfaces To Add Or Modify
 
 ```rust
-pub struct GraftPostSendEmitter { /* owned dependencies */ }
-
-impl PostSendHookEmitter for GraftPostSendEmitter {
-    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
-}
+pub(crate) fn emit_post_send_effects(
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    graft_port: Option<&dyn GraftPostSendPort>,
+    recipient: &ResolvedRecipient,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+    messages: &[LogicalMessage],
+)
 ```
 
-```rust
-fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
-    self.graft_advisory.deliver_post_send(event)
-}
-```
-
-- modify the daemon/graft advisory handoff so post-send emission crosses the
-  accepted graft advisory/session seam only
-- modify graft receive-loop/runtime code so emitted nudges are injected through
-  the live advisory path rather than through retired mailbox-context paths
+- retain the existing `send/hook.rs` local `GraftPostSendEmitter` adapter; do
+  not introduce a second standalone emitter surface outside the current
+  post-send pipeline
+- keep graft post-send handoff behind `GraftPostSendPort`, with sender warning
+  generation living in `emit_post_send_effects`
+- add one shared graft runtime cleanup helper so all advisory-session
+  registration leak sites use the same unregister-on-failure contract
 - modify send/ack warning paths so graft-unavailable or advisory-delivery
   failures become sender-visible warnings with structured logs
 

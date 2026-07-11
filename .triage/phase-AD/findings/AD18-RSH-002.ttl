@@ -1,0 +1,223 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Canonical triage record for AD18-RSH-002
+# Root cause: Same as AD18-RSH-001 (crates/atm-core/src/home.rs line 18-19)
+# Issue: ATM_HOME environment variable has no length or UTF-8 validation bounds
+# Severity: Important (input-limits hardening tier)
+# Repeatable: false (specific validation gap, not pattern-based)
+
+<urn:atm:triage:finding/AD18-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AD18-RSH-002" ;
+  triage:title "ATM_HOME has no length/UTF-8 bound" ;
+  triage:description "rust-service-hardening RSH-002: ATM_HOME environment variable lacks length and UTF-8 validation bounds. Same root cause as AD18-RSH-001 in crates/atm-core/src/home.rs — input validation gap in the atm_home() function. Could surface as obscure low-level socket-path errors deep in an unrelated subsystem." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AD" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/home.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:relatedTo "AD18-RSH-001" ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s13/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s14/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s15/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s16/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s17/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s18/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s19/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/s20/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD18-RSH-002/integrate/18> ;
+  triage:openOn <urn:atm:triage:worktree/s13/222c57da> ;
+  triage:openOn <urn:atm:triage:worktree/s14/3af451b0> ;
+  triage:openOn <urn:atm:triage:worktree/s15/0ab5d105> ;
+  triage:openOn <urn:atm:triage:worktree/s16/c4653158> ;
+  triage:openOn <urn:atm:triage:worktree/s17/0996fd33> ;
+  triage:openOn <urn:atm:triage:worktree/s18/0c8b7d5b> ;
+  triage:openOn <urn:atm:triage:worktree/s19/f5e8732f> ;
+  triage:openOn <urn:atm:triage:worktree/s20/5ac7f11b> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/876241aa> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+# Occurrence in s13
+<urn:atm:triage:occurrence/AD18-RSH-002/s13/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "222c57da" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/222c57da> .
+
+# Occurrence in s14
+<urn:atm:triage:occurrence/AD18-RSH-002/s14/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "3af451b0" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/3af451b0> .
+
+# Occurrence in s15
+<urn:atm:triage:occurrence/AD18-RSH-002/s15/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/0ab5d105> .
+
+# Occurrence in s16
+<urn:atm:triage:occurrence/AD18-RSH-002/s16/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/c4653158> .
+
+# Occurrence in s17
+<urn:atm:triage:occurrence/AD18-RSH-002/s17/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/0996fd33> .
+
+# Occurrence in s18
+<urn:atm:triage:occurrence/AD18-RSH-002/s18/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/0c8b7d5b> .
+
+# Occurrence in s19
+<urn:atm:triage:occurrence/AD18-RSH-002/s19/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/f5e8732f> .
+
+# Occurrence in s20
+<urn:atm:triage:occurrence/AD18-RSH-002/s20/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/5ac7f11b> .
+
+# Occurrence in integrate/phase-AD
+<urn:atm:triage:occurrence/AD18-RSH-002/integrate/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 18 ;
+  triage:snippet "if let Some(home) = env::var_os(\"ATM_HOME\").filter(|value| !value.is_empty())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AD" ;
+  triage:headSha "876241aa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/876241aa> .
+
+# WorktreeSnapshot s13
+<urn:atm:triage:worktree/s13/222c57da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s13-ulid-message-identity-reset" ;
+  triage:headSha "222c57da" ;
+  triage:orderIndex 13 .
+
+# WorktreeSnapshot s14
+<urn:atm:triage:worktree/s14/3af451b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "3af451b0" ;
+  triage:orderIndex 14 .
+
+# WorktreeSnapshot s15
+<urn:atm:triage:worktree/s15/0ab5d105>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105" ;
+  triage:orderIndex 15 .
+
+# WorktreeSnapshot s16
+<urn:atm:triage:worktree/s16/c4653158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c4653158" ;
+  triage:orderIndex 16 .
+
+# WorktreeSnapshot s17
+<urn:atm:triage:worktree/s17/0996fd33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s17-boundary-reset-verification-closeout" ;
+  triage:headSha "0996fd33" ;
+  triage:orderIndex 17 .
+
+# WorktreeSnapshot s18
+<urn:atm:triage:worktree/s18/0c8b7d5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s18-raw-cli-runtime-root-unification" ;
+  triage:headSha "0c8b7d5b" ;
+  triage:orderIndex 18 .
+
+# WorktreeSnapshot s19
+<urn:atm:triage:worktree/s19/f5e8732f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s19-read-mutation-output-consistency-repair" ;
+  triage:headSha "f5e8732f" ;
+  triage:orderIndex 19 .
+
+# WorktreeSnapshot s20
+<urn:atm:triage:worktree/s20/5ac7f11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s20-read-body-search-metadata-consistency-repair" ;
+  triage:headSha "5ac7f11b" ;
+  triage:orderIndex 20 .
+
+# WorktreeSnapshot integrate/phase-AD
+<urn:atm:triage:worktree/integrate/876241aa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AD" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "876241aa" ;
+  triage:orderIndex 100 .

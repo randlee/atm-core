@@ -38,3 +38,6 @@ Optimization target:
   but `atm list` does not call it yet
 - `atm read` currently uses one metadata query, one content fetch for the
   selected row, and one optional message-state write when display state changes
+- when `--contains` is present, metadata rows still stay bounded to header data;
+  ATM first applies metadata-only filters and summary matching, then reloads
+  durable body text only for surviving summary-miss candidates

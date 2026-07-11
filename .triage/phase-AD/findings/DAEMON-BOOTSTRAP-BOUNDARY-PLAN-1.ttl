@@ -1,0 +1,140 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1>
+  a triage:Finding ;
+  triage:findingId "DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1" ;
+  triage:title "DaemonBootstrapClient boundary drift leaves stale atm-daemon and atm-daemon-bootstrap dependents in the machine-readable contract" ;
+  triage:description "The daemon-bootstrap boundary drift is between boundaries/atm-daemon-client/daemon-bootstrap.toml and docs/atm-daemon-client/boundaries.md, but the actual defect is in the TOML. The human-readable boundary and the accepted AC.8 plan both describe DaemonBootstrapClient as the thin-client bootstrap seam consumed by atm and atm-graft. The machine-readable record still allows atm-daemon and atm-daemon-bootstrap as dependents even though neither crate currently depends on atm-daemon-client and neither is recognized as a consumer in the prose boundary or the AC.8 relock plan. This is stale boundary widening, not a missing documentation update for legitimate live edges." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundary record plus paired docs/plans" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-11T00:51:33Z"^^xsd:dateTime ;
+  triage:resolutionNote "Implemented on fix/phase-AD-pm-boundary-violation by tightening DaemonBootstrapClient allowed_dependents to atm plus atm-graft only, aligning the paired prose boundary, and extending lint_boundaries.py with an active-boundary stale-allowed-dependent check backed by a regression test." ;
+  triage:rationale "The accepted boundary contract for this seam is no longer advisory. The machine-readable allow-list now matches the live Cargo graph, and the linter rejects future over-permissive allowed_dependents drift for active boundaries." ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> ;
+  triage:notes """Root cause:
+
+1. `boundaries/atm-daemon-client/daemon-bootstrap.toml:34` currently reads `allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-graft"]`. Both extra middle entries are stale.
+2. The paired prose boundary never adopted either extra dependent. `docs/atm-daemon-client/boundaries.md:16-18,21-23,28-30` consistently describes the seam as the shared thin-client bootstrap path for `atm` and `atm-graft`.
+3. The later AC.8 relock plan and closeout text also reaffirm that ownership: `docs/plans/phase-AC/sprint-AC8.md:97-110,123-135` and `docs/plans/phase-AC/plan-phase-AC.md:373-377` require `atm-daemon-client` to own the endpoint/bin bootstrap seam while `atm-graft` stops depending on `atm-daemon-bootstrap`.
+4. The current code confirms there is no live `atm-daemon-bootstrap -> atm-daemon-client` edge to justify the widened dependent set. `crates/atm-daemon-bootstrap/Cargo.toml` depends only on `atm-core` and `atm-runtime`, and `crates/atm-daemon-bootstrap/src/lib.rs` only installs the retained runtime factory and forwards `with_default_roster_store()`.
+5. The current code also confirms there is no live `atm-daemon -> atm-daemon-client` edge to justify the other widened dependent. The daemon does not appear as a consumer in `docs/atm-daemon-client/boundaries.md`, does not appear as a recognized consumer in the AC.8 relock plan, and the machine-readable contract already forbids the inverse owner edge `atm-daemon-client -> atm-daemon`, reinforcing that the bootstrap seam belongs to thin clients rather than the daemon runtime crate.
+
+Conclusion:
+- this is not an unresolved prose-doc omission
+- this is a stale machine-readable allowance that survived after the bootstrap seam was relocked to the thin-client consumers `atm` and `atm-graft`
+- both `atm-daemon` and `atm-daemon-bootstrap` are equally stale dependents and must be removed together
+
+Remediation plan:
+
+1. Tighten the machine-readable boundary:
+   - change `boundaries/atm-daemon-client/daemon-bootstrap.toml` so `allowed_dependents = ["atm", "atm-graft"]`
+   - keep `allowed_dependencies = ["atm-core", "atm-storage"]` and the existing forbidden edges unchanged unless a separate live-edge audit proves otherwise
+
+2. Tighten the prose boundary to match the relocked ownership explicitly:
+   - update `docs/atm-daemon-client/boundaries.md` to say the shared same-host bootstrap seam is consumed only by `atm` and `atm-graft`
+   - add one explicit note that `atm-daemon-bootstrap` is not a consumer of this seam after AC.8; it remains a retained-runtime/roster transitional shim only
+
+3. Tighten the planning artifacts so the same drift does not recur:
+   - update `docs/plans/phase-AC/sprint-AC8.md` and `docs/plans/phase-AC/plan-phase-AC.md` only if they still imply `atm-daemon-bootstrap` is a legitimate dependent of DaemonBootstrapClient anywhere outside the historical migration narrative
+   - otherwise leave the AC.8 narrative intact and cite it as the authority for the narrower dependent set
+
+4. Add regression validation to the fix:
+   - run `python3 .just/lint_boundaries.py`
+   - run `cargo tree -p atm-daemon-client -e normal --prefix none`
+   - run `! cargo tree -p atm-daemon-bootstrap -e normal --prefix none | rg "atm-daemon-client"`
+   - run `rg -n "^allowed_dependents = \\[\\\"atm\\\", \\\"atm-graft\\\"\\]$" boundaries/atm-daemon-client/daemon-bootstrap.toml`
+   - run `! rg -n "^allowed_dependents = .*atm-daemon.*|^allowed_dependents = .*atm-daemon-bootstrap.*" boundaries/atm-daemon-client/daemon-bootstrap.toml`
+   - closure requires the machine-readable boundary to assert exactly `allowed_dependents = ["atm", "atm-graft"]`; substring checks against only `atm-daemon-bootstrap` are not sufficient because they would miss a surviving or reintroduced `atm-daemon` entry
+
+5. Required lint-regression hardening:
+   - extend `.just/lint_boundaries.py` or the equivalent boundary-lint path so `BOUNDARY-DaemonBootstrapClient` fails not only when a live Cargo edge is missing from `allowed_dependents`, but also when `allowed_dependents` contains over-permissive entries with no corresponding live edge
+   - the hardening must concretely catch this defect class: a TOML that still lists `atm-daemon`, `atm-daemon-bootstrap`, or any other non-consumer crate in `allowed_dependents` must fail lint even if the boundary is otherwise permissive enough to satisfy the current under-permissive checks
+   - do not leave this as advisory-only validation; the fix is not closed until this over-permissive dependent class is mechanically enforced
+
+Files directly impacted by the fix:
+- `boundaries/atm-daemon-client/daemon-bootstrap.toml`
+- `docs/atm-daemon-client/boundaries.md`
+- possibly `docs/plans/phase-AC/sprint-AC8.md`
+- possibly `docs/plans/phase-AC/plan-phase-AC.md`
+- `.just/lint_boundaries.py` or the equivalent boundary-lint implementation plus any direct regression tests covering that enforcement
+
+What not to change:
+- do not widen the prose boundary to include `atm-daemon` or `atm-daemon-bootstrap`; that would document non-existent live dependents and would undo the AC.8 relock
+- do not move bootstrap helper ownership back into `atm-daemon-bootstrap`
+- do not treat `atm-daemon-bootstrap`'s transitional retained-runtime/roster shim as evidence that it owns the thin-client daemon bootstrap seam""" .
+
+<urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-client/daemon-bootstrap.toml" ;
+  triage:line 34 ;
+  triage:snippet "allowed_dependents = [\"atm\", \"atm-daemon\", \"atm-daemon-bootstrap\", \"atm-graft\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> .
+
+<urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon-client/boundaries.md" ;
+  triage:line 16 ;
+  triage:snippet "- own the shared same-host bootstrap value types, canonical endpoint/bin resolution helpers, and launch gate helpers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> .
+
+<urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon-client/boundaries.md" ;
+  triage:line 22 ;
+  triage:snippet "`resolve_daemon_bin()` as the shared thin-client bootstrap seam consumed by both `atm` and `atm-graft`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> .
+
+<urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/Cargo.toml" ;
+  triage:line 13 ;
+  triage:snippet "atm-core = { package = \"agent-team-mail-core\", path = \"../atm-core\", version = \"1.2.3\" }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> .
+
+<urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "pub fn install_sqlite_retained_runtime_factory()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AD/develop-2026-07-10> .
+
+<urn:atm:triage:worktree/integrate-AD/develop-2026-07-10>
+  a triage:WorktreeSnapshot ;
+  triage:branch "develop" ;
+  triage:path "/Users/randlee/Documents/github/atm-core" ;
+  triage:headSha "develop-2026-07-10" ;
+  triage:orderIndex 1000 .

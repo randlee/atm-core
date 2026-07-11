@@ -3,16 +3,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::boundary::{
-    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, NotificationSink,
-    RuntimeStorageFinalizer,
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, RuntimeStorageFinalizer,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_core::home::host_mail_db_path;
-use atm_core::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::host_runtime_dir, load_atm_config,
-};
+use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, load_atm_config};
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 use atm_storage_rusqlite::SqliteStorageBackend;
 
@@ -28,7 +24,6 @@ pub struct RuntimeAssemblyInputs {
     pub config_current_dir: PathBuf,
     pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-    pub notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -38,7 +33,6 @@ impl fmt::Debug for RuntimeAssemblyInputs {
             .field("config_current_dir", &self.config_current_dir)
             .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
-            .field("notification_sink", &"dyn NotificationSink")
             .finish()
     }
 }
@@ -50,6 +44,7 @@ pub struct RuntimeAssembly {
         Arc<dyn SharedMessageStore + Send + Sync>,
         Arc<dyn SharedRosterStore + Send + Sync>,
     >,
+    pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
@@ -60,6 +55,10 @@ impl fmt::Debug for RuntimeAssembly {
         f.debug_struct("RuntimeAssembly")
             .field("service_runtime", &self.service_runtime)
             .field("storage_backends", &self.storage_backends)
+            .field(
+                "nudge_template_override_store",
+                &"dyn NudgeTemplateOverrideStore",
+            )
             .field("doctor_ports", &self.doctor_ports)
             .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
@@ -89,7 +88,6 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
         inputs.config_current_dir.clone(),
         Arc::clone(&inputs.sqlite_observer),
         Arc::clone(&inputs.non_claude_outbound),
-        Arc::clone(&inputs.notification_sink),
     )
 }
 
@@ -98,7 +96,6 @@ fn assemble_sqlite_runtime_at_path(
     config_current_dir: PathBuf,
     sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
     let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
     let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
@@ -114,8 +111,8 @@ fn assemble_sqlite_runtime_at_path(
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
+        sqlite_backend.nudge_template_override_store(),
         non_claude_outbound,
-        notification_sink,
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
@@ -126,6 +123,7 @@ fn assemble_sqlite_runtime_at_path(
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
+        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -140,19 +138,6 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
             )
             .with_source(source)
     })?;
-    let notification_path = host_runtime_dir()?.join("notifications.jsonl");
-    if let Some(parent) = notification_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to create notification sink directory {}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Create a writable ATM runtime directory before constructing the default local retained runtime.",
-            )
-            .with_source(source)
-        })?;
-    }
     let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
         host_mail_db_path()?,
         RuntimeSqliteObservability::disabled(),
@@ -166,8 +151,8 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
+        sqlite_backend.nudge_template_override_store(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
-        Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
@@ -178,6 +163,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
+        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -213,6 +199,25 @@ pub fn with_default_roster_store<T>(
     let roster_store = assembly.roster_store_arc();
     let result = f(roster_store.as_ref());
     let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
+    match (result, finalize_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(_)) => Err(error),
+    }
+}
+
+pub fn with_default_nudge_template_override_store<T>(
+    f: impl FnOnce(&(dyn boundary::NudgeTemplateOverrideStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
+    let override_store = sqlite_backend.nudge_template_override_store();
+    let result = f(override_store.as_ref());
+    let finalize_result =
+        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
     match (result, finalize_result) {
         (Ok(value), Ok(())) => Ok(value),
         (Ok(_), Err(error)) => Err(error),

@@ -1,3 +1,4 @@
+use atm_core::caller_context::{CallerContextOverrides, resolve_cli_caller_context};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
@@ -64,8 +65,6 @@ impl CliObservability {
             (AtmErrorCode::InternalError, error.to_string())
         };
 
-        let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
-        let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
         let fallback_agent: AgentName = match "unknown".parse() {
             Ok(agent) => agent,
             Err(_) => return,
@@ -74,12 +73,19 @@ impl CliObservability {
             Ok(team) => team,
             Err(_) => return,
         };
-        let agent = identity.parse().unwrap_or(fallback_agent);
+        let caller_context = resolve_cli_caller_context(CallerContextOverrides::default()).ok();
+        let agent = caller_context
+            .as_ref()
+            .map(|context| context.caller_identity.clone())
+            .unwrap_or_else(|| fallback_agent.clone());
+        let team = caller_context
+            .map(|context| context.caller_team)
+            .unwrap_or(fallback_team);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: ATM_SERVICE_NAME,
             action: action_name(stage),
             outcome: outcome_label("error"),
-            team: team.parse().unwrap_or(fallback_team),
+            team,
             agent: agent.clone(),
             sender: agent,
             message_id: None,
@@ -261,7 +267,7 @@ mod tests {
                 .expect("concrete adapter");
 
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S")))
             .expect("emit backlog");
 
         let health = observability.health().expect("health");
@@ -292,7 +298,7 @@ mod tests {
                 .expect("concrete adapter");
 
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S")))
             .expect("emit backlog");
 
         let initial = observability
@@ -332,10 +338,10 @@ mod tests {
             })
             .expect("follow");
         observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440001")))
+            .emit(event(Some("01KRFK5QTF2R6NRS3Q0F8Z9K0T")))
             .expect("emit followed");
 
-        let followed_message_id = "550e8400-e29b-41d4-a716-446655440001"
+        let followed_message_id = "01KRFK5QTF2R6NRS3Q0F8Z9K0T"
             .parse::<atm_core::schema::AtmMessageId>()
             .expect("message id")
             .to_string();

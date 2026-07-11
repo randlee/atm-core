@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD14-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AD14-RSH-002" ;
+  triage:title "Advisory-stream connections can starve the unary control plane" ;
+  triage:description "MAX_CONCURRENT_CONNECTIONS = 64 (local_ipc_transport.rs) but each open advisory stream held a connection slot for its full session lifetime, while MAX_ADVISORY_SESSIONS = 128 (advisory_runtime.rs) permitted double that many concurrent sessions -- a burst of long-lived graft streams could exhaust the connection cap and start rejecting Send/List/Doctor/Heartbeat traffic. Reported on AD14-QA-1 (PR #478). AD15-QA-1 (PR #480) reports this is now CLOSED as a direct, correct side effect of AD.15's daemon-side advisory runtime deletion (rust-service-hardening-agent confirmed)." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD14-RSH-002/pAD-s14/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s14/2bc4667cf11b> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s15/0ab5d105502c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAD-s16/c465315814fe> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s14/2bc4667cf11b> ;
+  triage:mergeForwardNeeded true ;
+  triage:propagated false ;
+  triage:regressed false .
+
+<urn:atm:triage:occurrence/AD14-RSH-002/pAD-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 26 ;
+  triage:snippet "const MAX_ADVISORY_SESSIONS: usize = 128;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667cf11b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s14/2bc4667cf11b> .
+
+<urn:atm:triage:worktree/pAD-s14/2bc4667cf11b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s14-shared-graft-boundary-surface-reset" ;
+  triage:headSha "2bc4667cf11b" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s15/0ab5d105502c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s15-daemon-advisory-runtime-deletion" ;
+  triage:headSha "0ab5d105502c" ;
+  triage:orderIndex 2 ;
+  triage:status "fixed" ;
+  triage:closureEvidence "advisory_runtime.rs deleted; MAX_ADVISORY_SESSIONS constant removed" .
+
+<urn:atm:triage:worktree/pAD-s16/c465315814fe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s16-thin-graft-receiver-reset" ;
+  triage:headSha "c465315814fe" ;
+  triage:orderIndex 3 ;
+  triage:status "fixed" ;
+  triage:closureEvidence "advisory_runtime.rs deletion inherited through merge-forward" .

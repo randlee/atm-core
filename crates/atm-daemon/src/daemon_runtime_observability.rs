@@ -7,19 +7,15 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
 
-type ActionName = sc_observability_types::ActionName;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
+pub(crate) type DaemonActionName = sc_observability_types::ActionName;
+pub(crate) type DaemonOutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
     LocalIpcTransport,
-    AdvisoryRuntime,
-    NotificationRuntime,
     PeerTransport,
-    WatchRuntime,
-    ReconcileRuntime,
     RuntimeHealth,
     HostOwnership,
     LifecycleControl,
@@ -33,11 +29,7 @@ impl DaemonSubsystem {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
             Self::LocalIpcTransport => "local_ipc_transport",
-            Self::AdvisoryRuntime => "advisory_runtime",
-            Self::NotificationRuntime => "notification_runtime",
             Self::PeerTransport => "peer_transport",
-            Self::WatchRuntime => "watch_runtime",
-            Self::ReconcileRuntime => "reconcile_runtime",
             Self::RuntimeHealth => "runtime_health",
             Self::HostOwnership => "host_ownership",
             Self::LifecycleControl => "lifecycle_control",
@@ -56,8 +48,8 @@ pub enum TeamScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonEvent {
     pub subsystem: DaemonSubsystem,
-    pub action: ActionName,
-    pub outcome: OutcomeLabel,
+    pub action: DaemonActionName,
+    pub outcome: DaemonOutcomeLabel,
     pub team: TeamScope,
     pub agent: Option<AgentName>,
     pub sender: Option<AgentName>,
@@ -70,8 +62,8 @@ pub struct DaemonEvent {
 impl DaemonEvent {
     pub(crate) fn new(
         subsystem: DaemonSubsystem,
-        action: ActionName,
-        outcome: OutcomeLabel,
+        action: DaemonActionName,
+        outcome: DaemonOutcomeLabel,
         detail: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
@@ -97,26 +89,6 @@ impl DaemonEvent {
         self.agent = Some(agent);
         self
     }
-
-    pub(crate) fn with_sender(mut self, sender: AgentName) -> Self {
-        self.sender = Some(sender);
-        self
-    }
-
-    pub(crate) fn with_recipient(mut self, recipient: AgentName) -> Self {
-        self.recipient = Some(recipient);
-        self
-    }
-
-    pub(crate) fn with_message_id(mut self, message_id: AtmMessageId) -> Self {
-        self.message_id = Some(message_id);
-        self
-    }
-
-    pub(crate) fn with_task_id(mut self, task_id: TaskId) -> Self {
-        self.task_id = Some(task_id);
-        self
-    }
 }
 
 /// Daemon-runtime observability operations that stay daemon-specific above the
@@ -137,8 +109,8 @@ pub trait DaemonRuntimeObservability:
     fn emit_subsystem_event(
         &self,
         subsystem: DaemonSubsystem,
-        action: &ActionName,
-        outcome: &OutcomeLabel,
+        action: &DaemonActionName,
+        outcome: &DaemonOutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError>;
@@ -205,9 +177,9 @@ impl SubsystemObservability {
         // explicitly on the returned event instead of relying on logger-held mutable state.
         DaemonEvent::new(
             self.subsystem(),
-            ActionName::new(action)
+            DaemonActionName::new(action)
                 .expect("daemon subsystem action literals must satisfy ActionName validation"),
-            OutcomeLabel::new(outcome)
+            DaemonOutcomeLabel::new(outcome)
                 .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
             detail,
         )

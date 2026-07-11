@@ -1,7 +1,7 @@
 ---
 id: AD.6
 title: Post-Send Nudge Contract Simplification
-status: planned
+status: complete
 branch: feature/pAD-s6-post-send-nudge-contract-simplification
 worktree: ../atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification
 target: integrate/phase-AD

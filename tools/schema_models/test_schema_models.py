@@ -114,13 +114,10 @@ class SchemaModelTests(unittest.TestCase):
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
                 "read": True,
                 "summary": "ping",
-                "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
+                "message_id": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
             }
         )
-        self.assertEqual(
-            str(message.message_id),
-            "81286baa-e783-4f0c-bfea-82d070750fae",
-        )
+        self.assertEqual(message.message_id, "01JQYVB6W51Q2E7E6T3Y4Q9N2M")
 
     def test_atm_superset_named_thread_fields_validate(self) -> None:
         """Write-path: approved immutable compatibility fields stay typed explicitly."""
@@ -132,15 +129,12 @@ class SchemaModelTests(unittest.TestCase):
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
                 "read": True,
                 "summary": "thread update",
-                "parentMessageId": "81286baa-e783-4f0c-bfea-82d070750fae",
+                "parentMessageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                 "threadMode": "add-details",
                 "taskId": "TASK-123",
             }
         )
-        self.assertEqual(
-            str(message.parentMessageId),
-            "81286baa-e783-4f0c-bfea-82d070750fae",
-        )
+        self.assertEqual(message.parentMessageId, "01JQYVB6W51Q2E7E6T3Y4Q9N2M")
         self.assertEqual(message.threadMode, "add-details")
         self.assertEqual(message.taskId, "TASK-123")
 
@@ -154,7 +148,7 @@ class SchemaModelTests(unittest.TestCase):
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
                 "read": False,
                 "summary": "ATM warning",
-                "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
+                "message_id": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                 "atmAlertKind": "missing_team_config",
                 "missingConfigPath": os.path.join(
                     self._temp_home.name,
@@ -224,8 +218,8 @@ class SchemaModelTests(unittest.TestCase):
         self.assertIsNone(current_model.threadMode)
         self.assertIsNone(current_model.taskId)
 
-    def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
-        """Write-path: current top-level message_id stays typed as the UUID wire form."""
+    def test_top_level_message_id_rejects_uuid(self) -> None:
+        """Write-path: current top-level message_id is ULID-only."""
 
         with self.assertRaises(Exception):
             AtmInboxMessage.model_validate(
@@ -234,7 +228,7 @@ class SchemaModelTests(unittest.TestCase):
                     "text": "ping",
                     "timestamp": "2026-04-04T18:49:59.525805+00:00",
                     "read": True,
-                    "message_id": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
                 }
             )
 
@@ -257,14 +251,14 @@ class SchemaModelTests(unittest.TestCase):
             "timestamp": "2026-04-04T18:49:59.525805+00:00",
             "read": True,
             "summary": "ping",
-            "message_id": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+            "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
         }
 
         warnings: list[str] = []
 
         try:
             AtmInboxMessage.model_validate(raw_message)
-            self.fail("write-path validator should reject ULID in legacy top-level message_id")
+            self.fail("write-path validator should reject legacy alternate-id text")
         except Exception as exc:
             warnings.append(f"format warning: {exc}")
 

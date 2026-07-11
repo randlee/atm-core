@@ -1,0 +1,222 @@
+use std::env;
+
+use crate::error::AtmError;
+use crate::types::{AgentName, TeamName};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallerContext {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CallerIdentityOverride<'a>(pub &'a str);
+
+#[derive(Debug, Clone, Copy)]
+pub struct CallerTeamOverride<'a>(pub &'a str);
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CallerContextOverrides<'a> {
+    pub identity_override: Option<CallerIdentityOverride<'a>>,
+    pub team_override: Option<CallerTeamOverride<'a>>,
+}
+
+pub fn resolve_cli_inspection_caller_context(
+    overrides: CallerContextOverrides<'_>,
+) -> Result<CallerContext, AtmError> {
+    let caller_identity =
+        resolve_identity_component(overrides.identity_override.map(|value| value.0))?;
+    let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
+    Ok(CallerContext {
+        caller_identity,
+        caller_team,
+    })
+}
+
+pub fn resolve_cli_mutation_caller_context(
+    team_override: Option<CallerTeamOverride<'_>>,
+) -> Result<CallerContext, AtmError> {
+    resolve_cli_inspection_caller_context(CallerContextOverrides {
+        identity_override: None,
+        team_override,
+    })
+}
+
+pub fn resolve_cli_caller_context(
+    overrides: CallerContextOverrides<'_>,
+) -> Result<CallerContext, AtmError> {
+    resolve_cli_inspection_caller_context(overrides)
+}
+
+pub fn read_cli_identity_from_env() -> Result<Option<AgentName>, AtmError> {
+    read_env_raw("ATM_IDENTITY")?
+        .map(parse_identity)
+        .transpose()
+}
+
+pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
+    read_env_raw("ATM_TEAM")?.map(parse_team).transpose()
+}
+
+fn resolve_identity_component(explicit: Option<&str>) -> Result<AgentName, AtmError> {
+    let raw = match explicit {
+        Some(value) => value.to_string(),
+        None => match read_cli_identity_from_env()? {
+            Some(value) => return Ok(value),
+            None => return Err(AtmError::identity_unavailable()),
+        },
+    };
+    parse_identity(raw)
+}
+
+fn resolve_team_component(explicit: Option<&str>) -> Result<TeamName, AtmError> {
+    let raw = match explicit {
+        Some(value) => value.to_string(),
+        None => match read_cli_team_from_env()? {
+            Some(value) => return Ok(value),
+            None => return Err(AtmError::team_unavailable()),
+        },
+    };
+    parse_team(raw)
+}
+
+fn read_env_raw(key: &str) -> Result<Option<String>, AtmError> {
+    match env::var_os(key) {
+        None => Ok(None),
+        Some(value) => value.into_string().map(Some).map_err(|value| match key {
+            "ATM_IDENTITY" => AtmError::identity_invalid(format!(
+                "{key} must be valid UTF-8 text, got {:?}",
+                value
+            )),
+            "ATM_TEAM" => {
+                AtmError::team_invalid(format!("{key} must be valid UTF-8 text, got {:?}", value))
+            }
+            _ => unreachable!("caller context only reads ATM-owned keys"),
+        }),
+    }
+}
+
+fn parse_identity(raw: String) -> Result<AgentName, AtmError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AtmError::identity_invalid(
+            "caller identity must not be blank".to_string(),
+        ));
+    }
+
+    trimmed
+        .parse::<AgentName>()
+        .map_err(|error| AtmError::identity_invalid(error.message))
+}
+
+fn parse_team(raw: String) -> Result<TeamName, AtmError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AtmError::team_invalid(
+            "caller team must not be blank".to_string(),
+        ));
+    }
+
+    trimmed
+        .parse::<TeamName>()
+        .map_err(|error| AtmError::team_invalid(error.message))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::error_codes::AtmErrorCode;
+    use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
+
+    use super::{
+        CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
+        read_cli_identity_from_env, read_cli_team_from_env, resolve_cli_inspection_caller_context,
+        resolve_cli_mutation_caller_context,
+    };
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn explicit_overrides_win_over_environment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let override_team = format!("{TEST_TEAM}-alt");
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
+            team_override: Some(CallerTeamOverride(override_team.as_str())),
+        })
+        .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(context.caller_team.as_str(), override_team);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn environment_supplies_context_when_overrides_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn missing_identity_fails_before_dispatch() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", Some(TEST_TEAM))]);
+
+        let error = resolve_cli_mutation_caller_context(Some(CallerTeamOverride(TEST_TEAM)))
+            .expect_err("missing identity");
+
+        assert_eq!(error.code, AtmErrorCode::IdentityUnavailable);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn invalid_explicit_team_uses_team_invalid_contract() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let error = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: None,
+            team_override: Some(CallerTeamOverride("../bad")),
+        })
+        .expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::TeamInvalid);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn optional_env_reads_return_none_when_missing() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", None)]);
+
+        assert_eq!(read_cli_identity_from_env().expect("identity"), None);
+        assert_eq!(read_cli_team_from_env().expect("team"), None);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn mutating_context_ignores_identity_override_surface() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let context = resolve_cli_mutation_caller_context(Some(CallerTeamOverride(TEST_TEAM)))
+            .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+    }
+}
