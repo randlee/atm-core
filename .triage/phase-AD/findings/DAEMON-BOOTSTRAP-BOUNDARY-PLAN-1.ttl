@@ -12,8 +12,11 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "boundary record plus paired docs/plans" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-11T00:51:33Z"^^xsd:dateTime ;
+  triage:resolutionNote "Implemented on fix/phase-AD-pm-boundary-violation by tightening DaemonBootstrapClient allowed_dependents to atm plus atm-graft only, aligning the paired prose boundary, and extending lint_boundaries.py with an active-boundary stale-allowed-dependent check backed by a regression test." ;
+  triage:rationale "The accepted boundary contract for this seam is no longer advisory. The machine-readable allow-list now matches the live Cargo graph, and the linter rejects future over-permissive allowed_dependents drift for active boundaries." ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/2> ;
@@ -110,7 +113,7 @@ What not to change:
 <urn:atm:triage:occurrence/DAEMON-BOOTSTRAP-BOUNDARY-PLAN-1/integrate-AD/4>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-bootstrap/Cargo.toml" ;
-  triage:line 11 ;
+  triage:line 13 ;
   triage:snippet "atm-core = { package = \"agent-team-mail-core\", path = \"../atm-core\", version = \"1.2.3\" }" ;
   triage:status "open" ;
   triage:closed false ;
