@@ -498,7 +498,7 @@ mod tests {
     }
 
     impl boundary::sealed::Sealed for RecordingRosterStore {}
-    impl boundary::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
+    impl atm_storage::contract::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
 
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(

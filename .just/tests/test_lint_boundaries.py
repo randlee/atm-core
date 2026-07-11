@@ -843,6 +843,20 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("found unexpected dependent" in item for item in rendered), rendered)
 
+    def test_collect_boundary_violations_flags_stale_allowed_dependent_without_live_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(any("stale allowed dependent" in item for item in rendered), rendered)
+
     def test_collect_boundary_violations_flags_forbidden_edge_even_when_planned(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

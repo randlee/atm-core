@@ -1399,6 +1399,7 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     infos = manifest_info(repo_root)
+    workspace_aliases = {alias for info in infos for alias in info.aliases}
     records_by_owner: dict[str, list[BoundaryRecord]] = {}
     for record in records:
         records_by_owner.setdefault(record.owner_package, []).append(record)
@@ -1408,6 +1409,7 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
         if owner_info is None:
             continue
         allowed = {alias for record in owner_records for alias in record.allowed_dependents}
+        live_allowed_aliases: set[str] = set()
         for depender_info in infos:
             if depender_info.path == owner_info.path:
                 continue
@@ -1419,7 +1421,8 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
                     package_name = dependency_package_name(dependency_name, dependency)
                     if package_name != owner_info.package_name:
                         continue
-                    depender_aliases = {depender_info.package_name, depender_info.crate_dir_name}
+                    depender_aliases = set(depender_info.aliases)
+                    live_allowed_aliases.update(depender_aliases)
                     if depender_aliases.isdisjoint(allowed):
                         rel_manifest = depender_info.path.relative_to(repo_root).as_posix()
                         violations.append(
@@ -1428,6 +1431,24 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
                                 f"{owner_package} allows dependents {sorted(allowed)!r}; found unexpected dependent {depender_info.package_name!r}",
                             )
                         )
+        if any(record.is_active for record in owner_records):
+            for allowed_alias in sorted(allowed):
+                if allowed_alias in live_allowed_aliases:
+                    continue
+                if allowed_alias not in workspace_aliases:
+                    violations.append(
+                        BoundaryViolation(
+                            owner_records[0].location,
+                            f"{owner_package} allows dependent {allowed_alias!r}, but no workspace crate exposes that alias",
+                        )
+                    )
+                    continue
+                violations.append(
+                    BoundaryViolation(
+                        owner_records[0].location,
+                        f"{owner_package} allows dependents {sorted(allowed)!r}; stale allowed dependent {allowed_alias!r} has no live Cargo edge",
+                    )
+                )
     return violations
 
 

@@ -351,7 +351,7 @@ mod tests {
 
     use atm_core::boundary::{
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
-        ResolvedBuiltInNudgeTemplate,
+        ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
     };
     use atm_core::send::nudge_template::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
@@ -394,34 +394,34 @@ mod tests {
     fn built_in_template_kind_selection_covers_six_paths() {
         let mut event = base_event();
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::Delivery
         );
         event.requires_ack = true;
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::DeliveryAck
         );
         event.requires_ack = false;
         event.task_id = Some("AD.21".parse().expect("task"));
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::DeliveryTask
         );
         event.requires_ack = true;
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::DeliveryTaskAck
         );
         event.is_ack = true;
         event.requires_ack = false;
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::AcknowledgeTask
         );
         event.task_id = None;
         assert_eq!(
-            BuiltInNudgeTemplateKind::from_post_send_event(&event),
+            built_in_nudge_template_kind_from_post_send_event(&event),
             BuiltInNudgeTemplateKind::Acknowledge
         );
     }

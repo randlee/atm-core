@@ -19,9 +19,9 @@ use super::{
     qualified_sender_identity,
 };
 use crate::boundary::{
-    BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary,
-    LocalTmuxNudgeTarget, PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath,
-    PostSendHookEmitter, PostSendHookEvent,
+    BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
+    PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath, PostSendHookEmitter,
+    PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::config::types::HookRecipient;
 use crate::config::{self, AtmConfig};
@@ -234,7 +234,7 @@ where
             .recipient_pane_id
             .clone()
             .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
-        let kind = BuiltInNudgeTemplateKind::from_post_send_event(event);
+        let kind = built_in_nudge_template_kind_from_post_send_event(event);
         let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
             Ok(row) => row,
             Err(error) => {

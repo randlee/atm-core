@@ -8,13 +8,14 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use atm_storage::{Message as SharedMessage, MessageQuery};
+use atm_storage::{
+    AckRequirementState, Message as SharedMessage, MessageQuery, derive_ack_requirement,
+};
 
 use crate::boundary;
 use crate::error::AtmError;
-use crate::read::state::derive_ack_requirement;
 use crate::service_runtime::LocalServiceRuntime;
-use crate::types::{AckRequirementState, AgentName, TeamName};
+use crate::types::{AgentName, TeamName};
 
 type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 

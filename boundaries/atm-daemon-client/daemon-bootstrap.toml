@@ -31,7 +31,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-graft"]
+allowed_dependents = ["atm", "atm-graft"]
 allowed_dependencies = ["atm-core", "atm-storage"]
 forbidden_edges = [
   "atm-daemon-client -> atm-daemon",

@@ -21,6 +21,10 @@ Rules:
 - `atm-daemon-client` owns `resolve_daemon_local_ipc_endpoint()` and
   `resolve_daemon_bin()` as the shared thin-client bootstrap seam consumed by
   both `atm` and `atm-graft`
+- `atm-daemon` and `atm-daemon-bootstrap` are not consumers of this seam;
+  after `AC.8`, `atm-daemon-bootstrap` remains only the retained-runtime /
+  roster transitional shim and must not reappear in this boundary's consumer
+  list
 - `atm-daemon-client` may depend on `atm-core` specifically for canonical
   ATM-owned environment/config and daemon-endpoint resolution needed by that
   shared seam; it must not use that edge to acquire runtime assembly or

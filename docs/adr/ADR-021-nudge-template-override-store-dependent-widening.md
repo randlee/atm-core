@@ -3,15 +3,22 @@
 | Field | Value |
 |---|---|
 | ID | ADR-021 |
-| Status | **Accepted** |
+| Status | **Superseded by ADR-024** |
 | Date | 2026-07-09 |
 | Deciders | Rand Lee |
 | Relates to | ADR-001, ADR-020, ARCH-001, ARCH-002 |
 | Supersedes | — |
+| Superseded by | ADR-024 |
 
 ---
 
 ## Context
+
+This record remains part of the phase history because it captured the accepted
+dependent widening when `NudgeTemplateOverrideStore` still lived under
+`atm-core`. ADR-024 later moved canonical ownership of that storage-neutral
+contract family to `atm-storage`, so this ADR no longer governs the live
+owner-package boundary record.
 
 `AD.25` introduced live built-in nudge override flows that made two retained
 compile-bridge dependents real consumers of the
@@ -39,7 +46,7 @@ The accepted precedent already existed in
 `boundaries/atm-core/roster-store.toml`, which documents the same dependent
 shape on the retained Phase AD line.
 
-## Decision
+## Historical Decision
 
 Accept the `NudgeTemplateOverrideStore` boundary-dependent widening on the
 Phase AD line:
@@ -58,9 +65,10 @@ This widening is accepted specifically because:
 - the change narrows to compile-bridge dependency bookkeeping only; it does not
   relax direct SQLite access or move template-rendering ownership out of `atm`
 
-## Enforcement
+## Historical Enforcement
 
-This ADR is valid only while both boundary records stay aligned:
+At the time this ADR was accepted, it was valid only while both boundary
+records stayed aligned:
 
 - `boundaries/atm-core/nudge-template-override-store.toml` must keep
   `atm-daemon-bootstrap` and `atm` in `allowed_dependents`
@@ -103,9 +111,28 @@ This ADR does not relax any other boundary:
 - one more ADR now exists to govern a Phase AD-specific compile-bridge
   exception pattern
 
-## Review Conditions
+## Supersession
 
-This ADR remains acceptable only while all of the following stay true:
+ADR-024 supersedes this record by moving canonical ownership of:
+
+- `NudgeTemplateOverrideStore`
+- `BuiltInNudgeTemplateKind`
+- `TeamNudgeTemplateOverrideMode`
+- `TeamNudgeTemplateOverrideRow`
+
+from `atm-core` to `atm-storage`, while retaining only an `atm-core`
+compatibility re-export plus the core-local
+`built_in_nudge_template_kind_from_post_send_event(...)` helper.
+
+The widening captured here remains historically true for the retained compile
+bridge, but the active canonical machine-readable boundary now lives at:
+
+- `boundaries/atm-storage/nudge-template-override-store.toml`
+
+## Historical Review Conditions
+
+Before ADR-024 superseded this record, it remained acceptable only while all
+of the following stayed true:
 
 - `atm-daemon-bootstrap` and `atm` consume the storage-neutral override-store
   contract rather than bypassing it

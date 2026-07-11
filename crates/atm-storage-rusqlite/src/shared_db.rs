@@ -800,7 +800,7 @@ mod tests {
                     "test-team",
                     "delivery_ack",
                     "",
-                    atm_core::types::IsoTimestamp::now().to_string()
+                    atm_storage::types::IsoTimestamp::now().to_string()
                 ],
             )
             .expect("insert legacy empty-body row");

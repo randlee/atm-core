@@ -29,7 +29,7 @@ target: integrate/phase-AD
 
 ## Exact Targets
 
-- `boundaries/atm-core/nudge-template-override-store.toml`
+- `boundaries/atm-storage/nudge-template-override-store.toml`
 - `crates/atm-core/src/boundary/store.rs`
 - `crates/atm-core/src/team_admin.rs`
 - `crates/atm/src/commands/teams.rs`
@@ -51,6 +51,14 @@ target: integrate/phase-AD
 - `docs/plans/phase-AD/sprint-AD25.md`
 
 ## Interfaces To Add Or Modify
+
+Postmerge ownership note:
+
+- the canonical machine-readable boundary record for
+  `NudgeTemplateOverrideStore` now lives at
+  `boundaries/atm-storage/nudge-template-override-store.toml`
+- any follow-up fix or review work against this sprint should treat the old
+  `atm-core` boundary file as retired historical context only
 
 The override-store contract after this sprint is explicit about all four
 operator-visible states:
