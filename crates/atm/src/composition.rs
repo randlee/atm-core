@@ -1002,8 +1002,8 @@ mod tests {
             ReadQuery::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                TEST_SENDER.parse().expect("caller"),
-                Some(TEST_RECIPIENT_ADDRESS),
+                TEST_RECIPIENT.parse().expect("caller"),
+                None,
                 TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
                 false,
@@ -1066,8 +1066,7 @@ mod tests {
             ClearQuery {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                caller_identity: TEST_SENDER.parse().expect("caller"),
-                target_address: Some(TEST_RECIPIENT_ADDRESS.parse().expect("recipient")),
+                caller_identity: TEST_RECIPIENT.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 older_than: None,
                 idle_only: false,
@@ -1442,6 +1441,44 @@ mod tests {
             outcome.message.expect("selected message").envelope.text,
             "read me"
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let error = composition
+            .receive(
+                ReadQuery::new(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                    TEST_SENDER.parse().expect("caller"),
+                    Some(TEST_RECIPIENT_ADDRESS),
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("query"),
+            )
+            .expect_err("cross-agent loopback read must fail");
+
+        assert!(error.is_validation(), "{error:?}");
+        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
     }
 
     #[test]

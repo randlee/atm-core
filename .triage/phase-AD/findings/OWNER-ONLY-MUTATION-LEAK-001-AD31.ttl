@@ -12,7 +12,7 @@
   triage:severity "critical" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/2> ;
@@ -21,15 +21,15 @@
   triage:openOn <urn:atm:triage:worktree/integrate-AD/ced7ff66> ;
   triage:promoteTo <urn:atm:triage:worktree/integrate-AD/ced7ff66> ;
   triage:triagedAt "2026-07-10T22:45:00Z"^^xsd:dateTime ;
-  triage:notes "Post-merge finding discovered on integrate/phase-AD. Commit a59d812e added resolve_cli_mutation_caller_context but did not enforce owner-only semantics. No prior QA round caught this because tests explicitly validate permissive cross-target behavior. Repeatable sweep will include all crates for similar patterns in other mutating commands (send, ack, etc.)." .
+  triage:notes "Fixed on fix/phase-AD-pm-owner-only-mutation: owner-only mutation now rejects explicit cross-agent atm read targets at CLI/runtime/daemon boundaries, atm clear no longer exposes a cross-agent target surface, and regression coverage includes loopback plus daemon dispatch rejection." .
 
 <urn:atm:triage:occurrence/OWNER-ONLY-MUTATION-LEAK-001-AD31/integrate-AD/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/read.rs" ;
   triage:line 17 ;
   triage:snippet "target: Option<String>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AD" ;
   triage:headSha "ced7ff66" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
@@ -39,8 +39,8 @@
   triage:file "crates/atm/src/commands/read.rs" ;
   triage:line 112 ;
   triage:snippet "self.target.as_deref()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AD" ;
   triage:headSha "ced7ff66" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
@@ -50,8 +50,8 @@
   triage:file "crates/atm/src/commands/clear.rs" ;
   triage:line 18 ;
   triage:snippet "target: Option<String>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AD" ;
   triage:headSha "ced7ff66" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .
@@ -61,8 +61,8 @@
   triage:file "crates/atm/src/commands/clear.rs" ;
   triage:line 61 ;
   triage:snippet "self.target.as_deref().map(str::parse::<AgentAddress>)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AD" ;
   triage:headSha "ced7ff66" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-AD/ced7ff66> .

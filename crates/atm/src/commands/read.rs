@@ -14,8 +14,6 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Read one ATM mailbox message and optionally update read state.
 pub struct ReadCommand {
-    target: Option<String>,
-
     #[arg(long)]
     team: Option<String>,
 
@@ -109,7 +107,7 @@ impl ReadCommand {
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            self.target.as_deref(),
+            None,
             caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
@@ -169,6 +167,7 @@ impl ReadCommand {
 mod tests {
     use atm_core::test_support::EnvGuard;
     use atm_core::types::ReadSelection;
+    use clap::Parser;
     use serial_test::serial;
 
     use super::ReadCommand;
@@ -199,7 +198,6 @@ mod tests {
             ("ATM_TEAM", Some("env-team")),
         ]);
         let mut command = base_command();
-        command.target = Some("recipient-a@test-team".to_string());
         command.team = Some("override-team".to_string());
         command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
         command.no_since_last_seen = true;
@@ -261,9 +259,21 @@ mod tests {
         );
     }
 
+    #[test]
+    fn cli_rejects_positional_mailbox_target_for_owner_only_read() {
+        let error = crate::commands::Cli::try_parse_from(["atm", "read", "recipient@test-team"])
+            .expect_err("owner-only read must reject positional target");
+
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("unexpected argument 'recipient@test-team'")
+                || rendered.contains("unexpected argument"),
+            "{rendered}"
+        );
+    }
+
     fn base_command() -> ReadCommand {
         ReadCommand {
-            target: None,
             team: None,
             all: false,
             unread: false,

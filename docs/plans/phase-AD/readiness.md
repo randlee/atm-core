@@ -21,7 +21,7 @@ Companion closure ledger:
 
 Current readiness verdict:
 
-- `release verdict: AD.25 through AD.30 closeout is complete on this branch, but the AD.31 through AD.35 messaging follow-up line is not yet fully closed because follow-up documentation-surface findings remain open.`
+- `release verdict: AD.25 through AD.35 closeout is complete on this branch; owner-only mutation enforcement, the store-backed peek --as non-mutation regression, and the refreshed closeout artifacts are all landed and verified here.`
 
 Current evidence surfaces:
 

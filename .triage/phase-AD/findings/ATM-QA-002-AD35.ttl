@@ -12,14 +12,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
   triage:findingType "absence_of_test" ;
   triage:propagated false ;
   triage:mergeForwardNeeded false ;
   triage:regressed false ;
-  triage:sweepNotes "Followup_pass: confirmed absence persists across all 5 branches. PR #507 QA-2 added regression matrix tests for peek non-mutation, but only for mailbox owner scenario (TEST_RECIPIENT caller). File-level sweep on composition.rs and mailbox_locking.rs confirmed: 0 tests with PeekQuery combined with identity_override or --as impersonation across all branches. Missing: cross-agent peek (alice peeks bob's mailbox without mutation)." ;
+  triage:sweepNotes "Fixed on fix/phase-AD-pm-owner-only-mutation: crates/atm-core/tests/mailbox_locking.rs now contains peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged(), which exercises a cross-agent peek path against the real retained store and proves read/pending_ack_at/acknowledged_at remain unchanged." ;
   triage:openOn <urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
   triage:openOn <urn:atm:triage:worktree/pAD-s34/05ddab013dea5a71a345bcf20f948b44a0420ed0> ;
   triage:openOn <urn:atm:triage:worktree/pAD-s33/6ef24f32eccc3381e9bc62e32c1701edf13e060e> ;
@@ -28,7 +28,7 @@
   triage:promoteTo <urn:atm:triage:worktree/pAD-s35/afdaf3c5d16f2560ea9b86a58becd85458a0cd91> ;
   triage:highestOpenBranch "AD.35" ;
   triage:priorStatus "open" ;
-  triage:statusChange "unchanged" .
+  triage:statusChange "open_to_fixed" .
 
 <urn:atm:triage:worktree/pAD-s31/5891c114b9e913313b46534375f038a2478667e8>
   a triage:WorktreeSnapshot ;
