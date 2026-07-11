@@ -36,8 +36,16 @@ The accepted architecture is:
 - packaging copies that tree into `<install-root>/share/doc/atm/`
 - the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
 - the default local install root is `~/.local/atm/<version>/`
-- installed-doc lookup is derived from the installed `atm` binary location
+- installed-doc lookup canonicalizes the resolved `atm` executable path first,
+  then derives the installed doc root from that canonical executable location
   using the executable-relative path `../share/doc/atm/`
+- this canonicalization step exists specifically so symlinked installs
+  (including `~/.local/bin/atm` shims or `current -> <version>` style version
+  links) resolve against the real install root on macOS, Linux, and Windows
+- when the executable path is not inside an installed ATM tree (for example a
+  dev build under `target/debug`), the installed-doc resolver returns no path
+  and the help surface falls back to a deterministic README hint instead of
+  consulting `ATM_HOME`
 - runtime state under `~/.atm/` remains a distinct runtime/data tree and is
   not the installed doc root
 - `ATM_HOME` remains the runtime/data root and is not an installed-doc locator

@@ -61,6 +61,10 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
   verification path
 - `scripts/validate_release.py` invokes the installed-copy verification path
   rather than inventing another documentation checker
+- user-doc tests under the existing repo test harness enumerate every
+  `HelpTopic`, call `doc_link_for_topic`, and assert each `relative_path`
+  resolves to a real file under both `docs/user-documents/` and
+  `target/phase-ae/staged-install-root/share/doc/atm/`
 - failures name:
   - the document path
   - the fenced language
@@ -78,12 +82,16 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
   validation to the installed-copy path
 - `.just/`, `Justfile`, and `scripts/validate_release.py` all reference the
   same canonical verifier instead of introducing a second documentation path
+- the help-table-to-doc-corpus cross-boundary gap is closed explicitly here;
+  markdown-link verification alone is not treated as sufficient coverage for
+  `doc_link_for_topic`
 
 ## Required Validation
 
 - `python3 scripts/release_artifacts.py stage-install-docs --manifest release/publish-artifacts.toml --output-root target/phase-ae/staged-install-root`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents --installed-root target/phase-ae/staged-install-root/share/doc/atm`
+- `cargo test -p atm commands::help::tests::doc_link_for_every_topic_resolves_in_source_and_installed_copy -- --nocapture`
 - `rg -n "verify_user_docs.py" .just Justfile scripts/validate_release.py`
 - `just test`
 - `git diff --check`
