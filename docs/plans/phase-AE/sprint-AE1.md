@@ -31,6 +31,7 @@ packaging sprints do not guess at file layout, metadata, or validation shape.
 - `docs/atm/commands/help.md`
 - `docs/adr/ADR-025-installed-user-documentation-surface.md`
 - `docs/adr/INDEX.md`
+- `docs/project-plan.md`
 - `docs/plans/phase-AE/plan-phase-AE.md`
 - `docs/plans/phase-AE/issues.md`
 - `docs/plans/phase-AE/readiness.md`
@@ -64,6 +65,9 @@ packaging sprints do not guess at file layout, metadata, or validation shape.
 - the contract requires relative links only
 - the contract requires mechanically valid fenced `json`, `xml`, `toml`, and
   `bash` examples
+- `docs/project-plan.md` registers Phase `AE` as the active installed
+  user-documentation planning line and points to `plan/phase-AE` /
+  `integrate/phase-AE`
 
 ## Acceptance Criteria
 
@@ -72,8 +76,11 @@ packaging sprints do not guess at file layout, metadata, or validation shape.
 - no document leaves the install destination or metadata header open-ended
 - the new ADR states why long-form help lives in installed markdown rather than
   new help-only commands
+- the project plan includes a Phase `AE` planning note consistent with this
+  sprint's branch and integration-branch contract
 
 ## Required Validation
 
 - `rg -n "docs/user-documents|share/doc/atm|reviewed_for_release" docs/requirements.md docs/architecture.md docs/documentation-guidelines.md docs/atm/requirements.md docs/atm/architecture.md docs/atm/commands/help.md docs/adr/ADR-025-installed-user-documentation-surface.md`
+- `rg -n "Phase-AE planning note|plan/phase-AE|integrate/phase-AE" docs/project-plan.md`
 - `git diff --check`
