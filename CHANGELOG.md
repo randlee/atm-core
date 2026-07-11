@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+## 1.3.0
+
 - complete the `AD.13` through `AD.30` corrective line by tightening caller
   identity ownership, restoring direct post-send emission, and deleting
   retired daemon-side Claude/reconcile paths
 - restore Windows daemon CI depth coverage for same-host local IPC shutdown,
   injected accept-failure, and post-terminate rejection without accepting
   flaky or hang-prone test behavior
+- converge the Phase AD messaging protocol: mailbox peek surface, owner-only
+  mutation reset, self-addressed send rejection, self-ack loop termination,
+  and historical poison cleanup
+- close out the rusqlite storage/core coupling remediation and the
+  daemon-bootstrap boundary drift plan
 
 ## 1.2.3
 
