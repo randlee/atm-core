@@ -68,6 +68,9 @@ state. It acts as the resolved caller only.
 Examples:
 
 ```bash
+export ATM_TEAM=atm-dev
+export ATM_IDENTITY=arch-ctm
+
 atm clear --team atm-dev --dry-run
 atm clear --team atm-dev --older-than 7d
 atm clear --team atm-dev --idle-only
