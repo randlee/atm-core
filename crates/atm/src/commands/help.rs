@@ -169,7 +169,10 @@ Commands:
         let readme = resolved_readme_string(executable_path);
         let topic_doc = resolved_topic_doc_string(executable_path, topic);
         let body = if let Some(topic_doc) = topic_doc.as_deref() {
-            format!("{}\nLong-form docs: {topic_doc}\nInstalled docs index: {readme}\n", topic.body())
+            format!(
+                "{}\nLong-form docs: {topic_doc}\nInstalled docs index: {readme}\n",
+                topic.body()
+            )
         } else {
             format!(
                 "{}\nInstalled docs index: {readme} (topic-specific docs resolve only from an installed atm binary)\n",
@@ -484,8 +487,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        canonical_installed_doc_root, fallback_doc_readme_hint, HelpCommand, HelpResultKind,
-        HelpTopic, HelpTopicTier,
+        HelpCommand, HelpResultKind, HelpTopic, HelpTopicTier, canonical_installed_doc_root,
+        fallback_doc_readme_hint,
     };
 
     fn write_installed_tree(root: &Path) {
@@ -493,9 +496,17 @@ mod tests {
         fs::create_dir_all(root.join("share/doc/atm")).expect("doc root");
         fs::write(root.join("share/doc/atm/README.md"), "# ATM\n").expect("readme");
         fs::write(root.join("share/doc/atm/hooks.md"), "# Hooks\n").expect("hooks");
-        fs::write(root.join("share/doc/atm/identity-and-team.md"), "# Identity\n").expect("identity");
+        fs::write(
+            root.join("share/doc/atm/identity-and-team.md"),
+            "# Identity\n",
+        )
+        .expect("identity");
         fs::write(root.join("share/doc/atm/install-layout.md"), "# Install\n").expect("install");
-        fs::write(root.join("share/doc/atm/troubleshooting.md"), "# Troubleshooting\n").expect("troubleshooting");
+        fs::write(
+            root.join("share/doc/atm/troubleshooting.md"),
+            "# Troubleshooting\n",
+        )
+        .expect("troubleshooting");
     }
 
     #[cfg(unix)]
@@ -564,7 +575,9 @@ mod tests {
             .canonicalize()
             .expect("repo root");
         let source_root = repo_root.join("docs/user-documents");
-        let installed_root = repo_root.join("target/phase-ae/staged-install-root/share/doc/atm");
+        let temp = TempDir::new().expect("temp dir");
+        write_installed_tree(temp.path());
+        let installed_root = temp.path().join("share/doc/atm");
 
         for topic in HelpTopic::ALL {
             let link = super::doc_link_for_topic(topic).expect("doc link");
