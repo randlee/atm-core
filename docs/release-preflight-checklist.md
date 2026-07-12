@@ -68,14 +68,13 @@ The validator currently accepts these targets:
 | Download and inspect the workflow `release-findings` artifact after preflight | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 | Confirm Homebrew / `winget` prerequisite coordination is in place before publish | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 
-## `just lint` Breakdown
+## `just lint` Gate Breakdown
 
-`just validate` delegates linting to `just lint`, which currently expands to
-these 24 subchecks:
+`just validate` delegates linting to `just lint`, and `just lint all`
+currently gates these 21 subchecks:
 
 - `fmt`
 - `clippy`
-- `modules`
 - `deny`
 - `shear`
 - `version`
@@ -85,8 +84,6 @@ these 24 subchecks:
 - `unix-gating`
 - `same-host-portability`
 - `runtime-waits`
-- `sc-boundary`
-- `sc-portability`
 - `manifests`
 - `silent-emit`
 - `function-length`
@@ -97,6 +94,15 @@ these 24 subchecks:
 - `ttl-triage`
 - `daemon-singleton`
 - `pytests`
+
+## Advisory / Manual Lint Lanes
+
+These lint commands exist in the repo surface but are not part of `just lint
+all`, and therefore do not currently block `just validate`:
+
+- `just lint modules`
+- `just lint sc-boundary`
+- `just lint sc-portability`
 
 ## CI-Only Additions
 

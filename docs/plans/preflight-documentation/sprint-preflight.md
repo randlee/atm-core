@@ -50,10 +50,9 @@ release flow.
   - `cargo-lock-drift`
   - `dependency-currency`
   - `phase-ad-readiness`
-- `just lint` currently expands to 24 subchecks:
+- `just lint all` currently gates 21 subchecks:
   - `fmt`
   - `clippy`
-  - `modules`
   - `deny`
   - `shear`
   - `version`
@@ -63,8 +62,6 @@ release flow.
   - `unix-gating`
   - `same-host-portability`
   - `runtime-waits`
-  - `sc-boundary`
-  - `sc-portability`
   - `manifests`
   - `silent-emit`
   - `function-length`
@@ -75,6 +72,11 @@ release flow.
   - `ttl-triage`
   - `daemon-singleton`
   - `pytests`
+- the repo also exposes three advisory/manual lint lanes that are not part of
+  `just lint all`:
+  - `modules`
+  - `sc-boundary`
+  - `sc-portability`
 - the release-preflight workflow adds CI-only behavior that `just validate`
   does not perform locally:
   - `run_by_agent=publisher` ownership assertion
