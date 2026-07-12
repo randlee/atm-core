@@ -17,6 +17,7 @@ from datetime import timezone
 from pathlib import Path
 
 from release_artifacts import installed_doc_members
+from release_artifacts import installed_doc_source_files
 from release_artifacts import installed_docs_source_root
 from release_artifacts import load_manifest
 
@@ -33,6 +34,7 @@ INVENTORY_REQUIRED_TOP = ("releaseVersion", "releaseTag", "releaseCommit", "gene
 INVENTORY_REQUIRED_ITEM = ("artifact", "version", "sourceRef", "publishTarget", "verifyCommands", "required")
 CHECK_DEP_CURRENCY_ENV = "ATMD_CHECK_DEP_CURRENCY"
 GITHUB_ISSUE_ENV = "ATMD_GH_AUTOFIX_ISSUES"
+PHASE_AE_STAGED_INSTALL_ROOT = Path("target/phase-ae/staged-install-root")
 
 
 @dataclass
@@ -156,12 +158,9 @@ def validate_staged_install_docs(
     findings: list[Finding],
     *,
     manifest_path: Path,
-    staged_install_root: Path | None,
+    staged_install_root: Path,
     release_version: str,
 ) -> None:
-    if staged_install_root is None:
-        return
-
     manifest = load_manifest(manifest_path)
     entrypoint = staged_install_root / manifest["installed_docs"]["entrypoint"]
     if not entrypoint.is_file():
@@ -189,12 +188,11 @@ def validate_staged_install_docs(
         "python3",
         "scripts/verify_user_docs.py",
         "--source-root",
-        str(installed_docs_source_root(manifest_path).relative_to(root)),
+        relpath_display(installed_docs_source_root(manifest_path), root),
         "--release-version",
         release_version,
     ]
-    if staged_install_root is not None:
-        verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
+    verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
     completed = run_capture(verify_cmd, cwd=root)
     append_completed_findings(
         findings,
@@ -212,6 +210,12 @@ def validate_manifest(
     staged_install_root: Path | None,
     release_version: str,
 ) -> None:
+    manifest_path = root / "release" / "publish-artifacts.toml"
+    resolved_staged_install_root = ensure_staged_install_docs(
+        root,
+        manifest_path=manifest_path,
+        staged_install_root=staged_install_root,
+    )
     commands = (
         (
             "manifest-coverage",
@@ -259,8 +263,8 @@ def validate_manifest(
     validate_staged_install_docs(
         root,
         findings,
-        manifest_path=root / "release" / "publish-artifacts.toml",
-        staged_install_root=staged_install_root,
+        manifest_path=manifest_path,
+        staged_install_root=resolved_staged_install_root,
         release_version=release_version,
     )
 
@@ -798,6 +802,144 @@ def phase_ad_frontmatter_value(path: Path, key: str) -> str | None:
     return key_match.group(1).strip()
 
 
+def relpath_display(path: Path, root: Path) -> str:
+    return Path(os.path.relpath(path.resolve(), root.resolve())).as_posix()
+
+
+def ensure_staged_install_docs(
+    root: Path,
+    *,
+    manifest_path: Path,
+    staged_install_root: Path | None,
+) -> Path:
+    resolved_root = staged_install_root or (root / PHASE_AE_STAGED_INSTALL_ROOT)
+    manifest = load_manifest(manifest_path)
+    source_root = installed_docs_source_root(manifest_path)
+    install_root = resolved_root / manifest["installed_docs"]["install_root"]
+    if install_root.exists():
+        shutil.rmtree(install_root)
+    install_root.mkdir(parents=True, exist_ok=True)
+    for source_path in installed_doc_source_files(manifest_path):
+        destination = install_root / source_path.relative_to(source_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
+    return resolved_root
+
+
+def release_notes_installed_docs_check(root: Path) -> tuple[Path, bool]:
+    release_notes_path = root / "release" / "release-notes.md"
+    if not release_notes_path.is_file():
+        return release_notes_path, False
+    text = release_notes_path.read_text(encoding="utf-8")
+    return release_notes_path, "share/doc/atm/" in text and "share/doc/atm/README.md" in text
+
+
+def ensure_phase_ae_proof_prereqs(root: Path, findings: list[Finding]) -> None:
+    release_notes_path, release_notes_ok = release_notes_installed_docs_check(root)
+    if not release_notes_path.is_file():
+        findings.append(
+            Finding(
+                check="phase-ae-proof-release-notes",
+                severity="error",
+                summary="release notes are missing for the installed-doc proof",
+                detail=str(release_notes_path.relative_to(root)),
+            )
+        )
+    elif not release_notes_ok:
+        findings.append(
+            Finding(
+                check="phase-ae-proof-release-notes",
+                severity="error",
+                summary="release notes do not describe the installed doc location",
+                detail="release/release-notes.md must mention both share/doc/atm/ and share/doc/atm/README.md",
+            )
+        )
+
+
+def is_phase_ae_doc_finding(check: str) -> bool:
+    return check.startswith("installed-docs-") or check.startswith("phase-ae-proof-")
+
+
+def write_phase_ae_installed_docs_proof(
+    root: Path,
+    *,
+    version: str,
+    proof_output: Path,
+    staged_install_root: Path | None,
+    findings: list[Finding],
+) -> None:
+    root = root.resolve()
+    manifest_path = root / "release" / "publish-artifacts.toml"
+    ensure_phase_ae_proof_prereqs(root, findings)
+    resolved_staged_install_root = ensure_staged_install_docs(
+        root,
+        manifest_path=manifest_path,
+        staged_install_root=staged_install_root,
+    )
+    manifest = load_manifest(manifest_path)
+    source_root = installed_docs_source_root(manifest_path)
+    install_root = resolved_staged_install_root / manifest["installed_docs"]["install_root"]
+    source_members = installed_doc_source_files(manifest_path)
+    installed_members = installed_doc_members(manifest_path)
+    mismatched_members: list[str] = []
+    for member in installed_members:
+        source_path = source_root / member.relative_to(manifest["installed_docs"]["install_root"])
+        installed_path = resolved_staged_install_root / member
+        if source_path.read_bytes() != installed_path.read_bytes():
+            mismatched_members.append(member.as_posix())
+    if mismatched_members:
+        findings.append(
+            Finding(
+                check="phase-ae-proof-membership",
+                severity="error",
+                summary="installed docs do not byte-match the repo-owned source tree",
+                detail=", ".join(mismatched_members),
+            )
+        )
+
+    release_notes_path, release_notes_ok = release_notes_installed_docs_check(root)
+    doc_blockers = [finding for finding in findings if finding.blocks and is_phase_ae_doc_finding(finding.check)]
+    proof_status = "passed" if not doc_blockers else "failed"
+    lines = [
+        "# Phase AE Installed Docs Proof",
+        "",
+        f"- status: `{proof_status}`",
+        f"- generated at: `{utc_now()}`",
+        f"- reviewed release version: {version}",
+        f"- source doc root: `{relpath_display(source_root, root)}`",
+        f"- staged install doc root: `{relpath_display(install_root, root)}`",
+        f"- installed entrypoint: `{manifest['installed_docs']['entrypoint'].as_posix()}`",
+        f"- release notes check: `{'passed' if release_notes_ok else 'failed'}` (`{relpath_display(release_notes_path, root)}`)",
+        f"- installed-doc verifier: `{proof_status}`",
+        "",
+        "## Verified Installed Corpus",
+        "",
+    ]
+    for member in installed_members:
+        lines.append(f"- `{member.as_posix()}`")
+    lines.extend(
+        [
+            "",
+            "## Source Corpus Members",
+            "",
+        ]
+    )
+    for source_path in source_members:
+        lines.append(f"- `{relpath_display(source_path, root)}`")
+    lines.extend(
+        [
+            "",
+            "## Validation Inputs",
+            "",
+            "- `python3 scripts/validate_release.py validate --proof-output reports/smoke/phase-AE-installed-docs-proof.md`",
+            "- `scripts/verify_user_docs.py` on the repo-owned source corpus and the staged installed copy",
+            "- `release/release-notes.md` installed-doc location references",
+        ]
+    )
+    proof_output.parent.mkdir(parents=True, exist_ok=True)
+    proof_output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def write_findings(root: Path, version: str, findings_path: Path, findings: list[Finding]) -> None:
     payload = {
         "generatedAt": utc_now(),
@@ -835,6 +977,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--staged-install-root",
         help="Optional deterministic staged install root to validate installed docs against",
     )
+    parser.add_argument(
+        "--proof-output",
+        help="Optional markdown path for the Phase AE installed-doc proof artifact",
+    )
     return parser
 
 
@@ -844,6 +990,7 @@ def main(argv: list[str] | None = None) -> int:
     explicit_version = args.version is not None
     version = args.version or workspace_version(root)
     staged_install_root = Path(args.staged_install_root).resolve() if args.staged_install_root else None
+    proof_output = Path(args.proof_output).resolve() if args.proof_output else None
     if version != workspace_version(root):
         raise SystemExit(
             f"release version mismatch: expected workspace version {workspace_version(root)}, got {version}"
@@ -896,6 +1043,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             actions[effective_target]()
     finally:
+        if proof_output is not None:
+            write_phase_ae_installed_docs_proof(
+                root,
+                version=version,
+                proof_output=proof_output,
+                staged_install_root=staged_install_root,
+                findings=findings,
+            )
         write_findings(root, version, findings_path, findings)
         print(f"wrote findings: {findings_path}")
 

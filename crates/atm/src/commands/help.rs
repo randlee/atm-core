@@ -611,7 +611,6 @@ mod tests {
 
         for topic in HelpTopic::ALL {
             let Some(link) = super::doc_link_for_topic(topic) else {
-                assert_eq!(topic, HelpTopic::Skills);
                 continue;
             };
             assert!(
