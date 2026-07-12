@@ -98,7 +98,10 @@ assuming additional retired crates/artifacts is out of date for this repo.
   `microsoft/winget-pkgs`.
 - After the initial bootstrap submission, later `winget` releases are handled
   by `.github/workflows/release.yml` via `vedantmgoyal2009/winget-releaser@v2`.
-- `winget` automation does not require a repo-specific secret beyond `GITHUB_TOKEN`.
+- `WINGET_GITHUB_TOKEN` must exist in `atm-core` GitHub repository secrets
+  before automated `winget` publishing can succeed.
+- `WINGET_GITHUB_TOKEN` must be a PAT with permission to create branches / PRs
+  against the `randlee/winget-pkgs` fork used by `winget-releaser`.
 - Microsoft review normally delays public `winget install` visibility by 1–2
   days. Treat submission success as the immediate release signal.
 

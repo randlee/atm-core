@@ -15,8 +15,14 @@ published from the `atm-core` repo.
   `microsoft/winget-pkgs`.
 - After that bootstrap submission, later releases are automated by the release
   workflow via `vedantmgoyal2009/winget-releaser@v2`.
-- No `winget`-specific repository secret is required; the default
-  `GITHUB_TOKEN` is sufficient for the workflow step.
+- `winget` automation requires a dedicated `WINGET_GITHUB_TOKEN` repository
+  secret.
+- `WINGET_GITHUB_TOKEN` must be a PAT, not the default Actions
+  `GITHUB_TOKEN`, because the workflow needs fork-write permission to create
+  branches / PRs against the `randlee/winget-pkgs` fork used by
+  `vedantmgoyal2009/winget-releaser@v2`.
+- Verification that the PAT still has the required fork-write permission is a
+  repo-owner responsibility outside this sprint.
 
 ## Installer Source
 

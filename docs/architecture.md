@@ -346,8 +346,9 @@ Release infrastructure notes:
 - `winget` uses the same `randlee` publisher namespace proven in
   `claude-history`; the retained CLI package ID for this repo is
   `randlee.agent-team-mail`
-- the ported `winget` flow uses the default GitHub workflow token and does not
-  introduce a separate `winget`-specific secret requirement
+- the ported `winget` flow requires a dedicated
+  `WINGET_GITHUB_TOKEN` repo secret because the default workflow token cannot
+  create branches / PRs against the `randlee/winget-pkgs` fork
 - the release workflow should use
   `vedantmgoyal2009/winget-releaser@v2` against the Windows ZIP release asset
   and its SHA256 rather than inventing repo-specific manifest plumbing first

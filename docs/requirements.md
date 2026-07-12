@@ -404,8 +404,10 @@ Required behavior:
 - the first `winget` release requires a one-time manual manifest submission to
   `microsoft/winget-pkgs`; after that initial submission, later releases may
   be automated from this repo
-- `winget` release automation must not require a repo-specific secret beyond
-  the default GitHub workflow token
+- automated `winget` release wiring requires a dedicated
+  `WINGET_GITHUB_TOKEN` repo secret
+- `WINGET_GITHUB_TOKEN` must be a PAT with permission to create branches / PRs
+  against the `randlee/winget-pkgs` fork used by the release workflow
 - release readiness proof for `winget` must validate successful submission or
   manifest update dispatch; it cannot require same-day installability because
   Microsoft review introduces a normal 1-2 day publication lag
