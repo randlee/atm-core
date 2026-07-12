@@ -509,6 +509,30 @@ mod tests {
         .expect("troubleshooting");
     }
 
+    fn copy_tree(source_root: &Path, destination_root: &Path) {
+        fn recurse(source_root: &Path, destination_root: &Path, current: &Path) {
+            for entry in fs::read_dir(current).expect("read source dir") {
+                let entry = entry.expect("dir entry");
+                let source_path = entry.path();
+                let relative = source_path
+                    .strip_prefix(source_root)
+                    .expect("relative source path");
+                let destination = destination_root.join(relative);
+                if source_path.is_dir() {
+                    fs::create_dir_all(&destination).expect("create destination dir");
+                    recurse(source_root, destination_root, &source_path);
+                    continue;
+                }
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent).expect("destination parent");
+                }
+                fs::copy(&source_path, &destination).expect("copy doc file");
+            }
+        }
+
+        recurse(source_root, destination_root, source_root);
+    }
+
     #[cfg(unix)]
     fn symlink_file(src: &Path, dst: &Path) {
         std::os::unix::fs::symlink(src, dst).expect("symlink");
@@ -580,10 +604,10 @@ mod tests {
             .join("../..")
             .canonicalize()
             .expect("repo root");
+        let tempdir = TempDir::new().expect("tempdir");
         let source_root = repo_root.join("docs/user-documents");
-        let temp = TempDir::new().expect("temp dir");
-        write_installed_tree(temp.path());
-        let installed_root = temp.path().join("share/doc/atm");
+        let installed_root = tempdir.path().join("share/doc/atm");
+        copy_tree(&source_root, &installed_root);
 
         for topic in HelpTopic::ALL {
             let Some(link) = super::doc_link_for_topic(topic) else {
