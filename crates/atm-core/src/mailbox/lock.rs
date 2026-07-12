@@ -834,10 +834,10 @@ fn transient_lock_identity_test_override() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::{OsStr, OsString};
     use std::io;
     use std::time::Duration;
 
+    use crate::test_support::EnvGuard;
     use tempfile::tempdir;
 
     use super::{
@@ -1205,42 +1205,6 @@ mod tests {
         drop(guard);
 
         assert!(sentinel.exists());
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-        // SAFETY: env-mutating tests in this module use
-        // #[serial_test::serial(env)] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::set_var(key, value) }
-    }
-
-    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-        // SAFETY: env-mutating tests in this module use
-        // #[serial_test::serial(env)] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::remove_var(key) }
     }
 
     use std::path::PathBuf;

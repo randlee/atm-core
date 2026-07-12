@@ -30,6 +30,7 @@ pub(crate) struct HelpTopicSummary {
     pub(crate) name: &'static str,
     pub(crate) tier: HelpTopicTier,
     pub(crate) summary: &'static str,
+    pub(crate) doc_relative_path: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -40,4 +41,6 @@ pub(crate) struct HelpResult {
     pub(crate) body: String,
     pub(crate) commands: Vec<String>,
     pub(crate) topics: Vec<HelpTopicSummary>,
+    pub(crate) installed_doc_readme: Option<String>,
+    pub(crate) installed_doc_topic_path: Option<String>,
 }

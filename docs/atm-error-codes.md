@@ -54,6 +54,7 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.1 Config And Identity
 
 - `ATM_CONFIG_HOME_UNAVAILABLE`
+- `ATM_HOME_UNRESOLVED`
 - `ATM_CONFIG_PARSE_FAILED`
 - `ATM_CONFIG_TEAM_PARSE_FAILED`
 - `ATM_CONFIG_TEAM_MISSING`
@@ -73,6 +74,7 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MAILBOX_LOCK_FAILED`
 - `ATM_MAILBOX_LOCK_TIMEOUT`
 - `ATM_MESSAGE_VALIDATION_FAILED`
+- `ATM_SELF_ADDRESSED_SEND_INVALID`
 - `ATM_SERIALIZATION_FAILED`
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
@@ -140,6 +142,8 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 - `ATM_WARNING_HOOK_SKIPPED` (retired for filter non-match)
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
+- `ATM_POST_SEND_PANE_MISSING`
+- `ATM_POST_SEND_TMUX_SEND_FAILED`
 
 #### 5.8.1 `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 
@@ -213,6 +217,61 @@ Error codes should describe the failure class, not a specific prose message.
   - may be accompanied by lower-level OS/process details and any structured
     hook result that was successfully parsed before failure
 
+#### 5.8.5 `ATM_POST_SEND_PANE_MISSING`
+
+- code: `ATM_POST_SEND_PANE_MISSING`
+- description: a recipient marked for local tmux-backed post-send emission has
+  no authoritative pane id in canonical roster state
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must be logged with sender, recipient, recipient team, and message id
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - recovery should direct the operator to repair pane metadata through
+    `atm teams update-member`
+
+#### 5.8.6 `ATM_POST_SEND_TMUX_SEND_FAILED`
+
+- code: `ATM_POST_SEND_TMUX_SEND_FAILED`
+- description: ATM attempted local tmux-backed post-send emission but `tmux
+  send-keys` failed or rejected the target pane
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must be logged with sender, recipient, recipient team, pane id, and tmux
+    failure detail
+
+#### 5.8.7 `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+
+- code: `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+- description: ATM attempted graft-backed post-send emission but no graft
+  advisory/session delivery surface was available
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - must preserve sender, recipient, recipient team, and message id in warning
+    context so the degraded graft handoff is auditable
+  - recovery should direct the operator to restore the graft advisory/session
+    path before relying on automatic graft nudges
+
+#### 5.8.8 `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+
+- code: `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+- description: ATM reached the graft advisory/session handoff but delivery of
+  the post-send event still failed
+- HTTP status: `200 OK`
+- context:
+  - emitted only after durable message persistence succeeds
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - must preserve sender, recipient, recipient team, and message id in warning
+    context so the failed graft advisory handoff is auditable
+  - recovery should direct the operator to investigate the graft receiver
+    availability or advisory transport health before retrying automated nudges
+  - must surface as a sender-visible warning rather than rolling back send/ack
+  - recovery should direct the operator to verify the pane still exists and
+    repair stale pane metadata through `atm teams update-member`
+
 ### 5.9 Mailbox Lock Read-Only Filesystem
 
 - `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
@@ -282,6 +341,8 @@ surface.
 - `ATM_DAEMON_SHUTDOWN_TIMEOUT`
 - `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
 - `ATM_DAEMON_UNAVAILABLE`
+- `ATM_RUNTIME_ROOT_INVALID`
+- `ATM_RUNTIME_BOOTSTRAP_REFUSED`
 - `ATM_DAEMON_CLIENT_TIMEOUT`
 - drop-time best-effort cleanup may log `ATM_DAEMON_CLIENT_TIMEOUT` as a
   warning because the mailbox command has already succeeded, but public
@@ -303,7 +364,7 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_HOME_UNRESOLVED`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
@@ -313,7 +374,7 @@ Required mapping rules:
 | `MailboxRead` | `ATM_MAILBOX_READ_FAILED` | none |
 | `MailboxWrite` | `ATM_MAILBOX_WRITE_FAILED` | none |
 | `FilePolicy` | `ATM_FILE_POLICY_REJECTED` | `ATM_FILE_REFERENCE_REWRITE_FAILED` |
-| `Validation` | `ATM_MESSAGE_VALIDATION_FAILED` | `ATM_ACK_INVALID_STATE`, `ATM_CLEAR_INVALID_STATE` |
+| `Validation` | `ATM_MESSAGE_VALIDATION_FAILED` | `ATM_SELF_ADDRESSED_SEND_INVALID`, `ATM_ACK_INVALID_STATE`, `ATM_CLEAR_INVALID_STATE` |
 | `Serialization` | `ATM_SERIALIZATION_FAILED` | none |
 | `Timeout` | `ATM_WAIT_TIMEOUT` | none |
 | `Store` | `ATM_STORE_QUERY_FAILED` | `ATM_STORE_OPEN_FAILED`, `ATM_STORE_BOOTSTRAP_FAILED`, `ATM_STORE_MIGRATION_FAILED`, `ATM_STORE_BUSY`, `ATM_STORE_CONSTRAINT_VIOLATION`, `ATM_STORE_TRANSACTION_FAILED` |
@@ -350,6 +411,7 @@ Classification rules:
 | `AtmErrorCode` | Classification |
 | --- | --- |
 | `ATM_CONFIG_HOME_UNAVAILABLE` | `operator_actionable` |
+| `ATM_HOME_UNRESOLVED` | `operator_actionable` |
 | `ATM_CONFIG_PARSE_FAILED` | `operator_actionable` |
 | `ATM_CONFIG_TEAM_PARSE_FAILED` | `operator_actionable` |
 | `ATM_CONFIG_TEAM_MISSING` | `operator_actionable` |
@@ -363,6 +425,7 @@ Classification rules:
 | `ATM_MAILBOX_LOCK_FAILED` | `operator_actionable` |
 | `ATM_MAILBOX_LOCK_TIMEOUT` | `retryable` |
 | `ATM_MESSAGE_VALIDATION_FAILED` | `operator_actionable` |
+| `ATM_SELF_ADDRESSED_SEND_INVALID` | `operator_actionable` |
 | `ATM_SERIALIZATION_FAILED` | `fail_closed` |
 | `ATM_FILE_POLICY_REJECTED` | `operator_actionable` |
 | `ATM_FILE_REFERENCE_REWRITE_FAILED` | `operator_actionable` |
@@ -413,6 +476,8 @@ Classification rules:
 | `ATM_DAEMON_SHUTDOWN_TIMEOUT` | `operator_actionable` |
 | `ATM_DAEMON_SIGNAL_RELOAD_FAILED` | `operator_actionable` |
 | `ATM_DAEMON_UNAVAILABLE` | `operator_actionable` |
+| `ATM_RUNTIME_ROOT_INVALID` | `operator_actionable` |
+| `ATM_RUNTIME_BOOTSTRAP_REFUSED` | `fail_closed` |
 | `ATM_DAEMON_CLIENT_TIMEOUT` | `retryable` |
 | `ATM_DAEMON_LAUNCH_GATE_REJECTED` | `fail_closed` |
 | `ATM_DAEMON_SERVING_STATE_REJECTED` | `fail_closed` |

@@ -1,7 +1,10 @@
 # `atm-core::mailbox`
 
-Owns mailbox file discovery, atomic read/write helpers, locking, duplicate
-suppression, and origin-inbox merge primitives.
+Historical compatibility scope:
+- this module documents retained mailbox file discovery, atomic read/write
+  helpers, locking, duplicate suppression, and origin-inbox merge primitives
+  from the earlier Claude inbox compatibility line
+- accepted ATM runtime durability is store-backed after `ADR-019`
 
 Primary ownership note:
 - mailbox code must distinguish:
@@ -19,17 +22,18 @@ Primary ownership note:
 - ATM-owned mailbox workflow durability is not owned by `mailbox`; it lives in
   `workflow.rs` and is joined onto the Claude-owned inbox surface by the
   higher-level read/ack/clear services
-- current shared-inbox rewrite behavior is a compatibility boundary over a
+- historical shared-inbox rewrite behavior was a compatibility boundary over a
   Claude-owned surface, not a general license to store new ATM-local source of
   truth in Claude-owned files
-- the mailbox append boundary owns the atomic sender-scoped idle-notification
-  dedup-and-replace rule: when a newly appended message is classified as an
-  idle notification, remove any older unread idle notification from the same
-  sender in the same inbox and append the new record in one atomic sequence
-- this behavior satisfies the sender-scoped idle-notification dedup contract
-  in `docs/requirements.md` alongside `REQ-CORE-MAILBOX-001`
-- mailbox ownership stops at the Claude-owned inbox compatibility surface; a
-  mailbox append that implies workflow-sidecar seeding must hand off to the
+- on the earlier compatibility line, the mailbox append boundary owned the
+  atomic sender-scoped idle-notification dedup-and-replace rule: when a newly
+  appended message was classified as an idle notification, remove any older
+  unread idle notification from the same sender in the same inbox and append
+  the new record in one atomic sequence
+- that historical behavior satisfied the sender-scoped idle-notification dedup
+  contract in `docs/requirements.md` alongside `REQ-CORE-MAILBOX-001`
+- mailbox ownership stopped at the Claude-owned inbox compatibility surface; a
+  mailbox append that implied workflow-sidecar seeding handed off to the
   workflow owner boundary rather than persisting sidecar JSON itself
 - review-sensitive corner cases for this boundary are:
   - `read` observational snapshot differs from the eventual under-lock reread

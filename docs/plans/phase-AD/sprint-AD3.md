@@ -1,119 +1,163 @@
-# AD.3 Portability Wrapper Published Cutover
+---
+id: AD.3
+title: Claude Backend And Inbox Nudge Retirement
+status: complete
+branch: feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
+worktree: ../atm-core-worktrees/feature/pAD-s3-claude-backend-and-inbox-nudge-retirement
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.3
-worktree: ../atm-core-worktrees/feature/pAD-s3-portability-wrapper-published-cutover
-branch: feature/pAD-s3-portability-wrapper-published-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.3` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.3 — Claude Backend And Inbox Nudge Retirement
 
 ## Goal
 
-Retarget `.just/lint_sc_portability.py` to the published
-`sc-lint-portability` binary while keeping the `sc-portability` ATM lint
-surface stable and proving portability parity against the old vendored
-snapshot.
+- retire `atm-storage-claude` and remove all post-send nudge/context-injection
+  logic that still depends on Claude inbox JSON append behavior; any retained
+  mailbox append helper must be explicit historical compatibility only
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the full portability-wrapper cutover.
+- `AD.1` complete
+- `AD.2` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
 
-Production-ready commitment:
-- `.just/lint_sc_portability.py` must stop sourcing portability findings from
-  the integrated vendored `sc-lint-boundary`
-- the sprint must prove published portability coverage is at least as strong for
-  the ATM repo before consumer-subset wrappers move
+## Exact Targets
 
-Required command contract:
+- `crates/atm-storage-claude/Cargo.toml`
+- `crates/atm-storage-claude/src/lib.rs`
+- `crates/atm-storage-claude/src/backend.rs`
+- `crates/atm-storage-claude/src/compat.rs`
+- `crates/atm-storage-claude/src/mailbox.rs`
+- `crates/atm-storage-claude/src/paths.rs`
+- `crates/atm-storage-claude/src/roster.rs`
+- `boundaries/atm-storage-claude/message-store.toml`
+- `boundaries/atm-storage-claude/roster-store.toml`
+- `scripts/atm-nudge.py`
+- `scripts/test_atm_nudge.py`
+- `crates/atm-core/src/delivery_execution.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `docs/adr/ADR-018-storage-contract-reset-and-backend-interchangeability.md`
+- `docs/adr/ADR-017-claude-inbox-fail-soft-read-policy.md`
+- `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`
+- `docs/atm-core/requirements.md`
+- `docs/plans/phase-Y/delivery-state-machines.md`
+- `docs/plans/phase-Y/new-message-claude.mmd`
+- `docs/plans/phase-Y/new-message-non-claude.mmd`
+- `docs/atm/flow-diagrams.md`
+- `docs/architecture.md`
+- `docs/requirements.md`
+- `docs/atm-core/architecture.md`
+- code/tests that still assume inbox append can serve as post-send context
+  injection
 
-```python
-[
-    "sc-lint-portability",
-    "analyze",
-    "--root",
-    str(repo_root),
-    "--format",
-    "json",
-]
-```
+## Paths To Delete
 
-## Prerequisites
+- `crates/atm-storage-claude/Cargo.toml`
+- `crates/atm-storage-claude/src/lib.rs`
+- `crates/atm-storage-claude/src/backend.rs`
+- `crates/atm-storage-claude/src/compat.rs`
+- `crates/atm-storage-claude/src/mailbox.rs`
+- `crates/atm-storage-claude/src/paths.rs`
+- `crates/atm-storage-claude/src/roster.rs`
+- `boundaries/atm-storage-claude/message-store.toml`
+- `boundaries/atm-storage-claude/roster-store.toml`
+- `scripts/atm-nudge-xml-1.py`
 
-- `AD.2`
+## Modified Surfaces
 
-## Out Of Scope
+- modify remaining storage/runtime composition so no accepted production path
+  depends on the retired Claude backend or on Claude inbox append, watcher
+  import, rebuild, or context injection as a governing delivery/runtime path
+- update ADR and architecture docs so backend interoperability remains
+  mandatory after Claude backend retirement
+- rewrite `docs/plans/phase-Y/delivery-state-machines.md`,
+  `docs/plans/phase-Y/new-message-claude.mmd`,
+  `docs/plans/phase-Y/new-message-non-claude.mmd`,
+  `docs/atm/flow-diagrams.md`, `docs/architecture.md`, and
+  `docs/atm-core/architecture.md` so Claude inbox append is historical only
+- rewrite `scripts/test_atm_nudge.py`,
+  `crates/atm-core/src/send/tests.rs`, and
+  `crates/atm-daemon/src/tests_advisory.rs` when they still encode the retired
+  inbox-append or context-injection assumptions
+- modify any surviving local nudge tooling so it no longer models Claude inbox
+  append as part of delivery
 
-- no `unix-gating` wrapper cutover yet
-- no `runtime-waits` wrapper cutover yet
-- no proc-macro registry cutover yet
-- no vendored analyzer crate deletion yet
-- no CI / release-preflight retarget yet
+## Obsolescence Instructions
 
-## Code And Document Targets
-
-- `.just/lint_sc_portability.py`
-- `.just/tests/test_lint_sc_portability.py`
-- `.triage/phase-AD/ad3-vendored-sc-portability.json`
-- `.triage/phase-AD/ad3-published-sc-portability.json`
-- `.triage/phase-AD/ad3-sc-portability-parity.md`
-- `.just/compare_sc_lint_findings.py` if `AD.2` had to add it
+- any temporary compile scaffolding left in runtime glue after Claude backend
+  deletion must be marked
+  `Phase AD obsolete: historical Claude mailbox compatibility only`
+- obsolete compatibility helpers may remain only long enough to complete module
+  deletion; they must not gain new production call sites or new documented
+  behavior
 
 ## Deliverables
 
-- `.just/lint_sc_portability.py` calls the published `sc-lint-portability`
-- `.just/tests/test_lint_sc_portability.py` is updated only as needed to
-  preserve the existing ATM wrapper contract
-- one parity proof is recorded on the same ATM commit as three deterministic
-  artifacts:
-  - `.triage/phase-AD/ad3-vendored-sc-portability.json`
-  - `.triage/phase-AD/ad3-published-sc-portability.json`
-  - `.triage/phase-AD/ad3-sc-portability-parity.md`
-- the parity summary artifact is produced by the same repo-local comparison
-  helper introduced in `AD.2`, or an equivalently deterministic normalization
-  command, and records:
-  - `## Rule IDs Only In Vendored`
-  - `## Rule IDs Only In Published`
-  - `## Finding-Count Drift`
-  - `## Reviewer Sign-Off Required?`
-- vendored `sc-lint-*` crates remain present after this sprint so parity
-  investigation and rollback remain possible
+- `atm-storage-claude` is removed from the accepted line
+- no accepted runtime path or doc still claims Claude inbox JSON append is the
+  governing mailbox, nudge, delivery, or context-injection path
+- the surviving local nudge path, if any, no longer depends on Claude inbox
+  append semantics
+- the shared `atm-storage` contract remains the governing backend seam after
+  Claude backend retirement
 
 ## Required Work
 
-- retarget the portability wrapper to the published analyzer only
-- preserve the ATM wrapper contract and user-facing lint name
-- reuse the deterministic parity comparison surface from `AD.2`
-- prove required portability rule families and JSON shape survive the cutover
-- block closure on unexplained rule loss or finding-count drift
+- delete `atm-storage-claude` and its boundary records
+- delete or rewrite obsolete nudge/context-injection logic
+- rewrite state-machine/documentation text that still models Claude append as a
+  mailbox or nudge path
+- delete duplicate or stale nudge helpers when they exist only to preserve the
+  retired inbox/context-injection model
+- restate architecture so SQLite remains one backend implementation and future
+  SQL backend support remains explicit
+- restate docs so backend interoperability is preserved by the shared contract,
+  not by requiring multiple live concrete backends after Claude retirement
+
+## This Sprint Does Not Close
+
+- local or graft emitter implementation
+- roster drift repair
+- smoke/readiness closeout
 
 ## Acceptance Criteria
 
-- ATM still exposes the `sc-portability` local lint target after retargeting
-- the wrapper output shape remains stable enough that the wrapper test still
-  expresses the ATM house contract
-- the published analyzer reproduces the required ATM portability rule families
-- any finding-volume drop, rule disappearance, or incompatible JSON shape
-  blocks sprint closure
-- any explained finding-volume drop is documented in the parity artifact and
-  requires reviewer sign-off rather than implementer-only assertion
+- no accepted line still ships `atm-storage-claude` or its boundary records
+- no accepted doc states that Claude inbox JSON append is an approved mailbox,
+  delivery, nudge, or context-injection mechanism
+- no accepted runtime code path still depends on Claude inbox append, watcher
+  import, or rebuild behavior for caller-context resolution, durable read
+  semantics, or post-send emission
+- any retained Claude compatibility mailbox append helper is explicitly marked
+  historical compatibility only and does not redefine current send/read
+  semantics
+- the shared backend contract remains intact and documented as future-SQL-ready
+- the accepted docs explicitly state that backend interoperability survives
+  with one live concrete backend because the shared contract remains
+  future-backend-ready
+- `docs/atm-core/requirements.md` no longer requires watcher/reconcile as the
+  production ingress path for external Claude roster edits
+- every path listed under `Paths To Delete` is absent from the accepted line
 
 ## Required Validation
 
-- `python3 .just/run_lint.py sc-portability`
-- `python3 .just/tests/test_lint_sc_portability.py`
-- `cargo run -q -p sc-lint-boundary -- analyze --root . --rule portability --format json > .triage/phase-AD/ad3-vendored-sc-portability.json`
-- `sc-lint-portability analyze --root . --format json > .triage/phase-AD/ad3-published-sc-portability.json`
-- `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad3-vendored-sc-portability.json --published .triage/phase-AD/ad3-published-sc-portability.json --output .triage/phase-AD/ad3-sc-portability-parity.md`
-- `test -f .triage/phase-AD/ad3-sc-portability-parity.md`
-- `rg -n '^## Rule IDs Only In Vendored$|^## Rule IDs Only In Published$|^## Finding-Count Drift$|^## Reviewer Sign-Off Required\\?$' .triage/phase-AD/ad3-sc-portability-parity.md -S`
-- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_sc_portability.py .just/tests/test_lint_sc_portability.py -S`
+- doc/code grep gates for obsolete Claude nudge wording/logic
+- targeted boundary-lint / boundary-grep gates for deleted Claude backend
+  boundary TOMLs
+- `test ! -e crates/atm-storage-claude/Cargo.toml`
+- `test ! -e crates/atm-storage-claude/src/lib.rs`
+- `test ! -e crates/atm-storage-claude/src/backend.rs`
+- `test ! -e crates/atm-storage-claude/src/compat.rs`
+- `test ! -e crates/atm-storage-claude/src/mailbox.rs`
+- `test ! -e crates/atm-storage-claude/src/paths.rs`
+- `test ! -e crates/atm-storage-claude/src/roster.rs`
+- `test ! -e boundaries/atm-storage-claude/message-store.toml`
+- `test ! -e boundaries/atm-storage-claude/roster-store.toml`
+- `test ! -e scripts/atm-nudge-xml-1.py`
+- `cargo test --workspace`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

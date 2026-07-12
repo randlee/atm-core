@@ -5,8 +5,26 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::error::AtmError;
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+
+#[doc(hidden)]
+pub mod sealed {
+    pub trait Sealed {}
+}
+
+fn require_non_blank(
+    value: String,
+    subject: &str,
+    recovery: &'static str,
+) -> Result<String, AtmError> {
+    if value.trim().is_empty() {
+        return Err(
+            AtmError::validation(format!("{subject} must not be blank")).with_recovery(recovery)
+        );
+    }
+    Ok(value)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
@@ -14,15 +32,12 @@ pub struct MessageKey(String);
 
 impl MessageKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("message key must not be blank").with_recovery(
-                    "Populate a stable ATM message key before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "message key",
+            "Populate a stable ATM message key before calling the storage contract.",
+        )
+        .map(Self)
     }
 
     pub fn into_inner(self) -> String {
@@ -38,11 +53,18 @@ impl MessageKey {
         raw.parse::<AtmMessageId>()
             .map_err(|error| AtmError::validation(format!("message key parse failed: {error}")))
     }
+
+    fn from_atm_message_id(value: AtmMessageId) -> Self {
+        let mut key = String::with_capacity(4 + value.to_string().len());
+        key.push_str("atm:");
+        key.push_str(&value.to_string());
+        Self(key)
+    }
 }
 
 impl From<AtmMessageId> for MessageKey {
     fn from(value: AtmMessageId) -> Self {
-        Self(format!("atm:{value}"))
+        Self::from_atm_message_id(value)
     }
 }
 
@@ -72,15 +94,12 @@ pub struct TaskState(String);
 
 impl TaskState {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("task state must not be blank").with_recovery(
-                    "Populate a non-empty task state before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "task state",
+            "Populate a non-empty task state before calling the storage contract.",
+        )
+        .map(Self)
     }
 }
 
@@ -124,15 +143,12 @@ pub struct AckTransition(String);
 
 impl AckTransition {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("ack transition must not be blank").with_recovery(
-                    "Populate a non-empty ack transition before calling the storage contract.",
-                ),
-            );
-        }
-        Ok(Self(value))
+        require_non_blank(
+            value.into(),
+            "ack transition",
+            "Populate a non-empty ack transition before calling the storage contract.",
+        )
+        .map(Self)
     }
 }
 
@@ -161,6 +177,103 @@ impl FromStr for AckTransition {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum BuiltInNudgeTemplateKind {
+    Delivery,
+    DeliveryAck,
+    DeliveryTask,
+    DeliveryTaskAck,
+    Acknowledge,
+    AcknowledgeTask,
+}
+
+impl BuiltInNudgeTemplateKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Delivery => "delivery",
+            Self::DeliveryAck => "delivery_ack",
+            Self::DeliveryTask => "delivery_task",
+            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Acknowledge => "acknowledge",
+            Self::AcknowledgeTask => "acknowledge_task",
+        }
+    }
+}
+
+impl fmt::Display for BuiltInNudgeTemplateKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for BuiltInNudgeTemplateKind {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "delivery" => Ok(Self::Delivery),
+            "delivery_ack" => Ok(Self::DeliveryAck),
+            "delivery_task" => Ok(Self::DeliveryTask),
+            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
+            "acknowledge" => Ok(Self::Acknowledge),
+            "acknowledge_task" => Ok(Self::AcknowledgeTask),
+            other => Err(AtmError::validation(format!(
+                "unsupported built-in nudge template kind `{other}`"
+            ))
+            .with_recovery(
+                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TeamNudgeTemplateOverrideMode {
+    Override { template_body: String },
+    Disabled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamNudgeTemplateOverrideRow {
+    pub team_name: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub mode: TeamNudgeTemplateOverrideMode,
+    pub updated_at: IsoTimestamp,
+}
+
+impl TeamNudgeTemplateOverrideRow {
+    pub fn template_body(&self) -> Option<&str> {
+        match &self.mode {
+            TeamNudgeTemplateOverrideMode::Override { template_body } => Some(template_body),
+            TeamNudgeTemplateOverrideMode::Disabled => None,
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        matches!(self.mode, TeamNudgeTemplateOverrideMode::Disabled)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AckRequirementState {
+    NotRequired,
+    RequiredPending,
+    RequiredAcknowledged,
+}
+
+pub fn derive_ack_requirement(message: &InboxMessage) -> AckRequirementState {
+    if !message.requires_ack {
+        AckRequirementState::NotRequired
+    } else if message.acknowledged_at.is_some() {
+        AckRequirementState::RequiredAcknowledged
+    } else {
+        AckRequirementState::RequiredPending
     }
 }
 
@@ -382,12 +495,41 @@ pub trait StorageNotifier {
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
 
+pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
+    fn load_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError>;
+
+    fn save_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+        template_body: &str,
+    ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
+
+    fn disable_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
+
+    fn clear_template_override(
+        &self,
+        team: &TeamName,
+        kind: BuiltInNudgeTemplateKind,
+    ) -> Result<bool, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, RosterChangedEvent,
+        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
+        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
         RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier,
+        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -398,6 +540,9 @@ mod tests {
 
     #[derive(Default)]
     struct DummyStore;
+
+    #[derive(Default)]
+    struct DummyNudgeTemplateOverrideStore;
 
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
@@ -445,12 +590,62 @@ mod tests {
         }
     }
 
+    impl sealed::Sealed for DummyNudgeTemplateOverrideStore {}
+
+    impl NudgeTemplateOverrideStore for DummyNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<Option<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+            template_body: &str,
+        ) -> Result<TeamNudgeTemplateOverrideRow, AtmError> {
+            Ok(TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: TeamNudgeTemplateOverrideMode::Override {
+                    template_body: template_body.to_string(),
+                },
+                updated_at: IsoTimestamp::from_datetime(Utc::now()),
+            })
+        }
+
+        fn disable_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<TeamNudgeTemplateOverrideRow, AtmError> {
+            Ok(TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: TeamNudgeTemplateOverrideMode::Disabled,
+                updated_at: IsoTimestamp::from_datetime(Utc::now()),
+            })
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: BuiltInNudgeTemplateKind,
+        ) -> Result<bool, AtmError> {
+            Ok(true)
+        }
+    }
+
     #[test]
     fn storage_traits_are_object_safe() {
         let store = DummyStore;
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
+        let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
 
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = ROLE_WORKER.parse().expect("agent");
@@ -468,6 +663,7 @@ mod tests {
                 source_team: Some(team.clone()),
                 summary: None,
                 message_id: None,
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -534,5 +730,54 @@ mod tests {
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
             })
             .expect("roster notification");
+
+        let override_row = override_store
+            .save_template_override(
+                &"test-team".parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+                "<atm/>",
+            )
+            .expect("save override");
+        assert_eq!(override_row.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+    }
+
+    #[test]
+    fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
+        let base = MessageEnvelope {
+            from: "sender".parse().expect("agent"),
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::from_datetime(Utc::now()),
+            read: false,
+            source_team: Some("test-team".parse().expect("team")),
+            summary: None,
+            message_id: None,
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: Some("AD.99".parse().expect("task")),
+            extra: Map::new(),
+        };
+
+        assert_eq!(
+            derive_ack_requirement(&base),
+            AckRequirementState::NotRequired
+        );
+
+        let mut pending = base.clone();
+        pending.requires_ack = true;
+        assert_eq!(
+            derive_ack_requirement(&pending),
+            AckRequirementState::RequiredPending
+        );
+
+        pending.acknowledged_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        assert_eq!(
+            derive_ack_requirement(&pending),
+            AckRequirementState::RequiredAcknowledged
+        );
     }
 }

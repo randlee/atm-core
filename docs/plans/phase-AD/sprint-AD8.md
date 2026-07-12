@@ -1,75 +1,115 @@
-# AD.8 CI And Release-Preflight Published Tool Cutover
+---
+id: AD.8
+title: Graft Post-Send Emitter
+status: complete
+branch: feature/pAD-s8-graft-post-send-emitter
+worktree: ../atm-core-worktrees/feature/pAD-s8-graft-post-send-emitter
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.8
-worktree: ../atm-core-worktrees/feature/pAD-s8-ci-release-published-tool-cutover
-branch: feature/pAD-s8-ci-release-published-tool-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.8` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.8 — Graft Post-Send Emitter
 
 ## Goal
 
-Retarget CI and release-preflight to the published `sc-lint` install path
-only.
+- implement the graft-backed post-send emitter
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the automation cutover line.
+- `AD.6` complete
+- `AD.5` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/plans/phase-T/sprint-T8-atm-graft-crate.md`
 
-Production-ready commitment:
-- all supported CI platforms must install and use published `sc-lint` binaries
-- release gating must use the same published install contract rather than a
-  special vendored fallback
+## Exact Targets
 
-## Prerequisites
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/send/tests.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-graft/src/lib.rs`
+- `crates/atm-graft/src/runtime.rs`
 
-- `AD.7`
+## Interfaces To Add Or Modify
 
-## Out Of Scope
+```rust
+pub(crate) fn emit_post_send_effects(
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&AtmConfig>,
+    graft_port: Option<&dyn GraftPostSendPort>,
+    recipient: &ResolvedRecipient,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+    messages: &[LogicalMessage],
+)
+```
 
-- no dependency-policy Phase `D.1` adoption yet
-- no new lint-target rename or local UX redesign
+- retain the existing `send/hook.rs` local `GraftPostSendEmitter` adapter; do
+  not introduce a second standalone emitter surface outside the current
+  post-send pipeline
+- keep graft post-send handoff behind `GraftPostSendPort`, with sender warning
+  generation living in `emit_post_send_effects`
+- add one shared graft runtime cleanup helper so all advisory-session
+  registration leak sites use the same unregister-on-failure contract
+- modify send/ack warning paths so graft-unavailable or advisory-delivery
+  failures become sender-visible warnings with structured logs
 
-## Code And Document Targets
+## Obsolescence Instructions
 
-- `.github/workflows/ci.yml`
-- `scripts/validate_release.py`
-- any repo docs or tests that still describe vendored analyzer install steps
+- any retained graft-side nudge path that bypasses the advisory/session seam
+  becomes obsolete in this sprint
+- if a transitional unary fetch/drain compatibility path must remain for a
+  short period, mark it `Phase AD obsolete: compatibility-only graft nudge
+  path`, forbid new production callers, and remove it once the live advisory
+  lane proves stable
 
 ## Deliverables
 
-- `.github/workflows/ci.yml` uses the published install path only
-- `scripts/validate_release.py` uses the published install path only
-- any stale docs or tests that still describe a vendored analyzer build path
-  are updated or removed
+- graft-backed recipients receive post-send emission through the approved
+  daemon/graft path
+- graft emission failures are logged and surfaced as sender-visible warnings
 
 ## Required Work
 
-- move CI to the published install contract only
-- move release-preflight to the same published install contract
-- keep Linux, macOS, and Windows on one supported installation story
-- remove stale vendored-analyzer automation assumptions from docs and tests
+- align graft post-send emission with the simplified AD contract
+- use the existing graft host injection seam only as the receiver-side handoff
+- keep send success dependent on persistence, not on downstream graft
+  consumption
+
+## Error And Warning Contract
+
+The graft emitter must use the shared `AD.6` post-send taxonomy exactly:
+
+- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+  - cause: the recipient graft session or graft host receiver is unavailable
+    when emission is attempted
+  - sender surface: warning after successful persistence
+  - recovery: restore graft receiver availability, then resend only if a
+    fresh nudge is still required
+- `PostSendAdvisoryDeliveryFailed` /
+  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+  - cause: the daemon-to-graft advisory/session handoff failed after message
+    persistence
+  - sender surface: warning after successful persistence
+  - recovery: inspect daemon/graft logs, restore the advisory path, then
+    resend only if a fresh nudge is still required
+
+## This Sprint Does Not Close
+
+- local tmux-backed emission
+- Claude inbox nudge deletion
+- roster drift repair
 
 ## Acceptance Criteria
 
-- CI can run ATM linting on Linux, macOS, and Windows using only the published
-  install path
-- release-preflight no longer depends on a workspace-built vendored analyzer
-  path
-- no automation path in ATM shells through `../sc-lint`
+- successful graft emission returns no warning
+- unavailable graft recipient or failed graft handoff returns a sender-visible
+  warning
+- emission failure is logged with enough context to diagnose sender, recipient,
+  and graft session scope
 
 ## Required Validation
 
+- targeted graft-emitter tests
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
 - `python3 .just/run_lint.py all`
-- `python3 scripts/validate_release.py`
-- `! rg -n '\\.\\./sc-lint|cargo run -q -p sc-lint-boundary|path = \"\\.\\./sc-lint-' .github/workflows .just scripts Justfile Cargo.toml crates -S`
 - `git diff --check`

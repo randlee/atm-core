@@ -4,6 +4,7 @@
 )]
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -12,17 +13,14 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::graft::{
-    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
-    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
-    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
-};
+use atm_core::graft::AtmGraftClient;
+use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
     self, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
-use atm_core::read::{ReadOutcome, ReadQuery};
+use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
@@ -30,7 +28,8 @@ use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
+    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
+    resolve_daemon_local_ipc_endpoint_from_home, try_connect as daemon_try_connect,
     unexpected_response,
 };
 #[cfg(test)]
@@ -82,6 +81,102 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CliBootstrapError {
+    AtmHomeUnresolved {
+        command: &'static str,
+    },
+    RuntimeRootInvalid {
+        command: &'static str,
+        atm_home: PathBuf,
+        invocation_dir: PathBuf,
+    },
+    RuntimeBootstrapRefused {
+        command: &'static str,
+        atm_home: PathBuf,
+        daemon_endpoint: PathBuf,
+    },
+}
+
+impl CliBootstrapError {
+    fn into_atm_error(self) -> AtmError {
+        match self {
+            Self::AtmHomeUnresolved { command } => AtmError::atm_home_unresolved(format!(
+                "failed to resolve ATM_HOME before bootstrapping `atm {command}`"
+            )),
+            Self::RuntimeRootInvalid {
+                command,
+                atm_home,
+                invocation_dir,
+            } => AtmError::runtime_root_invalid(format!(
+                "invalid runtime root for `atm {command}`: atm_home={} invocation_dir={}",
+                atm_home.display(),
+                invocation_dir.display()
+            )),
+            Self::RuntimeBootstrapRefused {
+                command,
+                atm_home,
+                daemon_endpoint,
+            } => AtmError::runtime_bootstrap_refused(format!(
+                "refused bootstrap for `atm {command}` because daemon endpoint {} does not match the canonical ATM_HOME root {}",
+                daemon_endpoint.display(),
+                atm_home.display()
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct InvocationDir<'a>(&'a Path);
+
+impl<'a> InvocationDir<'a> {
+    pub(crate) fn new(path: &'a Path) -> Self {
+        Self(path)
+    }
+
+    fn as_path(self) -> &'a Path {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AtmHomePath<'a>(&'a Path);
+
+impl<'a> AtmHomePath<'a> {
+    pub(crate) fn new(path: &'a Path) -> Self {
+        Self(path)
+    }
+
+    fn as_path(self) -> &'a Path {
+        self.0
+    }
+}
+
+pub(crate) fn resolve_command_runtime_context(
+    command: &'static str,
+) -> Result<(PathBuf, PathBuf), AtmError> {
+    let invocation_dir = home::command_invocation_dir().inspect_err(|error| {
+        log_runtime_root_failure(command, error);
+    })?;
+    let atm_home = home::atm_home().map_err(|source| {
+        let error = CliBootstrapError::AtmHomeUnresolved { command }
+            .into_atm_error()
+            .with_source(source);
+        log_runtime_root_failure(command, &error);
+        error
+    })?;
+    Ok((atm_home, invocation_dir))
+}
+
+fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
+    tracing::error!(
+        command,
+        error_code = %error.code.as_str(),
+        error = %error,
+        "raw cli runtime-root failure"
+    );
+}
+
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
@@ -96,8 +191,7 @@ impl LocalIpcClientTransportAdapter {
         daemon_try_connect(&self.endpoint)
     }
 
-    /// This function performs blocking IPC I/O. Callers in async contexts must
-    /// wrap this in `tokio::task::spawn_blocking`.
+    /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let envelope = encode_request_envelope(request)?;
         let response =
@@ -278,6 +372,29 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    pub(crate) fn peek(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Peek(query))? {
+            ResponseEnvelope::Peek(outcome) => {
+                self.observability_port.emit_command_event(CommandEvent {
+                    command: "peek",
+                    action: action_name("peek"),
+                    outcome: outcome_label("ok"),
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.clone(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(*outcome)
+            }
+            other => Err(unexpected_response("peek", other)),
+        }
+    }
+
     pub(crate) fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
         match self.send_request(RequestEnvelope::List(query))? {
             ResponseEnvelope::List(outcome) => {
@@ -338,51 +455,53 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn register_graft_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryRegister(request))? {
-            ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
-            other => Err(unexpected_response("graft register", other)),
-        }
-    }
-
-    pub(crate) fn unregister_graft_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryUnregister(request))? {
-            ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
-            other => Err(unexpected_response("graft unregister", other)),
-        }
-    }
-
-    pub(crate) fn fetch_graft_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryFetch(request))? {
-            ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
-            other => Err(unexpected_response("graft fetch", other)),
-        }
-    }
-
-    pub(crate) fn drain_graft_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::AdvisoryDrain(request))? {
-            ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
-            other => Err(unexpected_response("graft drain", other)),
-        }
-    }
-
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
+        invocation_dir: InvocationDir<'_>,
+        atm_home: AtmHomePath<'_>,
     ) -> Result<Self, AtmError> {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
+        let invocation_dir = invocation_dir.as_path();
+        let atm_home = atm_home.as_path();
+        let canonical_endpoint =
+            resolve_daemon_local_ipc_endpoint_from_home(atm_home).map_err(|source| {
+                let error = CliBootstrapError::RuntimeRootInvalid {
+                    command,
+                    atm_home: atm_home.to_path_buf(),
+                    invocation_dir: invocation_dir.to_path_buf(),
+                }
+                .into_atm_error()
+                .with_source(source);
+                log_runtime_root_failure(command, &error);
+                error
+            })?;
+        let endpoint =
+            if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+                let overridden = resolve_daemon_local_ipc_endpoint().map_err(|source| {
+                    let error = CliBootstrapError::RuntimeRootInvalid {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        invocation_dir: invocation_dir.to_path_buf(),
+                    }
+                    .into_atm_error()
+                    .with_source(source);
+                    log_runtime_root_failure(command, &error);
+                    error
+                })?;
+                if overridden.as_ref() != canonical_endpoint.as_ref() {
+                    let error = CliBootstrapError::RuntimeBootstrapRefused {
+                        command,
+                        atm_home: atm_home.to_path_buf(),
+                        daemon_endpoint: overridden.as_ref().to_path_buf(),
+                    }
+                    .into_atm_error();
+                    log_runtime_root_failure(command, &error);
+                    return Err(error);
+                }
+                overridden
+            } else {
+                canonical_endpoint
+            };
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
@@ -492,40 +611,17 @@ impl AtmGraftClient for CliComposition<'_> {
     }
 }
 
-impl AdvisorySessionPort for CliComposition<'_> {
-    fn register_session(
-        &self,
-        request: AdvisorySessionRegistrationRequest,
-    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
-        CliComposition::register_graft_session(self, request)
-    }
-
-    fn unregister_session(
-        &self,
-        request: AdvisorySessionUnregistrationRequest,
-    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
-        CliComposition::unregister_graft_session(self, request)
-    }
-
-    fn fetch_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        CliComposition::fetch_graft_nudges(self, request)
-    }
-
-    fn drain_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        CliComposition::drain_graft_nudges(self, request)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::ffi::OsString;
     use std::fs;
+    use std::io;
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt;
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
@@ -541,7 +637,7 @@ mod tests {
     use atm_core::protocol::{
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
-    use atm_core::read::ReadQuery;
+    use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
@@ -551,20 +647,85 @@ mod tests {
     use atm_core::transport::testing::{
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
-    use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
     use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
+    use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
-        open_sqlite_boundary,
+        AtmHomePath, CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, InvocationDir, LaunchGateGuard,
+        LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary,
+        resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
+
+    struct CwdGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = atm_core::home::command_invocation_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).expect("restore current dir");
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct SharedLogBuffer(Arc<Mutex<Vec<u8>>>);
+
+    struct SharedLogWriter(SharedLogBuffer);
+
+    impl<'a> MakeWriter<'a> for SharedLogBuffer {
+        type Writer = SharedLogWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            SharedLogWriter(self.clone())
+        }
+    }
+
+    impl Write for SharedLogWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0
+                .0
+                .lock()
+                .expect("log buffer lock")
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl SharedLogBuffer {
+        fn contents(&self) -> String {
+            String::from_utf8(self.0.lock().expect("log buffer lock").clone()).expect("utf8 logs")
+        }
+    }
+
+    fn capture_runtime_root_logs<T>(f: impl FnOnce() -> T) -> (T, String) {
+        let buffer = SharedLogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(buffer.clone())
+            .finish();
+        let result = tracing::subscriber::with_default(subscriber, f);
+        (result, buffer.contents())
+    }
 
     struct LoopbackFixture {
         _env_guard: EnvGuard,
@@ -683,18 +844,43 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
-            let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-            if raw.trim_start().starts_with('[') {
-                let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
-                return values
+            if self.sqlite_db_path().exists() {
+                let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+                let mail_store = assembly.mail_store_arc();
+                let team = TEST_TEAM.parse::<TeamName>().expect("team");
+                let agent_name = agent.parse::<AgentName>().expect("agent");
+                let metadata_rows = mail_store
+                    .query_mailbox_metadata(&team, &agent_name, None)
+                    .expect("mailbox rows");
+                return metadata_rows
                     .into_iter()
-                    .map(|value| serde_json::from_value(value).expect("message envelope"))
+                    .map(|row| {
+                        mail_store
+                            .load_message(&team, &agent_name, &row.message_key)
+                            .expect("message record")
+                            .expect("stored message")
+                            .envelope
+                    })
                     .collect();
             }
-            raw.lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
-                .collect()
+
+            let inbox_path = self.inbox_path(agent);
+            if let Ok(raw) = fs::read_to_string(&inbox_path) {
+                if raw.trim_start().starts_with('[') {
+                    let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                    return values
+                        .into_iter()
+                        .map(|value| serde_json::from_value(value).expect("message envelope"))
+                        .collect();
+                }
+                return raw
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
+                    .collect();
+            }
+
+            Vec::new()
         }
 
         fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
@@ -714,7 +900,7 @@ mod tests {
 
             for (index, message) in messages.iter().enumerate() {
                 let message_key = if let Some(message_id) = message.message_id {
-                    boundary::MessageKey::new(format!("atm:{message_id}")).expect("message key")
+                    boundary::MessageKey::from(message_id)
                 } else {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
@@ -752,9 +938,25 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request")
+        }
+
+        fn send_request_to(&self, recipient: &str, body: &str) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_SENDER.parse().expect("caller"),
+                recipient,
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 false,
@@ -773,9 +975,9 @@ mod tests {
             SendRequest::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
+                TEST_SENDER.parse().expect("caller"),
                 TEST_RECIPIENT_ADDRESS,
-                Some(TEST_TEAM),
+                TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline(body.to_string()),
                 None,
                 requires_ack,
@@ -789,8 +991,8 @@ mod tests {
             AckRequest {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 message_id,
                 reply_body: reply_body.to_string(),
             }
@@ -800,13 +1002,12 @@ mod tests {
             ReadQuery::new(
                 self.home_dir.clone(),
                 self.current_dir.clone(),
-                Some(TEST_SENDER),
-                Some(TEST_RECIPIENT_ADDRESS),
-                Some(TEST_TEAM),
+                TEST_RECIPIENT.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
                 false,
                 false,
-                AckActivationMode::ReadOnly,
                 None,
                 None,
                 None,
@@ -817,13 +1018,56 @@ mod tests {
             .expect("read query")
         }
 
+        fn read_query_for(&self, caller: &str, message_id: AtmMessageId) -> ReadQuery {
+            ReadQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query")
+        }
+
+        fn peek_query_for(
+            &self,
+            caller: &str,
+            target: Option<&str>,
+            message_id: AtmMessageId,
+        ) -> PeekQuery {
+            PeekQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                target,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("peek query")
+        }
+
         fn clear_query(&self) -> ClearQuery {
             ClearQuery {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
-                target_address: Some(TEST_RECIPIENT_ADDRESS.parse().expect("recipient")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                caller_identity: TEST_RECIPIENT.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
                 older_than: None,
                 idle_only: false,
                 dry_run: false,
@@ -847,6 +1091,7 @@ mod tests {
                 source_team: Some(TEST_TEAM.parse().expect("team")),
                 summary: None,
                 message_id: Some(AtmMessageId::new()),
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -862,6 +1107,7 @@ mod tests {
             let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);
+            message.requires_ack = true;
             message.pending_ack_at = Some(Utc::now().into());
             (message_id, message)
         }
@@ -919,6 +1165,29 @@ mod tests {
         assert_eq!(inbox.len(), 1);
         assert_eq!(inbox[0].text, "hello from loopback");
         assert_eq!(inbox[0].from.as_str(), TEST_SENDER);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_rejects_self_addressed_send_without_persisting_inbox() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let transport_observability = Arc::new(atm_core::observability::NullObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(transport_observability)),
+            &composition_observability,
+        );
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
+        );
+        assert!(fixture.inbox_contents(TEST_SENDER).is_empty());
     }
 
     #[test]
@@ -1003,7 +1272,150 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_none());
+        assert!(inbox[0].pending_ack_at.is_some());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        // Plain informational send stays non-ack-requiring.
+        let plain_outcome = composition
+            .send(fixture.send_request("plain informational"))
+            .expect("plain send outcome");
+        assert!(!plain_outcome.requires_ack);
+        let plain_message_id = plain_outcome.message_id;
+
+        // Explicit requires-ack send persists durable pending-ack state.
+        let ack_required_outcome = composition
+            .send(fixture.send_request_with_flags("needs acknowledgement", true, None))
+            .expect("ack-required send outcome");
+        assert!(ack_required_outcome.requires_ack);
+        let ack_required_message_id = ack_required_outcome.message_id;
+
+        // Task send also persists durable pending-ack state.
+        let task_outcome = composition
+            .send(fixture.send_request_with_flags(
+                "task payload",
+                false,
+                Some("TASK-314".parse().expect("task id")),
+            ))
+            .expect("task send outcome");
+        assert!(task_outcome.requires_ack);
+        let task_message_id = task_outcome.message_id;
+
+        // Peek is the explicit non-mutating inspection path.
+        let peek_outcome = composition
+            .peek(fixture.peek_query_for(TEST_RECIPIENT, None, plain_message_id))
+            .expect("peek outcome");
+        assert!(!peek_outcome.mutation_applied);
+        assert_eq!(peek_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            peek_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_peek = inbox_after_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after peek");
+        assert!(!plain_after_peek.read);
+        assert!(plain_after_peek.pending_ack_at.is_none());
+        assert!(plain_after_peek.acknowledged_at.is_none());
+
+        // Cross-agent peek via target address also stays non-mutating.
+        let cross_agent_peek = composition
+            .peek(fixture.peek_query_for(
+                TEST_SENDER,
+                Some(TEST_RECIPIENT_ADDRESS),
+                plain_message_id,
+            ))
+            .expect("cross-agent peek outcome");
+        assert!(!cross_agent_peek.mutation_applied);
+        assert_eq!(cross_agent_peek.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            cross_agent_peek
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_cross_agent_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_cross_agent_peek = inbox_after_cross_agent_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after cross-agent peek");
+        assert!(!plain_after_cross_agent_peek.read);
+        assert!(plain_after_cross_agent_peek.pending_ack_at.is_none());
+        assert!(plain_after_cross_agent_peek.acknowledged_at.is_none());
+
+        // Read mutates read state but never manufactures pending-ack state.
+        let read_outcome = composition
+            .receive(fixture.read_query_for(TEST_RECIPIENT, plain_message_id))
+            .expect("read outcome");
+        assert!(read_outcome.mutation_applied);
+        assert_eq!(read_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(true)
+        );
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .and_then(|message| message.envelope.pending_ack_at),
+            None
+        );
+
+        let inbox_after_read = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_read = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after read");
+        assert!(plain_after_read.read);
+        assert!(plain_after_read.pending_ack_at.is_none());
+
+        let ack_required_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(ack_required_message_id))
+            .expect("ack-required inbox message");
+        assert!(ack_required_after_send.pending_ack_at.is_some());
+
+        let task_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(task_message_id))
+            .expect("task inbox message");
+        assert!(task_after_send.pending_ack_at.is_some());
+        assert_eq!(
+            task_after_send.task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+
+        // Canonical same-team self-addressed sends fail before persistence.
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
+        );
     }
 
     #[test]
@@ -1029,6 +1441,44 @@ mod tests {
             outcome.message.expect("selected message").envelope.text,
             "read me"
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let error = composition
+            .receive(
+                ReadQuery::new(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                    TEST_SENDER.parse().expect("caller"),
+                    Some(TEST_RECIPIENT_ADDRESS),
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("query"),
+            )
+            .expect_err("cross-agent loopback read must fail");
+
+        assert!(error.is_validation(), "{error:?}");
+        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
     }
 
     #[test]
@@ -1158,20 +1608,52 @@ mod tests {
         assert_eq!(outcome.team.as_str(), TEST_TEAM);
         assert_eq!(outcome.agent.as_str(), TEST_SENDER);
         assert_eq!(outcome.message_id, message_id);
-        assert_eq!(
-            outcome.reply_target.to_string(),
-            format!("{TEST_LEAD}@{TEST_TEAM}")
-        );
+        assert!(matches!(
+            &outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::Sent { reply_target, .. }
+                if reply_target.to_string() == format!("{TEST_LEAD}@{TEST_TEAM}")
+        ));
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
-        assert!(sender_inbox[0].pending_ack_at.is_some());
-        assert!(sender_inbox[0].acknowledged_at.is_none());
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
-        assert!(replies[0].acknowledges_message_id.is_none());
+        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let (message_id, mut pending_ack) = fixture.pending_ack_message("historical self poison");
+        pending_ack.from = TEST_SENDER.parse().expect("self sender");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .ack(fixture.ack_request(message_id, "resolved"))
+            .expect("self poison ack outcome");
+
+        assert!(matches!(
+            outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::SuppressedSelfAck
+        ));
+        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
+        assert_eq!(sender_inbox.len(), 1);
+        assert_eq!(sender_inbox[0].message_id, Some(message_id));
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
+        assert!(fixture.inbox_contents(TEST_LEAD).is_empty());
     }
 
     #[test]
@@ -1244,32 +1726,30 @@ mod tests {
     }
 
     #[test]
-    fn launch_gate_is_host_wide_across_different_atm_home_roots() {
+    fn launch_gate_isolation_tracks_the_explicit_atm_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
-        let user_home = tempdir.path().join("user-home");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
-        let first_atm_home = user_home.join("workspace-a");
-        let second_atm_home = user_home.join("workspace-b");
-        let first_socket = first_atm_home.join(".atm").join("daemon.sock");
-        let second_socket = second_atm_home.join(".atm").join("daemon.sock");
+        let first_atm_home = tempdir.path().join("workspace-a");
+        let second_atm_home = tempdir.path().join("workspace-b");
+        let first_runtime_dir = atm_core::home::host_runtime_dir_from_home(&first_atm_home);
+        let second_runtime_dir = atm_core::home::host_runtime_dir_from_home(&second_atm_home);
 
         let first =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(first_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("first acquire");
         assert!(first.is_some());
         let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+            LaunchGateGuard::try_acquire_at(second_runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("second acquire");
         assert!(
-            second.is_none(),
-            "different ATM_HOME roots must share one launch gate"
+            second.is_some(),
+            "different ATM_HOME roots must not share one launch gate"
         );
-        assert_ne!(first_socket, second_socket);
         drop(first);
+        drop(second);
     }
 
     #[test]
-    fn host_runtime_lock_path_ignores_atm_home() {
+    fn host_runtime_lock_path_follows_the_explicit_home_root() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = atm_core::home::host_runtime_lock_path_from_home(
             tempdir.path(),
@@ -1283,6 +1763,225 @@ mod tests {
                 .join(".atm")
                 .join("daemon")
                 .join("launch.lock")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let workspace_a = tempdir.path().join("workspace-a");
+        let workspace_b = tempdir.path().join("workspace-b");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&workspace_a).expect("workspace a");
+        std::fs::create_dir_all(&workspace_b).expect("workspace b");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+        ]);
+
+        let (home_a, invocation_a) = {
+            let _cwd = CwdGuard::change_to(&workspace_a);
+            resolve_command_runtime_context("send").expect("workspace a context")
+        };
+        let (home_b, invocation_b) = {
+            let _cwd = CwdGuard::change_to(&workspace_b);
+            resolve_command_runtime_context("send").expect("workspace b context")
+        };
+        let canonical_atm_home = std::fs::canonicalize(&atm_home).expect("canonical atm home");
+        let canonical_workspace_a =
+            std::fs::canonicalize(&workspace_a).expect("canonical workspace a");
+        let canonical_workspace_b =
+            std::fs::canonicalize(&workspace_b).expect("canonical workspace b");
+        assert_eq!(
+            std::fs::canonicalize(&home_a).expect("canonical home a"),
+            canonical_atm_home
+        );
+        assert_eq!(
+            std::fs::canonicalize(&home_b).expect("canonical home b"),
+            canonical_atm_home
+        );
+        assert_eq!(
+            std::fs::canonicalize(&invocation_a).expect("canonical invocation a"),
+            canonical_workspace_a
+        );
+        assert_eq!(
+            std::fs::canonicalize(&invocation_b).expect("canonical invocation b"),
+            canonical_workspace_b
+        );
+        assert_eq!(
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_a)
+                .expect("workspace a daemon endpoint")
+                .as_ref(),
+            atm_daemon_client::resolve_daemon_local_ipc_endpoint_from_home(&home_b)
+                .expect("workspace b daemon endpoint")
+                .as_ref()
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reports_atm_home_unresolved_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
+        let (result, logs) = {
+            let _cwd = CwdGuard::change_to(&workspace);
+            capture_runtime_root_logs(|| resolve_command_runtime_context("send"))
+        };
+
+        let error = result.expect_err("missing ATM_HOME/home should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_HOME_UNRESOLVED"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(env)]
+    fn bootstrap_reports_runtime_root_invalid_for_non_utf8_socket_override_and_logs() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let invocation_dir = tempdir.path().join("workspace");
+        let invalid_atm_home = std::path::PathBuf::from(OsString::from_vec(vec![0xff, 0xfe, b'a']));
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let observability = CliObservability::fallback();
+
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&invalid_atm_home),
+            )
+        });
+        let error = result.expect_err("non-utf8 ATM_HOME should fail bootstrap");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeRootInvalid
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_ROOT_INVALID"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn bootstrap_refuses_conflicting_daemon_socket_override() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let invocation_dir = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            (
+                "ATM_DAEMON_SOCKET",
+                Some(
+                    tempdir
+                        .path()
+                        .join("other.sock")
+                        .to_str()
+                        .expect("utf8 socket"),
+                ),
+            ),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let observability = CliObservability::fallback();
+
+        let (result, logs) = capture_runtime_root_logs(|| {
+            CliComposition::bootstrap(
+                "send",
+                &observability,
+                InvocationDir::new(&invocation_dir),
+                AtmHomePath::new(&atm_home),
+            )
+        });
+        let error = result.expect_err("conflicting daemon socket override should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeBootstrapRefused
+        );
+        assert!(logs.contains("raw cli runtime-root failure"));
+        assert!(logs.contains("ATM_RUNTIME_BOOTSTRAP_REFUSED"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_command_runtime_context_reports_atm_home_unresolved() {
+        let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
+
+        let error =
+            resolve_command_runtime_context("send").expect_err("missing ATM_HOME should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    #[serial(env)]
+    fn bootstrap_reports_runtime_root_invalid_for_invalid_socket_override() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        struct SocketEnvRestore(Option<OsString>);
+
+        impl Drop for SocketEnvRestore {
+            fn drop(&mut self) {
+                match self.0.take() {
+                    Some(value) => {
+                        // SAFETY: this test is serialized on the shared env lock.
+                        unsafe { std::env::set_var("ATM_DAEMON_SOCKET", value) };
+                    }
+                    None => {
+                        // SAFETY: this test is serialized on the shared env lock.
+                        unsafe { std::env::remove_var("ATM_DAEMON_SOCKET") };
+                    }
+                }
+            }
+        }
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let invocation_dir = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&atm_home).expect("atm home");
+        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let _socket_restore = SocketEnvRestore(std::env::var_os("ATM_DAEMON_SOCKET"));
+        // SAFETY: this test is serialized on the shared env lock.
+        unsafe {
+            std::env::set_var(
+                "ATM_DAEMON_SOCKET",
+                OsString::from_vec(vec![0x66, 0x6f, 0x80]),
+            );
+        }
+
+        let error = CliComposition::bootstrap(
+            "send",
+            &CliObservability::fallback(),
+            InvocationDir::new(&invocation_dir),
+            AtmHomePath::new(&atm_home),
+        )
+        .expect_err("invalid daemon socket override should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::RuntimeRootInvalid
         );
     }
 

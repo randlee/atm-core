@@ -108,6 +108,28 @@ Within `RosterStore`, the current approved durable shape is:
 - no whole-roster JSON snapshot table
 - no durable member `pid`
 
+Built-in nudge override storage rule:
+- the first concrete override-store implementation for `AD.21` lives in
+  `atm-storage-rusqlite`
+- the concrete table is `team_nudge_template_overrides`
+- concrete columns are:
+  - `team_name TEXT NOT NULL`
+  - `template_kind TEXT NOT NULL`
+- `template_body TEXT NOT NULL`
+- `updated_at TEXT NOT NULL`
+- `mode TEXT NOT NULL` with `override` / `disabled`
+- the primary key is `(team_name, template_kind)`
+- the concrete migration lands by extending
+  `crates/atm-storage-rusqlite/src/shared_db.rs::DB_MIGRATIONS`
+- higher layers must reach this data only through the accepted
+  `NudgeTemplateOverrideStore` contract; no direct SQLite reads are allowed in
+  `atm` or `atm-core`
+- row semantics are explicit:
+  - no row => product default
+  - `mode='override'` => use `template_body`
+  - `mode='disabled'` => emit no built-in nudge
+  - clear/reset => delete the row
+
 Mail content/provenance rule:
 - weak provenance round-trip fields are not part of the `MailStoreMessageRecord`
   contract

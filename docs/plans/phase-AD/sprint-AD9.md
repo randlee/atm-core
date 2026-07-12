@@ -1,177 +1,234 @@
-# AD.9 Dependency-Policy Ownership Cutover On Released Phase D.1
+---
+id: AD.9
+title: Update-Member CLI And Roster Repair Path
+status: complete
+branch: feature/pAD-s9-update-member-cli-and-roster-repair-path
+worktree: ../atm-core-worktrees/feature/pAD-s9-update-member-cli-and-roster-repair-path
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.9
-worktree: ../atm-core-worktrees/feature/pAD-s9-dependency-policy-ownership-cutover
-branch: feature/pAD-s9-dependency-policy-ownership-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.9` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.9 — Update-Member CLI And Roster Repair Path
 
 ## Goal
 
-Adopt the first released `sc-lint` version that includes Phase `D.1`
-dependency-policy enforcement and move dependency-policy ownership onto the
-released analyzer wherever it provides equal-or-better coverage.
+- create the accepted CLI repair path for existing member metadata on the
+  canonical SQL-backed roster
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the dependency-policy ownership cutover.
+- `AD.1` complete
+- `AD.2` complete
+- `AD.7` complete
+- `AD.8` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
 
-Production-ready commitment:
-- ATM boundary inventory must be proven against the released `D.1`
-  dependency-policy rule family, not only against ATM-local parsing or review
-  checks
-- duplicate ATM-local dependency-policy checks must be deleted or reduced once
-  released `sc-lint` proves equivalent or stronger coverage
+## Exact Targets
 
-If upstream `D.1` is still unreleased when `AD.8` finishes, this sprint
-remains the only blocked follow-on sprint under the phase-level checkpoint
-policy. `AD.1` through `AD.8` may still be declared functionally complete, but
-`AD.9` cannot disappear into an indefinite silent hold.
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-core/src/schema/agent_member.rs`
+- `crates/atm/src/commands/caller_context.rs`
+- `crates/atm/src/commands/teams.rs`
+- `crates/atm/src/commands/members.rs`
+- team startup / rmux / pane metadata guidance touched by pane repair
 
-Dependency-policy records that must be validated against released `D.1`:
+## Interfaces To Add Or Modify
 
-```toml
-[dependencies]
-allowed_dependents = ["..."]
-allowed_dependencies = ["..."]
-forbidden_edges = ["left-package -> right-package"]
+```rust
+pub struct MemberName(pub AgentName);
+
+pub struct UpdateMemberRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub member: MemberName,
+    pub home_dir: Option<PathBuf>,
+    pub harness: Option<RosterHarness>,
+    pub agent_type: Option<AgentType>,
+    pub model: Option<ModelName>,
+    pub tmux_pane_id: Option<PaneId>,
+}
 ```
 
-## Prerequisites
+```rust
+pub struct UpdateMemberCommand {
+    team: String,
+    member: String,
+    #[arg(long)]
+    home_dir: Option<PathBuf>,
+    #[arg(long)]
+    harness: Option<String>,
+    #[arg(long)]
+    agent_type: Option<String>,
+    #[arg(long)]
+    model: Option<String>,
+    #[arg(long = "pane-id")]
+    pane_id: Option<String>,
+}
+```
 
-- `AD.8`
-- a published `sc-lint` release exists that contains Phase `D.1`
+- `MemberName` is the target-roster-member semantic type for this sprint; it
+  must stay distinct from `caller_identity: AgentName` so the CLI repair path
+  cannot confuse the acting member with the row being updated
+- add `atm teams update-member` as the accepted CLI mutation path for existing
+  roster metadata
+- keep `atm teams add-member` as create-only behavior; it must not become the
+  repair/update path for existing members
+- make `atm teams update-member` consume the same shared
+  `resolve_cli_caller_context(...)` path introduced in `AD.1`
+- modify the accepted CLI repair path so existing roster metadata can be set
+  and repaired through ATM-owned commands against SQLite roster truth:
+  - `home_dir`
+  - `recipient_pane_id`
+  - `model`
+  - `harness`
+  - `agent_type`
+- modify doctor roster projection so pane drift is surfaced directly from the
+  authoritative roster/store boundary
+- modify startup/operator guidance so pane repair steps point to the accepted
+  CLI path rather than to repo-local config edits
 
-## External Release Checkpoint
+## Obsolescence Instructions
 
-If the published `D.1` release is not available by the first ATM release-
-planning checkpoint after `AD.8`:
-
-- `team-lead` must record an explicit re-review date against the real upstream
-  published state in `.triage/phase-AD/ad9-checkpoint-log.md`
-- the checkpoint log must record one explicit cycle number:
-  - `Checkpoint cycle: 1/2`
-  - or `Checkpoint cycle: 2/2`
-- on cycle `1/2`, explicit human sign-off may either keep `AD.9` open against
-  one new checkpoint date or split it into a standalone follow-on phase
-- cycle `2/2` is the hard cap for this phase plan:
-  - `keep AD.9 open` is no longer an allowed default outcome
-  - explicit human re-scoping must choose a standalone follow-on phase, an
-    approved replacement plan against the real upstream state, or an explicit
-    decision to stop carrying the unresolved dependency inside Phase `AD`
-- indefinite carry-forward with no recorded checkpoint is not allowed, and
-  repeating checkpoint cycles beyond `2/2` is not allowed
-
-## Out Of Scope
-
-- no speculative adoption of later open-ended Phase `D` follow-on work
-- no transitive reachability redesign unless the released `D.1` surface
-  requires it explicitly
-
-## Code And Document Targets
-
-- `.just/lint_boundaries.py`
-- current `boundaries/**/*.toml` records touched by dependency-policy
-  enforcement
-- owning crate-local `requirements.md`, `architecture.md`, and `boundaries.md`
-  docs for every touched boundary record
-- the repo-owned version-pin record for published `sc-lint`
-- `.triage/phase-AD/ad9-dependency-policy-command.sh`
-- `.triage/phase-AD/ad9-dependency-policy-cutover.md`
-- `.triage/phase-AD/ad9-checkpoint-log.md`
-- `docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
-- any ATM-specific tests or docs that remain authoritative for dependency
-  policy
+- any helper, doc, or script that treats `.atm.toml` as live pane-routing truth
+  becomes obsolete in this sprint
+- any workflow that tells operators to re-run `add-member` in order to repair
+  existing member metadata becomes obsolete in this sprint
+- if such helpers cannot be deleted immediately, mark them
+  `Phase AD obsolete: pane truth lives in SQLite roster state`, block new
+  production callers, and keep them out of the accepted repair flow
 
 ## Deliverables
 
-- ATM pins the first released `sc-lint` version that includes direct
-  dependency-policy enforcement from Phase `D.1`
-- one repo-owned executable artifact
-  `.triage/phase-AD/ad9-dependency-policy-command.sh` runs the exact released
-  `D.1` dependency-policy command path selected for ATM
-- ATM reruns its boundary inventory against the released dependency-policy rule
-  family
-- any ATM boundary inventory drift exposed by real `D.1` enforcement is fixed
-  in ATM before phase closeout
-- duplicated ATM-local dependency-policy checks in `.just/lint_boundaries.py`
-  are deleted or reduced to ATM-only governance checks where released
-  `sc-lint` is now authoritative
-- one repo-owned cutover summary artifact
-  `.triage/phase-AD/ad9-dependency-policy-cutover.md` records:
-  - the published `sc-lint` version adopted
-  - the exact command shipped in `ad9-dependency-policy-command.sh`
-  - boundary TOML records touched by released `D.1` enforcement
-  - any owning crate docs updated to match those boundary edits
-  - any residual ATM-only dependency-policy checks left in
-    `.just/lint_boundaries.py`
-- a repository ADR records the decision to retire in-repo duplication in favor
-  of the published `sc-lint` dependency-policy surface, including rollback
-  posture if the upstream release proves insufficient
-- ADR closure requires removal of the reserved placeholder marker, accepted
-  decision status, real deciders, and concrete `Decision`, `Ownership
-  Boundary`, and `Rollback Posture` sections
+- existing member metadata is updateable from the CLI through one accepted
+  mutation path
+- `atm teams update-member` enforces caller identity and caller team through
+  the same shared CLI-owned resolver used by the rest of the retained ATM
+  command surface
+- durable member `home_dir` is stored on the canonical SQL-backed roster row
+- authoritative pane metadata is restored for active team members in the
+  existing SQLite roster rows
+- active pane ids are settable and repairable from the CLI
+- operator home-dir and pane repair guidance points to the accepted CLI path
+  instead of repo-local config edits
 
 ## Required Work
 
-- pin the first published `sc-lint` release that actually includes `D.1`
-- add one repo-owned executable helper that runs the exact released `D.1`
-  dependency-policy command path against the ATM repo
-- rerun dependency-policy enforcement across the real ATM boundary inventory
-- fix any newly exposed boundary TOML drift before claiming closure
-- if boundary TOML edits change dependency-policy semantics, update the owning
-  crate-local requirements, architecture, and boundary docs in the same sprint
-- delete or reduce duplicated ATM-local dependency-policy logic only after the
-  released analyzer proves equal-or-better coverage
-- author or update the ADR that records external ownership of the
-  dependency-policy enforcement surface and the allowed rollback posture
-- author the cutover summary artifact that records exact command, touched
-  boundary records, owning-doc reconciliation, and residual ATM-only checks
-- if upstream release lag blocks execution, record the checkpoint outcome
-  explicitly rather than leaving the sprint in an implicit hold
+- tighten roster drift detection around active member pane/registration truth
+- add or finalize `atm teams update-member` for the existing SQLite-owned
+  member metadata:
+  - `home_dir`
+  - `recipient_pane_id` / `tmux_pane_id`
+  - `model`
+  - `harness`
+  - `agent_type`
+- wire `atm teams update-member` through `resolve_cli_caller_context(...)`
+  instead of parsing `ATM_IDENTITY` / `ATM_TEAM` separately or reusing target
+  team as caller team
+- require invoking-shell caller identity and caller team at CLI entry for
+  `atm teams update-member`; the positional `team` argument remains the target
+  roster team only
+- remove lingering `.atm.toml` assumptions around active pane-id authority
+- update operator guidance for restoring pane truth when drift occurs
 
-## Paths To Delete
+## CLI Error Contract
 
-- dependency-policy enforcement code in `.just/lint_boundaries.py` that the
-  released `sc-lint` `D.1` surface fully supersedes
+- `MemberAlreadyExists` / `ATM_MEMBER_ALREADY_EXISTS`
+  - cause: `atm teams add-member` targets a member row that already exists
+  - emitted by: `atm teams add-member` duplicate-member validation before any
+    roster mutation is attempted
+  - caller surface: command failure with no roster mutation
+  - recovery: use `atm teams update-member` for metadata repair on existing
+    members instead of retrying `add-member`
+  - daemon contact: forbidden for the retained local CLI path; no mutation is
+    dispatched after duplicate detection
+- `MemberNotFound` / `ATM_MEMBER_NOT_FOUND`
+  - cause: `atm teams update-member` targets a member row that does not exist
+    on the canonical SQLite-backed roster for the requested team
+  - emitted by: `atm teams update-member` target-member lookup before any
+    roster mutation is attempted
+  - caller surface: command failure with no roster mutation
+  - recovery: confirm the target team/member pair, create the member through
+    `atm teams add-member` if the row is genuinely missing, or retry
+    `atm teams update-member` against an existing row
+  - daemon contact: forbidden for the retained local CLI path; no mutation is
+    dispatched after missing-member detection
+- `CallerIdentityUnresolved` / `ATM_IDENTITY_UNAVAILABLE`
+  - cause: `atm teams update-member` reached CLI entry with neither an
+    explicit caller-identity override surface nor invoking-shell
+    `ATM_IDENTITY`
+  - emitted by: shared `resolve_cli_caller_context(...)` before update-member
+    request construction
+  - caller surface: command failure with no roster mutation
+  - recovery: set invoking-shell `ATM_IDENTITY` before running
+    `atm teams update-member`
+  - daemon contact: forbidden
+- `CallerTeamUnresolved` / `ATM_TEAM_UNAVAILABLE`
+  - cause: `atm teams update-member` reached CLI entry with no valid
+    invoking-shell `ATM_TEAM`; the positional target `team` argument does not
+    satisfy caller-team resolution
+  - emitted by: shared `resolve_cli_caller_context(...)` before update-member
+    request construction
+  - caller surface: command failure with no roster mutation
+  - recovery: set invoking-shell `ATM_TEAM` before running
+    `atm teams update-member`
+  - daemon contact: forbidden
+- `CallerIdentityInvalid` / `ATM_IDENTITY_INVALID`
+  - cause: invoking-shell `ATM_IDENTITY` or any retained caller-identity
+    override shape reused by `atm teams update-member` could not be parsed into
+    a valid `AgentName`
+  - emitted by: shared `resolve_cli_caller_context(...)`
+  - caller surface: command failure with no roster mutation
+  - recovery: repair the caller identity value before retrying the command
+  - daemon contact: forbidden
+- `CallerTeamInvalid` / `ATM_TEAM_INVALID`
+  - cause: invoking-shell `ATM_TEAM` could not be parsed into a valid
+    `TeamName` for `atm teams update-member`
+  - emitted by: shared `resolve_cli_caller_context(...)`
+  - caller surface: command failure with no roster mutation
+  - recovery: repair the caller team value before retrying the command
+  - daemon contact: forbidden
+
+## This Sprint Does Not Close
+
+- caller identity ownership
+- post-send emitter contract
+- directory metadata terminology cleanup
+- final readiness
 
 ## Acceptance Criteria
 
-- Phase `AD` does not close until the released `D.1` dependency-policy rule
-  family is active and green on ATM
-- any ATM boundary TOML edits required by real `D.1` enforcement land in this
-  sprint rather than being deferred
-- any touched owning crate docs land in the same sprint as dependency-policy
-  boundary TOML edits rather than remaining in contradiction
-- any residual dependency-policy logic left in `.just/lint_boundaries.py` is
-  explicitly justified as ATM-only governance rather than silent duplication
-- if `D.1` is still unavailable at a release-planning checkpoint, the branch
-  records a bounded checkpoint outcome instead of leaving the sprint in an
-  unbounded implicit stall
-- after checkpoint cycle `2/2`, Phase `AD` cannot continue carrying `AD.9` as
-  an indefinitely open in-phase tail; explicit human re-scoping is mandatory
+- doctor output accurately reflects repaired or still-drifting roster state
+- active team pane/registration truth is restored for the accepted baseline
+- the validated-on-entry blank `tmux_pane_id` drift for `team-lead` and
+  `arch-ctm` is repaired on the accepted baseline
+- operators can update existing member metadata through `atm teams
+  update-member`
+- `atm teams update-member` fails locally when caller identity or caller team
+  is unavailable instead of guessing from repo config, roster state, or daemon
+  ambient environment
+- `atm teams update-member` uses invoking-shell `ATM_TEAM` as caller team and
+  does not reinterpret the positional target `team` argument as caller context
+- `atm teams add-member` remains create-only and rejects attempts to use it as
+  an update path for existing members
+- `atm teams update-member` accepts durable `home_dir` repair for existing
+  members
+- operators can set or repair active pane ids through the accepted CLI path
+- the accepted baseline no longer depends on `.atm.toml` as the pane-id source
+  of truth
 
 ## Required Validation
 
-- `test -x .triage/phase-AD/ad9-dependency-policy-command.sh`
-- `bash .triage/phase-AD/ad9-dependency-policy-command.sh`
+- targeted doctor/roster/pane-cli tests
+- targeted `teams update-member` caller-context tests:
+  - success with invoking-shell `ATM_IDENTITY` plus `ATM_TEAM`
+  - missing-identity local failure
+  - missing-team local failure
+  - invalid-identity local failure
+  - invalid-team local failure
+  - proof that positional target `team` does not satisfy caller-team
+    resolution
+- `cargo test --workspace`
 - `python3 .just/run_lint.py all`
-- `test -f .triage/phase-AD/ad9-dependency-policy-cutover.md`
-- `rg -n '^## Published Version$|^## Exact Command$|^## Touched Boundary Records$|^## Owning Crate Docs Updated$|^## Residual ATM-Only Checks$' .triage/phase-AD/ad9-dependency-policy-cutover.md -S`
-- `python3 .just/lint_boundaries.py`
-- `test -f .triage/phase-AD/ad9-checkpoint-log.md`
-- `rg -n '^Checkpoint cycle: [12]/2$|^Re-review date: |^Human sign-off decision: |^Escalation action: ' .triage/phase-AD/ad9-checkpoint-log.md -S`
-- `test -f docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md`
-- `rg -n '^\\| Status \\| \\*\\*Accepted\\*\\* \\|$|^## Decision$|^## Ownership Boundary$|^## Rollback Posture$' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
-- `! rg -n 'AD9-PLACEHOLDER-NOT-ACCEPTED|^\\| Status \\| \\*\\*Proposed\\*\\* \\|$|TBD during `AD\\.9`' docs/adr/ADR-019-sc-lint-dependency-policy-ownership.md -S`
 - `git diff --check`

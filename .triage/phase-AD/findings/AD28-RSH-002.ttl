@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AD28-RSH-002" ;
+  triage:title "BoundedHostNudgeInjector worker thread has no timeout on inject_nudge call itself" ;
+  triage:description "In crates/atm-graft/src/runtime.rs:117, BoundedHostNudgeInjector's single fixed worker thread has no timeout around the underlying injector.inject_nudge(...) call itself (only the caller's round-trip wait is bounded). If the host callback genuinely hangs, the sole worker thread is stuck permanently: every subsequent nudge injection fails immediately via TrySendError::Full for the rest of the process lifetime, with no supervisor/restart. Steady-state resilience gap, not a startup-only concern." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-002/pAD-s28-1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s28/835a6247> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-002/pAD-s28-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 121 ;
+  triage:snippet "let result = injector.inject_nudge(request.event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s28/835a6247> .
+
+<urn:atm:triage:worktree/pAD-s28/835a6247>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:orderIndex 0 .

@@ -29,20 +29,18 @@ Rules:
 
 Purpose:
 - own the concrete `GraftSession` lifecycle used by an embedded host CLI
-- keep one persistent receive thread and one open dedicated daemon
-  advisory-stream connection for nudges while the session is active
-- queue received nudges until the host consumes them and fire a host wake/event
-  callback on arrival
+- own any receiver-private activation, wakeup, and temporary buffering needed
+  to hand post-send events to the host
+- drive host wake/event callback on arrival
 
 Rules:
-- `atm-graft` must not own daemon queue state, direct SQLite access, or direct
-  inbox-JSONL access
-- automatic between-tool-call nudge injection belongs to this consumer layer,
-  but daemon-owned queue state remains outside it
+- `atm-graft` must not own direct SQLite access or direct inbox-JSONL access
+- automatic between-tool-call nudge injection belongs to this consumer layer
 - reconnect and shutdown behavior are owned here rather than in daemon-private
   runtime code
-- production embedded delivery must come from the live advisory-stream
-  connection; poll/drain alone is not sufficient
+- receiver-private task/thread/callback choices stay inside this consumer layer
+- `atm-graft` must not require shared daemon session registration, daemon-owned
+  per-session queues, or a dedicated shared advisory-stream packet family
 
 ## Host Injection Consumer
 

@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-WORKER-STARVATION-001>
+  a triage:Finding ;
+  triage:findingId "RSH-WORKER-STARVATION-001" ;
+  triage:title "atm peek --as with long --timeout can occupy a bounded daemon dispatch-worker slot for up to 1 hour" ;
+  triage:description "rust-service-hardening-agent (RSH-001 on AD.31) reports atm peek --as <member> --timeout <secs> can occupy a bounded daemon dispatch-worker slot (only 64 exist) for up to 1 hour, since the worker is intentionally allowed to outlive the 3s client-facing deadline. A handful of long-timeout impersonating peeks against different targets could materially starve other request types." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "daemon dispatch-worker handling of peek/read --timeout on AD.31's branch" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD35/1> ;
+  triage:openOn <urn:atm:triage:worktree/AD31/6ad246ee> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bbb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bbb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD31/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.31" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:occursIn <urn:atm:triage:worktree/AD31/6ad246ee> .
+
+<urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bbb> .
+
+<urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bbb> .
+
+<urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bbb> .
+
+<urn:atm:triage:occurrence/RSH-WORKER-STARVATION-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bbb> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD33/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bbb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 35 .

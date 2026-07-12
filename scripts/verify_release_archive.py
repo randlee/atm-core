@@ -6,23 +6,29 @@ import tarfile
 import zipfile
 from pathlib import Path
 
+from release_artifacts import installed_doc_members
+from release_artifacts import load_manifest
+
 
 def expected_members(manifest_path: Path, windows: bool) -> set[str]:
-    import tomllib
+    manifest = load_manifest(manifest_path)
+    names = {entry["name"] for entry in manifest["release_binaries"]}
+    binary_members = {f"bin/{name}.exe" if windows else f"bin/{name}" for name in names}
+    doc_members = {member.as_posix() for member in installed_doc_members(manifest_path)}
+    return binary_members | doc_members
 
-    data = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-    binaries = data.get("release_binaries", [])
-    names = {entry["name"] for entry in binaries}
-    return {f"{name}.exe" if windows else name for name in names}
+
+def normalize_member(name: str) -> str:
+    return name.removeprefix("./").strip("/")
 
 
 def archive_members(archive_path: Path) -> set[str]:
     if archive_path.suffix == ".zip":
         with zipfile.ZipFile(archive_path) as archive:
-            return {Path(name).name for name in archive.namelist() if not name.endswith("/")}
+            return {normalize_member(name) for name in archive.namelist() if not name.endswith("/")}
     if archive_path.suffixes[-2:] == [".tar", ".gz"]:
         with tarfile.open(archive_path, "r:gz") as archive:
-            return {Path(member.name).name for member in archive.getmembers() if member.isfile()}
+            return {normalize_member(member.name) for member in archive.getmembers() if member.isfile()}
     raise SystemExit(f"unsupported archive type: {archive_path}")
 
 

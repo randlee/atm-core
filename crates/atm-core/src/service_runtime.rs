@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
-use crate::boundary::ProjectionAppendMode;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -27,10 +26,15 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
 }
 
-pub(crate) trait RetainedServiceRuntime:
-    crate::boundary::NotificationSink + crate::boundary::sealed::Sealed
-{
+pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
+    fn load_nudge_template_override(
+        &self,
+        _team: &TeamName,
+        _kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        Ok(None)
+    }
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
     fn inbox_path(
@@ -62,17 +66,6 @@ pub(crate) trait RetainedServiceRuntime:
         inbox_path: &Path,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<(), AtmError>;
-    fn append_compat_inbox_message(
-        &self,
-        inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError>;
-    fn append_compat_inbox_message_set(
-        &self,
-        inbox_path: &Path,
-        mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
@@ -117,25 +110,49 @@ pub(crate) trait RetainedServiceRuntime:
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
+    pub(crate) nudge_template_override_store:
+        std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
-    pub(crate) notification_sink:
-        std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
 }
 
 impl LocalServiceRuntime {
     pub fn new_with_delivery_boundaries(
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
+        nudge_template_override_store: std::sync::Arc<
+            dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync,
+        >,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
-        notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
             roster_store,
+            nudge_template_override_store,
             non_claude_outbound,
-            notification_sink,
         }
+    }
+
+    pub fn load_roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
+        Ok(self
+            .roster_store
+            .load_roster(team)?
+            .members
+            .into_iter()
+            .find(|member| &member.agent_name == agent))
+    }
+
+    pub fn load_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
+        self.roster_store
+            .load_roster(team)
+            .map(|snapshot| snapshot.members)
     }
 }
 
@@ -148,24 +165,18 @@ impl fmt::Debug for LocalServiceRuntime {
             )
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
-                "non_claude_outbound",
-                &std::sync::Arc::as_ptr(&self.non_claude_outbound),
+                "nudge_template_override_store",
+                &std::sync::Arc::as_ptr(&self.nudge_template_override_store),
             )
             .field(
-                "notification_sink",
-                &std::sync::Arc::as_ptr(&self.notification_sink),
+                "non_claude_outbound",
+                &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
             .finish()
     }
 }
 
 impl crate::boundary::sealed::Sealed for LocalServiceRuntime {}
-
-impl crate::boundary::NotificationSink for LocalServiceRuntime {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_sink.deliver(event)
-    }
-}
 
 type OutputPathFactory = std::sync::Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
@@ -249,51 +260,49 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
     }
 }
 
-#[derive(Debug, Clone)]
-/// Production fallback boundary used when the daemon runtime is not composing
-/// a dedicated notification sink. This is not a test double.
-pub struct LocalFileNotificationSink {
-    path: PathBuf,
+pub(crate) fn append_notification_log(event: &NotificationEvent) -> Result<(), AtmError> {
+    append_notification_log_at_path(
+        &crate::home::host_runtime_dir()?.join("notifications.jsonl"),
+        event,
+    )
 }
 
-impl LocalFileNotificationSink {
-    /// Path validation stays lazy because this constructor is used from
-    /// cross-crate runtime assembly callsites that only have a PathBuf. The
-    /// actual boundary contract is enforced on first deliver() with typed I/O
-    /// errors instead of panicking during assembly.
-    pub fn at_path(path: PathBuf) -> Self {
-        Self { path }
-    }
-}
-
-impl crate::boundary::sealed::Sealed for LocalFileNotificationSink {}
-
-impl crate::boundary::NotificationSink for LocalFileNotificationSink {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        let parent = self.path.parent().ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "notification sink path {} has no parent directory",
-                self.path.display()
-            ))
-            .with_recovery("Choose a notification output path with an existing parent directory.")
-        })?;
-        std::fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create notification sink directory {}: {error}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Check that the notification output directory is writable before retrying notification delivery.",
-            )
-            .with_source(error)
-        })?;
-        crate::mailbox::atomic::append_jsonl_record(&self.path, &event)
-    }
+pub(crate) fn append_notification_log_at_path(
+    path: &Path,
+    event: &NotificationEvent,
+) -> Result<(), AtmError> {
+    let parent = path.parent().ok_or_else(|| {
+        AtmError::mailbox_write(format!(
+            "notification log path {} has no parent directory",
+            path.display()
+        ))
+        .with_recovery("Choose a notification log path with an existing parent directory.")
+    })?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create notification log directory {}: {error}",
+            parent.display()
+        ))
+        .with_recovery(
+            "Check that the notification log directory is writable before retrying post-send logging.",
+        )
+        .with_source(error)
+    })?;
+    crate::mailbox::atomic::append_jsonl_record(path, event)
 }
 
 impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         config::load_config(current_dir)
+    }
+
+    fn load_nudge_template_override(
+        &self,
+        team: &TeamName,
+        kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        self.nudge_template_override_store
+            .load_template_override(team, kind)
     }
 
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
@@ -348,65 +357,19 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
-    fn append_compat_inbox_message(
-        &self,
-        inbox_path: &Path,
-        message: &InboxMessage,
-    ) -> Result<(), AtmError> {
-        crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
-            if current_claude_inbox_requires_repair(inbox_path).unwrap_or(false) {
-                AtmError::validation(format!(
-                    "compatibility inbox {} is malformed or unsupported for the primary Claude delivery path",
-                    inbox_path.display()
-                ))
-                .with_recovery(
-                    "Run the explicit repair/rebuild inbox projection path before retrying normal Claude compatibility delivery; healthy current Claude inbox files should not require this path.",
-                )
-                .with_source(error)
-            } else {
-                error
-            }
-        })
-    }
-
-    fn append_compat_inbox_message_set(
-        &self,
-        inbox_path: &Path,
-        mode: ProjectionAppendMode,
-        messages: &[InboxMessage],
-    ) -> Result<(), AtmError> {
-        match mode {
-            ProjectionAppendMode::RecoveredLogicalMessageSet => {
-                let export_policy = crate::mailbox::store::export_policy_for_path(inbox_path)?;
-                crate::mailbox::store::append_compat_mailbox_message_set(
-                    inbox_path,
-                    export_policy,
-                    messages,
-                )
-            }
-        }
-    }
-
     fn load_roster_member(
         &self,
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
-        Ok(self
-            .roster_store
-            .load_roster(team)?
-            .members
-            .into_iter()
-            .find(|member| &member.agent_name == agent))
+        Self::load_roster_member(self, team, agent)
     }
 
     fn load_team_roster(
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
-        self.roster_store
-            .load_roster(team)
-            .map(|snapshot| snapshot.members)
+        Self::load_team_roster(self, team)
     }
 
     fn deliver_non_claude_payloads(
@@ -485,29 +448,17 @@ fn load_store_backed_mailbox_projection(
     Ok(messages)
 }
 
-fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
-    if !path.exists()
-        || crate::mailbox::store::inbox_file_format(path)
-            != crate::mailbox::store::InboxFileFormat::ClaudeJsonArray
-    {
-        return Ok(false);
-    }
-
-    Ok(crate::mailbox::load_compat_mailbox_messages_strict(path).is_err())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-        MAX_NON_CLAUDE_PAYLOAD_BYTES, RetainedServiceRuntime,
+        LocalFileNonClaudeOutbound, LocalServiceRuntime, MAX_NON_CLAUDE_PAYLOAD_BYTES,
+        RetainedServiceRuntime, append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
-    use serde_json::Value;
     use std::fs::File;
     use std::io::Read;
     use std::sync::Arc;
@@ -581,6 +532,47 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct NoopNudgeTemplateOverrideStore;
+
+    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+
+    impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            Ok(None)
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
+
+        fn clear_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            unimplemented!("test stub")
+        }
+    }
+
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
@@ -590,6 +582,7 @@ mod tests {
             source_team: Some("test-team".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -610,79 +603,14 @@ mod tests {
     }
 
     #[test]
-    fn append_compat_inbox_message_accepts_current_claude_json_array_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.json");
-        let first = message();
-        let second = message();
-        std::fs::write(
-            &inbox_path,
-            format!(
-                "{}\n",
-                serde_json::to_string_pretty(&vec![first.clone()]).expect("mailbox array")
-            ),
-        )
-        .expect("write mailbox");
-
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
-        );
-
-        runtime
-            .append_compat_inbox_message(&inbox_path, &second)
-            .expect("current Claude array path should succeed");
-
-        let raw = std::fs::read_to_string(&inbox_path).expect("mailbox contents");
-        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
-        assert_eq!(encoded.len(), 2);
-        assert_eq!(encoded[0]["text"], serde_json::Value::String(first.text));
-        assert_eq!(encoded[1]["text"], serde_json::Value::String(second.text));
-    }
-
-    #[test]
-    fn append_compat_inbox_message_rejects_malformed_current_claude_json_array_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.json");
-        std::fs::write(&inbox_path, "[{ not-json }\n").expect("write malformed mailbox");
-
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
-        );
-
-        let error = runtime
-            .append_compat_inbox_message(&inbox_path, &message())
-            .expect_err("malformed Claude array path must fail closed");
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(
-            error
-                .recovery
-                .iter()
-                .any(|recovery| recovery.contains("explicit repair/rebuild inbox projection path")),
-            "unexpected recovery: {error:?}"
-        );
-    }
-
-    #[test]
     fn rebuild_compat_inbox_projection_reexports_store_backed_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMessageStore),
             Arc::new(NoopRosterStore),
+            Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                tempdir.path().join("notifications.jsonl"),
-            )),
         );
         let team = "test-team".parse::<TeamName>().expect("team");
         let agent = "recipient".parse::<AgentName>().expect("agent");
@@ -699,17 +627,9 @@ mod tests {
     }
 
     #[test]
-    fn local_service_runtime_delivers_notifications_through_sink_boundary() {
+    fn notification_logging_appends_directly_at_event_site() {
         let tempdir = tempdir().expect("tempdir");
         let notification_path = tempdir.path().join("notifications.jsonl");
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-            Arc::new(LocalFileNotificationSink::at_path(
-                notification_path.clone(),
-            )),
-        );
         let event = NotificationEvent {
             kind: NotificationKind::Delivery,
             detail: "runtime-direct".to_string(),
@@ -717,41 +637,11 @@ mod tests {
             agent: Some("recipient".parse::<AgentName>().expect("agent")),
         };
 
-        crate::boundary::NotificationSink::deliver(&runtime, event.clone())
-            .expect("direct sink delivery");
+        append_notification_log_at_path(&notification_path, &event).expect("direct log append");
 
         let direct_events = read_notification_events(&notification_path);
         assert_eq!(direct_events.len(), 1);
         assert_eq!(direct_events[0].detail, "runtime-direct");
-
-        let mut warnings = Vec::new();
-        crate::delivery_execution::deliver_notifications(
-            &runtime,
-            &mut warnings,
-            &crate::send::ResolvedRecipient {
-                agent: "recipient".parse::<AgentName>().expect("agent"),
-                team: "test-team".parse::<TeamName>().expect("team"),
-            },
-            Some("pane-1"),
-            &[crate::delivery_plan::NotificationTarget {
-                sender: "sender".parse::<AgentName>().expect("sender"),
-                sender_team: Some("test-team".parse::<TeamName>().expect("team")),
-                message_id: crate::schema::AtmMessageId::new(),
-                requires_ack: true,
-                is_ack: false,
-                task_id: None,
-            }],
-        );
-        assert!(warnings.is_empty());
-
-        let events = read_notification_events(&notification_path);
-        assert_eq!(events.len(), 2);
-        let detail: Value =
-            serde_json::from_str(&events[1].detail).expect("structured notification detail");
-        assert_eq!(
-            detail.get("recipient_pane_id").and_then(Value::as_str),
-            Some("pane-1")
-        );
     }
 
     #[test]

@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AD35" ;
+  triage:title "README.md Quick Start still shows atm read --all --no-mark, contradicting this sprint's own deletion requirement" ;
+  triage:description "README.md Quick Start section documents `atm read --all --no-mark`. AD.35's own sprint requirement was to delete/retire this flag usage from documentation as part of the messaging protocol and regression closeout, but the README still shows it, contradicting the sprint's own deliverable." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AD35/s35/1> ;
+  triage:openOn <urn:atm:triage:worktree/s31/5891c11> ;
+  triage:openOn <urn:atm:triage:worktree/s32/46be50b> ;
+  triage:openOn <urn:atm:triage:worktree/s33/6ef24f3> ;
+  triage:openOn <urn:atm:triage:worktree/s34/05ddab0> ;
+  triage:openOn <urn:atm:triage:worktree/s35/afdaf3c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s35/afdaf3c> ;
+  triage:triagedAt "2026-07-10T21:30:00Z"^^xsd:dateTime ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AD35/s31/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 104 ;
+  triage:snippet "atm read --all --no-mark" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:occursIn <urn:atm:triage:worktree/s31/5891c11> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AD35/s32/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 104 ;
+  triage:snippet "atm read --all --no-mark" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:occursIn <urn:atm:triage:worktree/s32/46be50b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AD35/s33/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 104 ;
+  triage:snippet "atm read --all --no-mark" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:occursIn <urn:atm:triage:worktree/s33/6ef24f3> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AD35/s34/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 104 ;
+  triage:snippet "atm read --all --no-mark" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:occursIn <urn:atm:triage:worktree/s34/05ddab0> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AD35/s35/1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 104 ;
+  triage:snippet "atm read --all --no-mark" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:occursIn <urn:atm:triage:worktree/s35/afdaf3c> .
+
+<urn:atm:triage:worktree/s31/5891c11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "5891c114b9e913313b46534375f038a2478667e8" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/s32/46be50b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46be50b0322ab6e6be5860bb989ad66dc5bc87ad" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/s33/6ef24f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "6ef24f32eccc3381e9bc62e32c1701edf13e060e" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/s34/05ddab0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "05ddab013dea5a71a345bcf20f948b44a0420ed0" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/s35/afdaf3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "afdaf3c5d16f2560ea9b86a58becd85458a0cd91" ;
+  triage:orderIndex 35 .

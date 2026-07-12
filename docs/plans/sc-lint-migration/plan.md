@@ -10,18 +10,33 @@ worktree: ../atm-core-worktrees/plan/sc-lint-published-migration
 
 This document is retained as a supporting inventory and gap-analysis artifact.
 
-The proposed execution planning package for this work now lives in:
+## Phase AD Status Note
 
-- [`docs/plans/phase-AD/plan-phase-AD.md`](../phase-AD/plan-phase-AD.md)
-- `docs/plans/phase-AD/sprint-AD1.md`
-- `docs/plans/phase-AD/sprint-AD2.md`
-- `docs/plans/phase-AD/sprint-AD3.md`
-- `docs/plans/phase-AD/sprint-AD4.md`
-- `docs/plans/phase-AD/sprint-AD5.md`
-- `docs/plans/phase-AD/sprint-AD6.md`
-- `docs/plans/phase-AD/sprint-AD7.md`
-- `docs/plans/phase-AD/sprint-AD8.md`
-- `docs/plans/phase-AD/sprint-AD9.md`
+This branch originally attached an execution proposal that stopped at
+`sprint-AD1.md` through `sprint-AD9.md`. That is no longer the current state.
+
+The accepted `Phase AD` line later expanded, split, and closed as:
+
+- `AD.1` through `AD.35`
+- native Windows overlay sprints for `AD.13` through `AD.20`
+- companion closeout artifacts in:
+  - [`../phase-AD/plan-phase-AD.md`](../phase-AD/plan-phase-AD.md)
+  - [`../phase-AD/readiness.md`](../phase-AD/readiness.md)
+  - [`../phase-AD/violation-inventory.md`](../phase-AD/violation-inventory.md)
+  - [`../../project-plan.md`](../../project-plan.md) Phase `AD` section
+
+Current authoritative state:
+
+- `docs/project-plan.md` marks `Phase AD` complete
+- `docs/plans/phase-AD/readiness.md` records the accepted `AD.25` through
+  `AD.35` follow-up closeout as complete
+- `docs/plans/phase-AD/plan-phase-AD.md` remains the historical authoritative
+  phase-planning artifact even though its frontmatter still reads `status:
+  active`
+
+For any execution or closure claim about the accepted `Phase AD` line, use the
+Phase `AD` documents above rather than the earlier `AD.1` through `AD.9`
+snapshot that was first proposed on this branch.
 
 This supporting doc remains useful because it captures:
 
@@ -40,10 +55,11 @@ This is planning only. No cutover begins until a published `sc-lint` version
 exists that covers the current `atm-core` dependency and analyzer surface.
 
 The inventory/gap-analysis task was the originally scoped deliverable for this
-branch. The Phase `AD` phase/sprint package was added later as a planning
-proposal after the user asked for a phase-structured execution plan. That
-proposal is not an execution authorization by itself; it requires explicit
-human sign-off before any `AD.*` implementation branch is opened.
+branch. The `Phase AD` phase/sprint package was added later as the execution
+proposal for this migration line. That proposal is now historical: the real
+accepted `Phase AD` line executed beyond the original `AD.1` through `AD.9`
+proposal and closed on the accepted branch tip documented in the Phase `AD`
+readiness and project-plan artifacts cited above.
 
 ## Baseline
 
@@ -183,8 +199,8 @@ release line. The migration therefore requires both:
 | boundary-cycle and boundary-visibility findings from `sc-lint-boundary analyze --format json` | vendored `sc-lint-boundary` | expected yes | moderate risk: ATM must verify JSON field compatibility, not just rule existence |
 | graph export via `sc-lint-boundary export-graph` | vendored `sc-lint-boundary` | expected yes | low risk; no active ATM CI call site uses it today |
 | portability findings on demand (`sc-portability`) | vendored `sc-lint-boundary --rule portability` | expected yes through `sc-lint-portability` | moderate risk because the analyzer owner and command path changed |
-| default lint subset for `PORT-004` / `PORT-005` (`unix-gating`) | ATM wrapper filters portability findings | not a product feature by itself | ATM must keep this wrapper locally; retained `sc-lint` docs in this repo do not currently prove published `PORT-004` / `PORT-005` continuity, so `AD.4` must prove direct continuity or record an explicit upstream-to-ATM mapping |
-| default lint subset for `SCB-RUNTIME-001` / `SCB-RUNTIME-002` (`runtime-waits`) | ATM wrapper filters boundary findings | semantic coverage expected through `sc-lint-runtime`, but rule-id continuity is unproven | moderate risk because ATM currently filters those IDs out of the wrong analyzer family and the released runtime analyzer may require an explicit upstream-to-ATM mapping |
+| default lint subset for `PORT-004` / `PORT-005` (`unix-gating`) | ATM wrapper filters portability findings | not a product feature by itself | ATM must keep this wrapper locally; the original `Phase AD` proposal assigned published-rule continuity proof to `AD.4`, and the accepted `Phase AD` line is the source of truth for whether that proof landed |
+| default lint subset for `SCB-RUNTIME-001` / `SCB-RUNTIME-002` (`runtime-waits`) | ATM wrapper filters boundary findings | semantic coverage expected through `sc-lint-runtime`, but rule-id continuity is unproven | moderate risk because ATM currently filters those IDs out of the wrong analyzer family and the released runtime analyzer may require an explicit upstream-to-ATM mapping; consult accepted `Phase AD` artifacts rather than the original `AD.1` through `AD.9` proposal when checking closure |
 | current `just lint` names and report formatting | `.just/run_lint.py` + local Python wrappers | not expected upstream | ATM-owned adapter layer must remain |
 | dependency-policy enforcement from `dependencies.allowed_*` and `forbidden_edges` | partly duplicated in `.just/lint_boundaries.py` today | expected yes once released `sc-lint` Phase `D.1` lands | migration is not complete until ownership moves to released `sc-lint` or ATM explicitly proves why a residual check stays local |
 | all-platform CI bring-up with no local vendored analyzer crates | workspace build today | unknown until release artifacts are published | high risk until install story is confirmed for Windows, macOS, and Linux |
@@ -192,11 +208,11 @@ release line. The migration therefore requires both:
 | release-preflight lint behavior | `scripts/validate_release.py` | not expected upstream | ATM-owned release gate must be retargeted |
 
 The unresolved `unix_path_prefixes` portability-config gap is a hard planning
-input for the later `unix-gating` cutover. The proposed execution package
-assigns that closure explicitly to `AD.4`; no `unix-gating` sprint may claim
-success until the published `sc-lint-portability` surface either provides an
-equivalent knob or ATM carries the behavior forward in a documented wrapper-
-owned override.
+input for the later `unix-gating` cutover. The original `Phase AD` proposal
+assigned that closure explicitly to `AD.4`; any future migration execution
+branch must still prove that the published `sc-lint-portability` surface
+either provides an equivalent knob or that ATM carries the behavior forward in
+a documented wrapper-owned override.
 
 ## Verified No-Change Areas
 

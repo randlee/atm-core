@@ -13,6 +13,10 @@ owned by `atm-core`.
 CLI note:
 - `teams add-member --pane-id` accepts tmux pane ids in `%<number>` form or a
   bare numeric pane id that ATM canonicalizes to `%<number>`
+- `teams update-member` is the accepted repair path for existing member
+  metadata such as durable `home_dir`, harness, model, agent type, and tmux
+  `--pane-id`; manual `config.json` edits are no longer the supported pane or
+  home-dir repair workflow
 
 References:
 

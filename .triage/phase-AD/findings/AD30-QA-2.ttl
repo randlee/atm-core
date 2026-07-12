@@ -1,0 +1,154 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-101" ;
+  triage:title "Windows panic-depth test waited for the wrong recovery constant" ;
+  triage:description "crates/atm-daemon/src/tests/windows_local_ipc_depth.rs asserted on CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE even though PanicDispatcher panics on the dispatch worker path reaped by reap_finished_dispatches, which emits DISPATCH_PANIC_RECOVERED_MESSAGE. AD30-FIX-2 corrects the assertion to the actual observable code path." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/pAD-s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/pAD-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/windows_local_ipc_depth.rs" ;
+  triage:line 274 ;
+  triage:snippet "wait_for_message_contains(CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE, ...)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:finding/ARCH-001-AD30>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "PanicDispatcher test fixture was duplicated across daemon test modules" ;
+  triage:description "The PanicDispatcher fixture existed both in windows_local_ipc_depth.rs and local_ipc_transport.rs tests. AD30-FIX-2 moves it into crates/atm-daemon/src/test_support.rs and imports the shared fixture from both suites." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/windows> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/local-ipc-tests> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/windows>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/windows_local_ipc_depth.rs" ;
+  triage:line 24 ;
+  triage:snippet "struct PanicDispatcher;" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:occurrence/ARCH-001-AD30/pAD-s30/local-ipc-tests>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1061 ;
+  triage:snippet "struct PanicDispatcher;" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:finding/ARCH-002-AD30>
+  a triage:Finding ;
+  triage:findingId "ARCH-002" ;
+  triage:title "local_ipc_transport.rs exceeded the non-test line cap" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs exceeded the 1000-line non-test cap. AD30-FIX-2 extracts accept-loop helpers into crates/atm-daemon/src/local_ipc_transport/accept_loop.rs without changing the runtime contract." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AD30/pAD-s30/transport> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:occurrence/ARCH-002-AD30/pAD-s30/transport>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1 ;
+  triage:snippet "non-test body exceeded 1000 lines before #[cfg(test)] mod tests" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:finding/ATM-QA-102-AD30>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-102" ;
+  triage:title "AD.30 findings lacked a terminal-sprint triage record" ;
+  triage:description "AD30-QA-2 shipped without an AD.30-specific TTL record. AD30-FIX-2 adds .triage/phase-AD/findings/AD30-QA-2.ttl so the terminal sprint's findings and closure notes are tracked in the same phase-local ledger as prior AD work." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:finding/ATM-QA-103-AD30>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-103" ;
+  triage:title "AD.30 sprint frontmatter and readiness state drifted from actual branch state" ;
+  triage:description "sprint-AD30.md still said status: planned and readiness.md still said AD.30 in_progress after multiple landed AD.30 fix commits. AD30-FIX-2 reconciles both documents to the terminal sprint's actual closure state." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:finding/ATM-QA-104-AD30>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-104" ;
+  triage:title "Phase-AD direct-fix ledger still described open obligations instead of closure evidence" ;
+  triage:description "The direct-fix ledger rows were still written as future obligations. AD30-FIX-2 replaces them with concrete closure evidence and cites the accepted-line artifacts that now satisfy each carry-forward item." ;
+  triage:phaseId "phase-AD" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T18:20:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s30/77c30bb3> .
+
+<urn:atm:triage:worktree/pAD-s30/77c30bb3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "77c30bb3" ;
+  triage:orderIndex 30 ;
+  triage:status "open" .

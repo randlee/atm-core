@@ -1,24 +1,23 @@
 use anyhow::{Context, Result};
 use atm_core::ack::AckRequest;
-use atm_core::home;
 use atm_core::schema::AtmMessageId;
 use clap::Args;
 
-use crate::composition::CliComposition;
+use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
-/// Acknowledge one pending-ack message and send a reply.
+/// Acknowledge one pending-ack message and emit a reply when required.
 pub struct AckCommand {
     message_id: String,
     reply: String,
 
     #[arg(long)]
     team: Option<String>,
-
-    #[arg(long = "as")]
-    actor: Option<String>,
 
     #[arg(long)]
     json: bool,
@@ -27,11 +26,16 @@ pub struct AckCommand {
 impl AckCommand {
     /// Execute the `atm ack` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let home_dir = home::atm_home()?;
-        let composition = CliComposition::bootstrap("ack", observability)?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("ack")?;
         let json = self.json;
-        let outcome = composition.ack(self.build_request(home_dir, current_dir)?)?;
+        let request = self.build_request(home_dir.clone(), current_dir.clone())?;
+        let composition = CliComposition::bootstrap(
+            "ack",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
+        let outcome = composition.ack(request)?;
 
         output::print_ack_result(&outcome, json)
     }
@@ -41,6 +45,8 @@ impl AckCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<AckRequest> {
+        let caller_context =
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
         let message_id = self
             .message_id
             .parse::<AtmMessageId>()
@@ -49,8 +55,8 @@ impl AckCommand {
         Ok(AckRequest {
             home_dir,
             current_dir,
-            actor_override: self.actor.map(|value| value.parse()).transpose()?,
-            team_override: self.team.map(|value| value.parse()).transpose()?,
+            caller_identity: caller_context.caller_identity,
+            caller_team: caller_context.caller_team,
             message_id,
             reply_body: self.reply,
         })
@@ -59,11 +65,14 @@ impl AckCommand {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::TEST_TEAM;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::AckCommand;
 
-    const VALID_MESSAGE_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+    const VALID_MESSAGE_ID: &str = "01KRFK5QTF2R6NRS3Q0F8Z9K0S";
 
     fn test_paths() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
         let tempdir = TempDir::new().expect("tempdir");
@@ -73,12 +82,13 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_empty_message_id() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
         let command = AckCommand {
             message_id: String::new(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some(TEST_TEAM.to_string()),
             json: false,
         };
 
@@ -91,12 +101,13 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_rejects_whitespace_only_message_id() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
         let command = AckCommand {
             message_id: "   ".to_string(),
             reply: "working on it".to_string(),
-            team: None,
-            actor: None,
+            team: Some(TEST_TEAM.to_string()),
             json: false,
         };
 
@@ -109,13 +120,37 @@ mod tests {
     }
 
     #[test]
-    fn build_request_preserves_team_override_and_actor() {
+    fn build_request_preserves_team_override_and_environment_identity() {
         let command = AckCommand {
             message_id: VALID_MESSAGE_ID.to_string(),
             reply: "received".to_string(),
             team: Some("test-team".to_string()),
-            actor: Some("sender-a".to_string()),
             json: true,
+        };
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender-a"))]);
+
+        let (_tempdir, home_dir, current_dir) = test_paths();
+        let request = command
+            .build_request(home_dir, current_dir)
+            .expect("request");
+
+        assert_eq!(Some(request.caller_team.as_str()), Some("test-team"));
+        assert_eq!(Some(request.caller_identity.as_str()), Some("sender-a"));
+        assert_eq!(request.reply_body, "received");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_uses_environment_when_overrides_are_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = AckCommand {
+            message_id: VALID_MESSAGE_ID.to_string(),
+            reply: "received".to_string(),
+            team: None,
+            json: false,
         };
 
         let (_tempdir, home_dir, current_dir) = test_paths();
@@ -123,14 +158,30 @@ mod tests {
             .build_request(home_dir, current_dir)
             .expect("request");
 
-        assert_eq!(
-            request.team_override.as_ref().map(|value| value.as_str()),
-            Some("test-team")
-        );
-        assert_eq!(
-            request.actor_override.as_ref().map(|value| value.as_str()),
-            Some("sender-a")
-        );
-        assert_eq!(request.reply_body, "received");
+        assert_eq!(request.caller_identity.as_str(), "sender-a");
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_preserves_environment_identity_with_team_override() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let command = AckCommand {
+            message_id: VALID_MESSAGE_ID.to_string(),
+            reply: "received".to_string(),
+            team: Some(TEST_TEAM.to_string()),
+            json: false,
+        };
+
+        let (_tempdir, home_dir, current_dir) = test_paths();
+        let request = command
+            .build_request(home_dir, current_dir)
+            .expect("request");
+
+        assert_eq!(request.caller_identity.as_str(), "env-sender");
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
     }
 }

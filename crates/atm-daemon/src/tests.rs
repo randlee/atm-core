@@ -3,14 +3,14 @@ use super::runtime_health::{
 };
 use super::{
     LocalIpcServerTransportAdapter,
-    boundary_adapters::DaemonNotificationSink,
     composition::build_production_runtime,
-    daemon_runtime_observability::SubsystemObservability,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
-    notification_runtime::NotificationRuntime,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
+};
+use crate::test_support::{
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorQuery;
@@ -37,19 +37,13 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-#[cfg(windows)]
-use crate::test_support::connect_local_ipc_with_timeout;
-use crate::test_support::{
-    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-};
-
-const TEST_TEAM: &str = "test-team";
+pub(crate) const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
     TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
 }
 
-fn install_retained_runtime_factory() {
+pub(crate) fn install_retained_runtime_factory() {
     install_sqlite_retained_runtime_factory();
 }
 
@@ -60,6 +54,9 @@ impl Drop for ShutdownFinalizerDrainGuard {
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
 }
+
+mod local_ipc_depth;
+mod runtime_root;
 
 #[test]
 #[serial_test::serial(env)]
@@ -243,76 +240,6 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
-#[cfg(windows)]
-#[test]
-#[serial_test::serial(env)]
-fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let _env = EnvGuard::set_many([
-        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_CONFIG_HOME",
-            Some(tempdir.path().to_str().expect("utf8 config home")),
-        ),
-        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-    ]);
-    let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
-    let runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path)
-        .expect("prepare runtime");
-    let mut runtime = runtime;
-    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
-    let (lifecycle, _reset) = {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-        (lifecycle, reset)
-    };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
-    let (serve_result_tx, serve_result_rx) = mpsc::channel();
-    let (ready_tx, ready_rx) = mpsc::sync_channel(0);
-
-    let join = std::thread::spawn(move || {
-        let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
-            RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: Duration::from_millis(500),
-                force_cancel_deadline: Duration::from_secs(2),
-                begin_shutdown: || Ok(()),
-                reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
-                publish_ready: move || {
-                    ready_tx.send(()).ok();
-                    Ok(())
-                },
-            },
-        );
-        serve_result_tx.send(result).expect("send serve result");
-    });
-
-    let local_ipc_name =
-        atm_core::protocol::daemon_local_ipc_name_from_path(&tempdir.path().join("daemon.sock"))
-            .expect("ipc name");
-    ready_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("daemon ready within deadline");
-    lifecycle.set_terminate_for_test(true);
-
-    serve_result_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("recv serve result")
-        .expect("serve runtime result");
-    join.join().expect("join serve thread");
-    assert!(
-        connect_local_ipc_with_timeout(local_ipc_name, Duration::from_millis(250)).is_err(),
-        "windows same-host runtime should reject new local IPC connections after shutdown",
-    );
-}
-
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     let roster = members
@@ -337,7 +264,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .expect("replace roster");
 }
 
-fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
+pub(crate) fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
     std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
     let config = TeamConfig {
@@ -358,13 +285,9 @@ fn write_workspace_config(workspace_dir: &std::path::Path) {
     std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
 }
 
-fn read_notification_output(path: &std::path::Path) -> String {
-    std::fs::read_to_string(path).expect("notification output")
-}
-
 #[test]
 #[serial_test::serial(env)]
-fn production_runtime_installs_daemon_notification_sink() {
+fn production_runtime_only_logs_notifications_after_successful_post_send_emission() {
     let tempdir = TempDir::new().expect("tempdir");
     let workspace_dir = tempdir.path().join("workspace");
     let atm_home = tempdir.path().join("atm-home");
@@ -387,23 +310,15 @@ fn production_runtime_installs_daemon_notification_sink() {
     let notification_path = atm_core::home::host_runtime_dir()
         .expect("host runtime dir")
         .join("notifications.jsonl");
-    let sink = DaemonNotificationSink::new(NotificationRuntime::new_with_observability(
-        SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
-    ));
-    sink.start().expect("start notification sink");
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
-    let runtime = build_production_runtime(
-        &assembly,
-        Arc::new(DaemonNonClaudeOutbound::new()),
-        Arc::new(sink.clone()),
-    );
+    let runtime = build_production_runtime(&assembly, Arc::new(DaemonNonClaudeOutbound::new()));
 
     let request = SendRequest::new(
         atm_home.clone(),
         workspace_dir.clone(),
-        Some(ROLE_TEAM_LEAD),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
         "qa-a@test-team",
-        Some(TEST_TEAM),
+        TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("boundary install proof".to_string()),
         None,
         false,
@@ -414,12 +329,10 @@ fn production_runtime_installs_daemon_notification_sink() {
     let observability = atm_core::observability::NullObservability;
 
     send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
-    sink.shutdown().expect("shutdown notification sink");
 
-    let output = read_notification_output(&notification_path);
     assert!(
-        output.contains("\"kind\":\"delivery\""),
-        "expected delivery notification output, got: {output}"
+        !notification_path.exists(),
+        "notification log should only be appended after a successful post-send emission"
     );
 }
 

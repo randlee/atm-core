@@ -7,8 +7,8 @@ This document indexes the Phase T target flow diagrams for:
 
 Design goals captured by these diagrams:
 - SQLite is the ATM mailbox SSOT for all ATM-owned read paths
-- Claude Code JSONL read/write stays private to the watcher/import/export
-  boundary
+- historical Claude Code JSONL read/write stayed private to the
+  watcher/import/export boundary on the pre-`ADR-019` line
 - normal mailbox queries start from mutable message-status state
 - full message content is fetched only for messages that must be rendered
 - post-commit notification/nudge behavior runs only after durable SQLite
@@ -51,7 +51,8 @@ Static HTML viewers:
   [client-interface-diagrams.html](../reports/client-interface-diagrams.html)
 
 Simplified target model:
-- one private Claude compatibility boundary for JSONL ingest/export
+- historical Claude JSONL ingest/export remains documentation-only and is not
+  part of the accepted runtime after `ADR-019`
 - one SQLite-backed mailbox projection rooted in message-status
 - one generic post-commit notification/nudge subsystem
 - one generic registered-consumer registration/fetch/drain surface

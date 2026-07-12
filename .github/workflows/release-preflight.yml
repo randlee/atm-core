@@ -18,6 +18,7 @@ permissions:
 
 env:
   RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+  STAGED_INSTALL_ROOT: target/phase-ae/staged-install-root
 
 jobs:
   preflight:
@@ -39,9 +40,37 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.1"
+          components: clippy, rustfmt
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Install just
         uses: taiki-e/install-action@just
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.9
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Install cargo-shear
+        uses: taiki-e/install-action@cargo-shear
+
+      - name: Install cargo-binstall
+        uses: taiki-e/install-action@cargo-binstall
+
+      - name: Install cargo-modules
+        run: cargo binstall cargo-modules --no-confirm
+
+      - name: Install codespell
+        run: python -m pip install codespell
 
       - name: Normalize version input
         id: meta
@@ -59,7 +88,16 @@ jobs:
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release_version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Run canonical retained release validation suite
+      - name: Stage installed docs for validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${STAGED_INSTALL_ROOT}"
+          python3 scripts/release_artifacts.py stage-install-docs \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --output-root "${STAGED_INSTALL_ROOT}"
+
+      - name: Run canonical retained release validation suite + user-doc freshness gate
         id: validate
         continue-on-error: true
         shell: bash
@@ -67,6 +105,7 @@ jobs:
           set -euo pipefail
           python3 scripts/validate_release.py all \
             --version '${{ steps.meta.outputs.release_version }}' \
+            --staged-install-root "${STAGED_INSTALL_ROOT}" \
             --findings release-findings.json
 
       - name: Upload release findings

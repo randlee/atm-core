@@ -1,0 +1,76 @@
+---
+id: AE.3
+title: Mailbox And Diagnostics Corpus
+status: complete
+branch: feature/pAE-s3-mailbox-and-diagnostics-corpus
+worktree: ../atm-core-worktrees/feature/pAE-s3-mailbox-and-diagnostics-corpus
+target: integrate/phase-AE
+---
+
+# Sprint AE.3 — Mailbox And Diagnostics Corpus
+
+## Goal
+
+Author the installed user-doc set for mailbox workflows, diagnostics, and
+operator troubleshooting.
+
+## Hard Dependencies
+
+- `AE.2` complete
+- `docs/plans/phase-AE/plan-phase-AE.md`
+
+## Exact Targets
+
+- `docs/user-documents/mailbox-workflows.md`
+- `docs/user-documents/doctor-and-log.md`
+- `docs/user-documents/troubleshooting.md`
+- `docs/user-documents/examples/mailbox/`
+- `docs/user-documents/examples/diagnostics/`
+- `docs/user-documents/examples/troubleshooting/`
+
+## Deliverables
+
+- `docs/user-documents/mailbox-workflows.md` explains supported workflows for:
+  - `send`
+  - `list`
+  - `peek`
+  - `read`
+  - `ack`
+  - `clear`
+- `docs/user-documents/doctor-and-log.md` explains:
+  - `atm doctor`
+  - how to interpret high-signal diagnostic output
+  - where retained logs live
+  - supported log-inspection commands
+- `docs/user-documents/troubleshooting.md` explains supported recovery guidance
+  for:
+  - unresolved caller identity/team
+  - daemon startup/connect failures
+  - post-send warning surfaces
+  - nudge delivery misconfiguration
+- `docs/user-documents/examples/mailbox/`,
+  `docs/user-documents/examples/diagnostics/`, and
+  `docs/user-documents/examples/troubleshooting/` contain working fenced
+  examples for:
+  - `bash`
+  - `json`
+
+## Acceptance Criteria
+
+- mailbox workflow docs reflect the retained split:
+  - `peek`/`list` are inspection-only
+  - `read`/`ack`/`clear` are owner-only mutating commands
+- troubleshooting guidance references supported ATM commands and log files only
+- no troubleshooting step asks the operator to edit the database directly
+- `docs/user-documents/mailbox-workflows.md`,
+  `docs/user-documents/doctor-and-log.md`, and
+  `docs/user-documents/troubleshooting.md` are all present and validated by
+  this sprint
+
+## Required Validation
+
+- `python3 -c "from pathlib import Path; files=[Path('docs/user-documents/mailbox-workflows.md'), Path('docs/user-documents/doctor-and-log.md'), Path('docs/user-documents/troubleshooting.md')]; dirs=[Path('docs/user-documents/examples/mailbox'), Path('docs/user-documents/examples/diagnostics'), Path('docs/user-documents/examples/troubleshooting')]; assert all(p.is_file() for p in files); assert all(d.is_dir() for d in dirs)"`
+- `find docs/user-documents/examples/mailbox -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
+- `find docs/user-documents/examples/diagnostics -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null`
+- `find docs/user-documents/examples/mailbox docs/user-documents/examples/diagnostics docs/user-documents/examples/troubleshooting -name '*.sh' -print0 | xargs -0 -n1 bash -n`
+- `git diff --check`

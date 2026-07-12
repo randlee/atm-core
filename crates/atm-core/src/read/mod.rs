@@ -4,43 +4,38 @@ pub(crate) mod seen_state;
 pub(crate) mod state;
 pub(crate) mod wait;
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::boundary;
-use crate::config;
 use crate::error::AtmError;
-use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
-use crate::threading::ThreadIndex;
 use crate::types::{
-    AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
-    ReadSelection, SourceIndex, TaskId, TeamName,
+    AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    SourceIndex, TaskId, TeamName,
 };
-use metadata_selection::{selection_state_for_mailbox_metadata_rows, sort_and_limit_selected};
+use metadata_selection::{
+    filter_metadata_backed_contains_candidates, load_durable_metadata_message,
+    selection_state_for_mailbox_metadata_rows, sort_and_limit_selected,
+};
 
 pub const MAX_CONTAINS_FILTER_LEN: usize = 1024;
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
 /// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadQuery {
+pub struct MailboxQueryFields {
     pub(crate) home_dir: PathBuf,
     pub(crate) current_dir: PathBuf,
-    pub(crate) actor_override: Option<AgentName>,
     pub(crate) target_address: Option<AgentAddress>,
-    pub(crate) team_override: Option<TeamName>,
     pub(crate) selection_mode: ReadSelection,
     pub(crate) seen_state_filter: bool,
-    pub(crate) seen_state_update: bool,
-    pub(crate) ack_activation_mode: AckActivationMode,
     pub(crate) message_id_filter: Option<AtmMessageId>,
     pub(crate) sender_filter: Option<AgentName>,
     pub(crate) timestamp_filter: Option<IsoTimestamp>,
@@ -49,18 +44,14 @@ pub struct ReadQuery {
     pub(crate) timeout_secs: Option<u64>,
 }
 
-impl ReadQuery {
+impl MailboxQueryFields {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        actor_override: Option<&str>,
         target_address: Option<&str>,
-        team_override: Option<&str>,
         selection_mode: ReadSelection,
         seen_state_filter: bool,
-        seen_state_update: bool,
-        ack_activation_mode: AckActivationMode,
         message_id_filter: Option<&str>,
         sender_filter: Option<&str>,
         timestamp_filter: Option<IsoTimestamp>,
@@ -73,19 +64,15 @@ impl ReadQuery {
         Ok(Self {
             home_dir,
             current_dir,
-            actor_override: actor_override.map(str::parse).transpose()?,
             target_address: target_address.map(str::parse).transpose()?,
-            team_override: team_override.map(str::parse).transpose()?,
             selection_mode,
             seen_state_filter,
-            seen_state_update,
-            ack_activation_mode,
             message_id_filter: message_id_filter
                 .map(|value| {
                     value.parse::<AtmMessageId>().map_err(|source| {
                         AtmError::validation(format!("invalid message id: {value}"))
                             .with_recovery(
-                                "Provide a valid UUID-formatted --message-id before retrying `atm read`.",
+                                "Provide a valid ULID-formatted --message-id before retrying the mailbox command.",
                             )
                             .with_source(source)
                     })
@@ -98,42 +85,154 @@ impl ReadQuery {
             timeout_secs,
         })
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_mailbox_query_fields(
+    home_dir: PathBuf,
+    current_dir: PathBuf,
+    target_address: Option<&str>,
+    selection_mode: ReadSelection,
+    seen_state_filter: bool,
+    message_id_filter: Option<&str>,
+    sender_filter: Option<&str>,
+    timestamp_filter: Option<IsoTimestamp>,
+    task_filter: Option<&str>,
+    contains_filter: Option<&str>,
+    timeout_secs: Option<u64>,
+) -> Result<MailboxQueryFields, AtmError> {
+    MailboxQueryFields::new(
+        home_dir,
+        current_dir,
+        target_address,
+        selection_mode,
+        seen_state_filter,
+        message_id_filter,
+        sender_filter,
+        timestamp_filter,
+        task_filter,
+        contains_filter,
+        timeout_secs,
+    )
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeekQuery {
+    pub(crate) mailbox: MailboxQueryFields,
+    pub(crate) caller_identity: AgentName,
+    pub(crate) caller_team: TeamName,
+}
+
+impl PeekQuery {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        caller_identity: AgentName,
+        target_address: Option<&str>,
+        caller_team: TeamName,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        message_id_filter: Option<&str>,
+        sender_filter: Option<&str>,
+        timestamp_filter: Option<IsoTimestamp>,
+        task_filter: Option<&str>,
+        contains_filter: Option<&str>,
+        timeout_secs: Option<u64>,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            mailbox: build_mailbox_query_fields(
+                home_dir,
+                current_dir,
+                target_address,
+                selection_mode,
+                seen_state_filter,
+                message_id_filter,
+                sender_filter,
+                timestamp_filter,
+                task_filter,
+                contains_filter,
+                timeout_secs,
+            )?,
+            caller_identity,
+            caller_team,
+        })
+    }
+}
+
+/// Parameters for querying and optionally mutating one mailbox display surface.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadQuery {
+    pub(crate) mailbox: MailboxQueryFields,
+    pub(crate) caller_identity: AgentName,
+    pub(crate) caller_team: TeamName,
+    pub(crate) seen_state_update: bool,
+}
+
+impl ReadQuery {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        caller_identity: AgentName,
+        target_address: Option<&str>,
+        caller_team: TeamName,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        seen_state_update: bool,
+        message_id_filter: Option<&str>,
+        sender_filter: Option<&str>,
+        timestamp_filter: Option<IsoTimestamp>,
+        task_filter: Option<&str>,
+        contains_filter: Option<&str>,
+        timeout_secs: Option<u64>,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            mailbox: build_mailbox_query_fields(
+                home_dir,
+                current_dir,
+                target_address,
+                selection_mode,
+                seen_state_filter,
+                message_id_filter,
+                sender_filter,
+                timestamp_filter,
+                task_filter,
+                contains_filter,
+                timeout_secs,
+            )?,
+            caller_identity,
+            caller_team,
+            seen_state_update,
+        })
+    }
 
     pub fn team_override(&self) -> Option<&TeamName> {
-        self.team_override.as_ref()
+        Some(&self.caller_team)
     }
 
     pub fn selection_mode(&self) -> ReadSelection {
-        self.selection_mode
+        self.mailbox.selection_mode
     }
 
     pub fn seen_state_filter(&self) -> bool {
-        self.seen_state_filter
+        self.mailbox.seen_state_filter
     }
 
     pub fn seen_state_update(&self) -> bool {
         self.seen_state_update
     }
 
-    pub fn ack_activation_mode(&self) -> AckActivationMode {
-        self.ack_activation_mode
-    }
-
     pub fn message_id_filter(&self) -> Option<&AtmMessageId> {
-        self.message_id_filter.as_ref()
+        self.mailbox.message_id_filter.as_ref()
     }
 
     pub fn timeout_secs(&self) -> Option<u64> {
-        self.timeout_secs
+        self.mailbox.timeout_secs
     }
 
     pub fn with_selection_mode(mut self, selection_mode: ReadSelection) -> Self {
-        self.selection_mode = selection_mode;
-        self
-    }
-
-    pub fn with_ack_activation_mode(mut self, ack_activation_mode: AckActivationMode) -> Self {
-        self.ack_activation_mode = ack_activation_mode;
+        self.mailbox.selection_mode = selection_mode;
         self
     }
 }
@@ -151,7 +250,7 @@ pub(crate) fn normalize_contains_filter(
                 "Shorten the `--contains` filter before retrying so ATM can keep daemon-side substring scans bounded.",
             ),
         ),
-        Some(value) => Ok(Some(value.to_string())),
+        Some(value) => Ok(Some(value.to_ascii_lowercase())),
         None => Ok(None),
     }
 }
@@ -231,12 +330,91 @@ pub fn read_mail(
     read_mail_with_runtime_impl(query, observability, &runtime)
 }
 
+pub fn peek_mail(
+    query: PeekQuery,
+    observability: &dyn ObservabilityPort,
+) -> Result<ReadOutcome, AtmError> {
+    let runtime = default_runtime()?;
+    peek_mail_with_runtime(query, observability, &runtime)
+}
+
 pub fn read_mail_with_runtime(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<ReadOutcome, AtmError> {
     read_mail_with_runtime_impl(query, observability, runtime)
+}
+
+pub fn peek_mail_with_runtime(
+    query: PeekQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ReadOutcome, AtmError> {
+    peek_mail_with_runtime_impl(query, observability, runtime)
+}
+
+fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: PeekQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ReadOutcome, AtmError> {
+    let synthesized = ReadQuery {
+        mailbox: query.mailbox,
+        caller_identity: query.caller_identity,
+        caller_team: query.caller_team,
+        seen_state_update: false,
+    };
+    let ReadRuntimeContext {
+        actor,
+        actor_team,
+        target,
+        seen_watermark,
+    } = resolve_read_context(&synthesized, runtime, false)?;
+    let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
+    let selection = load_read_selection(runtime, &synthesized, &target, seen_watermark)?;
+    let display = resolve_read_display(
+        runtime,
+        &synthesized,
+        &target,
+        seen_watermark,
+        own_inbox,
+        DisplayMutationMode::NonMutatingPeek,
+        selection,
+    )?;
+
+    let outcome = ReadOutcome {
+        action: CommandAction::Peek,
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        selection_mode: synthesized.mailbox.selection_mode,
+        mutation_applied: display.mutation_applied,
+        count: usize::from(display.output_message.is_some()),
+        message: display.output_message,
+        selected_message_id: display.selected_message_id,
+        match_count: display.match_count,
+        additional_match_count: display.match_count.saturating_sub(1),
+        bucket_counts: display.bucket_counts,
+    };
+
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "peek",
+        action: action_name("peek"),
+        outcome: outcome_label(if display.timed_out { "timeout" } else { "ok" }),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: actor,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, command = "peek", action = "peek", "failed to emit peek command event");
+    }
+
+    Ok(outcome)
 }
 
 fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -249,7 +427,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         actor_team,
         target,
         seen_watermark,
-    } = resolve_read_context(&query, runtime)?;
+    } = resolve_read_context(&query, runtime, true)?;
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let selection = load_read_selection(runtime, &query, &target, seen_watermark)?;
     let display = resolve_read_display(
@@ -258,6 +436,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &target,
         seen_watermark,
         own_inbox,
+        DisplayMutationMode::MutatingRead,
         selection,
     )?;
 
@@ -270,7 +449,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             .max()
     {
         runtime.save_seen_watermark(
-            &query.home_dir,
+            &query.mailbox.home_dir,
             &target.team,
             &target.agent,
             latest_timestamp,
@@ -281,7 +460,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         action: CommandAction::Read,
         team: target.team.clone(),
         agent: target.agent.clone(),
-        selection_mode: query.selection_mode,
+        selection_mode: query.mailbox.selection_mode,
         mutation_applied: display.mutation_applied,
         count: usize::from(display.output_message.is_some()),
         message: display.output_message,
@@ -328,36 +507,52 @@ struct ReadDisplayState {
     selected: Vec<ClassifiedMessage>,
 }
 
+struct ReadSelectionSummary {
+    selected_message_id: Option<AtmMessageId>,
+    match_count: usize,
+}
+
 fn load_read_selection<R: RetainedMailboxRuntime>(
     runtime: &R,
     query: &ReadQuery,
     target: &crate::mailbox::source::ResolvedTarget,
     seen_watermark: Option<IsoTimestamp>,
 ) -> Result<ReadSelectionState, AtmError> {
-    let mut metadata_rows =
-        load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
-    let (mut bucket_counts, mut selected) =
+    let contains_needle = query.mailbox.contains_filter.as_deref();
+    let mut metadata_rows = load_checked_read_metadata(
+        runtime,
+        &query.mailbox.home_dir,
+        &target.team,
+        &target.agent,
+    )?;
+    let (mut bucket_counts, metadata_selected) =
         selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+    let mut selected = filter_metadata_backed_contains_candidates(
+        runtime,
+        &query.mailbox.home_dir,
+        &target.team,
+        &target.agent,
+        &metadata_rows,
+        metadata_selected,
+        contains_needle,
+    )?;
     let mut timed_out = false;
 
     if selected.is_empty()
-        && let Some(timeout_secs) = query.timeout_secs
+        && let Some(timeout_secs) = query.mailbox.timeout_secs
     {
-        let wait_satisfied = wait::wait_for_eligible_message(
+        let waited = wait_for_selection_candidates(
+            runtime,
+            query,
+            target,
+            seen_watermark,
+            contains_needle,
             timeout_secs,
-            || load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent),
-            |rows| {
-                !selection_state_for_mailbox_metadata_rows(rows, query, seen_watermark)
-                    .1
-                    .is_empty()
-            },
         )?;
-
-        if wait_satisfied {
-            metadata_rows =
-                load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
-            (bucket_counts, selected) =
-                selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+        if let Some((updated_rows, updated_counts, updated_selected)) = waited {
+            metadata_rows = updated_rows;
+            bucket_counts = updated_counts;
+            selected = updated_selected;
         } else {
             timed_out = true;
         }
@@ -376,38 +571,22 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
     query: &ReadQuery,
     target: &crate::mailbox::source::ResolvedTarget,
     seen_watermark: Option<IsoTimestamp>,
-    own_inbox: bool,
+    _own_inbox: bool,
+    mutation_mode: DisplayMutationMode,
     mut selection: ReadSelectionState,
 ) -> Result<ReadDisplayState, AtmError> {
-    let match_count = selection.selected.len();
+    let summary = ReadSelectionSummary {
+        match_count: selection.selected.len(),
+        selected_message_id: selection
+            .selected
+            .first()
+            .and_then(|message| message.envelope.message_id),
+    };
     sort_and_limit_selected(&mut selection.selected, Some(1));
-    let selected_message_id = selection
-        .selected
-        .first()
-        .and_then(|message| message.envelope.message_id);
-    let mutation_needed = displayed_messages_require_mutation(&selection.selected);
+    let mutation_needed = displayed_messages_require_mutation(mutation_mode, &selection.selected);
 
     if selection.timed_out || selection.selected.is_empty() || !mutation_needed {
-        let output_message = output_messages_from_metadata_selection(
-            runtime,
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-            &selection.metadata_rows,
-            &selection.selected,
-            query.message_id_filter,
-        )?
-        .into_iter()
-        .next();
-        return Ok(ReadDisplayState {
-            mutation_applied: false,
-            output_message,
-            bucket_counts: selection.bucket_counts,
-            selected_message_id,
-            match_count,
-            timed_out: selection.timed_out,
-            selected: selection.selected,
-        });
+        return build_unmodified_read_display(runtime, query, target, selection, summary);
     }
 
     let mutation_applied = apply_display_mutations_to_store(
@@ -415,31 +594,155 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
         &target.team,
         &target.agent,
         &selection.selected,
-        query.ack_activation_mode,
-        own_inbox,
     )?;
-    let metadata_rows =
-        load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
-    let (_updated_counts, updated_selected) =
-        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
-    let updated_selected = updated_selected.into_iter().take(1).collect::<Vec<_>>();
-    let output_message = output_messages_from_metadata_selection(
+    build_mutated_read_display(
         runtime,
-        &query.home_dir,
+        query,
+        target,
+        seen_watermark,
+        selection,
+        summary,
+        mutation_applied,
+    )
+}
+
+type WaitedSelection = Option<(
+    Vec<boundary::MailStoreMailboxMetadataRow>,
+    BucketCounts,
+    Vec<ClassifiedMessage>,
+)>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DisplayMutationMode {
+    MutatingRead,
+    NonMutatingPeek,
+}
+
+fn wait_for_selection_candidates<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+    contains_needle: Option<&str>,
+    timeout_secs: u64,
+) -> Result<WaitedSelection, AtmError> {
+    let wait_satisfied = wait::wait_for_eligible_message(
+        timeout_secs,
+        || {
+            load_checked_read_metadata(
+                runtime,
+                &query.mailbox.home_dir,
+                &target.team,
+                &target.agent,
+            )
+        },
+        |rows| {
+            let selected = selection_state_for_mailbox_metadata_rows(rows, query, seen_watermark).1;
+            filter_metadata_backed_contains_candidates(
+                runtime,
+                &query.mailbox.home_dir,
+                &target.team,
+                &target.agent,
+                rows,
+                selected,
+                contains_needle,
+            )
+            .map(|filtered| !filtered.is_empty())
+        },
+    )?;
+    if !wait_satisfied {
+        return Ok(None);
+    }
+    let metadata_rows = load_checked_read_metadata(
+        runtime,
+        &query.mailbox.home_dir,
+        &target.team,
+        &target.agent,
+    )?;
+    let (updated_counts, metadata_selected) =
+        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+    let updated_selected = filter_metadata_backed_contains_candidates(
+        runtime,
+        &query.mailbox.home_dir,
         &target.team,
         &target.agent,
         &metadata_rows,
-        &updated_selected,
-        query.message_id_filter,
+        metadata_selected,
+        contains_needle,
+    )?;
+    Ok(Some((metadata_rows, updated_counts, updated_selected)))
+}
+
+fn build_unmodified_read_display<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    selection: ReadSelectionState,
+    summary: ReadSelectionSummary,
+) -> Result<ReadDisplayState, AtmError> {
+    let output_message = output_messages_from_metadata_selection(
+        runtime,
+        &query.mailbox.home_dir,
+        &target.team,
+        &target.agent,
+        &selection.metadata_rows,
+        &selection.selected,
+        summary.selected_message_id,
     )?
     .into_iter()
     .next();
     Ok(ReadDisplayState {
-        mutation_applied,
+        mutation_applied: false,
         output_message,
         bucket_counts: selection.bucket_counts,
-        selected_message_id,
-        match_count,
+        selected_message_id: summary.selected_message_id,
+        match_count: summary.match_count,
+        timed_out: selection.timed_out,
+        selected: selection.selected,
+    })
+}
+
+fn build_mutated_read_display<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+    selection: ReadSelectionState,
+    summary: ReadSelectionSummary,
+    mutation_applied: bool,
+) -> Result<ReadDisplayState, AtmError> {
+    let metadata_rows = load_checked_read_metadata(
+        runtime,
+        &query.mailbox.home_dir,
+        &target.team,
+        &target.agent,
+    )?;
+    let (updated_counts, _updated_selected) =
+        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+    let output_message = selection
+        .selected
+        .first()
+        .cloned()
+        .map(|selected_message| {
+            output_messages_from_metadata_selection(
+                runtime,
+                &query.mailbox.home_dir,
+                &target.team,
+                &target.agent,
+                &metadata_rows,
+                &[selected_message],
+                summary.selected_message_id,
+            )
+            .map(|mut messages| messages.pop())
+        })
+        .transpose()?
+        .flatten();
+    Ok(ReadDisplayState {
+        mutation_applied,
+        output_message,
+        bucket_counts: updated_counts,
+        selected_message_id: summary.selected_message_id,
+        match_count: summary.match_count,
         timed_out: selection.timed_out,
         selected: selection.selected,
     })
@@ -455,18 +758,23 @@ struct ReadRuntimeContext {
 fn resolve_read_context<R: RetainedServiceRuntime>(
     query: &ReadQuery,
     runtime: &R,
+    owner_only: bool,
 ) -> Result<ReadRuntimeContext, AtmError> {
-    let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
-    let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
+    let config = runtime.load_config(&query.mailbox.current_dir)?;
+    let actor = query.caller_identity.clone();
+    let actor_team = Some(query.caller_team.clone());
     let target = resolve_target(
-        query.target_address.as_ref(),
+        query.mailbox.target_address.as_ref(),
         &actor,
-        query.team_override.as_ref(),
+        &query.caller_team,
         config.as_ref(),
     )?;
 
-    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
+    if owner_only {
+        ensure_owner_only_read_target(&actor, &query.caller_team, &target)?;
+    }
+
+    let team_dir = runtime.team_dir(&query.mailbox.home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm read`.",
@@ -475,11 +783,12 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
 
     validate_target_member_in_roster(runtime, &target)?;
 
-    let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
-        runtime.load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
-    } else {
-        None
-    };
+    let seen_watermark =
+        if query.mailbox.seen_state_filter && query.mailbox.selection_mode != ReadSelection::All {
+            runtime.load_seen_watermark(&query.mailbox.home_dir, &target.team, &target.agent)?
+        } else {
+            None
+        };
 
     Ok(ReadRuntimeContext {
         actor,
@@ -511,6 +820,29 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
     Ok(())
 }
 
+fn ensure_owner_only_read_target(
+    actor: &AgentName,
+    actor_team: &TeamName,
+    target: &crate::mailbox::source::ResolvedTarget,
+) -> Result<(), AtmError> {
+    if target.explicit
+        && (!actor.as_str().eq_ignore_ascii_case(target.agent.as_str())
+            || !actor_team
+                .as_str()
+                .eq_ignore_ascii_case(target.team.as_str()))
+    {
+        return Err(AtmError::validation(format!(
+            "owner-only `atm read` may not target '{}' in team '{}'; run the command as the mailbox owner or use `atm peek --as` for inspection",
+            target.agent, target.team
+        ))
+        .with_recovery(
+            "Rerun `atm read` without a mailbox target as the owner, or use `atm peek --as <member>` for non-mutating inspection.",
+        ));
+    }
+
+    Ok(())
+}
+
 fn message_key_for_classified(
     message: &ClassifiedMessage,
 ) -> Result<boundary::MessageKey, AtmError> {
@@ -519,7 +851,7 @@ fn message_key_for_classified(
             "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
         )
     })?;
-    boundary::MessageKey::new(format!("atm:{message_id}"))
+    Ok(boundary::MessageKey::from(message_id))
 }
 
 fn load_checked_read_metadata(
@@ -541,112 +873,20 @@ fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
     selected: &[ClassifiedMessage],
     exact_message_id: Option<AtmMessageId>,
 ) -> Result<Vec<ClassifiedMessage>, AtmError> {
-    let row_by_id = metadata_rows
-        .iter()
-        .filter_map(|row| row.message_id.map(|message_id| (message_id, row)))
-        .collect::<HashMap<_, _>>();
-
     selected
         .iter()
-        .cloned()
         .map(|selected_message| {
-            let message_key = message_key_for_classified(&selected_message)?;
-            let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?
-            else {
-                return Err(AtmError::validation(format!(
-                    "sqlite mailbox metadata row {} could not be reloaded for read output",
-                    message_key
-                ))
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox row before retrying `atm read`.",
-                ));
-            };
-            let envelope = if exact_message_id == record.envelope.message_id {
-                record.envelope
-            } else if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
-                load_logical_current_record(
-                    runtime,
-                    home_dir,
-                    team,
-                    agent,
-                    &row_by_id,
-                    &selected_message,
-                    record.envelope,
-                )?
-            } else {
-                record.envelope
-            };
-            Ok(ClassifiedMessage {
-                source_index: selected_message.source_index,
-                source_path: selected_message.source_path,
-                bucket: state::display_bucket_for_class(state::classify_message(&envelope)),
-                class: state::classify_message(&envelope),
-                envelope,
-            })
+            load_durable_metadata_message(
+                runtime,
+                home_dir,
+                team,
+                agent,
+                metadata_rows,
+                selected_message,
+                exact_message_id,
+            )
         })
         .collect()
-}
-
-fn load_logical_current_record<R: RetainedMailboxRuntime>(
-    runtime: &R,
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    row_by_id: &HashMap<AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
-    selected_message: &ClassifiedMessage,
-    terminal_envelope: InboxMessage,
-) -> Result<InboxMessage, AtmError> {
-    let Some(mut current_id) = terminal_envelope.message_id else {
-        return Ok(terminal_envelope);
-    };
-
-    let mut chain_ids = Vec::new();
-    while let Some(row) = row_by_id.get(&current_id) {
-        chain_ids.push(current_id);
-        let Some(parent_id) = row.parent_message_id else {
-            break;
-        };
-        current_id = parent_id;
-    }
-    chain_ids.reverse();
-
-    let mut chain = Vec::new();
-    for message_id in chain_ids {
-        let Some(row) = row_by_id.get(&message_id) else {
-            return Err(AtmError::validation(format!(
-                "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
-                message_id
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read`.",
-            ));
-        };
-        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
-        else {
-            return Err(AtmError::validation(format!(
-                "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
-                row.message_key
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read`.",
-            ));
-        };
-        chain.push(record.envelope);
-    }
-    let thread_index = ThreadIndex::new(&chain);
-    thread_index
-        .logical_current_envelope(
-            terminal_envelope
-                .message_id
-                .or(selected_message.envelope.message_id)
-                .unwrap_or(current_id),
-        )
-        .ok_or_else(|| {
-            AtmError::validation("failed to reconstruct logical current thread envelope")
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox thread rows before retrying `atm read`.",
-                )
-        })
 }
 
 fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
@@ -654,16 +894,12 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     team: &TeamName,
     agent: &AgentName,
     displayed_messages: &[ClassifiedMessage],
-    ack_activation_mode: AckActivationMode,
-    own_inbox: bool,
 ) -> Result<bool, AtmError> {
     let mut changed = false;
-    let promote_unread =
-        own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
     let now = IsoTimestamp::now();
 
     for message in displayed_messages {
-        let updated = transition_displayed_message(message, promote_unread, now).into_envelope();
+        let updated = transition_displayed_message(message).into_envelope();
         if updated == message.envelope {
             continue;
         }
@@ -685,29 +921,23 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     Ok(changed)
 }
 
-fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
+fn displayed_messages_require_mutation(
+    mutation_mode: DisplayMutationMode,
+    displayed_messages: &[ClassifiedMessage],
+) -> bool {
+    if mutation_mode == DisplayMutationMode::NonMutatingPeek {
+        return false;
+    }
     displayed_messages
         .iter()
         .any(|message| !message.envelope.read)
 }
 
-fn transition_displayed_message(
-    message: &ClassifiedMessage,
-    promote_unread: bool,
-    now: IsoTimestamp,
-) -> state::TransitionedMessage {
+fn transition_displayed_message(message: &ClassifiedMessage) -> state::TransitionedMessage {
     let read_state = state::derive_read_state(&message.envelope);
     let ack_state = state::derive_ack_state(&message.envelope);
 
     match (read_state, ack_state) {
-        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
-            state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
-                    message.envelope.clone(),
-                )
-                .display_and_require_ack(now),
-            )
-        }
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
             state::TransitionedMessage::ReadNoAck(
                 state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
@@ -742,6 +972,8 @@ fn transition_displayed_message(
 mod tests {
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     use serde_json::Map;
@@ -749,10 +981,11 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
-        read_mail_with_runtime_impl, state,
+        BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, metadata_selection,
+        peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
     };
-    use crate::boundary::{self, ProjectionAppendMode, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
+    use crate::error::AtmError;
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
@@ -764,8 +997,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-        TaskId, TeamName,
+        AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId,
+        TeamName,
     };
     use crate::workflow::{self, WorkflowStateFile};
 
@@ -786,7 +1019,7 @@ mod tests {
             ),
             workflow_state,
         );
-        if let Some(message_id) = query.message_id_filter {
+        if let Some(message_id) = query.mailbox.message_id_filter {
             let selected = classified_all
                 .iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
@@ -798,15 +1031,20 @@ mod tests {
         }
         let logical_current = metadata_selection::logical_current_messages(classified_all);
         let bucket_counts = metadata_selection::bucket_counts_for(&logical_current);
-        let filtered = metadata_selection::apply_filters(
-            logical_current,
-            query.sender_filter.as_ref(),
-            query.timestamp_filter,
-            query.task_filter.as_ref(),
-            query.contains_filter.as_deref(),
+        let filtered = crate::read::filters::apply_contains_filter(
+            metadata_selection::apply_metadata_only_filters(
+                logical_current,
+                query.mailbox.sender_filter.as_ref(),
+                query.mailbox.timestamp_filter,
+                query.mailbox.task_filter.as_ref(),
+            ),
+            query.mailbox.contains_filter.as_deref(),
         );
-        let selected =
-            metadata_selection::select_messages(&filtered, query.selection_mode, seen_watermark);
+        let selected = metadata_selection::select_messages(
+            &filtered,
+            query.mailbox.selection_mode,
+            seen_watermark,
+        );
         (bucket_counts, selected)
     }
 
@@ -817,20 +1055,22 @@ mod tests {
         seen_watermark: Option<IsoTimestamp>,
     ) -> Vec<ClassifiedMessage> {
         let classified = classify_all(messages.to_vec(), workflow_state);
-        if let Some(message_id) = query.message_id_filter {
+        if let Some(message_id) = query.mailbox.message_id_filter {
             return classified
                 .into_iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
                 .collect();
         }
-        let filtered = metadata_selection::apply_filters(
-            metadata_selection::logical_current_messages(classified),
-            query.sender_filter.as_ref(),
-            query.timestamp_filter,
-            query.task_filter.as_ref(),
-            query.contains_filter.as_deref(),
+        let filtered = crate::read::filters::apply_contains_filter(
+            metadata_selection::apply_metadata_only_filters(
+                metadata_selection::logical_current_messages(classified),
+                query.mailbox.sender_filter.as_ref(),
+                query.mailbox.timestamp_filter,
+                query.mailbox.task_filter.as_ref(),
+            ),
+            query.mailbox.contains_filter.as_deref(),
         );
-        metadata_selection::select_messages(&filtered, query.selection_mode, seen_watermark)
+        metadata_selection::select_messages(&filtered, query.mailbox.selection_mode, seen_watermark)
     }
 
     fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -1016,6 +1256,7 @@ mod tests {
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(message_id),
+            requires_ack: false,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -1047,18 +1288,17 @@ mod tests {
     struct ReadRuntime {
         team_dir: PathBuf,
         roster_present: bool,
+        metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+        metadata_row_batches: Option<Vec<Vec<boundary::MailStoreMailboxMetadataRow>>>,
+        message_records: HashMap<MessageKey, boundary::Message>,
+        query_mailbox_metadata_rows_count: Arc<AtomicUsize>,
+        load_message_record_count: Arc<AtomicUsize>,
+        save_seen_watermark_count: Arc<AtomicUsize>,
+        persist_message_state_count: Arc<AtomicUsize>,
+        fail_load_message_record: bool,
     }
 
     impl crate::boundary::sealed::Sealed for ReadRuntime {}
-
-    impl crate::boundary::NotificationSink for ReadRuntime {
-        fn deliver(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
-        }
-    }
 
     impl RetainedServiceRuntime for ReadRuntime {
         fn load_config(
@@ -1108,6 +1348,8 @@ mod tests {
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
+            self.save_seen_watermark_count
+                .fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
@@ -1124,23 +1366,6 @@ mod tests {
             _agent: &AgentName,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("read roster-truth tests do not rebuild projections")
-        }
-
-        fn append_compat_inbox_message(
-            &self,
-            _inbox_path: &Path,
-            _message: &InboxMessage,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox messages")
-        }
-
-        fn append_compat_inbox_message_set(
-            &self,
-            _inbox_path: &Path,
-            _mode: ProjectionAppendMode,
-            _messages: &[InboxMessage],
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not append compat inbox message sets")
         }
 
         fn deliver_non_claude_payloads(
@@ -1200,7 +1425,16 @@ mod tests {
             _agent: &AgentName,
             _limit: Option<usize>,
         ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
-            Ok(Vec::new())
+            if let Some(batches) = &self.metadata_row_batches {
+                let index = self
+                    .query_mailbox_metadata_rows_count
+                    .fetch_add(1, Ordering::SeqCst);
+                return Ok(batches
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| batches.last().cloned().unwrap_or_default()));
+            }
+            Ok(self.metadata_rows.clone())
         }
 
         fn load_message_record(
@@ -1208,9 +1442,16 @@ mod tests {
             _home_dir: &Path,
             _team: &TeamName,
             _agent: &AgentName,
-            _message_key: &boundary::MessageKey,
+            message_key: &boundary::MessageKey,
         ) -> Result<Option<boundary::Message>, crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not load message records")
+            self.load_message_record_count
+                .fetch_add(1, Ordering::SeqCst);
+            if self.fail_load_message_record {
+                return Err(AtmError::mailbox_read(
+                    "simulated durable reload failure during contains filtering",
+                ));
+            }
+            Ok(self.message_records.get(message_key).cloned())
         }
 
         fn persist_message_record(
@@ -1224,7 +1465,9 @@ mod tests {
             &self,
             _state: boundary::MailMessageState,
         ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not persist message state")
+            self.persist_message_state_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
         }
     }
 
@@ -1233,13 +1476,12 @@ mod tests {
         ReadQuery::new(
             home_dir,
             current_dir,
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some(&target),
-            None,
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::All,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1248,6 +1490,96 @@ mod tests {
             None,
         )
         .expect("read query")
+    }
+
+    fn explicit_peek_query(home_dir: PathBuf, current_dir: PathBuf) -> PeekQuery {
+        let target = format!("recipient@{TEST_TEAM}");
+        PeekQuery::new(
+            home_dir,
+            current_dir,
+            TEST_SENDER.parse().expect("caller"),
+            Some(&target),
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query")
+    }
+
+    fn base_read_query() -> ReadQuery {
+        ReadQuery::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            TEST_SENDER.parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+    }
+
+    fn metadata_row(
+        text: &str,
+        summary: Option<&str>,
+        from: &str,
+    ) -> (boundary::MailStoreMailboxMetadataRow, boundary::Message) {
+        let message_id = AtmMessageId::new();
+        let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
+        let envelope = InboxMessage {
+            from: from.parse::<AgentName>().expect("agent"),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            summary: summary.map(str::to_string),
+            message_id: Some(message_id),
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        (
+            boundary::MailStoreMailboxMetadataRow {
+                message_key: message_key.clone(),
+                message_id: Some(message_id),
+                parent_message_id: None,
+                thread_mode: None,
+                from_agent: from.parse::<AgentName>().expect("agent"),
+                summary: summary.map(str::to_string),
+                message_at: envelope.timestamp,
+                read: false,
+                requires_ack: false,
+                pending_ack: false,
+                acknowledged_at: None,
+                expires_at: None,
+                task_id: None,
+            },
+            boundary::Message {
+                team: TEST_TEAM.parse::<TeamName>().expect("team"),
+                agent: "recipient".parse::<AgentName>().expect("agent"),
+                message_key,
+                envelope,
+            },
+        )
     }
 
     #[test]
@@ -1272,23 +1604,7 @@ mod tests {
             sourced_message(0, &malformed),
             sourced_message(1, "normal unread"),
         ];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::All,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let query = base_read_query();
 
         let selected = std::panic::catch_unwind(|| {
             selected_after_filters(&messages, &workflow_state, &query, None)
@@ -1317,13 +1633,12 @@ mod tests {
         let error = ReadQuery::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some(TEST_SENDER),
+            TEST_SENDER.parse().expect("caller"),
             Some("../evil"),
-            Some(TEST_TEAM),
+            TEST_TEAM.parse().expect("team"),
             ReadSelection::Actionable,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -1332,31 +1647,6 @@ mod tests {
             None,
         )
         .expect_err("invalid target");
-
-        assert!(error.message.contains("agent name"));
-    }
-
-    #[test]
-    fn read_query_new_rejects_invalid_actor_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = ReadQuery::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some("../evil"),
-            None,
-            Some(TEST_TEAM),
-            ReadSelection::Actionable,
-            false,
-            false,
-            AckActivationMode::ReadOnly,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect_err("invalid actor");
 
         assert!(error.message.contains("agent name"));
     }
@@ -1382,23 +1672,8 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1428,23 +1703,9 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: Some("root context".to_string()),
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
+        query.mailbox.contains_filter = Some("root context".to_string());
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1478,23 +1739,9 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: Some("root context".to_string()),
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
+        query.mailbox.contains_filter = Some("root context".to_string());
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1523,23 +1770,8 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1570,23 +1802,8 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.selection_mode = ReadSelection::Actionable;
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1614,27 +1831,10 @@ mod tests {
             source_index: 0.into(),
         }];
         let workflow_state = workflow::WorkflowStateFile::default();
-        let actionable = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
-        let all = ReadQuery {
-            selection_mode: ReadSelection::All,
-            ..actionable.clone()
-        };
+        let mut actionable = base_read_query();
+        actionable.mailbox.selection_mode = ReadSelection::Actionable;
+        let mut all = actionable.clone();
+        all.mailbox.selection_mode = ReadSelection::All;
 
         assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
         assert_eq!(
@@ -1657,27 +1857,10 @@ mod tests {
             source_index: 0.into(),
         }];
         let workflow_state = workflow::WorkflowStateFile::default();
-        let actionable = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::Actionable,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
-        let all = ReadQuery {
-            selection_mode: ReadSelection::All,
-            ..actionable.clone()
-        };
+        let mut actionable = base_read_query();
+        actionable.mailbox.selection_mode = ReadSelection::Actionable;
+        let mut all = actionable.clone();
+        all.mailbox.selection_mode = ReadSelection::All;
 
         assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
         assert!(selected_after_filters(&messages, &workflow_state, &all, None).is_empty());
@@ -1711,23 +1894,8 @@ mod tests {
                 },
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::All,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: Some(task_id),
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.task_filter = Some(task_id);
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1757,23 +1925,8 @@ mod tests {
                 ),
             ],
         }];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::All,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            message_id_filter: Some(root_id),
-            sender_filter: None,
-            timestamp_filter: None,
-            task_filter: None,
-            contains_filter: None,
-            timeout_secs: None,
-        };
+        let mut query = base_read_query();
+        query.mailbox.message_id_filter = Some(root_id);
 
         let (_counts, selected) = selection_state_for_source_files(
             &source_files,
@@ -1787,35 +1940,121 @@ mod tests {
     }
 
     #[test]
-    fn read_mail_uses_atm_roster_truth_for_explicit_targets() {
+    fn metadata_backed_read_contains_fetches_durable_body_when_summary_misses() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (mut metadata_row, mut message_record) = metadata_row(
+            "durable body with needle",
+            Some("summary miss"),
+            TEST_SENDER,
+        );
+        metadata_row.read = true;
+        message_record.envelope.read = true;
+        let load_count = Arc::new(AtomicUsize::new(0));
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+            metadata_rows: vec![metadata_row],
+            metadata_row_batches: None,
+            message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: load_count.clone(),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
+        };
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Some("needle"),
+            None,
+        )
+        .expect("read query");
+
+        let outcome =
+            read_mail_with_runtime_impl(query, &NullObservability, &runtime).expect("read outcome");
+
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.text.as_str()),
+            Some("durable body with needle")
+        );
+        assert_eq!(load_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (metadata_row, message_record) =
+            metadata_row("peek target", Some("peek summary"), TEST_SENDER);
+        let persist_count = Arc::new(AtomicUsize::new(0));
+        let seen_count = Arc::new(AtomicUsize::new(0));
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+            metadata_rows: vec![metadata_row],
+            metadata_row_batches: None,
+            message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: seen_count.clone(),
+            persist_message_state_count: persist_count.clone(),
+            fail_load_message_record: false,
+        };
+
+        let outcome = peek_mail_with_runtime_impl(
+            explicit_peek_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("peek outcome");
+
+        assert_eq!(outcome.action, CommandAction::Peek);
+        assert!(!outcome.mutation_applied);
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+        assert_eq!(persist_count.load(Ordering::SeqCst), 0);
+        assert_eq!(seen_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn read_mail_rejects_explicit_cross_agent_targets_on_mutating_path() {
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ReadRuntime {
             team_dir,
             roster_present: true,
-        };
-
-        let outcome = read_mail_with_runtime_impl(
-            explicit_read_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
-            &NullObservability,
-            &runtime,
-        )
-        .expect("read outcome");
-
-        assert_eq!(outcome.team, TeamName::from_validated(TEST_TEAM));
-        assert_eq!(outcome.agent, AgentName::from_validated("recipient"));
-        assert_eq!(outcome.count, 0);
-    }
-
-    #[test]
-    fn read_mail_rejects_explicit_targets_missing_from_atm_roster() {
-        let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
-        let runtime = ReadRuntime {
-            team_dir,
-            roster_present: false,
+            metadata_rows: Vec::new(),
+            metadata_row_batches: None,
+            message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
         };
 
         let error = read_mail_with_runtime_impl(
@@ -1823,8 +2062,85 @@ mod tests {
             &NullObservability,
             &runtime,
         )
-        .expect_err("missing ATM roster member should fail");
+        .expect_err("cross-agent owner-only read must fail");
 
-        assert!(error.is_agent_not_found(), "{error:?}");
+        assert!(error.is_validation(), "{error:?}");
+        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+    }
+
+    #[test]
+    fn peek_mail_rejects_explicit_targets_missing_from_atm_roster() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: false,
+            metadata_rows: Vec::new(),
+            metadata_row_batches: None,
+            message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
+        };
+
+        let error = peek_mail_with_runtime_impl(
+            explicit_peek_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect_err("peek with explicit missing roster target must fail");
+
+        assert_eq!(error.code, crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(error.message.contains("recipient"), "{error:?}");
+    }
+
+    #[test]
+    fn read_wait_propagates_contains_reload_errors_instead_of_timeout() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let (metadata_row, message_record) = metadata_row(
+            "durable body with needle",
+            Some("summary miss"),
+            TEST_SENDER,
+        );
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+            metadata_rows: Vec::new(),
+            metadata_row_batches: Some(vec![Vec::new(), vec![metadata_row]]),
+            message_records: HashMap::from([(message_record.message_key.clone(), message_record)]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: true,
+        };
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Some("needle"),
+            Some(1),
+        )
+        .expect("read query");
+
+        let error = read_mail_with_runtime_impl(query, &NullObservability, &runtime)
+            .expect_err("durable reload failure should surface");
+
+        assert!(error.is_mailbox_read(), "{error:?}");
+        assert!(error.message.contains("simulated durable reload failure"));
     }
 }

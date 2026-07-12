@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD22-QA-003-NO-TEST-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AD22-QA-003-NO-TEST-COVERAGE" ;
+  triage:title "Missing regression/smoke test for roster-backed pane nudge" ;
+  triage:description "Sprint AD.22's acceptance criterion 'targeted regression or smoke coverage proves a roster-backed pane id is sufficient for local tmux nudge with no .atm.toml pane lookup' is unmet. req-qa found no new test was added this sprint that validates this criterion. AD.21 contained test_roster_match_skips_toml_fallback_lookup which explicitly tested roster-only path, but this was removed in AD.22 without a replacement. The only related test in AD.22 (test_roster_match_nudges_without_warning, test_roster_match_uses_roster_pane) predates the acceptance criterion change and does not assert absence of .atm.toml involvement." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-QA-003-NO-TEST-COVERAGE/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD22-QA-003-NO-TEST-COVERAGE/s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21/66fcea4b> ;
+  triage:openOn <urn:atm:triage:worktree/s22/0c3c96f5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/0c3c96f5> .
+
+<urn:atm:triage:occurrence/AD22-QA-003-NO-TEST-COVERAGE/s21/1>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 0 ;
+  triage:snippet "Missing: test asserting roster-only pane resolution without .atm.toml fallback" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/66fcea4b> .
+
+<urn:atm:triage:occurrence/AD22-QA-003-NO-TEST-COVERAGE/s22/1>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_nudge.py" ;
+  triage:line 0 ;
+  triage:snippet "Missing: test asserting roster-only pane resolution without .atm.toml fallback (removed without replacement)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "0c3c96f5" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/0c3c96f5> .
+
+<urn:atm:triage:worktree/s21/66fcea4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s21-built-in-nudge-hardening" ;
+  triage:headSha "66fcea4b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/0c3c96f5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s22-built-in-nudge-hardening-part2" ;
+  triage:headSha "0c3c96f5" ;
+  triage:orderIndex 2 .

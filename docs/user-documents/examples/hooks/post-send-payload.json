@@ -1,0 +1,11 @@
+{
+  "from": "arch-ctm@atm-dev",
+  "sender": "arch-ctm",
+  "recipient": "quality-mgr",
+  "team": "atm-dev",
+  "message_id": "01KRFK5QTF2R6NRS3Q0F8Z9K0S",
+  "description": "review smoke lane",
+  "task_id": "AE.4",
+  "requires_ack": true,
+  "is_ack": false
+}

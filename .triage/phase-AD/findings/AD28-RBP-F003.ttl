@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RBP-F003>
+  a triage:Finding ;
+  triage:findingId "AD28-RBP-F003" ;
+  triage:title "Unconditional event.clone() forced by inject_nudge taking event by value" ;
+  triage:description "In crates/atm-graft/src/nudge_sink.rs:17, event.clone() is unconditionally performed on every nudge delivery solely because HostNudgeInjector::inject_nudge takes the event by value while deliver() still needs it afterward for observability." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T17:52:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RBP-F003/s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/s28/835a6247> ;
+  triage:promoteTo <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RBP-F003/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/nudge_sink.rs" ;
+  triage:line 17 ;
+  triage:snippet "event.clone()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:worktree/s28/835a6247>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:orderIndex 0 .

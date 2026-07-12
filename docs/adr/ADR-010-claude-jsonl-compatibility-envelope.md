@@ -3,13 +3,24 @@
 | Field | Value |
 |---|---|
 | ID | ADR-010 |
-| Status | **Accepted** |
+| Status | **Superseded** |
 | Date | 2026-05-09 |
 | Deciders | Rand Lee |
 | Relates to | REQ-CORE-COMPAT-001, REQ-CORE-MAILBOX-001, REQ-P-RELIABILITY-001, ADR-009 |
 | Supersedes | — |
+| Superseded by | ADR-019 |
 
 ---
+
+## Supersession Note
+
+`ADR-019` retires Claude inbox-append runtime behavior and the
+`atm-storage-claude` backend from the accepted product architecture while
+preserving the shared backend contract.
+
+This ADR remains the historical record of the JSONL compatibility-envelope
+decision from the earlier mailbox-compatibility line only. It is no longer the
+active product contract.
 
 ## Context
 

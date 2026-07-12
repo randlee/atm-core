@@ -3,7 +3,7 @@
 
 [[allow]]
 rule = "SCB-CONFIG-001"
-path = "crates/atm-core/src/team_admin.rs"
+path = "crates/atm-core/src/team_admin/member_mutation.rs"
 symbol = "load_team_projection_extra_for_member_add"
 why = "temporary non-roster Claude config extra preservation while add-member still projects canonical ATM roster truth back into config.json"
 sunset_sprint = "Z.11"

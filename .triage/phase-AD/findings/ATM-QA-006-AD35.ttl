@@ -1,0 +1,125 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006-AD35>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-AD35" ;
+  triage:title "readiness.md Phase Exit Criteria heading scope mismatches its own bullet content" ;
+  triage:description "docs/plans/phase-AD/readiness.md 'Phase Exit Criteria' heading is narrowed in scope to AD.25-30, but the bullet content underneath it still requires the full AD.31-35 range. The heading and body are internally inconsistent." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s31/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s35/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s31/cddd205> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s32/54ad2c6> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s33/bfafd5d> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s34/b191e22> ;
+  triage:openOn <urn:atm:triage:worktree/pAD-s35/bd3ab37> ;
+  triage:highestOpenBranch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:promoteToBranch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:promoteTo <urn:atm:triage:worktree/pAD-s35/bd3ab37> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s31/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 66 ;
+  triage:snippet "## Phase Exit Criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s31/cddd205> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s32/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 66 ;
+  triage:snippet "## Phase Exit Criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s32/54ad2c6> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s33/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 66 ;
+  triage:snippet "## Phase Exit Criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s33/bfafd5d> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s34/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 66 ;
+  triage:snippet "## Phase Exit Criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s34/b191e22> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AD35/pAD-s35/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/readiness.md" ;
+  triage:line 71 ;
+  triage:snippet "## Phase Exit Criteria" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:occursIn <urn:atm:triage:worktree/pAD-s35/bd3ab37> .
+
+<urn:atm:triage:worktree/pAD-s31/cddd205>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "cddd20544a3a5bb9d3caa70eca9cf01dc5f05862" ;
+  triage:orderIndex 31 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s32/54ad2c6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "54ad2c6b8e7038f561b5c84e3f51974a636e3ef1" ;
+  triage:orderIndex 32 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s33/bfafd5d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "bfafd5de9e3377e4dd51fbb9da7bf4f3cbbaec49" ;
+  triage:orderIndex 33 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s34/b191e22>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "b191e22001cbf7594c2ecefe88ece707f1b51fcf" ;
+  triage:orderIndex 34 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAD-s35/bd3ab37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "bd3ab37a63c97a40b11d7da7e90a6b4f0bb5bdf2" ;
+  triage:orderIndex 35 ;
+  triage:status "open" .

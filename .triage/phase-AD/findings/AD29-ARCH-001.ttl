@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD29-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "AD29-ARCH-001" ;
+  triage:title "Sprint doc declares undelivered Rust enum interface (dedup of req-qa's AD29-QA-103)" ;
+  triage:description "docs/plans/phase-AD/sprint-AD29.md:47-55 declares a Rust enum PhaseAdPostSendSmokeCase with five variants as the authoritative interface. This type does not exist anywhere in crates/ -- only in doc text. The five cases are implemented purely as Python SuiteRowSpec string-id rows in scripts/smoke/run.py:11 and scripts/smoke/run_thorough.py:9, backed by cargo test --exact invocations. Same class of doc/code mismatch as AD27-ARCH-001 (declared interface never implemented). Independently confirmed by both arch-qa (Blocking, RULE-013) and req-qa (Important) -- dedup and scored Blocking per arch-qa's architectural-fitness framing." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD29-ARCH-001/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/32742f7a> ;
+  triage:openOn <urn:atm:triage:worktree/s27/33683226> ;
+  triage:openOn <urn:atm:triage:worktree/s28/2e7b5d2e> ;
+  triage:openOn <urn:atm:triage:worktree/s29/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/s30/88558576> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/d5d1d6e5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s29/88558576> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s25" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s26" ;
+  triage:headSha "32742f7a" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/32742f7a> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s27" ;
+  triage:headSha "33683226" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/33683226> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s28" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/2e7b5d2e> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s29" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/88558576> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "s30" ;
+  triage:headSha "88558576" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/88558576> .
+
+<urn:atm:triage:occurrence/AD29-ARCH-001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AD/sprint-AD29.md" ;
+  triage:line 47 ;
+  triage:snippet "pub enum PhaseAdPostSendSmokeCase { ExternalHookSuccess, ExternalHookPartialFailure, BuiltInFallback, OverrideResetToDefault, OverrideDisabled }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate" ;
+  triage:headSha "d5d1d6e5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d5d1d6e5> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s26/32742f7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s26" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "32742f7a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s27/33683226>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s27" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "33683226" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s28/2e7b5d2e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s28" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "2e7b5d2e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s29/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s29" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s30/88558576>
+  a triage:WorktreeSnapshot ;
+  triage:branch "s30" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "88558576" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate/d5d1d6e5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AD" ;
+  triage:headSha "d5d1d6e5" ;
+  triage:orderIndex 7 .

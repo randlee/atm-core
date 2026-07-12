@@ -16,7 +16,7 @@ forbidden_literals = [
 [fixed_sleep]
 # Empty by default: no test file is exempt until a narrow daemon-runtime suite
 # is explicitly approved and listed here.
-allowed_paths = []
+allowed_paths = ["crates/atm-core/tests/mailbox_locking.rs"]
 
 [portability]
 config_home_env = "ATM_CONFIG_HOME"
@@ -89,8 +89,9 @@ file = ".github/workflows/release.yml"
 required_fragments = [
   "update-homebrew:",
   "repository: randlee/homebrew-tap",
-  "for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do",
-  "version='${{ needs.gate-and-tag.outputs.release_version }}'",
-  "tarball_url=\"https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz\"",
-  "sed -i \"s|version \\\"[^\\\"]*\\\"|version \\\"${version}\\\"|g\" \"$formula\"",
+  "python3 scripts/release_artifacts.py update-homebrew-formulas \\",
+  "python3 scripts/release_artifacts.py validate-homebrew-formulas \\",
+  "--release-dir release \\",
+  "--formula homebrew-tap/Formula/agent-team-mail.rb \\",
+  "--formula homebrew-tap/Formula/atm.rb",
 ]

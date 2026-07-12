@@ -20,7 +20,7 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.2.2" }
+atm-storage = { path = "../atm-storage", version = "1.3.1" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -28,14 +28,13 @@ interprocess = "2.4.2"
 libc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
-uuid.workspace = true
 fs2 = "0.4"
 same-file = "1"
-sc-observability-types.workspace = true
-sc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }
+parking_lot = "0.12"
+ulid.workspace = true
 
 [dev-dependencies]
-atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.2.2" }
+atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 serial_test = "3"
 tempfile = "3"
 

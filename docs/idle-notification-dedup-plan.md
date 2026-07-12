@@ -200,8 +200,9 @@ Deferred from PG.1:
 - idle notifications are non-actionable and do not belong in the pending-ack
   queues
 - read-time auto-purge remains deferred after PG.1
-- `--no-mark` leaves the message untouched and therefore does not auto-purge it
-  when that behavior is implemented later
+- historical note: the pre-`AD.31` `atm read --no-mark` surface left the
+  message untouched and therefore would not have auto-purged it when that
+  deferred behavior was discussed
 
 ### 5.4 Clear Requirement Changes
 
@@ -241,18 +242,21 @@ Recommended answer:
 - once an idle notification has already been read, normal read-time auto-purge
   should have removed it anyway
 
-### 7.2 `--no-mark`
+### 7.2 Historical `--no-mark` Discussion (Superseded By `atm peek`)
 
 Question:
-- if a user reads with `--no-mark`, should the idle notification still be
-  auto-purged?
+- if a user used the legacy `atm read --no-mark` surface, should the idle
+  notification still be auto-purged?
 
 Resolved ruling:
 - no
-- `--no-mark` should preserve current "display without mutation" semantics,
-  which implies no auto-purge when that behavior is implemented later
+- the historical `--no-mark` surface preserved "display without mutation"
+  semantics, which implied no auto-purge when that deferred behavior was being
+  discussed
 - this keeps the deferred purge rule aligned with writeback rather than display
   alone
+- this historical note is superseded on the current command surface by
+  `atm peek`, which is now the non-mutating inspection path
 
 ### 7.3 Reading Another Agent's Inbox
 
@@ -303,8 +307,9 @@ Resolved detection rule:
 5. Update `docs/architecture.md` to assign send/read/mailbox ownership for
    dedup and the deferred auto-purge follow-on.
 6. Update `docs/read-behavior.md` to explain how idle notifications interact
-   with display, marking, `--no-mark`, and history when the deferred read-time
-   purge work is scheduled.
+   with display, marking, legacy `--no-mark` history, and the current
+   `atm peek` inspection path when the deferred read-time purge work is
+   scheduled.
 7. Correct the stale pending-ack clear-override text in `docs/read-behavior.md`
    so cleanup semantics remain internally consistent.
 8. After the doc update, create the follow-on implementation sprint that owns:

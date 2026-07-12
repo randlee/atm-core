@@ -1,121 +1,84 @@
-# AD.2 Boundary Wrapper Published Cutover
+---
+id: AD.2
+title: Obsolete Config Identity Removal And Doctor Contract Repair
+status: complete
+branch: feature/pAD-s2-config-identity-removal-and-doctor-repair
+worktree: ../atm-core-worktrees/feature/pAD-s2-config-identity-removal-and-doctor-repair
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.2
-worktree: ../atm-core-worktrees/feature/pAD-s2-boundary-wrapper-published-cutover
-branch: feature/pAD-s2-boundary-wrapper-published-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.2` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.2 — Obsolete Config Identity Removal And Doctor Contract Repair
 
 ## Goal
 
-Retarget `.just/lint_sc_boundary.py` to the published `sc-lint-boundary`
-binary while keeping the `sc-boundary` ATM lint surface stable and proving
-published parity against the old vendored snapshot.
+- remove obsolete config identity usage and close
+  `ATM_WARNING_IDENTITY_DRIFT`
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the full boundary-wrapper cutover.
+- `AD.1` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/requirements.md`
+- `.atm.toml`
 
-Production-ready commitment:
-- `.just/lint_sc_boundary.py` must stop depending on workspace-built
-  `sc-lint-boundary`
-- the sprint must prove the published analyzer is not materially weaker on the
-  ATM repo before any vendored crate deletion begins
+## Exact Targets
 
-Required command contract:
+- repo `.atm.toml`
+- `crates/atm-core/src/config/`
+- `crates/atm-core/src/doctor/`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/modules/send.md`
+- team startup/operator docs touched by identity guidance
 
-```python
-[
-    "sc-lint-boundary",
-    "analyze",
-    "--root",
-    str(repo_root),
-    "--format",
-    "json",
-]
-```
+## Added Or Modified Surfaces
 
-The wrapper may resolve the binary path through a helper, but it must not shell
-through `cargo run -q -p sc-lint-boundary`.
+- modify repo `.atm.toml` so `[atm].identity` is absent from the accepted
+  baseline
+- tighten doctor wording and operator docs so the only accepted runtime
+  identity sources are explicit CLI override and invoking-shell `ATM_IDENTITY`
+- keep legacy config parsing fields only when they are still needed to detect
+  and report obsolete `[atm].identity`
 
-## Prerequisites
+## Obsolescence Instructions
 
-- `AD.1`
-
-## Out Of Scope
-
-- no portability wrapper cutover yet
-- no `unix-gating` wrapper cutover yet
-- no `runtime-waits` wrapper cutover yet
-- no proc-macro registry cutover yet
-- no vendored crate deletion yet
-- no CI install-path closeout yet
-
-## Code And Document Targets
-
-- `.just/lint_sc_boundary.py`
-- `.just/tests/test_lint_sc_boundary.py`
-- `.triage/phase-AD/ad2-vendored-sc-boundary.json`
-- `.triage/phase-AD/ad2-published-sc-boundary.json`
-- `.triage/phase-AD/ad2-sc-boundary-parity.md`
-- `.just/compare_sc_lint_findings.py` if no equivalent repo-local comparison
-  helper exists yet
+- `AtmConfig.identity` and any related parse fields may survive only as
+  diagnostic-only migration inputs
+- if those fields cannot be deleted in this sprint, mark them
+  `Phase AD obsolete: diagnostics only`, keep them out of runtime identity
+  resolution, and block new production call sites that read them
 
 ## Deliverables
 
-- `.just/lint_sc_boundary.py` calls the published `sc-lint-boundary`
-- `.just/tests/test_lint_sc_boundary.py` is updated only as needed to preserve
-  the existing ATM wrapper contract
-- one parity proof is recorded on the same ATM commit as three deterministic
-  artifacts:
-  - `.triage/phase-AD/ad2-vendored-sc-boundary.json`
-  - `.triage/phase-AD/ad2-published-sc-boundary.json`
-  - `.triage/phase-AD/ad2-sc-boundary-parity.md`
-- the parity summary artifact is produced by a repo-local comparison helper or
-  equivalently deterministic normalization command that records:
-  - `## Rule IDs Only In Vendored`
-  - `## Rule IDs Only In Published`
-  - `## Finding-Count Drift`
-  - `## Reviewer Sign-Off Required?`
-- vendored `sc-lint-*` crates remain present after this sprint so parity
-  investigation and rollback remain possible
+- repo config no longer carries `[atm].identity`
+- doctor guidance matches the accepted runtime identity model
+- no runtime path depends on config identity fallback
 
 ## Required Work
 
-- retarget the boundary wrapper to the published binary only
-- preserve the ATM wrapper contract and user-facing lint name
-- add or reuse one deterministic parity comparison helper
-- produce vendored and published findings on the same ATM commit
-- block closure on unexplained rule loss, JSON-shape drift, or finding-count
-  drop
+- remove obsolete `[atm].identity` from repo-local config
+- update doctor/requirements/operator wording so `ATM_IDENTITY` is the accepted
+  runtime source
+- keep obsolete config parsing only if still required for migration-oriented
+  diagnostics
+
+## This Sprint Does Not Close
+
+- caller identity transport semantics
+- post-send hook emission
+- roster drift repair
 
 ## Acceptance Criteria
 
-- ATM still exposes the `sc-boundary` local lint target after retargeting
-- the wrapper output shape remains stable enough that the wrapper test still
-  expresses the ATM house contract
-- the published analyzer reproduces the required ATM boundary rule families
-- any unexpected finding-volume drop, rule disappearance, or incompatible JSON
-  shape blocks sprint closure
+- `atm doctor --team atm-dev` no longer reports `ATM_WARNING_IDENTITY_DRIFT`
+  on the repaired repo baseline
+- repo startup docs instruct operators to set `ATM_IDENTITY` in environment,
+  not `.atm.toml`
+- no accepted runtime path still treats `[atm].identity` as a working fallback
 
 ## Required Validation
 
-- `python3 .just/run_lint.py sc-boundary`
-- `python3 .just/tests/test_lint_sc_boundary.py`
-- `cargo run -q -p sc-lint-boundary -- analyze --root . --format json > .triage/phase-AD/ad2-vendored-sc-boundary.json`
-- `sc-lint-boundary analyze --root . --format json > .triage/phase-AD/ad2-published-sc-boundary.json`
-- `python3 .just/compare_sc_lint_findings.py --vendored .triage/phase-AD/ad2-vendored-sc-boundary.json --published .triage/phase-AD/ad2-published-sc-boundary.json --output .triage/phase-AD/ad2-sc-boundary-parity.md`
-- `test -f .triage/phase-AD/ad2-sc-boundary-parity.md`
-- `rg -n '^## Rule IDs Only In Vendored$|^## Rule IDs Only In Published$|^## Finding-Count Drift$|^## Reviewer Sign-Off Required\\?$' .triage/phase-AD/ad2-sc-boundary-parity.md -S`
-- `! rg -n 'cargo run -q -p sc-lint-boundary' .just/lint_sc_boundary.py .just/tests/test_lint_sc_boundary.py -S`
+- targeted doctor/config tests
+- `cargo test --workspace`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

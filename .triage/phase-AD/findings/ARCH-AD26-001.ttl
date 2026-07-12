@@ -1,0 +1,139 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-AD26-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-AD26-001" ;
+  triage:title "post-send-hook-emitter.toml boundary note names wrong implementer" ;
+  triage:description "boundaries/atm-core/post-send-hook-emitter.toml:8 boundary note claims the graft-backed PostSendHookEmitter implementation is allowlisted in atm-graft; the actual implementation (DaemonPostSendHookEmitter) lives in crates/atm-daemon/src/post_send_emitter.rs. Workspace-wide grep confirms no type in atm-graft implements PostSendHookEmitter/GraftPostSendPort. Contradicts sprint AD.26's own deliverable that boundary docs and runtime code describe the same mechanism." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-09T16:44:14Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-08T22:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AD26-001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/acb7ab6b> ;
+  triage:openOn <urn:atm:triage:worktree/s26/4dbd5ba8> ;
+  triage:openOn <urn:atm:triage:worktree/s27/0c8606f3> ;
+  triage:openOn <urn:atm:triage:worktree/s28/75df80a8> ;
+  triage:openOn <urn:atm:triage:worktree/s29/1d94594b> ;
+  triage:openOn <urn:atm:triage:worktree/s30/1d94594b> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/1d94594b> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s25" ;
+  triage:headSha "acb7ab6b" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/acb7ab6b> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s26" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/4dbd5ba8> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s27" ;
+  triage:headSha "0c8606f3" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/0c8606f3> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s28" ;
+  triage:headSha "75df80a8" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/75df80a8> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s29" ;
+  triage:headSha "1d94594b" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/1d94594b> .
+
+<urn:atm:triage:occurrence/ARCH-AD26-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/post-send-hook-emitter.toml" ;
+  triage:line 8 ;
+  triage:snippet "notes = \"sealed post-commit emission contract landed in Phase AD AD.6; local tmux emitters may live in atm_core and the graft-backed emitter is allowlisted in atm-graft\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "pAD-s30" ;
+  triage:headSha "1d94594b" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/1d94594b> .
+
+<urn:atm:triage:worktree/s25/acb7ab6b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s25-post-send-hook-emitter-live-wiring" ;
+  triage:headSha "acb7ab6b" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/4dbd5ba8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s26" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s26-rule001-observability-seam-closure" ;
+  triage:headSha "4dbd5ba8" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/0c8606f3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s27" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s27-upstream-built-in-template-resolution" ;
+  triage:headSha "0c8606f3" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/75df80a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s28" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "75df80a8" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s29" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s29-phase-ad-post-send-smoke-matrix" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/1d94594b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAD-s30" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s30-windows-daemon-integration-depth" ;
+  triage:headSha "1d94594b" ;
+  triage:orderIndex 30 .

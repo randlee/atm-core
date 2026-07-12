@@ -1,101 +1,177 @@
-# AD.6 Proc-Macro Registry Cutover
+---
+id: AD.6
+title: Post-Send Nudge Contract Simplification
+status: complete
+branch: feature/pAD-s6-post-send-nudge-contract-simplification
+worktree: ../atm-core-worktrees/feature/pAD-s6-post-send-nudge-contract-simplification
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.6
-worktree: ../atm-core-worktrees/feature/pAD-s6-proc-macro-registry-cutover
-branch: feature/pAD-s6-proc-macro-registry-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.6` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.6 — Post-Send Nudge Contract Simplification
 
 ## Goal
 
-Replace ATM's vendored `sc-lint-attributes` compile-time dependency with the
-published crate line and prove the exact ATM `#[sc_lint(...)]` usage remains
-compile-valid and semantically acceptable.
+- simplify post-send nudge ownership back to one direct post-commit seam
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the proc-macro registry cutover.
+- `AD.1` complete
+- `AD.2` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `#440`
 
-Production-ready commitment:
-- the proc-macro dependency must come from the published registry line rather
-  than an ATM-vendored path dependency
-- whole-workspace success alone is not sufficient proof; the real ATM
-  attribute call sites must be exercised explicitly
+## Exact Targets
 
-Required dependency and call-site shape:
+- `crates/atm-core/src/send/`
+- `crates/atm-core/src/ack/`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/config/mod.rs`
+- `crates/atm-core/src/delivery_plan.rs`
+- `crates/atm-core/src/delivery_execution.rs`
+- `crates/atm-core/src/boundary/mod.rs`
+- `boundaries/atm-core/post-send-hook-emitter.toml`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
 
-```toml
-[dependencies]
-sc-lint-attributes = "<published version>"
-```
+## Interfaces To Add Or Modify
+
+- define the accepted post-send event contract explicitly:
 
 ```rust
-#[sc_lint(boundary.allow("cycle.recursive_value_container"))]
+pub struct PostSendHookEvent {
+    pub sender: AgentName,
+    pub sender_team: TeamName,
+    pub recipient: AgentName,
+    pub recipient_team: TeamName,
+    pub message_id: AtmMessageId,
+    pub requires_ack: bool,
+    pub is_ack: bool,
+    pub task_id: Option<TaskId>,
+    pub recipient_pane_id: Option<PaneId>,
+}
+
+pub trait PostSendHookEmitter: sealed::Sealed {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+}
 ```
 
-## Prerequisites
-
-- `AD.5`
-
-## Out Of Scope
-
-- no vendored crate removal yet
-- no CI / release-preflight cutover yet
-- no dependency-policy Phase `D.1` adoption yet
-
-## Code And Document Targets
-
-- `crates/atm-core/Cargo.toml`
-- `crates/atm-core/src/observability.rs`
-- dedicated proc-macro compatibility test covering the real
-  `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` call sites
-- any repo-owned version pin or install-contract record introduced earlier in
-  the phase
+- modify `send` and `ack` finalization so they call the direct emitter seam
+  after persistence and own sender-visible warning construction directly
+- modify post-send capability lookup so it no longer depends on caller working
+  directory or unrelated repo-local `.atm.toml` discovery
 
 ## Deliverables
 
-- `crates/atm-core/Cargo.toml` no longer path-depends on vendored
-  `sc-lint-attributes`
-- any required registry pinning for the published proc-macro surface is
-  reviewable in repo state
-- the exact `#[sc_lint(...)]` attribute call sites in
-  `crates/atm-core/src/observability.rs` are compiled and validated under the
-  published proc-macro dependency
-- a dedicated proc-macro compatibility test exists for the published macro
-  path rather than relying only on whole-workspace compilation
+- one accepted post-send contract:
+  - persist message
+  - emit nudge only when recipient exposes post-send capability
+  - log and warn on emission failure
+- post-send ownership no longer hidden behind generic delivery-plan behavior
+- live post-send capability resolution no longer changes based on the caller's
+  current working directory
+- the new sealed boundary trait has a machine-readable governance record and a
+  matching `docs/atm-core/boundaries.md` inventory entry before AD.7 / AD.8
+  implementation work closes
 
 ## Required Work
 
-- replace the vendored proc-macro dependency with the published registry line
-- keep ATM source changes limited to what the proc-macro cutover strictly
-  requires
-- exercise the real `observability.rs` attribute usage explicitly, not only a
-  whole-workspace build
-- block closure if the published directive grammar requires unplanned source
-  redesign
+- document the simplified post-send runtime contract directly in the code/docs
+- narrow post-send responsibility away from generic plan construction where it
+  obscures the simple send model
+- remove caller-CWD-dependent config lookup from live post-send capability
+  decisions
+- preserve durable delivery behavior while shrinking post-send ownership to one
+  direct seam
+- add the `PostSendHookEmitter` boundary TOML and boundary-inventory entry as
+  the governing contract record for this sealed trait
+
+## Explicit Code Samples
+
+```rust
+pub trait PostSendHookEmitter: sealed::Sealed {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+}
+```
+
+```rust
+// Required send shape:
+persist_message(...)?;
+if recipient_has_post_send_hook {
+    if let Err(error) = post_send_hook_emitter.emit(&event) {
+        log_post_send_failure(&error);
+        warnings.push(render_post_send_warning(&error));
+    }
+}
+```
+
+## Error And Warning Taxonomy
+
+All post-send emission failures normalized by this sprint must reuse the
+following codes and recovery text in AD.7 / AD.8 rather than inventing
+emitter-specific warning strings:
+
+- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
+  - cause: the recipient requires local tmux emission but no authoritative
+    `tmux_pane_id` is available on the roster row
+  - sender surface: warning after successful persistence
+  - recovery: repair pane state with
+    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
+- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - cause: tmux rejected the pane id or the local pane send failed
+  - sender surface: warning after successful persistence
+  - recovery: verify the pane still exists, then repair changed pane state
+    with `atm teams update-member` if needed
+- `PostSendGraftUnavailable` / `ATM_POST_SEND_GRAFT_UNAVAILABLE`
+  - cause: the graft recipient/session is unavailable when emission is
+    attempted
+  - sender surface: warning after successful persistence
+  - recovery: restore the graft receiver/session, then resend only if a fresh
+    nudge is still needed
+- `PostSendAdvisoryDeliveryFailed` /
+  `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+  - cause: daemon-to-graft advisory delivery failed after message persistence
+  - sender surface: warning after successful persistence
+  - recovery: inspect daemon/graft logs, restore the advisory path, then
+    resend only if a fresh nudge is still needed
+
+## Obsolescence Instructions
+
+- `DeliveryPlan`, `ReplyDeliveryPlan`, `execute_delivery_plan(...)`,
+  `execute_reply_delivery_plan(...)`, and `NotificationSink`-based post-send
+  orchestration become obsolete for normal send/ack post-send behavior in this
+  sprint
+- if any of those helpers cannot be deleted immediately, mark them
+  `Phase AD obsolete: not the governing post-send seam`, remove all new
+  send/ack callers, and carry them only until the relevant AD.3 / AD.5
+  deletion work has landed when those retained paths still exist
+
+## This Sprint Does Not Close
+
+- local tmux-backed emitter implementation
+- graft-backed emitter implementation
+- Claude inbox nudge deletion
 
 ## Acceptance Criteria
 
-- ATM compiles with the published proc-macro dependency instead of the vendored
-  path dependency
-- the current `#[sc_lint(...)]` directive grammar used by ATM remains valid
-- any source change beyond what is required for the proc-macro cutover is
-  treated as out of scope and blocks sprint closure
+- the accepted design for post-send nudge execution is stated directly in docs
+  and code-facing seams
+- post-send behavior is explicitly modeled as post-commit emission, not a
+  generic planned side-effect bundle
+- sender warning ownership on emission failure is explicit and testable
+- no validated reproduction remains where running `atm send` from an unrelated
+  repo or working directory changes whether post-send emission is attempted
+- the accepted `PostSendHookEmitter` contract is governed by
+  `boundaries/atm-core/post-send-hook-emitter.toml` plus the matching
+  `docs/atm-core/boundaries.md` entry
 
 ## Required Validation
 
-- `cargo build --workspace`
-- `cargo test -p atm-core sc_lint_observability_macro_compat -- --exact`
-- `test \"$(rg '#\\[sc_lint\\(boundary\\.allow\\(\"cycle\\.recursive_value_container\"\\)\\)\\]' crates/atm-core/src/observability.rs -c)\" = '2'`
-- `! rg -n 'path = \"\\.\\./sc-lint-attributes\"|path = \"\\.\\./sc-lint-directives\"' Cargo.toml crates/*/Cargo.toml -S`
+- targeted tests or compile gates for the narrowed contract seam
+- `cargo test --workspace`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

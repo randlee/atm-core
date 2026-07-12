@@ -12,10 +12,8 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort,
 };
 
+use crate::daemon_runtime_observability::{DaemonActionName, DaemonOutcomeLabel};
 use crate::{DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem};
-
-type ActionName = sc_observability_types::ActionName;
-type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {
@@ -197,8 +195,8 @@ impl DaemonRuntimeObservability for TestDaemonObservability {
     fn emit_subsystem_event(
         &self,
         subsystem: DaemonSubsystem,
-        action: &ActionName,
-        outcome: &OutcomeLabel,
+        action: &DaemonActionName,
+        outcome: &DaemonOutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError> {

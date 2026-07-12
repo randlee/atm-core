@@ -1,0 +1,135 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AD28-RSH-003>
+  a triage:Finding ;
+  triage:findingId "AD28-RSH-003" ;
+  triage:title "Deadline/shutdown path under-instrumented with tracing" ;
+  triage:description "In crates/atm-graft/src/runtime.rs, only one tracing call (a debug!) exists anywhere in deadline/shutdown paths. Listener-wake timeouts and accept-loop failures surface only as returned AtmError values with no tracing emitted at the failure point, so operators cannot distinguish clean shutdown / wake-failed-thread-detached / accept-broke from logs alone." ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "missing structured tracing at bounded-deadline failure points" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AD28-RSH-003/s28/9> ;
+  triage:openOn <urn:atm:triage:worktree/s28/835a6247> ;
+  triage:promoteTo <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 257 ;
+  triage:snippet "join_helper.join() panic case in finish_join_receive_loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 262 ;
+  triage:snippet "join_helper.join() panic case in handle_join_helper_disconnect" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 264 ;
+  triage:snippet "join_helper_disconnect_error() in handle_join_helper_disconnect" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 352 ;
+  triage:snippet "Ok(Err(source)) case in wake_graft_receiver_listener" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 362 ;
+  triage:snippet "RecvTimeoutError::Timeout case in wake_graft_receiver_listener" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 371 ;
+  triage:snippet "RecvTimeoutError::Disconnected case in wake_graft_receiver_listener" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 442 ;
+  triage:snippet "listener.accept() error in accept_graft_receiver_connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 483 ;
+  triage:snippet "stream.flush() error in handle_graft_receiver_connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:occurrence/AD28-RSH-003/s28/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 512 ;
+  triage:snippet "set_recv/send_timeout error in apply_receiver_deadline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/835a6247> .
+
+<urn:atm:triage:worktree/s28/835a6247>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s28-atm-graft-timing-independent" ;
+  triage:headSha "835a6247" ;
+  triage:orderIndex 0 .

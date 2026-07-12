@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
 use ulid::Ulid;
-use uuid::Uuid;
 
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -25,14 +24,6 @@ pub struct AtmMessageId(Ulid);
 impl AtmMessageId {
     pub fn new() -> Self {
         Self(Ulid::new())
-    }
-
-    pub fn from_uuid_wire(value: Uuid) -> Self {
-        Self(Ulid::from_bytes(value.into_bytes()))
-    }
-
-    pub fn into_uuid_wire(self) -> Uuid {
-        Uuid::from_bytes(self.0.to_bytes())
     }
 
     pub fn into_ulid(self) -> Ulid {
@@ -63,21 +54,9 @@ impl From<Ulid> for AtmMessageId {
     }
 }
 
-impl From<Uuid> for AtmMessageId {
-    fn from(value: Uuid) -> Self {
-        Self::from_uuid_wire(value)
-    }
-}
-
 impl From<AtmMessageId> for Ulid {
     fn from(value: AtmMessageId) -> Self {
         value.0
-    }
-}
-
-impl From<AtmMessageId> for Uuid {
-    fn from(value: AtmMessageId) -> Self {
-        value.into_uuid_wire()
     }
 }
 
@@ -87,7 +66,6 @@ impl std::str::FromStr for AtmMessageId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ulid::from_string(s)
             .map(Self)
-            .or_else(|_| Uuid::parse_str(s).map(Self::from_uuid_wire))
             .map_err(|error| AtmMessageIdParseError(error.to_string()))
     }
 }
@@ -95,57 +73,6 @@ impl std::str::FromStr for AtmMessageId {
 impl fmt::Display for AtmMessageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-mod atm_message_id_uuid_wire {
-    use super::AtmMessageId;
-    use serde::{Deserialize, Deserializer, Serializer};
-    use uuid::Uuid;
-
-    pub fn serialize<S>(value: &AtmMessageId, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&value.into_uuid_wire().to_string())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<AtmMessageId, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-        Uuid::parse_str(&raw)
-            .map(AtmMessageId::from_uuid_wire)
-            .map_err(serde::de::Error::custom)
-    }
-}
-
-mod option_atm_message_id_uuid_wire {
-    use super::AtmMessageId;
-    use serde::{Deserialize, Deserializer, Serializer};
-    use uuid::Uuid;
-
-    pub fn serialize<S>(value: &Option<AtmMessageId>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match value {
-            Some(value) => serializer.serialize_some(&value.into_uuid_wire().to_string()),
-            None => serializer.serialize_none(),
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<AtmMessageId>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Option::<String>::deserialize(deserializer)?
-            .map(|raw| {
-                let uuid = Uuid::parse_str(&raw).map_err(serde::de::Error::custom)?;
-                Ok(AtmMessageId::from_uuid_wire(uuid))
-            })
-            .transpose()
     }
 }
 
@@ -207,7 +134,7 @@ impl<'de> Deserialize<'de> for AlertKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct MessageEnvelope {
     pub from: AgentName,
     pub text: String,
@@ -218,8 +145,8 @@ pub struct MessageEnvelope {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "option_atm_message_id_uuid_wire")]
     pub message_id: Option<AtmMessageId>,
+    pub requires_ack: bool,
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
     #[serde(rename = "acknowledgedAt", skip_serializing_if = "Option::is_none")]
@@ -229,14 +156,12 @@ pub struct MessageEnvelope {
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    #[serde(with = "option_atm_message_id_uuid_wire")]
     pub acknowledges_message_id: Option<AtmMessageId>,
     #[serde(
         rename = "parentMessageId",
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    #[serde(with = "option_atm_message_id_uuid_wire")]
     pub parent_message_id: Option<AtmMessageId>,
     #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
     pub thread_mode: Option<ThreadMode>,
@@ -248,9 +173,106 @@ pub struct MessageEnvelope {
     pub extra: Map<String, Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct RawMessageEnvelope {
+    from: AgentName,
+    text: String,
+    timestamp: IsoTimestamp,
+    read: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_team: Option<TeamName>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    requires_ack: Option<bool>,
+    #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
+    pending_ack_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgedAt", skip_serializing_if = "Option::is_none")]
+    acknowledged_at: Option<IsoTimestamp>,
+    #[serde(
+        rename = "acknowledgesMessageId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    acknowledges_message_id: Option<AtmMessageId>,
+    #[serde(
+        rename = "parentMessageId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    parent_message_id: Option<AtmMessageId>,
+    #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
+    thread_mode: Option<ThreadMode>,
+    #[serde(rename = "expiresAt", skip_serializing_if = "Option::is_none")]
+    expires_at: Option<IsoTimestamp>,
+    #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
+    task_id: Option<TaskId>,
+    #[serde(flatten)]
+    extra: Map<String, Value>,
+}
+
+impl From<MessageEnvelope> for RawMessageEnvelope {
+    fn from(value: MessageEnvelope) -> Self {
+        Self {
+            from: value.from,
+            text: value.text,
+            timestamp: value.timestamp,
+            read: value.read,
+            source_team: value.source_team,
+            summary: value.summary,
+            message_id: value.message_id,
+            requires_ack: Some(value.requires_ack),
+            pending_ack_at: value.pending_ack_at,
+            acknowledged_at: value.acknowledged_at,
+            acknowledges_message_id: value.acknowledges_message_id,
+            parent_message_id: value.parent_message_id,
+            thread_mode: value.thread_mode,
+            expires_at: value.expires_at,
+            task_id: value.task_id,
+            extra: value.extra,
+        }
+    }
+}
+
+impl From<RawMessageEnvelope> for MessageEnvelope {
+    fn from(value: RawMessageEnvelope) -> Self {
+        let requires_ack = value
+            .requires_ack
+            .unwrap_or(value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none());
+        Self {
+            from: value.from,
+            text: value.text,
+            timestamp: value.timestamp,
+            read: value.read,
+            source_team: value.source_team,
+            summary: value.summary,
+            message_id: value.message_id,
+            requires_ack,
+            pending_ack_at: value.pending_ack_at,
+            acknowledged_at: value.acknowledged_at,
+            acknowledges_message_id: value.acknowledges_message_id,
+            parent_message_id: value.parent_message_id,
+            thread_mode: value.thread_mode,
+            expires_at: value.expires_at,
+            task_id: value.task_id,
+            extra: value.extra,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageEnvelope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        RawMessageEnvelope::deserialize(deserializer).map(Into::into)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PendingAck {
-    #[serde(with = "atm_message_id_uuid_wire")]
     pub message_id: AtmMessageId,
     pub from: AgentName,
     pub acked: bool,

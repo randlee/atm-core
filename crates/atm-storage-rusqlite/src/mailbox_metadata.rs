@@ -4,7 +4,9 @@ use atm_storage::AtmError;
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::{AckRequirementState, InboxMessage, derive_ack_requirement};
 use rusqlite::params;
+use serde_json::Map;
 
 // This module shares the same mixed lib/test compatibility lane as lib.rs:
 // some helpers are only exercised via rusqlite tests on this branch, while the
@@ -20,7 +22,7 @@ type MetadataQueryRow = (
     Option<String>,
     String,
     i64,
-    Option<String>,
+    i64,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -31,7 +33,7 @@ fn parse_optional_timestamp(
     raw: Option<String>,
     field_name: &str,
 ) -> Result<Option<IsoTimestamp>, AtmError> {
-    raw.map(|value| value.parse::<chrono::DateTime<chrono::Utc>>())
+    raw.map(|value| value.parse::<IsoTimestamp>())
         .transpose()
         .map_err(|error| {
             AtmError::validation(format!(
@@ -42,7 +44,6 @@ fn parse_optional_timestamp(
             )
             .with_source(error)
         })
-        .map(|value| value.map(IsoTimestamp::from_datetime))
 }
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
@@ -56,7 +57,7 @@ fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Metada
         row.get::<_, Option<String>>(5)?,
         row.get::<_, String>(6)?,
         row.get::<_, i64>(7)?,
-        row.get::<_, Option<String>>(8)?,
+        row.get::<_, i64>(8)?,
         row.get::<_, Option<String>>(9)?,
         row.get::<_, Option<String>>(10)?,
         row.get::<_, Option<String>>(11)?,
@@ -125,6 +126,43 @@ fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
 }
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
+fn parse_message_key(message_key: &str) -> Result<MessageKey, AtmError> {
+    MessageKey::new(message_key.to_string()).map_err(|error| {
+        AtmError::validation(format!(
+            "failed to parse sqlite mailbox metadata message key: {error}"
+        ))
+        .with_recovery(
+            "Repair or remove the malformed message-key row before retrying the sqlite mailbox metadata query.",
+        )
+    })
+}
+
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
+fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmError> {
+    value.parse().map_err(|error| {
+        AtmError::validation(format!(
+            "failed to parse sqlite mailbox metadata from_agent for {message_key}: {error}"
+        ))
+        .with_recovery(
+            "Repair or remove the malformed from_agent row before retrying the sqlite mailbox metadata query.",
+        )
+    })
+}
+
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
+fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
+    value.parse::<IsoTimestamp>().map_err(|error| {
+        AtmError::validation(format!(
+            "failed to parse sqlite mailbox metadata timestamp: {error}"
+        ))
+        .with_recovery(
+            "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
+        )
+        .with_source(error)
+    })
+}
+
+#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_mailbox_metadata_row(
     row: MetadataQueryRow,
 ) -> Result<SqliteMailboxMetadataRow, AtmError> {
@@ -137,49 +175,54 @@ fn decode_mailbox_metadata_row(
         summary,
         message_at,
         read,
-        pending_ack_at,
+        requires_ack,
         acknowledged_at,
         expires_at,
         task_id,
     ) = row;
-    let parsed_message_key = MessageKey::new(message_key.clone()).map_err(|error| {
-        AtmError::validation(format!(
-            "failed to parse sqlite mailbox metadata message key: {error}"
-        ))
-        .with_recovery(
-            "Repair or remove the malformed message-key row before retrying the sqlite mailbox metadata query.",
-        )
-    })?;
+    let parsed_message_key = parse_message_key(&message_key)?;
+    let parsed_message_id = parse_optional_message_id(message_id, "message_id")?;
+    let parsed_parent_message_id =
+        parse_optional_message_id(parent_message_id, "parent_message_id")?;
+    let parsed_thread_mode = parse_thread_mode(thread_mode)?;
+    let parsed_from_agent = parse_from_agent(&from_agent, &message_key)?;
+    let parsed_message_at = parse_message_at(&message_at)?;
+    let parsed_acknowledged_at =
+        parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?;
+    let parsed_expires_at = parse_optional_timestamp(expires_at, "expires_at timestamp")?;
+    let parsed_task_id = parse_task_id(task_id, &message_key)?;
+    let ack_requirement = derive_ack_requirement(&InboxMessage {
+        from: parsed_from_agent.clone(),
+        text: String::new(),
+        timestamp: parsed_message_at,
+        read: read != 0,
+        source_team: None,
+        summary: summary.clone(),
+        message_id: parsed_message_id,
+        requires_ack: requires_ack != 0,
+        pending_ack_at: None,
+        acknowledged_at: parsed_acknowledged_at,
+        acknowledges_message_id: None,
+        parent_message_id: parsed_parent_message_id,
+        thread_mode: parsed_thread_mode,
+        expires_at: parsed_expires_at,
+        task_id: parsed_task_id.clone(),
+        extra: Map::new(),
+    });
     Ok(SqliteMailboxMetadataRow {
         message_key: parsed_message_key,
-        message_id: parse_optional_message_id(message_id, "message_id")?,
-        parent_message_id: parse_optional_message_id(parent_message_id, "parent_message_id")?,
-        thread_mode: parse_thread_mode(thread_mode)?,
-        from_agent: from_agent.parse().map_err(|error| {
-            AtmError::validation(format!(
-                "failed to parse sqlite mailbox metadata from_agent for {message_key}: {error}"
-            ))
-            .with_recovery(
-                "Repair or remove the malformed from_agent row before retrying the sqlite mailbox metadata query.",
-            )
-        })?,
+        message_id: parsed_message_id,
+        parent_message_id: parsed_parent_message_id,
+        thread_mode: parsed_thread_mode,
+        from_agent: parsed_from_agent,
         summary,
-        message_at: message_at
-            .parse::<chrono::DateTime<chrono::Utc>>()
-            .map(IsoTimestamp::from_datetime)
-            .map_err(|error| {
-                AtmError::validation(format!(
-                    "failed to parse sqlite mailbox metadata timestamp: {error}"
-                ))
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
-                )
-            })?,
+        message_at: parsed_message_at,
         read: read != 0,
-        pending_ack: pending_ack_at.is_some() && acknowledged_at.is_none(),
-        acknowledged_at: parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?,
-        expires_at: parse_optional_timestamp(expires_at, "expires_at timestamp")?,
-        task_id: parse_task_id(task_id, &message_key)?,
+        requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
+        pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
+        acknowledged_at: parsed_acknowledged_at,
+        expires_at: parsed_expires_at,
+        task_id: parsed_task_id,
     })
 }
 
@@ -195,6 +238,9 @@ pub(crate) fn query_mailbox_metadata_rows(
             AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
                 .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
         })?;
+        // AD.20 keeps this query bounded to mailbox header data only. Full
+        // durable message text is reloaded later, and only for surviving
+        // summary-miss `--contains` candidates that still need a body check.
         let sql = "SELECT
                  mail_messages.message_key,
                  mail_messages.message_id,
@@ -208,7 +254,10 @@ pub(crate) fn query_mailbox_metadata_rows(
                      json_extract(mail_messages.envelope_json, '$.read'),
                      0
                  ),
-                 mail_message_states.pending_ack_at,
+                 COALESCE(
+                     json_extract(mail_messages.envelope_json, '$.requiresAck'),
+                     0
+                 ),
                  mail_message_states.acknowledged_at,
                  mail_message_states.expires_at,
                  json_extract(mail_messages.envelope_json, '$.taskId')

@@ -1,134 +1,109 @@
-# AD.4 Unix-Gating Wrapper Published Cutover
+---
+id: AD.4
+title: Reconcile Runtime Removal
+status: complete
+branch: feature/pAD-s4-reconcile-runtime-removal
+worktree: ../atm-core-worktrees/feature/pAD-s4-reconcile-runtime-removal
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.4
-worktree: ../atm-core-worktrees/feature/pAD-s4-unix-gating-wrapper-published-cutover
-branch: feature/pAD-s4-unix-gating-wrapper-published-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.4` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.4 — Reconcile Runtime Removal
 
 ## Goal
 
-Keep `unix-gating` as an ATM-owned subset wrapper while moving its backend to
-published portability findings only.
+- remove `ReconcileRuntime` and the daemon watch/import subsystem
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the repo-specific `unix-gating` wrapper cutover.
+- `AD.2` complete
+- `AD.3` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
+- `docs/architecture.md`
 
-Production-ready commitment:
-- the wrapper must keep the ATM-owned `PORT-004` / `PORT-005` subset contract
-- the wrapper must stop depending on the vendored integrated portability path
-- the sprint must not assume the published analyzer still emits `PORT-004` /
-  `PORT-005` unless the retained `sc-lint` rule inventory proves it; direct
-  continuity or explicit mapping must be recorded
+## Exact Targets
 
-Required command and filter contract:
+- `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/composition.rs`
+- `crates/atm-core/src/boundary/mod.rs`
+- `boundaries/atm-core/reconcile-coordinator.toml`
+- `boundaries/atm-core/watch-event-source.toml`
+- `boundaries/atm-daemon/daemon-reconcile-coordinator.toml`
+- `boundaries/atm-daemon/file-watch-event-source.toml`
+- `docs/architecture.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-core/requirements.md`
 
-```python
-command(repo_root) == [
-    "sc-lint-portability",
-    "analyze",
-    "--root",
-    str(repo_root),
-    "--format",
-    "json",
-]
+## Paths To Delete
 
-RULE_IDS = {"PORT-004", "PORT-005"}
-```
+- `crates/atm-daemon/src/reconcile_runtime.rs`
+- `crates/atm-daemon/src/reconcile_runtime/notification_fingerprints.rs`
+- `crates/atm-daemon/src/reconcile_runtime_tests.rs`
+- `crates/atm-daemon/src/watch_runtime.rs`
+- daemon-only watch/reconcile wiring that exists solely to feed reconcile
 
-If the published analyzer now emits different rule IDs for the equivalent Unix-
-gating findings, the wrapper must use one explicit repo-owned upstream-to-ATM
-mapping and still expose only the ATM contract above.
+## Modified Surfaces
 
-## Prerequisites
+- modify daemon composition so no accepted startup path constructs reconcile or
+  watch runtimes
+- modify boundary exports so reconcile/watch-only traits are absent from the
+  accepted runtime surface
+- modify reconcile/watch boundary TOMLs so retired components are no longer
+  declared `active`, `stub_landed`, or composition-owned by deleted runtime
+  roots
+- rewrite docs that still describe reconcile/watch as a live Claude runtime
 
-- `AD.3`
+## Obsolescence Instructions
 
-## Out Of Scope
-
-- no `runtime-waits` wrapper cutover yet
-- no proc-macro dependency cutover yet
-- no vendored crate removal yet
-- no CI / release-preflight cutover yet
-
-## Code And Document Targets
-
-- `.just/lint_unix_gating.py`
-- `.just/tests/test_lint_unix_gating.py`
-- `.triage/phase-AD/ad4-sc-lint-portability-help.txt`
-- `.triage/phase-AD/ad4-unix-path-prefixes-review.md`
-- `.triage/phase-AD/ad4-unix-gating-rule-map.md`
+- any retained `WatchEventSource`, `ReconcileCoordinator`, reconcile request,
+  or watch-runtime helper that cannot be deleted immediately must be marked
+  `Phase AD obsolete: historical reconcile/watch only`
+- retained obsolete reconcile/watch symbols must have zero accepted runtime
+  construction paths and zero new call sites
 
 ## Deliverables
 
-- `.just/lint_unix_gating.py` sources findings from the published
-  `sc-lint-portability` analyzer
-- the wrapper continues to report only `PORT-004` and `PORT-005`
-- `.just/tests/test_lint_unix_gating.py` is updated only as needed to preserve
-  the ATM subset-wrapper contract
-- one repo-owned rule-map artifact
-  `.triage/phase-AD/ad4-unix-gating-rule-map.md` records either:
-  - `## ATM Wrapper Rule Contract`
-  - `## Published Rule IDs`
-  - `## Mapping Decision`
-  - one explicit decision line:
-    - `Decision: direct-continuity`
-    - or `Decision: explicit-mapping`
-- one repo-owned review artifact
-  `.triage/phase-AD/ad4-unix-path-prefixes-review.md` records whether the
-  published `sc-lint-portability` surface exposes a direct equivalent for the
-  vendored `unix_path_prefixes` knob
-- if no direct equivalent exists, the sprint must either carry the behavior
-  forward in an ATM-owned wrapper/config override or record an explicitly
-  approved removal in that review artifact before sprint closure
+- the daemon no longer ships or starts `ReconcileRuntime`
+- the daemon no longer ships or starts `WatchRuntime`
+- watched-source import no longer participates in the accepted runtime
+- no send/read path depends on reconcile completion or reconcile notifications
 
 ## Required Work
 
-- retarget `unix-gating` to published portability findings only
-- preserve the `PORT-004` / `PORT-005` subset contract exactly
-- inspect the published rule inventory for direct `PORT-004` / `PORT-005`
-  continuity and record the result in the rule-map artifact
-- if published rule IDs differ, define one explicit upstream-to-ATM mapping
-  rather than leaving the translation implicit in wrapper code
-- inspect the published portability surface for `unix_path_prefixes`
-  equivalence
-- if direct equivalence is missing, define the repo-owned replacement or
-  record approved removal explicitly before closure
+- remove the reconcile coordinator boundary and runtime wiring from the daemon
+- remove file-watch/import behavior that is only there for the retired
+  reconcile model
+- remove any watched-source/import support that exists only to feed the retired
+  Claude JSON mailbox path
+
+## This Sprint Does Not Close
+
+- daemon notification runtime removal
+- post-send emitter implementation
+- Claude inbox nudge deletion
 
 ## Acceptance Criteria
 
-- ATM still exposes the `unix-gating` local lint target after retargeting
-- non-`PORT-004` / non-`PORT-005` portability findings remain excluded from
-  this wrapper
-- any published-rule-id drift is resolved by an explicit rule-map artifact
-  rather than implementer-only assumption
-- the `unix_path_prefixes` portability-config gap is closed explicitly:
-  - direct published equivalence is confirmed
-  - or the ATM-owned replacement behavior is named
-  - or approved removal is documented
-- the wrapper no longer shells through the old vendored portability path
-- any stale path-based analyzer invocation left in the repo blocks sprint
-  closure
+- no accepted daemon composition path starts or references `ReconcileRuntime`
+- no accepted daemon composition path starts or references `WatchRuntime`
+- no accepted `atm-core` boundary surface still requires reconcile-only traits
+- no reconcile/watch boundary TOML still declares a deleted composition root or
+  a retired reconcile/watch component as `active` or `stub_landed`
+- `docs/architecture.md`, `docs/atm-daemon/architecture.md`,
+  `docs/atm-daemon/requirements.md`, and `docs/atm-core/requirements.md` no
+  longer describe watch/reconcile as an accepted production subsystem
+- removing reconcile does not regress `send`, `read`, or `ack`
 
 ## Required Validation
 
-- `python3 .just/run_lint.py unix-gating`
-- `python3 .just/tests/test_lint_unix_gating.py`
-- `sc-lint-portability --help > .triage/phase-AD/ad4-sc-lint-portability-help.txt`
-- `test -f .triage/phase-AD/ad4-unix-gating-rule-map.md`
-- `rg -n '^## ATM Wrapper Rule Contract$|^## Published Rule IDs$|^## Mapping Decision$|^Decision: (direct-continuity|explicit-mapping)$' .triage/phase-AD/ad4-unix-gating-rule-map.md -S`
-- `test -f .triage/phase-AD/ad4-unix-path-prefixes-review.md`
-- `rg -n '^## Published Surface$|^## Decision$|^Decision: (direct-equivalent|wrapper-override|approved-removal)$' .triage/phase-AD/ad4-unix-path-prefixes-review.md -S`
-- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule portability' .just/lint_unix_gating.py .just/tests/test_lint_unix_gating.py -S`
+- targeted daemon composition and command regression tests
+- targeted boundary-lint / boundary-grep gates for retired reconcile/watch
+  TOMLs
+- `test ! -e crates/atm-daemon/src/reconcile_runtime.rs`
+- `test ! -e crates/atm-daemon/src/reconcile_runtime/notification_fingerprints.rs`
+- `test ! -e crates/atm-daemon/src/reconcile_runtime_tests.rs`
+- `test ! -e crates/atm-daemon/src/watch_runtime.rs`
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

@@ -58,4 +58,18 @@ published `sc-lint` migration proposal.
 
 ## Closed Items
 
-- none yet
+### AD-ISSUE-006 Post-Phase-AD Doc Sync Follow-Up
+
+- status: closed by `SCLINT-PLAN-REFRESH-DEV-1`
+- owner: `plan/sc-lint-published-migration`
+- summary: this follow-up was folded into the supporting-plan refresh on the
+  `plan/sc-lint-published-migration` branch once the accepted `Phase AD` line
+  had landed. The refresh:
+  - removes the stale claim that the execution package stops at `AD.1` through
+    `AD.9`
+  - points readers at the accepted `Phase AD` source-of-truth set:
+    `plan-phase-AD.md`, `readiness.md`, `violation-inventory.md`, and the
+    `Phase AD` section in `docs/project-plan.md`
+  - records that the accepted line closed through `AD.35`
+  - keeps caller-context and pane-truth interpretation aligned with the
+    accepted `Phase AD` artifacts instead of the earlier proposal snapshot

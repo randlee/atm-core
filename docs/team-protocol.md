@@ -4,13 +4,39 @@ This protocol is mandatory for all ATM team communications.
 
 ## Required Flow
 
-1. Immediately acknowledge every ATM message received.
+1. Immediately acknowledge every ATM message that requires ack (see Message Classes).
 - Example: `ack, working on <task>`
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done.
 - Example: `task complete: <summary>`
-4. Receiver immediately acknowledges completion.
-5. No silent processing. Every message must receive a response.
+4. Receiver immediately acknowledges completion if it requires ack.
+5. No silent processing. Every requires-ack message must receive a response.
+
+## Message Classes
+
+Two classes of message exist. Handling differs per class.
+
+```json
+{
+  "class": "requires_ack",
+  "examples": ["task assignment", "fix request", "QA dispatch", "blocker report"],
+  "read_with": "atm read",
+  "respond_with": "atm ack <message_id> \"<reply>\""
+}
+```
+
+```json
+{
+  "class": "informational",
+  "examples": ["status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
+  "read_with": "atm peek",
+  "respond_with": "atm send <to> \"<reply>\" (omit --requires-ack; never use atm ack)"
+}
+```
+
+Never use `atm ack` on an informational message. `atm ack` is reserved for
+messages that actually entered the pending-ack queue because the sender set
+`--requires-ack` or sent a task-linked message.
 
 ## Good Patterns
 

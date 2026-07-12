@@ -1,12 +1,14 @@
 //! Send command service implementation and post-send hook handling.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
+use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -18,9 +20,9 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
-use crate::identity;
+use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
@@ -33,18 +35,23 @@ use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
+pub(crate) mod hook;
 #[allow(
     dead_code,
-    reason = "The direct CLI post-send hook helper is intentionally dormant while retained-runtime notification delivery is boundary-owned."
+    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
 )]
-pub(crate) mod hook;
+mod hook_tmux;
 pub(crate) mod input;
 mod missing_config_notice;
+#[doc(hidden)]
+pub mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 pub(crate) use persistence::persist_message_and_seed_workflow;
+
+pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -60,9 +67,9 @@ pub enum SendMessageSource {
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub sender_override: Option<AgentName>,
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
     pub to: AgentAddress,
-    pub team_override: Option<TeamName>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -78,9 +85,9 @@ impl SendRequest {
     pub fn new(
         home_dir: PathBuf,
         current_dir: PathBuf,
-        sender_override: Option<&str>,
+        caller_identity: AgentName,
         to: &str,
-        team_override: Option<&str>,
+        caller_team: TeamName,
         message_source: SendMessageSource,
         summary_override: Option<String>,
         requires_ack: bool,
@@ -90,9 +97,9 @@ impl SendRequest {
         Ok(Self {
             home_dir,
             current_dir,
-            sender_override: sender_override.map(str::parse).transpose()?,
+            caller_identity,
+            caller_team,
             to: to.parse()?,
-            team_override: team_override.map(str::parse).transpose()?,
             message_source,
             summary_override,
             requires_ack,
@@ -147,6 +154,8 @@ impl SendCommandOutcome {
 pub struct WarningEntry {
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery: Option<String>,
 }
 
@@ -154,14 +163,33 @@ impl WarningEntry {
     pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
         Self {
             message: message.into(),
+            code: None,
+            recovery: recovery.map(Into::into),
+        }
+    }
+
+    pub fn with_code(
+        code: AtmErrorCode,
+        message: impl Into<String>,
+        recovery: Option<impl Into<String>>,
+    ) -> Self {
+        Self {
+            message: message.into(),
+            code: Some(code),
             recovery: recovery.map(Into::into),
         }
     }
 
     pub fn render(&self) -> String {
+        let message = match self.code {
+            Some(code) if !self.message.contains(code.as_str()) => {
+                format!("{} [{}]", self.message, code.as_str())
+            }
+            _ => self.message.clone(),
+        };
         match &self.recovery {
-            Some(recovery) => format!("{} Recovery: {recovery}", self.message),
-            None => self.message.clone(),
+            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            None => message,
         }
     }
 }
@@ -176,7 +204,7 @@ impl WarningEntry {
 /// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
 /// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
-/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`],
+/// [`crate::error_codes::AtmErrorCode::SelfAddressedSendInvalid`],
 /// [`crate::error_codes::AtmErrorCode::FilePolicyRejected`],
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
@@ -195,7 +223,16 @@ pub fn send_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime)
+    send_mail_with_runtime_impl(request, observability, runtime, None)
+}
+
+pub fn send_mail_with_runtime_and_post_send_emitter(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<SendOutcome, AtmError> {
+    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
 fn send_mail_with_runtime_impl<
@@ -204,6 +241,7 @@ fn send_mail_with_runtime_impl<
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
@@ -232,6 +270,7 @@ fn send_mail_with_runtime_impl<
     finalize_send_outcome(
         runtime,
         observability,
+        post_send_emitter,
         &request,
         &context,
         &body,
@@ -252,6 +291,7 @@ fn finalize_send_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -281,8 +321,18 @@ fn finalize_send_outcome<
         if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
             outcome.warnings.push(warning);
         }
+        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+        hook::emit_post_send_effects(
+            runtime,
+            &mut outcome.warnings,
+            context.post_send_config.as_ref(),
+            post_send_emitter,
+            &context.recipient,
+            &context.delivery_snapshot,
+            &post_send_messages,
+        );
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
+        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
             observability,
             DeliveryTransitionContext {
@@ -398,7 +448,6 @@ fn build_send_delivery_plan(
             &context.delivery_snapshot,
         ),
         context.recipient.clone(),
-        context.delivery_snapshot.recipient_pane_id.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
             .map_err(|error| {
                 AtmError::mailbox_write(error.to_string()).with_recovery(
@@ -409,12 +458,28 @@ fn build_send_delivery_plan(
     ))
 }
 
+fn post_send_messages_from_persistence(
+    persistence: &DeliveryPersistenceResult,
+    requires_ack: bool,
+) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
+    crate::delivery_plan::LogicalMessage::new(
+        persistence.original_message.clone(),
+        requires_ack,
+        false,
+    )
+    .map(|message| vec![message])
+    .map_err(|error| {
+        AtmError::mailbox_write(error.to_string()).with_recovery(
+            "Repair the persisted delivery record shape before retrying post-send emission.",
+        )
+    })
+}
+
 struct SendExecutionContext {
-    config: Option<config::AtmConfig>,
+    command_config: Option<config::AtmConfig>,
+    post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
-    sender_team: Option<TeamName>,
     canonical_sender: AgentName,
-    display_sender: AgentName,
     inbox_path: PathBuf,
     delivery_snapshot: DeliveryRecipientSnapshot,
     delivery_family: DeliveryEventFamily,
@@ -427,22 +492,28 @@ fn prepare_send_context<
     runtime: &R,
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
-    let config = runtime.load_config(&request.current_dir)?;
-    let canonical_sender =
-        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
-    let recipient = resolve_recipient(
-        &request.to,
-        request.team_override.as_deref(),
-        config.as_ref(),
-    )?;
-    let sender_team = config::resolve_team(None, config.as_ref());
-    let display_sender = display_sender_identity(
-        &canonical_sender,
-        request.sender_override.as_ref(),
-        sender_team.as_ref(),
-        &recipient.team,
-        config.as_ref(),
-    );
+    let command_config = runtime.load_config(&request.current_dir)?;
+    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
+        runtime,
+        &request.caller_team,
+        &request.caller_identity,
+    ) {
+        Ok(config) => (config, Vec::new()),
+        Err(error) => (
+            None,
+            vec![WarningEntry::with_code(
+                error.code,
+                format!(
+                    "warning: post-send hook config lookup failed for {}@{}: {}.",
+                    request.caller_identity, request.caller_team, error.message
+                ),
+                error.primary_recovery().map(str::to_owned),
+            )],
+        ),
+    };
+    let canonical_sender = request.caller_identity.clone();
+    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
+    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
@@ -456,15 +527,14 @@ fn prepare_send_context<
         request.thread_mode,
     );
     Ok(SendExecutionContext {
-        config,
+        command_config,
+        post_send_config,
         recipient,
-        sender_team,
         canonical_sender,
-        display_sender,
         inbox_path,
         delivery_snapshot,
         delivery_family,
-        warnings: Vec::new(),
+        warnings,
     })
 }
 
@@ -483,20 +553,19 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     requires_ack: bool,
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
+    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
-            from: context.display_sender.clone(),
+            from: context.canonical_sender.clone(),
             text: body.to_string(),
             timestamp,
             read: false,
-            source_team: context
-                .sender_team
-                .clone()
-                .or_else(|| Some(context.recipient.team.clone())),
+            source_team: Some(request.caller_team.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
-            pending_ack_at: requires_ack.then_some(timestamp),
-            acknowledged_at: None,
+            requires_ack: ack_intent.requires_ack,
+            pending_ack_at: ack_intent.pending_ack_at,
+            acknowledged_at: ack_intent.acknowledged_at,
             acknowledges_message_id: None,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
@@ -506,18 +575,16 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         }));
     }
     let envelope = InboxMessage {
-        from: context.display_sender.clone(),
+        from: context.canonical_sender.clone(),
         text: body.to_string(),
         timestamp,
         read: false,
-        source_team: context
-            .sender_team
-            .clone()
-            .or_else(|| Some(context.recipient.team.clone())),
+        source_team: Some(request.caller_team.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
-        pending_ack_at: requires_ack.then_some(timestamp),
-        acknowledged_at: None,
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
         acknowledges_message_id: None,
         parent_message_id: request.parent_message_id,
         thread_mode: request.thread_mode,
@@ -567,39 +634,62 @@ pub(crate) struct ResolvedRecipient {
     pub(crate) team: TeamName,
 }
 
-#[allow(
-    dead_code,
-    reason = "The direct post-send hook payload contract remains documented while the CLI-only helper stays dormant."
-)]
-#[derive(Clone, Copy)]
-pub(crate) struct PostSendHookContext<'a> {
-    pub(crate) sender: &'a AgentName,
-    pub(crate) sender_team: Option<&'a TeamName>,
-    pub(crate) recipient: &'a ResolvedRecipient,
-    pub(crate) recipient_pane_id: Option<&'a str>,
-    pub(crate) message_id: AtmMessageId,
-    pub(crate) requires_ack: bool,
-    pub(crate) is_ack: bool,
-    pub(crate) task_id: Option<&'a TaskId>,
+pub(crate) fn validate_non_self_recipient(
+    sender: &AgentName,
+    sender_team: &TeamName,
+    recipient: &ResolvedRecipient,
+) -> Result<(), AtmError> {
+    if sender
+        .as_str()
+        .eq_ignore_ascii_case(recipient.agent.as_str())
+        && sender_team
+            .as_str()
+            .eq_ignore_ascii_case(recipient.team.as_str())
+    {
+        return Err(AtmError::self_addressed_send_invalid(format!(
+            "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod self_address_tests {
+    use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::error_codes::AtmErrorCode;
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let error = validate_non_self_recipient(
+            &AgentName::from_validated("Sender-A"),
+            &TeamName::from_validated("Test-Team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+        )
+        .expect_err("case-variant self target must be rejected");
+
+        assert!(error.is_validation(), "{error:?}");
+        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    }
 }
 
 fn resolve_recipient(
     target_address: &AgentAddress,
-    team_override: Option<&str>,
+    caller_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
     let team = target_address
         .team
         .as_deref()
         .and_then(|team| team.parse().ok())
-        .or_else(|| config::resolve_team(team_override, config))
+        .or_else(|| Some(caller_team.clone()))
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: AgentName::from_validated(config::aliases::resolve_agent(
-            &target_address.agent,
-            config,
-        )),
+        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
         team,
     })
 }
@@ -719,32 +809,10 @@ fn validate_thread_append(
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);
+    envelope.requires_ack = thread_requires_ack;
     envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
     envelope.acknowledged_at = None;
     Ok(())
-}
-
-fn display_sender_identity(
-    canonical_sender: &AgentName,
-    sender_override: Option<&AgentName>,
-    sender_team: Option<&TeamName>,
-    recipient_team: &TeamName,
-    config: Option<&config::AtmConfig>,
-) -> AgentName {
-    let cross_team = sender_team.is_some_and(|team| team != recipient_team);
-    if !cross_team {
-        return canonical_sender.clone();
-    }
-
-    if let Some(sender_override) = sender_override
-        && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
-    {
-        return sender_override.clone();
-    }
-
-    config::aliases::preferred_alias(canonical_sender.as_str(), config)
-        .map(AgentName::from_validated)
-        .unwrap_or_else(|| canonical_sender.clone())
 }
 
 #[allow(
@@ -760,5 +828,7 @@ pub(super) fn qualified_sender_identity(
         .unwrap_or_else(|| sender.to_string())
 }
 
+#[cfg(test)]
+mod graft_warning_tests;
 #[cfg(test)]
 mod tests;

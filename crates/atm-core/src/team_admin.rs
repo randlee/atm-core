@@ -3,29 +3,32 @@
     reason = "team_admin still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
 )]
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use tracing::warn;
+use serde_json::Value;
 
-use crate::address::validate_path_segment;
 use crate::boundary::{
-    ConfigLoadRequest, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
+    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterStore,
+    TeamNudgeTemplateOverrideMode,
 };
-use crate::config::{load_claude_team_config_document, resolve_team};
-use crate::error::{AtmError, AtmErrorKind};
-use crate::error_codes::AtmErrorCode;
-use crate::home;
-use crate::persistence;
-use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AgentMember, AgentType, TeamConfig};
-use crate::types::{AgentId, AgentName, ModelName, PaneId, TeamName};
+use crate::error::AtmError;
+use crate::schema::HomeDirPath;
+use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
+#[path = "team_admin/filesystem.rs"]
+mod filesystem;
+#[path = "team_admin/member_mutation.rs"]
+mod member_mutation;
+#[path = "team_admin/projection.rs"]
+mod projection;
 #[path = "team_admin/restore.rs"]
 mod restore;
+
+pub use member_mutation::{
+    AddMemberOutcome, AddMemberRequest, MemberName, UpdateMemberOutcome, UpdateMemberRequest,
+    add_member_with_roster_store, update_member_with_roster_store,
+};
 
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -51,7 +54,9 @@ pub struct MemberSummary {
     pub model: ModelName,
     pub joined_at: Option<u64>,
     pub tmux_pane_id: Option<PaneId>,
-    pub cwd: String,
+    pub home_dir: HomeDirPath,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_cwd: Option<String>,
     pub extra: serde_json::Map<String, Value>,
 }
 
@@ -65,58 +70,9 @@ pub struct MembersList {
 /// Parameters for listing the members of one team.
 #[derive(Debug, Clone)]
 pub struct MembersQuery {
-    pub home_dir: PathBuf,
-    pub current_dir: PathBuf,
-    pub team_override: Option<TeamName>,
-}
-
-/// Parameters for adding one member to a team roster.
-#[derive(Debug, Clone)]
-pub struct AddMemberRequest {
-    pub home_dir: PathBuf,
     pub team: TeamName,
-    pub member: AgentName,
-    pub agent_type: AgentType,
-    pub model: ModelName,
-    pub cwd: PathBuf,
-    pub tmux_pane_id: Option<PaneId>,
-}
-
-impl AddMemberRequest {
-    pub fn new(
-        home_dir: PathBuf,
-        team: &str,
-        member: &str,
-        agent_type: String,
-        model: String,
-        cwd: PathBuf,
-        tmux_pane_id: Option<String>,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
-            home_dir,
-            team: team.parse()?,
-            member: member.parse()?,
-            agent_type: parse_agent_type(agent_type)?,
-            model: ModelName::new(model)?,
-            cwd,
-            tmux_pane_id: normalize_tmux_pane_id(tmux_pane_id.as_deref())?,
-        })
-    }
-}
-
-/// Result of adding one member and optional inbox to a team.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct AddMemberOutcome {
-    pub action: &'static str,
-    pub team: TeamName,
-    pub member: AgentName,
-    pub created_inbox: bool,
-}
-
-struct MemberAddContext {
-    team_dir: PathBuf,
-    current_extra: serde_json::Map<String, Value>,
-    existing_roster: Vec<RosterEntry>,
+    pub caller_identity: Option<AgentName>,
+    pub live_cwd: Option<PathBuf>,
 }
 
 /// Parameters for creating one team backup.
@@ -200,6 +156,96 @@ pub enum RestoreResult {
     Applied(RestoreOutcome),
 }
 
+/// Parameters for setting one team-scoped built-in nudge template override.
+#[derive(Debug, Clone)]
+pub struct SetNudgeTemplateOverrideRequest {
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+}
+
+impl SetNudgeTemplateOverrideRequest {
+    pub fn new(
+        caller_team: TeamName,
+        team: &str,
+        kind: &str,
+        template_body: String,
+    ) -> Result<Self, AtmError> {
+        validate_nudge_template_body(&template_body)?;
+        Ok(Self {
+            caller_team,
+            team: team.parse()?,
+            kind: kind.parse()?,
+            template_body,
+        })
+    }
+}
+
+/// Parameters for disabling one team-scoped built-in nudge template.
+#[derive(Debug, Clone)]
+pub struct DisableNudgeTemplateOverrideRequest {
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+}
+
+impl DisableNudgeTemplateOverrideRequest {
+    pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_team,
+            team: team.parse()?,
+            kind: kind.parse()?,
+        })
+    }
+}
+
+/// Parameters for clearing one team-scoped built-in nudge template override.
+#[derive(Debug, Clone)]
+pub struct ClearNudgeTemplateOverrideRequest {
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+}
+
+impl ClearNudgeTemplateOverrideRequest {
+    pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_team,
+            team: team.parse()?,
+            kind: kind.parse()?,
+        })
+    }
+}
+
+/// Result of setting one team-scoped built-in nudge template override.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SetNudgeTemplateOverrideOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub template_body: String,
+    pub updated_at: crate::types::IsoTimestamp,
+}
+
+/// Result of disabling one team-scoped built-in nudge template override.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DisableNudgeTemplateOverrideOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub updated_at: crate::types::IsoTimestamp,
+}
+
+/// Result of clearing one team-scoped built-in nudge template override.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ClearNudgeTemplateOverrideOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub cleared: bool,
+}
+
 /// List teams currently discoverable under ATM home.
 ///
 /// # Errors
@@ -208,10 +254,8 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    current_dir: PathBuf,
+    current_team: TeamName,
 ) -> Result<TeamsList, AtmError> {
-    let config = load_workspace_config_via_ingress(current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
     list_teams_from_roster_store(roster_store, current_team)
 }
 
@@ -225,30 +269,7 @@ pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
 ) -> Result<MembersList, AtmError> {
-    let config = load_workspace_config_via_ingress(query.current_dir)?;
-    let team = resolve_team(query.team_override.as_deref(), config.as_ref())
-        .ok_or_else(AtmError::team_unavailable)?;
-    list_members_from_roster_store(roster_store, team)
-}
-
-/// Add one member record and inbox file to a team.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when the team is missing, the member already exists, or
-/// inbox/config persistence fails.
-pub fn add_member_with_roster_store(
-    roster_store: &(dyn RosterStore + Send + Sync),
-    request: AddMemberRequest,
-) -> Result<AddMemberOutcome, AtmError> {
-    add_member_from_roster_store(roster_store, request)
-}
-
-fn load_workspace_config_via_ingress(
-    current_dir: PathBuf,
-) -> Result<Option<crate::config::AtmConfig>, AtmError> {
-    crate::direct_boundaries::load_workspace_config(ConfigLoadRequest { current_dir })
-        .map(|response| response.config)
+    list_members_from_roster_store(roster_store, query)
 }
 
 fn list_teams_from_roster_store(
@@ -275,135 +296,9 @@ fn list_teams_from_roster_store(
 
 fn list_members_from_roster_store(
     roster_store: &dyn RosterStore,
-    team: TeamName,
+    query: MembersQuery,
 ) -> Result<MembersList, AtmError> {
-    let roster = load_team_roster(roster_store, &team)?;
-    if roster.is_empty() {
-        return Err(AtmError::team_not_found(&team));
-    }
-
-    Ok(MembersList {
-        team,
-        members: ordered_roster_member_summaries(&roster),
-    })
-}
-
-fn add_member_from_roster_store(
-    roster_store: &dyn RosterStore,
-    request: AddMemberRequest,
-) -> Result<AddMemberOutcome, AtmError> {
-    let MemberAddContext {
-        team_dir,
-        current_extra,
-        mut existing_roster,
-    } = load_member_add_context(roster_store, &request)?;
-
-    let inbox_path = home::inbox_path_from_home(&request.home_dir, &request.team, &request.member)?;
-    let created_inbox = ensure_inbox_exists(&inbox_path)?;
-    existing_roster.push(build_member_add_roster_record(&request)?);
-    replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
-    let projected_config = project_team_config_from_roster(current_extra, &existing_roster);
-
-    if let Err(error) = write_team_config(&team_dir, &projected_config) {
-        if created_inbox {
-            let _ = fs::remove_file(&inbox_path);
-        }
-        return Err(
-            error.with_recovery(
-                "Check team config permissions and rerun `atm teams add-member`; ATM roster state may already include the new member.",
-            )
-        );
-    }
-
-    Ok(AddMemberOutcome {
-        action: "add-member",
-        team: request.team,
-        member: request.member,
-        created_inbox,
-    })
-}
-
-fn load_member_add_context(
-    roster_store: &dyn RosterStore,
-    request: &AddMemberRequest,
-) -> Result<MemberAddContext, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
-    let existing_roster = load_team_roster(roster_store, &request.team)?;
-    ensure_member_absent(&existing_roster, &request.team, &request.member)?;
-    Ok(MemberAddContext {
-        team_dir,
-        current_extra,
-        existing_roster,
-    })
-}
-
-fn ensure_member_absent(
-    existing_roster: &[RosterEntry],
-    team: &TeamName,
-    member: &AgentName,
-) -> Result<(), AtmError> {
-    if existing_roster
-        .iter()
-        .any(|existing_member| existing_member.agent_name == *member)
-    {
-        return Err(AtmError::new_with_code(
-            AtmErrorCode::IdentityConflict,
-            AtmErrorKind::Validation,
-            format!("member '{}' already exists in team '{}'", member, team),
-        )
-        .with_recovery(
-            "Use `atm members` to inspect the current ATM roster and choose a new member name before retrying `atm team member add`.",
-        ));
-    }
-    Ok(())
-}
-
-fn build_member_add_roster_record(request: &AddMemberRequest) -> Result<RosterEntry, AtmError> {
-    let normalized_tmux_pane_id = request.tmux_pane_id.clone();
-    let mut extra = serde_json::Map::new();
-    if normalized_tmux_pane_id.is_some() {
-        extra.insert("backendType".to_string(), json!("tmux"));
-        extra.insert("isActive".to_string(), json!(true));
-    }
-    extra.insert(
-        "agentId".to_string(),
-        json!(format!("{}@{}", request.member, request.team)),
-    );
-    extra.insert(
-        "joinedAt".to_string(),
-        json!(Utc::now().timestamp_millis() as u64),
-    );
-    extra.insert("cwd".to_string(), json!(request.cwd.display().to_string()));
-
-    Ok(RosterEntry {
-        team_name: request.team.clone(),
-        agent_name: request.member.clone(),
-        member_kind: RosterMemberKind::Permanent,
-        harness: RosterHarness::ClaudeCode,
-        agent_type: request.agent_type.clone(),
-        model: request.model.clone(),
-        recipient_pane_id: normalized_tmux_pane_id,
-        metadata_json: extra,
-    })
-}
-
-fn replace_roster_for_member_add(
-    roster_store: &dyn RosterStore,
-    team: &TeamName,
-    existing_roster: &[RosterEntry],
-) -> Result<(), AtmError> {
-    roster_store
-        .replace_roster(team, existing_roster, None)
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams add-member`.",
-            )
-        })
+    projection::list_members_from_roster_store(roster_store, query)
 }
 
 /// Create a point-in-time backup of one team's config, inboxes, and task files.
@@ -416,63 +311,7 @@ pub fn backup_team_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: BackupRequest,
 ) -> Result<BackupOutcome, AtmError> {
-    backup_team_from_roster_store(roster_store, request)
-}
-
-fn backup_team_from_roster_store(
-    roster_store: &dyn RosterStore,
-    request: BackupRequest,
-) -> Result<BackupOutcome, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let config_path = team_dir.join("config.json");
-    if !config_path.is_file() {
-        return Err(AtmError::missing_document(format!(
-            "team config is missing at {}",
-            config_path.display()
-        )));
-    }
-
-    let backup_dir = backup_root_from_home(&request.home_dir, &request.team)?.join(timestamp_dir());
-    fs::create_dir_all(backup_dir.join("inboxes")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to create backup directory {}: {error}",
-            backup_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check backup directory permissions under ATM_HOME and retry the backup.")
-    })?;
-
-    fs::copy(&config_path, backup_dir.join("config.json")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to copy {} into backup {}: {error}",
-            config_path.display(),
-            backup_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source and backup directory permissions and retry the backup.")
-    })?;
-
-    copy_regular_files(
-        &team_dir.join("inboxes"),
-        &backup_dir.join("inboxes"),
-        |name| !name.starts_with('.') && !name.ends_with(".lock"),
-    )?;
-    copy_regular_files(
-        &tasks_dir_from_home(&request.home_dir, &request.team)?,
-        &backup_dir.join("tasks"),
-        |name| name == ".highwatermark" || name.ends_with(".json"),
-    )?;
-    write_roster_audit_snapshot(&backup_dir, roster_store, &request.team)?;
-
-    Ok(BackupOutcome {
-        action: "backup",
-        team: request.team,
-        backup_path: backup_dir,
-    })
+    filesystem::backup_team_from_roster_store(roster_store, request)
 }
 
 /// Restore one team from a backup directory.
@@ -489,370 +328,164 @@ pub fn restore_team_with_roster_store(
     restore::restore_team_with_roster_store(roster_store, request)
 }
 
-fn ordered_roster_member_summaries(records: &[RosterEntry]) -> Vec<MemberSummary> {
-    let mut members = Vec::with_capacity(records.len());
-    if let Some(team_lead) = records
-        .iter()
-        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
-    {
-        members.push(member_summary_from_roster(team_lead));
-    }
-    for member in records {
-        if member.agent_name == ROLE_TEAM_LEAD {
-            continue;
-        }
-        members.push(member_summary_from_roster(member));
-    }
-    members
+/// Save one team-scoped built-in nudge template override.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when caller-team validation fails or the override row
+/// cannot be persisted through the shared override-store boundary.
+pub fn set_nudge_template_override_with_store(
+    override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
+    request: SetNudgeTemplateOverrideRequest,
+) -> Result<SetNudgeTemplateOverrideOutcome, AtmError> {
+    validate_nudge_template_override_team(
+        request.caller_team.clone(),
+        request.team.clone(),
+        "set-nudge-template",
+    )?;
+    validate_nudge_template_body(&request.template_body)?;
+
+    let row = override_store.save_template_override(
+        &request.team,
+        request.kind,
+        &request.template_body,
+    )?;
+    let template_body = row
+        .template_body()
+        .expect("saved override rows must retain template bodies")
+        .to_string();
+    Ok(SetNudgeTemplateOverrideOutcome {
+        action: "set-nudge-template",
+        team: row.team_name,
+        kind: row.kind,
+        template_body,
+        updated_at: row.updated_at,
+    })
 }
 
-fn member_summary_from_roster(record: &RosterEntry) -> MemberSummary {
-    MemberSummary {
-        name: record.agent_name.clone(),
-        agent_id: metadata_string(&record.metadata_json, "agentId")
-            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
-        agent_type: record.agent_type.to_string(),
-        model: record.model.clone(),
-        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone(),
-        cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
-        extra: compatibility_extra_fields(&record.metadata_json),
-    }
+/// Disable one team-scoped built-in nudge template override.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when caller-team validation fails or the disabled row
+/// cannot be persisted through the shared override-store boundary.
+pub fn disable_nudge_template_override_with_store(
+    override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
+    request: DisableNudgeTemplateOverrideRequest,
+) -> Result<DisableNudgeTemplateOverrideOutcome, AtmError> {
+    validate_nudge_template_override_team(
+        request.caller_team,
+        request.team.clone(),
+        "disable-nudge-template",
+    )?;
+    let row = override_store.disable_template_override(&request.team, request.kind)?;
+    debug_assert!(matches!(row.mode, TeamNudgeTemplateOverrideMode::Disabled));
+    Ok(DisableNudgeTemplateOverrideOutcome {
+        action: "disable-nudge-template",
+        team: row.team_name,
+        kind: row.kind,
+        updated_at: row.updated_at,
+    })
 }
 
-const MAX_MEMBER_METADATA_FIELD_LEN: usize = 256;
+/// Clear one team-scoped built-in nudge template override row.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when caller-team validation fails or the clear
+/// operation cannot complete through the shared override-store boundary.
+pub fn clear_nudge_template_override_with_store(
+    override_store: &(dyn NudgeTemplateOverrideStore + Send + Sync),
+    request: ClearNudgeTemplateOverrideRequest,
+) -> Result<ClearNudgeTemplateOverrideOutcome, AtmError> {
+    validate_nudge_template_override_team(
+        request.caller_team,
+        request.team.clone(),
+        "clear-nudge-template",
+    )?;
+    let cleared = override_store.clear_template_override(&request.team, request.kind)?;
+    Ok(ClearNudgeTemplateOverrideOutcome {
+        action: "clear-nudge-template",
+        team: request.team,
+        kind: request.kind,
+        cleared,
+    })
+}
 
-fn parse_agent_type(value: String) -> Result<AgentType, AtmError> {
-    if value.len() > MAX_MEMBER_METADATA_FIELD_LEN {
+fn validate_nudge_template_override_team(
+    caller_team: TeamName,
+    team: TeamName,
+    action: &'static str,
+) -> Result<(), AtmError> {
+    if caller_team != team {
         return Err(AtmError::validation(format!(
-            "agent_type must be at most {MAX_MEMBER_METADATA_FIELD_LEN} bytes"
+            "caller team '{}' does not match nudge-template target team '{}'",
+            caller_team, team
+        ))
+        .with_recovery(format!(
+            "Run `atm teams {action}` from the same ATM team that owns the target override row.",
         )));
     }
-    Ok(AgentType::from(value))
-}
-
-fn load_team_projection_extra_for_member_add(
-    team_dir: &Path,
-) -> Result<serde_json::Map<String, Value>, AtmError> {
-    // Add-member still preserves non-roster Claude config extras while it
-    // projects canonical ATM roster truth back into config.json.
-    load_claude_team_config_document(team_dir).map(|config| config.extra)
-}
-
-fn load_team_roster(
-    roster_store: &dyn RosterStore,
-    team: &TeamName,
-) -> Result<Vec<RosterEntry>, AtmError> {
-    roster_store.load_roster(team)
-}
-
-pub(super) fn project_team_config_from_roster(
-    extra: serde_json::Map<String, Value>,
-    records: &[RosterEntry],
-) -> TeamConfig {
-    let mut members = Vec::with_capacity(records.len());
-    if let Some(team_lead) = records
-        .iter()
-        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
-    {
-        members.push(agent_member_from_roster_record(team_lead));
-    }
-    for record in records {
-        if record.agent_name == ROLE_TEAM_LEAD {
-            continue;
-        }
-        members.push(agent_member_from_roster_record(record));
-    }
-    TeamConfig { members, extra }
-}
-
-fn agent_member_from_roster_record(record: &RosterEntry) -> AgentMember {
-    let mut extra = compatibility_extra_fields(&record.metadata_json);
-    AgentMember {
-        name: record.agent_name.clone(),
-        agent_id: AgentId::new(
-            metadata_string(&record.metadata_json, "agentId")
-                .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
-        )
-        .expect("validated agent id from roster record"),
-        agent_type: record.agent_type.clone(),
-        model: record.model.clone(),
-        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone(),
-        cwd: metadata_string(&record.metadata_json, "cwd")
-            .unwrap_or_default()
-            .into(),
-        extra: {
-            extra.remove("agentId");
-            extra.remove("joinedAt");
-            extra.remove("cwd");
-            extra
-        },
-    }
-}
-
-fn compatibility_extra_fields(
-    metadata_json: &serde_json::Map<String, Value>,
-) -> serde_json::Map<String, Value> {
-    let mut extra = metadata_json.clone();
-    extra.remove("agentId");
-    extra.remove("joinedAt");
-    extra.remove("cwd");
-    extra
-}
-
-fn metadata_string(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
-    metadata_json
-        .get(key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
-fn metadata_u64(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<u64> {
-    metadata_json.get(key).and_then(Value::as_u64)
-}
-
-fn teams_root_from_home(home_dir: &Path) -> PathBuf {
-    home_dir.join(".claude").join("teams")
-}
-
-fn backup_root_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    validate_path_segment(team, "team")?;
-    Ok(teams_root_from_home(home_dir).join(".backups").join(team))
-}
-
-fn tasks_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    validate_path_segment(team, "team")?;
-    Ok(home_dir.join(".claude").join("tasks").join(team))
-}
-
-fn timestamp_dir() -> String {
-    let now = Utc::now();
-    format!(
-        "{}{:09}Z",
-        now.format("%Y%m%dT%H%M%S"),
-        now.timestamp_subsec_nanos()
-    )
-}
-
-fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
-    if inbox_path.exists() {
-        return Ok(false);
-    }
-
-    if let Some(parent) = inbox_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create inbox directory {}: {error}",
-                parent.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox directory permissions and rerun the team recovery command.")
-        })?;
-    }
-
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(inbox_path)
-        .map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create inbox {}: {error}",
-                inbox_path.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and rerun the team recovery command.")
-        })?;
-    Ok(true)
-}
-
-fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmError> {
-    let config_path = team_dir.join("config.json");
-    let encoded = serde_json::to_vec_pretty(config).map_err(AtmError::from)?;
-    atomic_write(&config_path, &encoded)
-}
-
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
-    // Test seam for deterministic rollback coverage in integration tests.
-    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
-        return Err(AtmError::file_policy(format!(
-            "forced team config write failure for {}",
-            path.display()
-        ))
-        .with_recovery(
-            "Unset ATM_TEST_FAIL_TEAM_CONFIG_WRITE or rerun without the injected test failure.",
-        ));
-    }
-    persistence::atomic_write_bytes(
-        path,
-        bytes,
-        AtmErrorKind::FilePolicy,
-        "config",
-        "Check config directory permissions and rerun the operation.",
-    )
-}
-
-fn write_roster_audit_snapshot(
-    backup_dir: &Path,
-    roster_store: &dyn RosterStore,
-    team: &TeamName,
-) -> Result<(), AtmError> {
-    let roster = load_team_roster(roster_store, team)?;
-    let bytes = serde_json::to_vec_pretty(&json!({
-        "team": team,
-        "members": roster,
-    }))
-    .map_err(AtmError::from)?;
-    persistence::atomic_write_bytes(
-        &backup_dir.join("atm-roster.json"),
-        &bytes,
-        AtmErrorKind::FilePolicy,
-        "ATM roster backup snapshot",
-        "Check backup directory permissions and retry the backup.",
-    )
-}
-
-fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::WarnAndSkip)
-}
-
-fn copy_regular_files_strict<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
-}
-
-enum DirEntryErrorPolicy {
-    WarnAndSkip,
-    FailClosed,
-}
-
-fn copy_regular_files_with_policy<F>(
-    src: &Path,
-    dst: &Path,
-    include: F,
-    dir_entry_error_policy: DirEntryErrorPolicy,
-) -> Result<(), AtmError>
-where
-    F: Fn(&str) -> bool,
-{
-    if !src.exists() {
-        return Ok(());
-    }
-    fs::create_dir_all(dst).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to create destination directory {}: {error}",
-            dst.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check destination directory permissions and retry the copy.")
-    })?;
-
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(src).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to read source directory {}: {error}",
-            src.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source directory permissions and retry the copy.")
-    })? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => match dir_entry_error_policy {
-                DirEntryErrorPolicy::WarnAndSkip => {
-                    warn!(
-                        source = %src.display(),
-                        %error,
-                        "skipping unreadable source directory entry during backup copy"
-                    );
-                    continue;
-                }
-                DirEntryErrorPolicy::FailClosed => {
-                    return Err(AtmError::file_policy(format!(
-                        "failed to read source directory entry under {}: {error}",
-                        src.display()
-                    ))
-                    .with_source(error)
-                    .with_recovery("Check source directory permissions and retry the restore."));
-                }
-            },
-        };
-        if entry.path().is_file() && include(&entry.file_name().to_string_lossy()) {
-            entries.push(entry);
-        }
-    }
-    entries.sort_by_key(|entry| entry.file_name());
-
-    for entry in entries {
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        fs::copy(&from, &to).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to copy {} to {}: {error}",
-                from.display(),
-                to.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check source and destination permissions and retry the copy.")
-        })?;
-    }
-
     Ok(())
 }
 
-fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {
-    let Some(raw) = pane_id.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(None);
-    };
-
-    if (raw
-        .strip_prefix('%')
-        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|ch| ch.is_ascii_digit())))
-        || raw.chars().all(|ch| ch.is_ascii_digit())
-    {
-        return PaneId::from_cli(raw).map(Some);
+fn validate_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
+    if template_body.trim().is_empty() {
+        return Err(AtmError::empty_nudge_template_body());
     }
+    Ok(())
+}
 
-    Err(AtmError::validation(format!(
-        "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
-    ))
-    .with_recovery(
-        "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
-    ))
+pub(crate) fn ordered_roster_member_summaries(
+    records: &[RosterEntry],
+    caller_identity: Option<&AgentName>,
+    live_cwd: Option<&Path>,
+) -> Vec<MemberSummary> {
+    projection::ordered_roster_member_summaries(records, caller_identity, live_cwd)
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, MAX_MEMBER_METADATA_FIELD_LEN, MembersQuery,
-        RestoreRequest, add_member_with_roster_store, backup_root_from_home,
-        backup_team_with_roster_store, list_members_with_roster_store,
-        list_teams_with_roster_store, tasks_dir_from_home,
+        AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
+        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RestoreRequest,
+        SetNudgeTemplateOverrideRequest, UpdateMemberRequest, add_member_with_roster_store,
+        backup_team_with_roster_store, clear_nudge_template_override_with_store,
+        disable_nudge_template_override_with_store, list_members_with_roster_store,
+        list_teams_with_roster_store, set_nudge_template_override_with_store,
+        update_member_with_roster_store,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-        RosterStoreHealthSnapshot,
+        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, ReplaySource, RosterEntry,
+        RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
-    use crate::schema::TeamConfig;
-    use crate::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
+    use crate::test_support::{
+        EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
+    };
     use crate::types::{AgentName, TeamName};
+
+    const MAX_MEMBER_METADATA_FIELD_LEN: usize =
+        super::member_mutation::MAX_MEMBER_METADATA_FIELD_LEN;
 
     #[derive(Default)]
     struct RecordingRosterStore {
         // Test-only seam: Mutex keeps the fixture simple while serial tests own all access.
         teams: Mutex<BTreeMap<TeamName, Vec<RosterEntry>>>,
+    }
+
+    #[derive(Default)]
+    struct RecordingNudgeTemplateOverrideStore {
+        rows: Mutex<BTreeMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
     }
 
     impl RecordingRosterStore {
@@ -865,6 +498,7 @@ mod tests {
     }
 
     impl boundary::sealed::Sealed for RecordingRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
 
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(
@@ -938,6 +572,76 @@ mod tests {
         }
     }
 
+    impl NudgeTemplateOverrideStore for RecordingNudgeTemplateOverrideStore {
+        fn load_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<Option<TeamNudgeTemplateOverrideRow>, crate::error::AtmError> {
+            Ok(self
+                .rows
+                .lock()
+                .expect("override store lock")
+                .get(&(team.clone(), kind))
+                .cloned())
+        }
+
+        fn save_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+            template_body: &str,
+        ) -> Result<TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            if template_body.trim().is_empty() {
+                return Err(crate::error::AtmError::empty_nudge_template_body());
+            }
+            let row = TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: TeamNudgeTemplateOverrideMode::Override {
+                    template_body: template_body.to_string(),
+                },
+                updated_at: crate::types::IsoTimestamp::now(),
+            };
+            self.rows
+                .lock()
+                .expect("override store lock")
+                .insert((team.clone(), kind), row.clone());
+            Ok(row)
+        }
+
+        fn disable_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
+            let row = TeamNudgeTemplateOverrideRow {
+                team_name: team.clone(),
+                kind,
+                mode: TeamNudgeTemplateOverrideMode::Disabled,
+                updated_at: crate::types::IsoTimestamp::now(),
+            };
+            self.rows
+                .lock()
+                .expect("override store lock")
+                .insert((team.clone(), kind), row.clone());
+            Ok(row)
+        }
+
+        fn clear_template_override(
+            &self,
+            team: &TeamName,
+            kind: BuiltInNudgeTemplateKind,
+        ) -> Result<bool, crate::error::AtmError> {
+            Ok(self
+                .rows
+                .lock()
+                .expect("override store lock")
+                .remove(&(team.clone(), kind))
+                .is_some())
+        }
+    }
+
     fn roster_member(team: &str, agent: &str) -> RosterEntry {
         RosterEntry {
             team_name: team.parse().expect("team"),
@@ -1005,12 +709,12 @@ mod tests {
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf().into(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
             },
         )
@@ -1048,12 +752,12 @@ mod tests {
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf().into(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
             },
         )
@@ -1071,18 +775,20 @@ mod tests {
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
         let mut member = roster_member(TEST_TEAM, TEST_SENDER);
+        let worker_home_dir = tempdir.path().join("worker-home");
         member.recipient_pane_id = Some(crate::types::PaneId::from_cli("%9").expect("pane"));
-        member
-            .metadata_json
-            .insert("cwd".to_string(), serde_json::json!("/tmp/worker"));
+        member.metadata_json.insert(
+            HOME_DIR_METADATA_KEY.to_string(),
+            serde_json::json!(worker_home_dir.display().to_string()),
+        );
         roster_store.seed_team(TEST_TEAM, vec![member]);
 
         let members = list_members_with_roster_store(
             &roster_store,
             MembersQuery {
-                home_dir: tempdir.path().to_path_buf(),
-                current_dir: tempdir.path().to_path_buf(),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                team: TEST_TEAM.parse().expect("team"),
+                caller_identity: Some(TEST_SENDER.parse().expect("caller")),
+                live_cwd: Some(PathBuf::from("/repo/live")),
             },
         )
         .expect("list members");
@@ -1091,7 +797,29 @@ mod tests {
         assert_eq!(members.members.len(), 1);
         assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
         assert_eq!(members.members[0].tmux_pane_id.as_deref(), Some("%9"));
-        assert_eq!(members.members[0].cwd, "/tmp/worker");
+        assert_eq!(
+            members.members[0].home_dir.as_ref(),
+            worker_home_dir.as_path()
+        );
+        assert_eq!(members.members[0].live_cwd.as_deref(), Some("/repo/live"));
+    }
+
+    #[test]
+    fn project_team_config_from_roster_rejects_invalid_persisted_agent_id() {
+        let mut malformed = roster_member(TEST_TEAM, TEST_SENDER);
+        malformed
+            .metadata_json
+            .insert("agentId".to_string(), serde_json::json!("bad/agent/id"));
+
+        let error = super::projection::project_team_config_from_roster(
+            serde_json::Map::new(),
+            &[malformed],
+        )
+        .expect_err("invalid persisted agent id");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("invalid persisted agentId"));
+        assert!(error.message.contains("bad/agent/id"));
     }
 
     #[test]
@@ -1114,7 +842,7 @@ mod tests {
             ],
         );
 
-        let teams = list_teams_with_roster_store(&roster_store, tempdir.path().to_path_buf())
+        let teams = list_teams_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
             .expect("list teams");
 
         assert_eq!(teams.team.as_str(), TEST_TEAM);
@@ -1132,22 +860,24 @@ mod tests {
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
         let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
+        let lead_home_dir = tempdir.path().join("team-lead-home");
         existing.agent_type = crate::schema::AgentType::from("lead".to_string());
         existing.model = crate::types::ModelName::new("gpt-5").expect("model");
-        existing
-            .metadata_json
-            .insert("cwd".to_string(), serde_json::json!("/tmp/team-lead"));
+        existing.metadata_json.insert(
+            HOME_DIR_METADATA_KEY.to_string(),
+            serde_json::json!(lead_home_dir.display().to_string()),
+        );
         roster_store.seed_team(TEST_TEAM, vec![existing]);
 
         add_member_with_roster_store(
             &roster_store,
             AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
+                atm_home_dir: tempdir.path().to_path_buf().into(),
                 team: TEST_TEAM.parse().expect("team"),
                 member: TEST_SENDER.parse().expect("member"),
                 agent_type: crate::schema::AgentType::from("worker".to_string()),
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
-                cwd: tempdir.path().to_path_buf(),
+                member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
             },
         )
@@ -1171,6 +901,235 @@ mod tests {
             .find(|member| member.name == TEST_SENDER)
             .expect("member");
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
+    }
+
+    #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_repairs_existing_roster_metadata_and_projects_config() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+            ],
+        );
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_SENDER.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                harness: Some(RosterHarness::CodexCli),
+                agent_type: Some(crate::schema::AgentType::from("worker".to_string())),
+                model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
+            },
+        )
+        .expect("update member");
+
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        assert_eq!(roster.len(), 2);
+        let member = roster
+            .iter()
+            .find(|member| member.agent_name == TEST_SENDER)
+            .expect("sender member");
+        assert_eq!(member.harness, RosterHarness::CodexCli);
+        assert_eq!(member.recipient_pane_id.as_deref(), Some("%22"));
+        assert_eq!(
+            member.metadata_json.get(HOME_DIR_METADATA_KEY),
+            Some(&serde_json::json!("/repo/worktree"))
+        );
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        let projected_member = config
+            .members
+            .iter()
+            .find(|member| member.name == TEST_SENDER)
+            .expect("member");
+        assert_eq!(projected_member.tmux_pane_id.as_deref(), Some("%22"));
+        assert_eq!(
+            projected_member.home_dir.as_path(),
+            PathBuf::from("/repo/worktree").as_path()
+        );
+    }
+
+    #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                // This fixture must prove the accepted pane-repair flow for a
+                // non-lead roster member on the retained line.
+                roster_member(TEST_TEAM, TEST_ARCH_CTM),
+            ],
+        );
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(ROLE_TEAM_LEAD.parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
+            },
+        )
+        .expect("repair team-lead pane");
+
+        update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_ARCH_CTM.parse().expect("member")),
+                home_dir: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
+            },
+        )
+        .expect("repair secondary member pane");
+
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        let team_lead = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == ROLE_TEAM_LEAD)
+            .expect("lead member");
+        let arch_ctm = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == TEST_ARCH_CTM)
+            .expect("arch fixture member");
+        assert_eq!(team_lead.recipient_pane_id.as_deref(), Some("%0"));
+        assert_eq!(arch_ctm.recipient_pane_id.as_deref(), Some("%1"));
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        let projected_team_lead = config
+            .members
+            .iter()
+            .find(|member| member.name == ROLE_TEAM_LEAD)
+            .expect("projected lead member");
+        let projected_arch_ctm = config
+            .members
+            .iter()
+            .find(|member| member.name == TEST_ARCH_CTM)
+            .expect("projected arch fixture member");
+        assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
+        assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
+    }
+
+    #[test]
+    fn update_member_rejects_caller_team_mismatch_before_mutation() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: "other-team".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_SENDER.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+            },
+        )
+        .expect_err("caller team mismatch");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("caller team"));
+    }
+
+    #[test]
+    fn update_member_rejects_caller_missing_from_target_roster() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_RECIPIENT)]);
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_RECIPIENT.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+            },
+        )
+        .expect_err("missing caller");
+
+        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert!(error.message.contains(TEST_SENDER));
+    }
+
+    #[test]
+    fn update_member_rejects_missing_existing_member() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD)]);
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            tempdir.path(),
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName(TEST_SENDER.parse().expect("member")),
+                home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+            },
+        )
+        .expect_err("missing member");
+
+        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
     }
 
     #[test]
@@ -1198,6 +1157,164 @@ mod tests {
         .expect("parse snapshot");
         assert_eq!(snapshot["team"], serde_json::json!(TEST_TEAM));
         assert_eq!(snapshot["members"].as_array().map(Vec::len), Some(2));
+    }
+
+    #[test]
+    fn set_nudge_template_override_rejects_invalid_kind() {
+        let error = SetNudgeTemplateOverrideRequest::new(
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            "not-a-kind",
+            "<atm/>".to_string(),
+        )
+        .expect_err("invalid kind");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message
+                .contains("unsupported built-in nudge template kind")
+        );
+    }
+
+    #[test]
+    fn set_nudge_template_override_rejects_empty_body() {
+        let error = SetNudgeTemplateOverrideRequest::new(
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            "delivery_ack",
+            "   ".to_string(),
+        )
+        .expect_err("empty body");
+
+        assert_eq!(error.code, AtmErrorCode::EmptyNudgeTemplateBody);
+    }
+
+    #[test]
+    fn set_nudge_template_override_rejects_caller_team_mismatch() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let error = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                "other-team".parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect_err("caller mismatch");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("caller team"));
+    }
+
+    #[test]
+    fn set_nudge_template_override_saves_row_through_boundary() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("save");
+
+        assert_eq!(outcome.action, "set-nudge-template");
+        assert_eq!(outcome.team.as_str(), TEST_TEAM);
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+        assert_eq!(outcome.template_body, "<atm/>");
+
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert_eq!(saved.template_body(), Some("<atm/>"));
+        assert!(!saved.is_disabled());
+    }
+
+    #[test]
+    fn disable_nudge_template_override_saves_disabled_row_through_boundary() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = disable_nudge_template_override_with_store(
+            &override_store,
+            DisableNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("disable");
+
+        assert_eq!(outcome.action, "disable-nudge-template");
+        assert_eq!(outcome.team.as_str(), TEST_TEAM);
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert!(saved.is_disabled());
+        assert_eq!(saved.template_body(), None);
+    }
+
+    #[test]
+    fn clear_nudge_template_override_deletes_row_and_reports_state() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("seed");
+
+        let outcome = clear_nudge_template_override_with_store(
+            &override_store,
+            ClearNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("clear");
+        assert!(outcome.cleared);
+
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::DeliveryAck,
+            )
+            .expect("load");
+        assert!(saved.is_none());
+
+        let second = clear_nudge_template_override_with_store(
+            &override_store,
+            ClearNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+            )
+            .expect("request"),
+        )
+        .expect("clear missing");
+        assert!(!second.cleared);
     }
 
     #[test]
@@ -1241,7 +1358,8 @@ mod tests {
     #[test]
     fn backup_root_from_home_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = backup_root_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+        let error = super::filesystem::backup_root_from_home(tempdir.path(), "../evil")
+            .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
@@ -1249,7 +1367,8 @@ mod tests {
     #[test]
     fn tasks_dir_from_home_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = tasks_dir_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+        let error = super::filesystem::tasks_dir_from_home(tempdir.path(), "../evil")
+            .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }

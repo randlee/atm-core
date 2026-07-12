@@ -2,24 +2,23 @@ use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
-#[cfg(unix)]
-use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use atm_core::ack::{AckRequest, ack_mail};
+use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 #[cfg(unix)]
 use atm_core::error::AtmErrorCode;
+use atm_core::list::{ListQuery, list_mail};
 use atm_core::observability::NullObservability;
-use atm_core::read::{ReadQuery, read_mail};
+use atm_core::read::{PeekQuery, ReadQuery, peek_mail, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 #[cfg(unix)]
 use atm_core::test_support::EnvGuard;
-use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
 #[cfg(unix)]
 use atm_runtime_test_support::hold_sqlite_writer_lock;
 use atm_runtime_test_support::{
@@ -29,7 +28,6 @@ use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
 use tempfile::TempDir;
-use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
@@ -143,7 +141,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         &[read_message(
             SECONDARY_AGENT,
             "clearable history entry",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
@@ -197,7 +195,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     drop(clear_fixture);
     let ack_fixture = Fixture::new();
-    let pending_message_id = AtmMessageId::from(Uuid::new_v4());
+    let pending_message_id = AtmMessageId::new();
     ack_fixture.write_primary_inbox(
         PRIMARY_AGENT,
         &[pending_ack_message(
@@ -326,7 +324,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
         .expect("task inbox message");
     assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
     assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
-    assert!(task_message.pending_ack_at.is_none());
+    assert!(task_message.pending_ack_at.is_some());
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
@@ -531,7 +529,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[unread_message(
             TEAM_LEAD,
             "primary unread",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     fixture.write_origin_inbox(
@@ -540,7 +538,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[unread_message(
             SECONDARY_AGENT,
             "origin unread b",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     fixture.write_origin_inbox(
@@ -549,7 +547,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         &[read_message(
             SECONDARY_AGENT,
             "origin read a",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
 
@@ -606,35 +604,31 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _timeouts = EnvGuard::set_many([
-        ("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", Some("100")),
-        ("ATM_TEST_SQLITE_BUSY_TIMEOUT_MS", Some("100")),
-    ]);
     let fixture = Fixture::new();
-    let observability = NullObservability;
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
+    let request = fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "blocked send");
+    let (tx, rx) = mpsc::sync_channel(1);
 
-    let started = Instant::now();
-    let error = send_mail(
-        fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "blocked send"),
-        &observability,
-    )
-    .expect_err("timeout");
+    let join = thread::spawn(move || {
+        let result = send_mail(request, &NullObservability);
+        tx.send(result).expect("send result");
+    });
+
+    let error = rx
+        .recv_timeout(TEST_LOCK_BUDGET_CEILING)
+        .expect("bounded send completion")
+        .expect_err("timeout");
+    join.join().expect("join send thread");
 
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-    assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
 }
 
 #[test]
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -642,7 +636,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
         &[unread_message(
             TEAM_LEAD,
             "read without lock",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let lock_path = sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -672,7 +666,6 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -681,7 +674,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         &[unread_message(
             TEAM_LEAD,
             "needs mark-read",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -695,9 +688,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mutation_query = mutation_fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -705,11 +696,7 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
         PRIMARY_AGENT,
-        &[read_message(
-            TEAM_LEAD,
-            "already read",
-            AtmMessageId::from(Uuid::new_v4()),
-        )],
+        &[read_message(TEAM_LEAD, "already read", AtmMessageId::new())],
     );
     let no_mutation_lock_path =
         sentinel_path(&no_mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
@@ -725,7 +712,6 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
         .expect("hold no-mutation lock");
     let no_mutation_query = no_mutation_fixture
         .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
         .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
@@ -742,6 +728,318 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
 
 #[test]
 #[serial_test::serial(env)]
+fn read_unread_output_stays_consistent_with_the_mutated_message() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let older_id = AtmMessageId::new();
+    let newer_id = AtmMessageId::new();
+    let now = Utc::now();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[
+            unread_message_at(
+                TEAM_LEAD,
+                "older unread",
+                older_id,
+                now - chrono::Duration::seconds(5),
+            ),
+            unread_message_at(TEAM_LEAD, "newer unread", newer_id, now),
+        ],
+    );
+
+    let unread_query = fixture
+        .read_query(PRIMARY_AGENT)
+        .with_selection_mode(ReadSelection::Unread);
+
+    let first = read_mail(unread_query.clone(), &observability).expect("first unread read");
+    assert!(first.mutation_applied);
+    assert_eq!(first.selected_message_id, Some(newer_id));
+    assert_eq!(
+        first
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(newer_id)
+    );
+    assert_eq!(
+        first
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("newer unread")
+    );
+    assert_eq!(
+        first.message.as_ref().map(|message| message.envelope.read),
+        Some(true)
+    );
+    assert_eq!(first.bucket_counts.unread, 1);
+
+    let second = read_mail(unread_query, &observability).expect("second unread read");
+    assert!(second.mutation_applied);
+    assert_eq!(second.selected_message_id, Some(older_id));
+    assert_eq!(
+        second
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(older_id)
+    );
+    assert_eq!(
+        second
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("older unread")
+    );
+    assert_eq!(
+        second.message.as_ref().map(|message| message.envelope.read),
+        Some(true)
+    );
+    assert_eq!(second.bucket_counts.unread, 0);
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn ack_persists_read_state_and_acknowledged_timestamp() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            TEAM_LEAD,
+            "needs ack",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let ack_outcome = ack_mail(
+        fixture.ack_request(PRIMARY_AGENT, message_id, "ack reply"),
+        &observability,
+    )
+    .expect("ack outcome");
+    assert_eq!(ack_outcome.message_id, message_id);
+
+    let query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        Some(&message_id.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("read query");
+    let outcome = read_mail(query, &observability).expect("read acked message");
+    let message = outcome.message.expect("acked message");
+
+    assert_eq!(message.envelope.message_id, Some(message_id));
+    assert!(message.envelope.read);
+    assert!(message.envelope.pending_ack_at.is_none());
+    assert!(message.envelope.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            PRIMARY_AGENT,
+            "historical self poison",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let ack_outcome = ack_mail(
+        fixture.ack_request(PRIMARY_AGENT, message_id, "resolved"),
+        &observability,
+    )
+    .expect("self ack outcome");
+
+    assert!(matches!(
+        ack_outcome.reply_disposition,
+        AckReplyDisposition::SuppressedSelfAck
+    ));
+    assert_eq!(ack_outcome.reply_text, "resolved");
+
+    let inbox = fixture.inbox_contents(PRIMARY_AGENT);
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].message_id, Some(message_id));
+    assert!(inbox[0].pending_ack_at.is_none());
+    assert!(inbox[0].acknowledged_at.is_some());
+    assert!(inbox[0].acknowledges_message_id.is_none());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            TEAM_LEAD,
+            "peek without mutation",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let before = fixture
+        .inbox_contents(PRIMARY_AGENT)
+        .into_iter()
+        .find(|message| message.message_id == Some(message_id))
+        .expect("message before peek");
+
+    let outcome = peek_mail(
+        fixture.peek_query(SECONDARY_AGENT, Some(PRIMARY_AGENT), message_id),
+        &observability,
+    )
+    .expect("peek outcome");
+
+    assert!(!outcome.mutation_applied);
+    assert_eq!(outcome.selected_message_id, Some(message_id));
+
+    let after = fixture
+        .inbox_contents(PRIMARY_AGENT)
+        .into_iter()
+        .find(|message| message.message_id == Some(message_id))
+        .expect("message after peek");
+
+    assert_eq!(after.read, before.read);
+    assert_eq!(after.pending_ack_at, before.pending_ack_at);
+    assert_eq!(after.acknowledged_at, before.acknowledged_at);
+    assert_eq!(
+        after.acknowledges_message_id,
+        before.acknowledges_message_id
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn read_contains_matches_summary_only_and_body_only_on_store_backed_path() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let summary_match_id = AtmMessageId::new();
+    let body_match_id = AtmMessageId::new();
+    let now = Utc::now();
+    let mut summary_match = unread_message_at(
+        TEAM_LEAD,
+        "durable body without the term",
+        summary_match_id,
+        now - chrono::Duration::seconds(5),
+    );
+    summary_match.summary = Some("summary needle".to_string());
+    let mut body_match = unread_message_at(TEAM_LEAD, "durable body needle", body_match_id, now);
+    body_match.summary = Some("summary miss".to_string());
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[summary_match, body_match]);
+
+    let summary_query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some("summary needle"),
+        None,
+    )
+    .expect("summary query");
+    let summary_outcome = read_mail(summary_query, &observability).expect("summary outcome");
+    assert_eq!(summary_outcome.selected_message_id, Some(summary_match_id));
+    assert_eq!(
+        summary_outcome
+            .message
+            .as_ref()
+            .and_then(|message| message.envelope.message_id),
+        Some(summary_match_id)
+    );
+
+    let body_query = ReadQuery::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        PRIMARY_AGENT.parse().expect("caller"),
+        None,
+        PRIMARY_TEAM.parse().expect("team"),
+        ReadSelection::All,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some("body needle"),
+        None,
+    )
+    .expect("body query");
+    let body_outcome = read_mail(body_query, &observability).expect("body outcome");
+    assert_eq!(body_outcome.selected_message_id, Some(body_match_id));
+    assert_eq!(
+        body_outcome
+            .message
+            .as_ref()
+            .map(|message| message.envelope.text.as_str()),
+        Some("durable body needle")
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn list_contains_matches_body_only_on_store_backed_path() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    let mut body_match = unread_message(TEAM_LEAD, "body only needle", message_id);
+    body_match.summary = Some("summary miss".to_string());
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[body_match]);
+
+    let outcome = list_mail(
+        ListQuery::new(
+            fixture.tempdir.path().to_path_buf(),
+            fixture.tempdir.path().to_path_buf(),
+            PRIMARY_AGENT.parse().expect("caller"),
+            None,
+            PRIMARY_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Some("only needle"),
+        )
+        .expect("list query"),
+        &observability,
+    )
+    .expect("list outcome");
+
+    assert_eq!(outcome.count, 1);
+    assert_eq!(outcome.rows[0].message_id, Some(message_id));
+    assert_eq!(outcome.rows[0].summary, "summary miss");
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -752,21 +1050,19 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     )
     .expect("send ULID-authored message");
 
-    let inbox_before = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
-        .expect("raw inbox before read");
-    let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
-    let message_id = physical_before["message_id"]
-        .as_str()
-        .expect("message id")
-        .to_string();
-    let logical_message_id = message_id
-        .parse::<AtmMessageId>()
-        .expect("logical message id");
-    assert_eq!(physical_before["read"], false);
+    let inbox_before = fixture.inbox_contents(PRIMARY_AGENT);
+    let physical_before = inbox_before
+        .iter()
+        .find(|message| message.text == "hello sidecar")
+        .expect("store-backed inbox before read");
+    let logical_message_id = physical_before.message_id.expect("logical message id");
+    assert!(!physical_before.read);
+    assert!(
+        !fixture.primary_inbox_path(PRIMARY_AGENT).exists(),
+        "AD.3 should not recreate the retired primary compatibility inbox file on send",
+    );
 
-    let read_query = fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let read_query = fixture.read_query(PRIMARY_AGENT);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -776,15 +1072,20 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         "read outcome should include the ULID-authored message"
     );
 
-    let inbox_after = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
-        .expect("raw inbox after read");
-    assert_eq!(inbox_after, inbox_before);
-    let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
-    assert_eq!(physical_after["message_id"], message_id);
-    assert_eq!(physical_after["read"], false);
+    let inbox_after = fixture.inbox_contents(PRIMARY_AGENT);
+    let physical_after = inbox_after
+        .iter()
+        .find(|message| message.text == "hello sidecar")
+        .expect("store-backed inbox after read");
+    assert_eq!(physical_after.message_id, Some(logical_message_id));
+    assert!(physical_after.read);
     assert!(
         !sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT)).exists(),
         "read-only ULID sidecar path must not leave a lock sentinel behind",
+    );
+    assert!(
+        !fixture.primary_inbox_path(PRIMARY_AGENT).exists(),
+        "AD.3 read-sidecar flow should not create the retired compatibility inbox file",
     );
     assert!(
         outcome
@@ -795,8 +1096,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
 
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
+    let logical_message_key = atm_core::boundary::MessageKey::from(logical_message_id).into_inner();
     assert!(
-        workflow["messages"][format!("atm:{logical_message_id}")]
+        workflow["messages"][logical_message_key]
             .as_object()
             .is_some(),
         "workflow entry missing for ULID-authored message: {workflow:?}"
@@ -807,9 +1109,8 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     fixture.write_origin_inbox(
@@ -818,7 +1119,7 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
         &[read_message(
             SECONDARY_AGENT,
             "origin read a",
-            AtmMessageId::from(Uuid::new_v4()),
+            AtmMessageId::new(),
         )],
     );
     let before_primary = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
@@ -843,9 +1144,8 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let observability = NullObservability;
     let started = Instant::now();
 
@@ -865,21 +1165,6 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
-}
-
-// Serializes process-environment mutation inside this test module. This is
-// process-local only; it does not coordinate with other test processes.
-#[cfg(unix)]
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
-    // `ATM_TEST_SQLITE_BUSY_TIMEOUT_MS`,
-    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
-    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
-    // mailbox lock behavior. Keep a single process-wide mutex in addition to
-    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
-    // continuing with inconsistent shared state.
-    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 struct Fixture {
@@ -921,8 +1206,8 @@ impl Fixture {
         AckRequest {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.parse().expect("actor")),
-            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
+            caller_identity: actor.parse().expect("caller"),
+            caller_team: PRIMARY_TEAM.parse().expect("team"),
             message_id,
             reply_body: reply_body.to_string(),
         }
@@ -932,9 +1217,8 @@ impl Fixture {
         ClearQuery {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.parse().expect("actor")),
-            target_address: None,
-            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
+            caller_identity: actor.parse().expect("caller"),
+            caller_team: PRIMARY_TEAM.parse().expect("team"),
             older_than: None,
             idle_only: false,
             dry_run: false,
@@ -945,13 +1229,12 @@ impl Fixture {
         ReadQuery::new(
             self.tempdir.path().to_path_buf(),
             self.tempdir.path().to_path_buf(),
-            Some(actor),
+            actor.parse().expect("caller"),
             None,
-            Some(PRIMARY_TEAM),
+            PRIMARY_TEAM.parse().expect("team"),
             ReadSelection::Actionable,
             false,
             false,
-            AckActivationMode::ReadOnly,
             None,
             None,
             None,
@@ -962,13 +1245,32 @@ impl Fixture {
         .expect("read query")
     }
 
+    fn peek_query(&self, actor: &str, target: Option<&str>, message_id: AtmMessageId) -> PeekQuery {
+        PeekQuery::new(
+            self.tempdir.path().to_path_buf(),
+            self.tempdir.path().to_path_buf(),
+            actor.parse().expect("caller"),
+            target,
+            PRIMARY_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            Some(&message_id.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query")
+    }
+
     fn send_request(&self, sender: &str, to: &str, text: &str) -> SendRequest {
         SendRequest::new(
             self.tempdir.path().to_path_buf(),
             self.tempdir.path().to_path_buf(),
-            Some(sender),
+            sender.parse().expect("caller"),
             to,
-            Some(PRIMARY_TEAM),
+            PRIMARY_TEAM.parse().expect("team"),
             SendMessageSource::Inline(text.to_string()),
             None,
             false,
@@ -990,8 +1292,32 @@ impl Fixture {
         self.workflow_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
+    #[allow(
+        deprecated,
+        reason = "mailbox locking tests still inspect the retained sqlite runtime through legacy core boundary shims"
+    )]
     fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<InboxMessage> {
-        read_jsonl(self.primary_inbox_path_for_team(team, agent))
+        let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+        let mail_store = assembly.mail_store_arc();
+        let team = team.parse::<TeamName>().expect("team");
+        let agent_name = agent.parse::<AgentName>().expect("agent");
+        let mut metadata_rows = mail_store
+            .query_mailbox_metadata(&team, &agent_name, None)
+            .expect("mailbox rows");
+        metadata_rows.sort_by(|left, right| {
+            left.message_at
+                .cmp(&right.message_at)
+                .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+        });
+        metadata_rows
+            .into_iter()
+            .filter_map(|row| {
+                mail_store
+                    .load_message(&team, &agent_name, &row.message_key)
+                    .expect("message record")
+            })
+            .map(|record| record.envelope)
+            .collect()
     }
 
     fn workflow_state_contents_for_team(&self, team: &str, agent: &str) -> serde_json::Value {
@@ -1032,7 +1358,6 @@ impl Fixture {
                 );
             }
             attempts = attempts.saturating_add(1);
-            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(5));
         }
     }
@@ -1074,7 +1399,6 @@ impl Fixture {
                 );
             }
             attempts = attempts.saturating_add(1);
-            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(5));
         }
     }
@@ -1161,8 +1485,7 @@ impl Fixture {
 
         for (index, message) in messages.iter().enumerate() {
             let message_key = if let Some(message_id) = message.message_id {
-                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
-                    .expect("message key")
+                atm_core::boundary::MessageKey::from(message_id)
             } else {
                 atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
                     .expect("message key")
@@ -1254,7 +1577,7 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
 fn message_workflow_key(message: &InboxMessage) -> String {
     message
         .message_id
-        .map(|message_id| format!("atm:{message_id}"))
+        .map(|message_id| atm_core::boundary::MessageKey::from(message_id).into_inner())
         .expect("message id")
 }
 
@@ -1276,25 +1599,6 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<InboxMessage> {
         .into_iter()
         .map(|value| serde_json::from_value(value).expect("message envelope"))
         .collect()
-}
-
-fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
-    let values: Vec<serde_json::Value> = if raw.trim().is_empty() {
-        Vec::new()
-    } else {
-        match raw.chars().find(|ch| !ch.is_whitespace()) {
-            Some('[') => serde_json::from_str(raw).expect("json array"),
-            _ => raw
-                .lines()
-                .map(|line| serde_json::from_str(line).expect("json line"))
-                .collect(),
-        }
-    };
-
-    values
-        .into_iter()
-        .find(|line| line["text"] == text)
-        .expect("matching inbox json line")
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[InboxMessage]) {
@@ -1336,6 +1640,7 @@ fn pending_ack_message_at(
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: true,
         pending_ack_at: Some(IsoTimestamp::from_datetime(timestamp)),
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1365,6 +1670,7 @@ fn read_message_at(
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -1377,14 +1683,24 @@ fn read_message_at(
 }
 
 fn unread_message(from: &str, text: &str, message_id: AtmMessageId) -> InboxMessage {
+    unread_message_at(from, text, message_id, Utc::now())
+}
+
+fn unread_message_at(
+    from: &str,
+    text: &str,
+    message_id: AtmMessageId,
+    timestamp: chrono::DateTime<Utc>,
+) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: false,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
+        requires_ack: false,
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,

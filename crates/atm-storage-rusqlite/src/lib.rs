@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod mailbox_metadata;
+mod nudge_template_override_store;
 mod observability;
 mod roster_store;
 mod shared_db;
@@ -145,6 +146,7 @@ pub(crate) struct SqliteMailboxMetadataRow {
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
     pub read: bool,
+    pub requires_ack: bool,
     pub pending_ack: bool,
     pub acknowledged_at: Option<IsoTimestamp>,
     pub expires_at: Option<IsoTimestamp>,
@@ -178,6 +180,11 @@ struct SqliteRosterStore {
     db: Arc<SharedDb>,
 }
 
+#[derive(Debug)]
+struct SqliteNudgeTemplateOverrideStore {
+    db: Arc<SharedDb>,
+}
+
 #[derive(Debug, Clone)]
 struct StoredMailMessageState {
     read: bool,
@@ -199,7 +206,7 @@ impl SqliteMessageStore {
         raw: Option<String>,
         field_name: &str,
     ) -> Result<Option<IsoTimestamp>, AtmError> {
-        raw.map(|value| value.parse::<chrono::DateTime<chrono::Utc>>())
+        raw.map(|value| value.parse::<IsoTimestamp>())
             .transpose()
             .map_err(|error| {
                 AtmError::validation(format!(
@@ -210,7 +217,6 @@ impl SqliteMessageStore {
                 )
                 .with_source(error)
             })
-            .map(|value| value.map(IsoTimestamp::from_datetime))
     }
 
     fn load_message_state_row(
@@ -436,6 +442,7 @@ impl MessageStore for SqliteMessageStore {
 pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
+    nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
 }
 
 impl SqliteStorageBackend {
@@ -450,7 +457,8 @@ impl SqliteStorageBackend {
         let db = Arc::new(SharedDb::open_with_observability(path, observability)?);
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
-            roster_store: Arc::new(SqliteRosterStore::new(db)),
+            roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
         })
     }
 
@@ -459,7 +467,8 @@ impl SqliteStorageBackend {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
-            roster_store: Arc::new(SqliteRosterStore::new(db)),
+            roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
         })
     }
 
@@ -499,6 +508,17 @@ impl SqliteStorageBackend {
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {
         self.roster_store.clone()
+    }
+
+    pub fn nudge_template_override_store(
+        &self,
+    ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
+        self.nudge_template_override_store.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shared_db_for_test(&self) -> Arc<SharedDb> {
+        Arc::clone(&self.nudge_template_override_store.db)
     }
 
     pub fn replace_roster(
@@ -956,6 +976,7 @@ mod tests {
                 source_team: Some(team),
                 summary: None,
                 message_id: None,
+                requires_ack: false,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

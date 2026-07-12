@@ -1,89 +1,114 @@
-# AD.7 Vendored Crate Removal
+---
+id: AD.7
+title: Local Tmux Post-Send Emitter
+status: complete
+branch: feature/pAD-s7-local-tmux-post-send-emitter
+worktree: ../atm-core-worktrees/feature/pAD-s7-local-tmux-post-send-emitter
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.7
-worktree: ../atm-core-worktrees/feature/pAD-s7-vendored-crate-removal
-branch: feature/pAD-s7-vendored-crate-removal
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.7` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.7 — Local Tmux Post-Send Emitter
 
 ## Goal
 
-Delete the vendored `sc-lint-*` workspace members after wrapper and
-proc-macro parity are already proven.
+- implement the local tmux-backed post-send emitter
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the duplicate vendored-crate removal line.
+- `AD.6` complete
+- `AD.5` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
 
-Production-ready commitment:
-- the ATM repo must stop carrying the old duplicated `sc-lint` implementation
-- wrapper, proc-macro, and install-path behavior must already be proven before
-  deletion starts
+## Exact Targets
 
-## Prerequisites
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/send/hook.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/boundary/store.rs`
+- `scripts/atm-nudge.sh`
 
-- `AD.6`
+## Interfaces To Add Or Modify
 
-## Out Of Scope
+```rust
+pub struct LocalTmuxPostSendEmitter { /* owned dependencies */ }
 
-- no CI / release-preflight cutover yet
-- no dependency-policy Phase `D.1` adoption yet
+impl PostSendHookEmitter for LocalTmuxPostSendEmitter {
+    fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError>;
+}
+```
 
-## Code And Document Targets
+```rust
+fn emit(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    let pane_id = event.recipient_pane_id.ok_or_else(missing_pane_error)?;
+    self.tmux_nudge.send(&pane_id, event)?;
+    Ok(())
+}
+```
 
-- root `Cargo.toml`
-- `Cargo.lock`
-- `crates/sc-lint-directives/`
-- `crates/sc-lint-attributes/`
-- `crates/sc-lint-boundary/`
-- any wrapper or helper path that still assumes those directories exist
+- modify local emission so the emitter consumes authoritative
+  `recipient_pane_id` from roster/store state
+- modify send/ack warning paths so pane-missing and tmux-send failures become
+  sender-visible warnings with structured logs
+- modify any surviving shell adapter so it consumes the provided pane id rather
+  than rediscovering pane routing from repo-local config
+
+## Obsolescence Instructions
+
+- any local nudge helper that rediscovers pane routing from `.atm.toml`,
+  `config.json`, or cwd-dependent lookup becomes obsolete in this sprint
+- if `scripts/atm-nudge.sh` survives as an execution helper, mark the old
+  discovery path obsolete and permit only payload-driven pane targeting
 
 ## Deliverables
 
-- ATM removes the vendored workspace members:
-  - `crates/sc-lint-directives`
-  - `crates/sc-lint-attributes`
-  - `crates/sc-lint-boundary`
-- no ATM workspace path dependency points at vendored `sc-lint-*`
-- no lint wrapper still shells through a workspace-built vendored `sc-lint`
-  binary
+- local tmux-backed recipients receive post-send emission through the approved
+  local emitter path
+- pane-not-found and local emission failures are logged and returned as
+  sender-visible warnings
 
 ## Required Work
 
-- remove the vendored workspace members from the workspace definition
-- delete the vendored crate directories and update lockfile state
-- remove any residual path assumptions in wrappers, tests, or helper scripts
-- prove the previously cut-over wrappers still run after deletion
+- map local recipients with post-send capability onto the tmux-backed emitter
+- use authoritative SQLite roster pane metadata for emission
+- fail cleanly and visibly when pane metadata is missing or invalid
 
-## Paths To Delete
+## Error And Warning Contract
 
-- `crates/sc-lint-directives/`
-- `crates/sc-lint-attributes/`
-- `crates/sc-lint-boundary/`
+The local tmux emitter must use the shared `AD.6` post-send taxonomy exactly:
+
+- `PostSendPaneMissing` / `ATM_POST_SEND_PANE_MISSING`
+  - cause: `recipient_pane_id` is absent for a recipient that requires local
+    tmux emission
+  - sender surface: warning after successful persistence
+  - recovery: repair the roster row with
+    `atm teams update-member --team <team> --member <member> --tmux-pane-id <pane>`
+- `PostSendTmuxSendFailed` / `ATM_POST_SEND_TMUX_SEND_FAILED`
+  - cause: tmux rejected the pane id or the send operation failed
+  - sender surface: warning after successful persistence
+  - recovery: verify the pane still exists and repair changed pane metadata
+    through `atm teams update-member` when the pane id is stale
+
+## This Sprint Does Not Close
+
+- graft-backed emission
+- roster drift repair
+- Claude inbox nudge deletion
 
 ## Acceptance Criteria
 
-- the vendored `sc-lint-*` crates are absent from the ATM workspace
-- no `Cargo.toml` still uses a path dependency into the deleted vendored crates
-- no wrapper/backend path in ATM still depends on those deleted crates being
-  present
+- successful local post-send emission returns no warning
+- missing or invalid pane state returns a sender-visible warning
+- emission failure is logged with enough context to diagnose sender, recipient,
+  and pane ownership
+- the accepted local emitter does not require repo-local `.atm.toml` lookup to
+  resolve the live target pane
 
 ## Required Validation
 
-- `cargo build --workspace`
-- `python3 .just/run_lint.py sc-boundary`
-- `python3 .just/run_lint.py sc-portability`
-- `python3 .just/run_lint.py unix-gating`
-- `python3 .just/run_lint.py runtime-waits`
-- `! rg -n 'path = \"\\.\\./sc-lint-(attributes|directives|boundary)\"|crates/sc-lint-(attributes|directives|boundary)' Cargo.toml crates/*/Cargo.toml -S`
+- targeted local-emitter tests
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

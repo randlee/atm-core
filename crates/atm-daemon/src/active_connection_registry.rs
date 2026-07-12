@@ -18,6 +18,29 @@ impl std::fmt::Debug for TrackedDispatchHandle {
     }
 }
 
+/// Controls whether reaping a panicked dispatch worker escalates as an error.
+///
+/// Two independent call sites race to reap the same tracked dispatch handles: the
+/// accept-loop's opportunistic bookkeeping reap, and the per-connection worker's own
+/// post-response reap. Whichever wins observes the panic; the other never sees it again,
+/// since the handle has already been removed from the tracked list. Escalating
+/// unconditionally would make a single dispatcher panic non-deterministically fatal or
+/// benign depending on which caller happened to win that race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DispatchPanicHandling {
+    /// Log the panic and continue; used by opportunistic bookkeeping reaps where a single
+    /// panicked worker must not be treated as a fatal accept-loop or connection error.
+    LogAndContinue,
+    /// Propagate the panic as an error; used by the deliberate shutdown drain, where a
+    /// wedged or panicked worker blocking graceful shutdown is worth surfacing.
+    Escalate,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DispatchReapSummary {
+    pub(crate) recovered_panics: usize,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ActiveConnectionRegistry {
     // These counters are updated from independent accept, connection, and dispatch threads, so
@@ -98,7 +121,32 @@ impl ActiveConnectionRegistry {
         Ok(())
     }
 
-    pub(crate) fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
+    /// Reaps completed dispatch workers without escalating a panicked worker as an error.
+    ///
+    /// This is the opportunistic bookkeeping reap used by the accept loop between
+    /// iterations, and by the per-connection worker after writing its response. Both call
+    /// sites race each other to reap the same shared handles, so treating a panic here as
+    /// fatal would non-deterministically escalate a single-request panic into tearing down
+    /// the whole daemon runtime depending on which caller wins the race. A panicked dispatch
+    /// worker is logged and otherwise ignored; it has already been removed from the tracked
+    /// handle list and cannot be reaped again.
+    pub(crate) fn reap_finished_dispatches(&self) -> Result<DispatchReapSummary, AtmError> {
+        self.reap_finished_dispatches_with(DispatchPanicHandling::LogAndContinue)
+    }
+
+    /// Reaps completed dispatch workers, escalating a panicked worker as an error.
+    ///
+    /// This is used by the deliberate shutdown drain (via [`Self::join_tracked_dispatches`]),
+    /// where a wedged or panicked worker blocking graceful shutdown is legitimately worth
+    /// surfacing to the caller.
+    fn reap_finished_dispatches_escalating(&self) -> Result<DispatchReapSummary, AtmError> {
+        self.reap_finished_dispatches_with(DispatchPanicHandling::Escalate)
+    }
+
+    fn reap_finished_dispatches_with(
+        &self,
+        panic_handling: DispatchPanicHandling,
+    ) -> Result<DispatchReapSummary, AtmError> {
         let finished = {
             let mut handles = self.lock_dispatch_handles()?;
             let mut pending = Vec::with_capacity(handles.len());
@@ -116,14 +164,29 @@ impl ActiveConnectionRegistry {
             *handles = pending;
             finished
         };
+        let mut summary = DispatchReapSummary::default();
         for handle in finished {
-            join_dispatch_handle(handle)?;
+            if let Err(error) = join_dispatch_handle(handle) {
+                match panic_handling {
+                    DispatchPanicHandling::Escalate => return Err(error),
+                    DispatchPanicHandling::LogAndContinue => {
+                        summary.recovered_panics += 1;
+                        tracing::warn!(
+                            subsystem = "active_connection_registry",
+                            action = "reap_finished_dispatches",
+                            outcome = "panic_recovered",
+                            %error,
+                            "dispatch worker panicked before completing; opportunistic reap continuing without escalating"
+                        );
+                    }
+                }
+            }
         }
-        Ok(())
+        Ok(summary)
     }
 
     pub(crate) fn join_tracked_dispatches(&self, timeout: Duration) -> Result<(), AtmError> {
-        self.reap_finished_dispatches()?;
+        let _ = self.reap_finished_dispatches_escalating()?;
         let handles = {
             let mut handles = self.lock_dispatch_handles()?;
             std::mem::take(&mut *handles)
@@ -214,5 +277,87 @@ fn join_dispatch_handle_with_timeout(
                 "Restart the daemon; a request worker outlived the bounded shutdown window.",
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pushes a dispatch handle whose worker thread panics immediately, then blocks until
+    /// the panic has fully unwound so `completion_rx` deterministically observes
+    /// `Disconnected` before the caller reaps it.
+    ///
+    /// This deliberately does not synchronize on [`ActiveConnectionRegistry::active_work_items`]:
+    /// the worker only increments that counter after it starts running, so polling it from
+    /// the caller races the thread scheduler (the caller can observe zero active work items
+    /// before the worker has even registered, let alone panicked). Instead, a dedicated
+    /// one-shot channel is dropped last during unwinding (after `completion_tx`), so
+    /// observing it disconnect proves `completion_tx` has already been dropped too.
+    fn push_panicking_dispatch_handle(registry: &Arc<ActiveConnectionRegistry>) {
+        let dispatch_registry = Arc::clone(registry);
+        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let (unwound_tx, unwound_rx) = std::sync::mpsc::sync_channel::<()>(1);
+        let join_handle = std::thread::Builder::new()
+            .name("reap-panic-test-dispatch".to_string())
+            .spawn(move || {
+                // Declared first so it drops last during unwinding (locals drop in
+                // reverse declaration order), after `_completion_tx` below.
+                let _unwound_tx = unwound_tx;
+                let _dispatch_work = dispatch_registry.register_dispatch_work();
+                let _completion_tx = completion_tx;
+                panic!("intentional dispatch worker panic for reap test");
+            })
+            .expect("spawn panicking dispatch worker");
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                1,
+            )
+            .expect("push dispatch handle");
+        match unwound_rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("panicking dispatch worker did not unwind within 5s");
+            }
+        }
+    }
+
+    #[test]
+    fn reap_finished_dispatches_logs_and_continues_after_panic() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        push_panicking_dispatch_handle(&registry);
+
+        let summary = registry
+            .reap_finished_dispatches()
+            .expect("opportunistic reap must not escalate a dispatch worker panic");
+        assert_eq!(summary.recovered_panics, 1);
+        assert_eq!(
+            registry
+                .lock_dispatch_handles()
+                .expect("lock dispatch handles")
+                .len(),
+            0,
+            "the panicked handle should have been removed from the tracked list"
+        );
+    }
+
+    #[test]
+    fn join_tracked_dispatches_escalates_after_panic() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        push_panicking_dispatch_handle(&registry);
+
+        let error = registry
+            .join_tracked_dispatches(Duration::from_secs(5))
+            .expect_err(
+                "the deliberate shutdown drain must surface a panicked dispatch worker as fatal",
+            );
+        assert!(
+            error.message.contains("daemon dispatch thread panicked"),
+            "unexpected error: {error:?}"
+        );
     }
 }

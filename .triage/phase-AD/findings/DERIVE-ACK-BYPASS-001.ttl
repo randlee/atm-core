@@ -1,0 +1,164 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DERIVE-ACK-BYPASS-001>
+  a triage:Finding ;
+  triage:findingId "DERIVE-ACK-BYPASS-001" ;
+  triage:title "classify_mailbox_metadata_rows reconstructs requires_ack ad hoc instead of using derive_ack_requirement" ;
+  triage:description "Ad hoc reimplementation of requires_ack classifier instead of calling canonical derive_ack_requirement. Root cause: MailStoreMailboxMetadataRow carries no durable requires_ack field; metadata-query path structurally cannot call canonical classifier. Currently functionally equivalent by coincidence but no compile-time/test-time guarantee. Future write paths could desync silently. Also risks misclassifying legacy ack-reply rows." ;
+  triage:category "DERIVE-ACK-BYPASS" ;
+  triage:phaseId "phase-AD" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD32/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD32/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD33/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD33/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD34/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD34/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD35/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD35/2> ;
+  triage:openOn <urn:atm:triage:worktree/AD32/46f44bb> ;
+  triage:openOn <urn:atm:triage:worktree/AD33/46f44bb> ;
+  triage:openOn <urn:atm:triage:worktree/AD34/46f44bb> ;
+  triage:openOn <urn:atm:triage:worktree/AD35/46f44bb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AD32/68d5c2f> ;
+  triage:highestOpenBranch "AD.32" ;
+  triage:highest_open_branch_sha "68d5c2facd7aa3c378a745c1d53f2a075f66e9fe" ;
+  triage:notes "Corrected 2026-07-10 during AD32-QA-3 recheck: promoteTo/highestOpenBranch previously pointed at AD.35 under the old highest-open-branch promotion model. This phase closeout requires strict earliest-branch-first dispatch: every branch must independently reach QA closure, and findings cannot be handled by promoting solely to the highest branch where they are observed. This finding does not exist on AD.31 and was introduced on AD.32, so AD.32 is the earliest defective branch and the correct fix target. The fix must land on AD.32 first, then be merge-forwarded through AD.33, AD.34, and AD.35, with each downstream branch independently re-verified to actually close on the fix rather than assumed to inherit it. highest_open_branch_sha updated to AD.32's current HEAD (68d5c2facd7aa3c378a745c1d53f2a075f66e9fe) as of the AD32-CLOSURE-FIX-1 merge that landed prior to this correction." .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD32/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 70 ;
+  triage:snippet "requires_ack: row.pending_ack || row.acknowledged_at.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD32/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 191 ;
+  triage:snippet "pending_ack: message.envelope.requires_ack && message.envelope.acknowledged_at.is_none()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.32" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD32/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD33/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 70 ;
+  triage:snippet "requires_ack: row.pending_ack || row.acknowledged_at.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD33/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 191 ;
+  triage:snippet "pending_ack: message.envelope.requires_ack && message.envelope.acknowledged_at.is_none()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.33" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD33/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD34/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 70 ;
+  triage:snippet "requires_ack: row.pending_ack || row.acknowledged_at.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD34/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 191 ;
+  triage:snippet "pending_ack: message.envelope.requires_ack && message.envelope.acknowledged_at.is_none()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.34" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD34/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD35/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/metadata_selection.rs" ;
+  triage:line 70 ;
+  triage:snippet "requires_ack: row.pending_ack || row.acknowledged_at.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bb> .
+
+<urn:atm:triage:occurrence/DERIVE-ACK-BYPASS-001/AD35/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 191 ;
+  triage:snippet "pending_ack: message.envelope.requires_ack && message.envelope.acknowledged_at.is_none()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AD.35" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:occursIn <urn:atm:triage:worktree/AD35/46f44bb> .
+
+<urn:atm:triage:worktree/AD31/6ad246ee>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.31" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s31-mailbox-peek-surface-and-owner-only-mutation-reset" ;
+  triage:headSha "6ad246eebf909c8dfbd886d4f51cd5f763f9c6df" ;
+  triage:orderIndex 31 .
+
+<urn:atm:triage:worktree/AD32/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 32 .
+
+<urn:atm:triage:worktree/AD32/68d5c2f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.32" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s32-durable-ack-intent-and-read-semantics-reset" ;
+  triage:headSha "68d5c2facd7aa3c378a745c1d53f2a075f66e9fe" ;
+  triage:orderIndex 32 ;
+  triage:notes "Post-AD32-CLOSURE-FIX-1 HEAD, recorded 2026-07-10 during promoteTo correction for AD32-QA-3 recheck." .
+
+<urn:atm:triage:worktree/AD33/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.33" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s33-self-addressed-send-rejection" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 33 .
+
+<urn:atm:triage:worktree/AD34/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.34" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s34-self-ack-loop-termination-and-historical-poison-cleanup" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 34 .
+
+<urn:atm:triage:worktree/AD35/46f44bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AD.35" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAD-s35-messaging-protocol-and-regression-closeout" ;
+  triage:headSha "46f44bbbbe9ee6305c9a2b4858182b44f89d204b" ;
+  triage:orderIndex 35 .

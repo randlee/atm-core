@@ -1,120 +1,126 @@
-# AD.5 Runtime-Waits Wrapper Published Cutover
+---
+id: AD.5
+title: Notification Runtime Removal And Post-Send NotificationSink Detachment
+status: complete
+branch: feature/pAD-s5-notification-runtime-removal-and-post-send-detachment
+worktree: ../atm-core-worktrees/feature/pAD-s5-notification-runtime-removal-and-post-send-detachment
+target: integrate/phase-AD
+---
 
-```yaml
-plan_type: sprint_plan
-phase: AD
-sprint: AD.5
-worktree: ../atm-core-worktrees/feature/pAD-s5-runtime-waits-wrapper-published-cutover
-branch: feature/pAD-s5-runtime-waits-wrapper-published-cutover
-status: proposed-pending-signoff
-estimated_scope: medium
-```
-
-## Authorization Gate
-
-This sprint is a proposed planning target only. No implementation branch or
-worktree for `AD.5` may open until explicit human sign-off approves `Phase AD`
-per [`docs/plans/phase-AD/plan-phase-AD.md`](./plan-phase-AD.md).
+# Sprint AD.5 — Notification Runtime Removal And Post-Send `NotificationSink` Detachment
 
 ## Goal
 
-Keep `runtime-waits` as an ATM-owned subset wrapper while moving its backend to
-the published runtime analyzer.
+- remove daemon notification queue/worker delivery and the generic
+  `NotificationSink` abstraction from the post-send line
 
-## Scope Summary
+## Hard Dependencies
 
-This sprint closes only the repo-specific `runtime-waits` wrapper cutover.
+- `AD.2` complete
+- `AD.4` complete
+- `docs/plans/phase-AD/plan-phase-AD.md`
 
-Production-ready commitment:
-- the wrapper must keep the ATM-owned runtime-waits subset contract
-- the wrapper must stop reading runtime findings out of the old integrated
-  vendored boundary analyzer
-- the sprint must not assume the published analyzer still emits
-  `SCB-RUNTIME-001` / `SCB-RUNTIME-002` unless the retained `sc-lint` rule
-  inventory proves it; direct continuity or explicit mapping must be recorded
+## Exact Targets
 
-Required command and filter contract:
+- `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/composition.rs`
+- `crates/atm-core/src/boundary/mod.rs`
+- `crates/atm-core/src/delivery_execution.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `boundaries/atm-core/notification-sink.toml`
+- `boundaries/atm-daemon/daemon-notification-sink.toml`
+- `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
+- `docs/architecture.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/requirements.md`
 
-```python
-command(repo_root) == [
-    "sc-lint-runtime",
-    "analyze",
-    "--root",
-    str(repo_root),
-    "--format",
-    "json",
-]
+## Paths To Delete
 
-RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
+- `crates/atm-daemon/src/notification_runtime.rs`
+- `crates/atm-daemon/src/notification_runtime_tests.rs`
+- daemon-owned `NotificationSink` implementations that exist only for runtime
+  queue/worker delivery
+
+## Interfaces To Add Or Modify
+
+```rust
+fn append_notification_log(event: &PostSendHookEvent) -> Result<(), AtmError>;
 ```
 
-If the published analyzer now emits different rule IDs for the equivalent
-runtime-waits findings, the wrapper must use one explicit repo-owned upstream-
-to-ATM mapping and still expose only the ATM contract above.
+```rust
+persist_message(...)?;
+if recipient_has_post_send_hook {
+    if let Err(error) = post_send_hook_emitter.emit(&event) {
+        log_post_send_failure(&error);
+        warnings.push(render_post_send_warning(&error));
+    }
+}
+append_notification_log(&event)?;
+```
 
-## Prerequisites
+- modify the post-send path so it no longer depends on `NotificationSink`
+- if retained notification logging still exists, define one direct append helper
+  at the event site rather than one queue/worker subsystem
+- modify daemon composition and boundary wiring so no accepted startup path
+  constructs notification-runtime worker state
+- modify notification-related boundary TOMLs so deleted worker/runtime
+  components are no longer declared active composition roots and non-Claude
+  outbound contracts no longer imply notification-runtime fallback
 
-- `AD.4`
+## Obsolescence Instructions
 
-## Out Of Scope
-
-- no proc-macro registry cutover yet
-- no vendored crate removal yet
-- no CI / release-preflight cutover yet
-- no dependency-policy Phase `D.1` adoption yet
-
-## Code And Document Targets
-
-- `.just/lint_runtime_waits.py`
-- `.just/tests/test_lint_runtime_waits.py`
-- `.triage/phase-AD/ad5-runtime-waits-rule-map.md`
+- `NotificationSink`, `DaemonNotificationSink`, `LocalFileNotificationSink`,
+  and any queue-owned notification helper become obsolete for post-send
+  behavior in this sprint
+- if a retained `NotificationSink` surface cannot be deleted immediately, mark
+  it `Phase AD obsolete: non-post-send residual only`, keep it off the accepted
+  post-send path, and forbid new production call sites
 
 ## Deliverables
 
-- `.just/lint_runtime_waits.py` sources findings from the published
-  `sc-lint-runtime` analyzer
-- the wrapper continues to report only `SCB-RUNTIME-001` and
-  `SCB-RUNTIME-002`
-- `.just/tests/test_lint_runtime_waits.py` is updated only as needed to
-  preserve the ATM subset-wrapper contract
-- one repo-owned rule-map artifact
-  `.triage/phase-AD/ad5-runtime-waits-rule-map.md` records either:
-  - `## ATM Wrapper Rule Contract`
-  - `## Published Rule IDs`
-  - `## Mapping Decision`
-  - one explicit decision line:
-    - `Decision: direct-continuity`
-    - or `Decision: explicit-mapping`
+- post-send no longer routes through `NotificationSink`
+- the daemon no longer ships or starts a notification worker just to append
+  notification events
+- if notification logging remains, it is a direct append at the event site
+- any retained `NotificationSink` surface is explicitly documented as
+  non-post-send residual scope outside this sprint
 
 ## Required Work
 
-- retarget `runtime-waits` to `sc-lint-runtime`
-- preserve the `SCB-RUNTIME-001` / `SCB-RUNTIME-002` subset contract exactly
-- inspect the published rule inventory for direct
-  `SCB-RUNTIME-001` / `SCB-RUNTIME-002` continuity and record the result in
-  the rule-map artifact
-- if published rule IDs differ, define one explicit upstream-to-ATM mapping
-  rather than leaving the translation implicit in wrapper code
-- prove the wrapper no longer reads runtime rule ownership through the old
-  integrated boundary analyzer
-- block closure if published runtime coverage is weaker than the vendored path
+- delete the queue/worker notification runtime and its boundary adapters
+- remove `NotificationSink` from the post-send execution path
+- if retained event logging still has operational value, replace subsystem
+  delivery with a direct append helper on the event path
+- keep sender warning ownership direct at the post-send call site
+
+## This Sprint Does Not Close
+
+- local tmux emitter implementation
+- graft emitter implementation
+- Claude inbox nudge deletion
 
 ## Acceptance Criteria
 
-- ATM still exposes the `runtime-waits` local lint target after retargeting
-- non-runtime findings remain excluded from this wrapper
-- any published-rule-id drift is resolved by an explicit rule-map artifact
-  rather than implementer-only assumption
-- the wrapper no longer shells through the vendored integrated boundary
-  analyzer for runtime rule ownership
-- any finding-volume drop caused by missing runtime rule coverage blocks sprint
-  closure
+- no accepted daemon composition path starts or references the notification
+  runtime worker
+- post-send warning/logging behavior does not depend on `NotificationSink`
+- any retained notification log append is synchronous and directly testable
+- any retained `NotificationSink` surface is explicitly documented as
+  non-post-send residual scope and is absent from the accepted post-send path
+- no notification-related boundary TOML still declares a deleted notification
+  worker composition root or a `NotificationSink` fallback on the accepted
+  post-send path
+- `docs/architecture.md`, `docs/atm-daemon/architecture.md`, and
+  `docs/atm-daemon/requirements.md` no longer describe the notification worker
+  as an accepted production subsystem
 
 ## Required Validation
 
-- `python3 .just/run_lint.py runtime-waits`
-- `python3 .just/tests/test_lint_runtime_waits.py`
-- `test -f .triage/phase-AD/ad5-runtime-waits-rule-map.md`
-- `rg -n '^## ATM Wrapper Rule Contract$|^## Published Rule IDs$|^## Mapping Decision$|^Decision: (direct-continuity|explicit-mapping)$' .triage/phase-AD/ad5-runtime-waits-rule-map.md -S`
-- `! rg -n 'cargo run -q -p sc-lint-boundary|--rule boundaries' .just/lint_runtime_waits.py .just/tests/test_lint_runtime_waits.py -S`
+- targeted send-path and daemon composition regression tests
+- targeted boundary-lint / boundary-grep gates for notification boundary TOMLs
+- `test ! -e crates/atm-daemon/src/notification_runtime.rs`
+- `test ! -e crates/atm-daemon/src/notification_runtime_tests.rs`
+- `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
+- `python3 .just/run_lint.py all`
 - `git diff --check`

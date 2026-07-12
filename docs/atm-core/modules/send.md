@@ -1,7 +1,12 @@
 # `atm-core::send`
 
 Owns send request validation, message construction, summary generation,
-ack-required/task metadata handling, and atomic inbox append orchestration.
+ack-required/task metadata handling, and the direct post-send seam used by the
+accepted runtime.
+
+Historical compatibility note:
+- any retained inbox-append behavior in this module belongs to the earlier
+  Claude mailbox compatibility line, not the accepted runtime after `ADR-019`
 
 Also owns send-time resilience behavior that is not generic config parsing:
 - missing-team-config fallback when the product contract explicitly allows it
@@ -10,7 +15,9 @@ Also owns send-time resilience behavior that is not generic config parsing:
 - post-send-hook trigger evaluation, payload construction, and diagnostics
 
 Accepted limitations in this module:
-- missing-config repair notifications are best-effort and effectively at-most-once across crash windows because dedup state is recorded before the team-lead inbox append
+- missing-config repair notifications are best-effort and effectively
+  at-most-once across crash windows because dedup state was historically
+  recorded before the team-lead compatibility write
 - send-alert stale-lock eviction uses PID-only liveness checks, so PID reuse can conservatively preserve a stale lock until manual cleanup or timeout
 
 `SendOutcome.warnings` is part of the stable send API contract:

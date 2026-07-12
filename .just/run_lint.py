@@ -81,62 +81,62 @@ class LintResult:
 
 
 def build_tasks(repo_root: Path) -> dict[str, LintTask]:
-    python_executable = sys.executable
+    python_command = [sys.executable, "-B"]
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
         "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
-        "modules": LintTask("modules", [python_executable, str(repo_root / ".just/lint_cargo_modules.py")]),
-        "deny": LintTask("deny", [python_executable, str(repo_root / ".just/lint_cargo_deny.py")]),
-        "shear": LintTask("shear", [python_executable, str(repo_root / ".just/lint_cargo_shear.py")]),
-        "version": LintTask("version", [python_executable, str(repo_root / ".just/check_version_sync.py")]),
+        "modules": LintTask("modules", [*python_command, str(repo_root / ".just/lint_cargo_modules.py")]),
+        "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
+        "shear": LintTask("shear", [*python_command, str(repo_root / ".just/lint_cargo_shear.py")]),
+        "version": LintTask("version", [*python_command, str(repo_root / ".just/check_version_sync.py")]),
         "identities": LintTask(
-            "identities", [python_executable, str(repo_root / ".just/check_test_identity_literals.py")]
+            "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]
         ),
-        "lines": LintTask("lines", [python_executable, str(repo_root / ".just/check_line_counts.py")]),
-        "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
+        "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
+        "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
         "unix-gating": LintTask(
-            "unix-gating", [python_executable, str(repo_root / ".just/lint_unix_gating.py")]
+            "unix-gating", [*python_command, str(repo_root / ".just/lint_unix_gating.py")]
         ),
         "same-host-portability": LintTask(
             "same-host-portability",
-            [python_executable, str(repo_root / ".just/lint_same_host_portability.py")],
+            [*python_command, str(repo_root / ".just/lint_same_host_portability.py")],
         ),
         "runtime-waits": LintTask(
-            "runtime-waits", [python_executable, str(repo_root / ".just/lint_runtime_waits.py")]
+            "runtime-waits", [*python_command, str(repo_root / ".just/lint_runtime_waits.py")]
         ),
         "sc-boundary": LintTask(
-            "sc-boundary", [python_executable, str(repo_root / ".just/lint_sc_boundary.py")]
+            "sc-boundary", [*python_command, str(repo_root / ".just/lint_sc_boundary.py")]
         ),
         "sc-portability": LintTask(
-            "sc-portability", [python_executable, str(repo_root / ".just/lint_sc_portability.py")]
+            "sc-portability", [*python_command, str(repo_root / ".just/lint_sc_portability.py")]
         ),
-        "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
+        "manifests": LintTask("manifests", [*python_command, str(repo_root / ".just/lint_manifests.py")]),
         "silent-emit": LintTask(
-            "silent-emit", [python_executable, str(repo_root / "scripts/check-silent-emit.py")]
+            "silent-emit", [*python_command, str(repo_root / "scripts/check-silent-emit.py")]
         ),
         "function-length": LintTask(
-            "function-length", [python_executable, str(repo_root / "scripts/check-function-length.py")]
+            "function-length", [*python_command, str(repo_root / "scripts/check-function-length.py")]
         ),
         "legacy-mailbox-paths": LintTask(
             "legacy-mailbox-paths",
-            [python_executable, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
+            [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
         ),
         "capability-degradation": LintTask(
             "capability-degradation",
-            [python_executable, str(repo_root / "scripts/check-capability-degradation.py")],
+            [*python_command, str(repo_root / "scripts/check-capability-degradation.py")],
         ),
-        "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
+        "spell": LintTask("spell", [*python_command, str(repo_root / ".just/lint_codespell.py")]),
         "fixed-sleep": LintTask(
-            "fixed-sleep", [python_executable, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
+            "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
         ),
         "ttl-triage": LintTask(
-            "ttl-triage", [python_executable, str(repo_root / ".just/lint_ttl_triage_consistency.py")]
+            "ttl-triage", [*python_command, str(repo_root / ".just/lint_ttl_triage_consistency.py")]
         ),
         "daemon-singleton": LintTask(
             "daemon-singleton",
-            [python_executable, str(repo_root / "scripts/lint_daemon_singleton.py")],
+            [*python_command, str(repo_root / "scripts/lint_daemon_singleton.py")],
         ),
-        "pytests": LintTask("pytests", [python_executable, str(repo_root / ".just/run_pytests.py")]),
+        "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),
     }
 
 

@@ -1,0 +1,584 @@
+use std::io::Write as _;
+use std::process::{Child, Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use anyhow::Result;
+use atm_core::boundary::{
+    BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
+};
+use atm_core::error::{AtmError, AtmErrorKind};
+use atm_core::error_codes::AtmErrorCode;
+use atm_core::graft::{
+    GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
+    read_graft_post_send_message, write_graft_post_send_message,
+};
+use atm_core::home;
+use atm_core::send::nudge_template;
+use clap::Args;
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
+
+use crate::observability::CliObservability;
+
+#[cfg(test)]
+use std::collections::BTreeMap;
+
+const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
+const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
+const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
+
+#[derive(Debug, Args)]
+#[command(hide = true)]
+pub struct InternalNudgeCommand;
+
+impl InternalNudgeCommand {
+    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+        let input = InternalNudgeInput::from_env()?;
+        let Some(template) =
+            nudge_template::render_resolved_built_in_nudge(&input.event, &input.template)?
+        else {
+            return Ok(());
+        };
+        match input.sink_target {
+            BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
+            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event)?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct InternalNudgeInput {
+    event: PostSendHookEvent,
+    sink_target: BuiltInNudgeSinkTarget,
+    template: ResolvedBuiltInNudgeTemplate,
+}
+
+impl InternalNudgeInput {
+    fn from_env() -> Result<Self> {
+        let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {
+            AtmError::validation("missing ATM_INTERNAL_NUDGE payload for built-in post-send nudge")
+                .with_recovery(
+                    "Populate ATM_INTERNAL_NUDGE with a resolved envelope before invoking `atm internal-nudge`.",
+                )
+        })?;
+        let payload: InternalNudgeEnvelope =
+            serde_json::from_str(&raw_payload).map_err(|source| {
+                AtmError::validation(
+                    "failed to decode ATM_INTERNAL_NUDGE payload for built-in nudge",
+                )
+                    .with_recovery(
+                        "Repair the ATM_INTERNAL_NUDGE JSON payload before retrying the built-in post-send path.",
+                    )
+                    .with_source(source)
+            })?;
+        Ok(Self {
+            event: payload.event,
+            sink_target: payload.sink_target,
+            template: payload.template,
+        })
+    }
+
+    #[cfg(test)]
+    fn render_values(&self) -> BTreeMap<&'static str, String> {
+        BTreeMap::from([
+            (
+                "from",
+                nudge_template::qualified_sender_identity(&self.event),
+            ),
+            ("team", self.event.recipient_team.to_string()),
+            ("message_id", self.event.message_id.to_string()),
+            ("description", self.event.description.clone()),
+            (
+                "task_id",
+                self.event
+                    .task_id
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+            ),
+        ])
+    }
+}
+
+#[cfg(test)]
+fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> Result<String> {
+    if template.contains("{%") || template.contains("%}") {
+        return Err(AtmError::validation(
+            "built-in nudge templates do not support Jinja or conditional blocks",
+        )
+        .with_recovery(
+            "Use only the documented placeholder tokens in the stored template body before retrying built-in nudge rendering.",
+        )
+        .into());
+    }
+    let mut output = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find("{{") {
+        output.push_str(&rest[..start]);
+        let after_start = &rest[start + 2..];
+        let Some(end) = after_start.find("}}") else {
+            return Err(AtmError::validation("unterminated built-in nudge placeholder")
+                .with_recovery(
+                    "Close every built-in nudge placeholder with `}}` before retrying template rendering.",
+                )
+                .into());
+        };
+        let key = after_start[..end].trim();
+        let Some(value) = values.get(key) else {
+            return Err(AtmError::validation(format!(
+                "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
+            ))
+            .with_recovery(
+                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, and {{task_id}} in built-in nudge templates.",
+            )
+            .into());
+        };
+        output.push_str(value);
+        rest = &after_start[end + 2..];
+    }
+    output.push_str(rest);
+    Ok(output)
+}
+
+struct TmuxNudgeSink;
+
+impl TmuxNudgeSink {
+    fn deliver(&self, event: &PostSendHookEvent, rendered: &str) -> Result<()> {
+        let pane_id = event.recipient_pane_id.as_ref().ok_or_else(|| {
+            AtmError::new_with_code(
+                AtmErrorCode::PostSendPaneMissing,
+                AtmErrorKind::Validation,
+                format!(
+                    "recipient {}@{} has tmux-backed post-send capability but no pane id",
+                    event.recipient, event.recipient_team
+                ),
+            )
+            .with_recovery(format!(
+                "Repair the roster row with `atm teams update-member --team {} --member {} --pane-id <pane>`.",
+                event.recipient_team, event.recipient
+            ))
+        })?;
+        run_tmux_command(
+            {
+                let mut command = tmux_command();
+                command.args(["send-keys", "-t", pane_id.as_str(), "-l", rendered]);
+                command
+            },
+            "send literal nudge",
+        )?;
+        run_tmux_command(
+            {
+                let mut command = tmux_command();
+                command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
+                command
+            },
+            "send first Enter to nudge pane",
+        )?;
+        thread::sleep(TMUX_DOUBLE_ENTER_DELAY);
+        run_tmux_command(
+            {
+                let mut command = tmux_command();
+                command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
+                command
+            },
+            "send second Enter to nudge pane",
+        )?;
+        Ok(())
+    }
+}
+
+struct GraftNudgeSink;
+
+impl GraftNudgeSink {
+    fn deliver(&self, event: &PostSendHookEvent) -> Result<()> {
+        let home_dir = home::atm_home()?;
+        let endpoint_path = graft_receiver_socket_path_from_home(
+            &home_dir,
+            &event.recipient_team,
+            &event.recipient,
+        );
+        let endpoint_name = atm_core::protocol::daemon_local_ipc_name_from_path(&endpoint_path)?;
+        let mut stream = LocalSocketStream::connect(endpoint_name).map_err(|source| {
+            AtmError::new_with_code(
+                AtmErrorCode::PostSendGraftUnavailable,
+                AtmErrorKind::DaemonUnavailable,
+                format!(
+                    "failed to connect to graft nudge receiver for {}@{}",
+                    event.recipient, event.recipient_team
+                ),
+            )
+            .with_recovery(
+                "Start or repair the graft-backed receiver before retrying post-send delivery.",
+            )
+            .with_source(source)
+        })?;
+        let request = GraftPostSendRequest {
+            event: event.clone(),
+        };
+        write_graft_post_send_message(
+            &mut stream,
+            &request,
+            "failed to write graft post-send request",
+            "graft post-send request exceeded the bounded payload cap",
+        )?;
+        let response: GraftPostSendResponse = read_graft_post_send_message(
+            &mut stream,
+            "failed to read graft post-send response",
+            "graft post-send response exceeded the bounded payload cap",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::new_with_code(
+                AtmErrorCode::PostSendGraftUnavailable,
+                AtmErrorKind::DaemonUnavailable,
+                "failed to flush graft post-send request",
+            )
+            .with_recovery(
+                "Repair the graft-backed receiver socket before retrying post-send delivery.",
+            )
+            .with_source(source)
+        })?;
+        match response {
+            GraftPostSendResponse::Delivered => Ok(()),
+            GraftPostSendResponse::Error(error) => Err(error.into_atm_error().into()),
+        }
+    }
+}
+
+fn tmux_command() -> Command {
+    #[cfg(test)]
+    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
+        return Command::new(program);
+    }
+    Command::new("tmux")
+}
+
+fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let child = command.spawn().map_err(|source| {
+        AtmError::new_with_code(
+            AtmErrorCode::PostSendTmuxSendFailed,
+            AtmErrorKind::DaemonUnavailable,
+            format!("failed to start tmux while trying to {action}: {source}"),
+        )
+        .with_recovery("Repair the local tmux installation before retrying post-send delivery.")
+        .with_source(source)
+    })?;
+    let output = wait_for_tmux_output(child, action)?;
+    ensure_tmux_success(output, action).map_err(Into::into)
+}
+
+fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output> {
+    let started_at = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child.wait_with_output().map_err(|source| {
+                    AtmError::new_with_code(
+                        AtmErrorCode::PostSendTmuxSendFailed,
+                        AtmErrorKind::DaemonUnavailable,
+                        format!("failed to collect tmux output while trying to {action}: {source}"),
+                    )
+                    .with_recovery(
+                        "Repair the local tmux installation before retrying post-send delivery.",
+                    )
+                    .with_source(source)
+                    .into()
+                });
+            }
+            Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(AtmError::new_with_code(
+                    AtmErrorCode::PostSendTmuxSendFailed,
+                    AtmErrorKind::Timeout,
+                    format!(
+                        "tmux {action} timed out after {}s",
+                        TMUX_SEND_TIMEOUT.as_secs()
+                    ),
+                )
+                .with_recovery(
+                    "Repair the local tmux installation or pane state before retrying post-send delivery.",
+                )
+                .into());
+            }
+            Err(source) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(AtmError::new_with_code(
+                    AtmErrorCode::PostSendTmuxSendFailed,
+                    AtmErrorKind::DaemonUnavailable,
+                    format!("failed while waiting for tmux {action}: {source}"),
+                )
+                .with_recovery(
+                    "Repair the local tmux installation before retrying post-send delivery.",
+                )
+                .with_source(source)
+                .into());
+            }
+        }
+    }
+}
+
+fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmError> {
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = if stderr.is_empty() {
+        format!("tmux exited unsuccessfully while trying to {action}")
+    } else {
+        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
+    };
+    Err(AtmError::new_with_code(
+        AtmErrorCode::PostSendTmuxSendFailed,
+        AtmErrorKind::DaemonUnavailable,
+        detail,
+    )
+    .with_recovery("Repair the local tmux installation before retrying post-send delivery."))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::Duration;
+
+    use atm_core::boundary::{
+        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
+        ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
+    };
+    use atm_core::send::nudge_template::default_template;
+    use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
+    use serial_test::serial;
+    use tempfile::tempdir;
+
+    use super::{
+        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_DOUBLE_ENTER_DELAY,
+        TMUX_PROGRAM_ENV, render_template,
+    };
+
+    fn base_event() -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: TEST_LEAD.parse().expect("sender"),
+            sender_team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+            recipient_team: TEST_TEAM.parse().expect("team"),
+            message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
+            description: "review failing smoke lane".to_string(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id: Some(atm_core::types::PaneId::from_cli("%9").expect("pane")),
+        }
+    }
+
+    #[test]
+    fn built_in_templates_keep_ack_payloads_compact() {
+        assert_eq!(
+            default_template(BuiltInNudgeTemplateKind::Acknowledge),
+            "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
+        );
+        assert_eq!(
+            default_template(BuiltInNudgeTemplateKind::AcknowledgeTask),
+            "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
+        );
+    }
+
+    #[test]
+    fn built_in_template_kind_selection_covers_six_paths() {
+        let mut event = base_event();
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::Delivery
+        );
+        event.requires_ack = true;
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::DeliveryAck
+        );
+        event.requires_ack = false;
+        event.task_id = Some("AD.21".parse().expect("task"));
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::DeliveryTask
+        );
+        event.requires_ack = true;
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::DeliveryTaskAck
+        );
+        event.is_ack = true;
+        event.requires_ack = false;
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::AcknowledgeTask
+        );
+        event.task_id = None;
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event),
+            BuiltInNudgeTemplateKind::Acknowledge
+        );
+    }
+
+    #[test]
+    fn render_template_replaces_only_supported_placeholders() {
+        let rendered = render_template(
+            "<atm from=\"{{from}}\" task-id=\"{{task_id}}\">{{description}}</atm>",
+            &InternalNudgeInput {
+                event: base_event(),
+                sink_target: BuiltInNudgeSinkTarget::Tmux,
+                template: ResolvedBuiltInNudgeTemplate {
+                    kind: BuiltInNudgeTemplateKind::Delivery,
+                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
+                },
+            }
+            .render_values(),
+        )
+        .expect("render");
+        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
+        assert!(rendered.contains("review failing smoke lane"));
+        assert!(rendered.contains("task-id=\"\""));
+    }
+
+    #[test]
+    fn render_template_rejects_unknown_placeholder() {
+        let error = render_template(
+            "<atm>{{unknown}}</atm>",
+            &InternalNudgeInput {
+                event: base_event(),
+                sink_target: BuiltInNudgeSinkTarget::Tmux,
+                template: ResolvedBuiltInNudgeTemplate {
+                    kind: BuiltInNudgeTemplateKind::Delivery,
+                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
+                },
+            }
+            .render_values(),
+        )
+        .expect_err("unknown placeholder");
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported built-in nudge placeholder")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn internal_nudge_input_reads_resolved_envelope() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: PostSendHookEvent {
+                requires_ack: true,
+                task_id: Some("AD.21".parse().expect("task")),
+                ..base_event()
+            },
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::DeliveryTaskAck,
+                body: Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>".to_string()),
+            },
+        })
+        .expect("serialize envelope");
+        let payload_value = payload.to_string();
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload_value.as_str()))]);
+
+        let input = InternalNudgeInput::from_env().expect("input");
+
+        assert_eq!(input.sink_target, BuiltInNudgeSinkTarget::Tmux);
+        assert_eq!(input.event.task_id.expect("task").as_str(), "AD.21");
+        assert_eq!(
+            input.template.kind,
+            BuiltInNudgeTemplateKind::DeliveryTaskAck
+        );
+        assert_eq!(
+            input.template.body.as_deref(),
+            Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn internal_nudge_input_accepts_explicit_disabled_template_state() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: base_event(),
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: None,
+            },
+        })
+        .expect("serialize envelope");
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload.as_str()))]);
+
+        let input = InternalNudgeInput::from_env().expect("input");
+
+        assert_eq!(input.template.body, None);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
+        let payload = serde_json::to_string(&InternalNudgeEnvelope {
+            event: base_event(),
+            sink_target: BuiltInNudgeSinkTarget::Tmux,
+            template: ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: None,
+            },
+        })
+        .expect("serialize envelope");
+        let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload.as_str()))]);
+
+        InternalNudgeCommand
+            .run(&crate::observability::CliObservability::fallback())
+            .expect("disabled template should short-circuit");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn tmux_sink_uses_double_enter_sequence() {
+        let tempdir = tempdir().expect("tempdir");
+        let tmux_log = tempdir.path().join("tmux.log");
+        #[cfg(windows)]
+        let tmux_path = tempdir.path().join("tmux.cmd");
+        #[cfg(not(windows))]
+        let tmux_path = tempdir.path().join("tmux");
+        #[cfg(windows)]
+        fs::write(
+            &tmux_path,
+            "@echo off\r\n>> \"%ATM_TEST_TMUX_LOG%\" echo %*\r\nexit /b 0\r\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(not(windows))]
+        fs::write(
+            &tmux_path,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$ATM_TEST_TMUX_LOG\"\nexit 0\n",
+        )
+        .expect("write tmux shim");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&tmux_path, perms).expect("chmod");
+        }
+
+        let tmux_log_value = tmux_log.display().to_string();
+        let tmux_bin_value = tmux_path.display().to_string();
+        let _env = EnvGuard::set_many([
+            (TMUX_PROGRAM_ENV, Some(tmux_bin_value.as_str())),
+            ("ATM_TEST_TMUX_LOG", Some(tmux_log_value.as_str())),
+        ]);
+        super::TmuxNudgeSink
+            .deliver(&base_event(), "<atm/>")
+            .expect("deliver");
+        let logged = fs::read_to_string(&tmux_log).expect("tmux log");
+        assert_eq!(logged.matches("Enter").count(), 2);
+        assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
+    }
+}
