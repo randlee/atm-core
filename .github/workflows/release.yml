@@ -13,6 +13,7 @@ permissions:
 
 env:
   RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+  STAGED_INSTALL_ROOT: target/phase-ae/staged-install-root
 
 jobs:
   gate-and-tag:
@@ -282,21 +283,46 @@ jobs:
           bin_args="$(python3 scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
           cargo build --release --target ${{ matrix.target }} ${bin_args}
 
+      - name: Stage installed release tree (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${STAGED_INSTALL_ROOT}"
+          mkdir -p "${STAGED_INSTALL_ROOT}/bin"
+          while IFS= read -r bin; do
+            [[ -n "$bin" ]] || continue
+            cp "target/${{ matrix.target }}/release/${bin}" "${STAGED_INSTALL_ROOT}/bin/${bin}"
+          done < <(python3 scripts/release_artifacts.py list-release-binaries --manifest "${RELEASE_ARTIFACT_MANIFEST}")
+          python3 scripts/release_artifacts.py stage-install-docs \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --output-root "${STAGED_INSTALL_ROOT}"
+
+      - name: Stage installed release tree (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          if (Test-Path $env:STAGED_INSTALL_ROOT) {
+            Remove-Item -Recurse -Force $env:STAGED_INSTALL_ROOT
+          }
+          New-Item -ItemType Directory -Force -Path "$env:STAGED_INSTALL_ROOT/bin" | Out-Null
+          $bins = python3 scripts/release_artifacts.py list-release-binaries --manifest $env:RELEASE_ARTIFACT_MANIFEST
+          foreach ($bin in $bins) {
+            Copy-Item "target/${{ matrix.target }}/release/$bin.exe" "$env:STAGED_INSTALL_ROOT/bin/$bin.exe"
+          }
+          python3 scripts/release_artifacts.py stage-install-docs `
+            --manifest $env:RELEASE_ARTIFACT_MANIFEST `
+            --output-root $env:STAGED_INSTALL_ROOT
+
       - name: Package (unix)
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
           set -euo pipefail
+          export COPYFILE_DISABLE=1
           VERSION='${{ needs.gate-and-tag.outputs.release_version }}'
           ARCHIVE="atm_${VERSION}_${{ matrix.target }}.tar.gz"
-          cd target/${{ matrix.target }}/release
-          bins=()
-          while IFS= read -r bin; do
-            [[ -n "$bin" ]] || continue
-            bins+=("$bin")
-          done < <(python3 ../../../scripts/release_artifacts.py list-release-binaries --manifest ../../../release/publish-artifacts.toml)
-          tar czf "../../../${ARCHIVE}" "${bins[@]}"
-          cd ../../..
+          tar czf "${ARCHIVE}" -C "${STAGED_INSTALL_ROOT}" .
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
       - name: Package (windows)
@@ -305,11 +331,7 @@ jobs:
         run: |
           $VERSION = '${{ needs.gate-and-tag.outputs.release_version }}'
           $ARCHIVE = "atm_${VERSION}_${{ matrix.target }}.zip"
-          $bins = python3 scripts/release_artifacts.py list-release-binaries --manifest release/publish-artifacts.toml
-          $paths = @()
-          foreach ($bin in $bins) {
-            $paths += "target/${{ matrix.target }}/release/$bin.exe"
-          }
+          $paths = Join-Path $env:STAGED_INSTALL_ROOT '*'
           Compress-Archive -Path $paths -DestinationPath $ARCHIVE
           echo "ARCHIVE=$ARCHIVE" | Out-File -FilePath $env:GITHUB_ENV -Append
 

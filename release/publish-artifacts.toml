@@ -104,3 +104,8 @@ name = "atm"
 
 [[release_binaries]]
 name = "atm-daemon"
+
+[installed_docs]
+source_root = "docs/user-documents"
+install_root = "share/doc/atm"
+entrypoint = "share/doc/atm/README.md"
