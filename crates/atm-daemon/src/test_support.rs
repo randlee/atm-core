@@ -38,6 +38,9 @@ impl Drop for LifecycleFlagResetGuard {
         self.lifecycle.set_reload_for_test(false);
         if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
             tracing::warn!(
+                subsystem = "test_support",
+                action = "reset_shared_state_for_test",
+                outcome = "drain_failed",
                 %error,
                 "failed to drain shared lifecycle worker during test reset"
             );
