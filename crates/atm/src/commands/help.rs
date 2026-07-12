@@ -318,7 +318,7 @@ fn doc_link_for_topic(topic: HelpTopic) -> Option<HelpDocLink> {
         HelpTopic::Errors => "troubleshooting.md",
         HelpTopic::Hooks => "hooks.md",
         HelpTopic::Identity => "identity-and-team.md",
-        HelpTopic::Skills => "README.md",
+        HelpTopic::Skills => return None,
     };
     Some(HelpDocLink {
         topic,
@@ -566,6 +566,12 @@ mod tests {
                 .iter()
                 .any(|topic| topic.name == "hooks" && topic.doc_relative_path == Some("hooks.md"))
         );
+        assert!(
+            result
+                .topics
+                .iter()
+                .any(|topic| topic.name == "skills" && topic.doc_relative_path.is_none())
+        );
     }
 
     #[test]
@@ -640,6 +646,21 @@ mod tests {
         assert!(!hooks.body.contains("Y.2 will"));
         assert!(!identity.body.contains("Y.2 will"));
         assert!(!skills.body.contains("Y.2 will"));
+    }
+
+    #[test]
+    fn skills_topic_does_not_claim_installed_long_form_docs() {
+        let result = HelpCommand {
+            target: Some("skills".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("skills help");
+
+        assert_eq!(result.installed_doc_topic_path, None);
+        assert!(result.body.contains("Installed docs index:"));
+        assert!(!result.body.contains("Long-form docs:"));
     }
 
     #[test]
