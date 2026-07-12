@@ -318,7 +318,7 @@ fn doc_link_for_topic(topic: HelpTopic) -> Option<HelpDocLink> {
         HelpTopic::Errors => "troubleshooting.md",
         HelpTopic::Hooks => "hooks.md",
         HelpTopic::Identity => "identity-and-team.md",
-        HelpTopic::Skills => "README.md",
+        HelpTopic::Skills => return None,
     };
     Some(HelpDocLink {
         topic,
@@ -509,6 +509,30 @@ mod tests {
         .expect("troubleshooting");
     }
 
+    fn copy_tree(source_root: &Path, destination_root: &Path) {
+        fn recurse(source_root: &Path, destination_root: &Path, current: &Path) {
+            for entry in fs::read_dir(current).expect("read source dir") {
+                let entry = entry.expect("dir entry");
+                let source_path = entry.path();
+                let relative = source_path
+                    .strip_prefix(source_root)
+                    .expect("relative source path");
+                let destination = destination_root.join(relative);
+                if source_path.is_dir() {
+                    fs::create_dir_all(&destination).expect("create destination dir");
+                    recurse(source_root, destination_root, &source_path);
+                    continue;
+                }
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent).expect("destination parent");
+                }
+                fs::copy(&source_path, &destination).expect("copy doc file");
+            }
+        }
+
+        recurse(source_root, destination_root, source_root);
+    }
+
     #[cfg(unix)]
     fn symlink_file(src: &Path, dst: &Path) {
         std::os::unix::fs::symlink(src, dst).expect("symlink");
@@ -566,6 +590,12 @@ mod tests {
                 .iter()
                 .any(|topic| topic.name == "hooks" && topic.doc_relative_path == Some("hooks.md"))
         );
+        assert!(
+            result
+                .topics
+                .iter()
+                .any(|topic| topic.name == "skills" && topic.doc_relative_path.is_none())
+        );
     }
 
     #[test]
@@ -574,13 +604,16 @@ mod tests {
             .join("../..")
             .canonicalize()
             .expect("repo root");
+        let tempdir = TempDir::new().expect("tempdir");
         let source_root = repo_root.join("docs/user-documents");
-        let temp = TempDir::new().expect("temp dir");
-        write_installed_tree(temp.path());
-        let installed_root = temp.path().join("share/doc/atm");
+        let installed_root = tempdir.path().join("share/doc/atm");
+        copy_tree(&source_root, &installed_root);
 
         for topic in HelpTopic::ALL {
-            let link = super::doc_link_for_topic(topic).expect("doc link");
+            let Some(link) = super::doc_link_for_topic(topic) else {
+                assert_eq!(topic, HelpTopic::Skills);
+                continue;
+            };
             assert!(
                 source_root.join(link.relative_path).is_file(),
                 "missing source doc for topic {} at {}",
@@ -640,6 +673,21 @@ mod tests {
         assert!(!hooks.body.contains("Y.2 will"));
         assert!(!identity.body.contains("Y.2 will"));
         assert!(!skills.body.contains("Y.2 will"));
+    }
+
+    #[test]
+    fn skills_topic_does_not_claim_installed_long_form_docs() {
+        let result = HelpCommand {
+            target: Some("skills".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("skills help");
+
+        assert_eq!(result.installed_doc_topic_path, None);
+        assert!(result.body.contains("Installed docs index:"));
+        assert!(!result.body.contains("Long-form docs:"));
     }
 
     #[test]

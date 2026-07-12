@@ -59,7 +59,7 @@ for the release version.
 
 ## Required Validation
 
-- `python3 scripts/validate_release.py validate`
+- `python3 scripts/validate_release.py all --version 1.3.0 --staged-install-root target/phase-ae/staged-install-root`
 - `rg -n "reviewed_for_release|release version|docs/user-documents" scripts/release_artifacts.py .github/workflows/release-preflight.yml`
-- `rg -n "reviewed_for_release|docs/user-documents|validate_release.py validate" release/publish-surface-scope.md`
+- `rg -n "reviewed_for_release|docs/user-documents|validate_release.py all" release/publish-surface-scope.md`
 - `git diff --check`

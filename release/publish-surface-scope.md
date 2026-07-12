@@ -70,7 +70,7 @@ Required contract:
 
 Canonical validation entrypoint:
 
-- `python3 scripts/validate_release.py validate --version <release version>`
+- `python3 scripts/validate_release.py all --version <release version> --staged-install-root target/phase-ae/staged-install-root`
 
 The release-preflight workflow invokes that exact entrypoint, and the user-doc
 freshness gate reuses `scripts/verify_user_docs.py` rather than maintaining a

@@ -40,7 +40,7 @@ seconds = 60
 
 [[atm.post_send_hooks]]
 recipient = "quality-mgr"
-command = ["scripts/post-send-notify.sh"]
+command = ["post-send-notify.sh"]
 
 [startup.arch-ctm]
 all = [
@@ -68,6 +68,14 @@ Important rules:
 The hook payload arrives in `ATM_POST_SEND` as ATM-owned JSON. That payload
 includes the sender, recipient, team, `message_id`, description, task id,
 ack-related flags, and other supported post-send fields.
+
+ATM-aware hook lookup does not follow the invoking shell `cwd`. When
+`ATM_IDENTITY` and `ATM_TEAM` resolve an ATM-enabled caller, ATM loads the
+authoritative roster record for that sender and resolves repo-local hook paths
+from that sender's stored `home_dir`. In practice, that means the same
+repo-local hook configuration still applies when an agent runs `atm send` from
+another folder, because ATM uses the sender's roster-backed ATM home instead of
+guessing from the current shell location.
 
 ## Startup And Idle Behavior
 
