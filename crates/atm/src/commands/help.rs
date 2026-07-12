@@ -558,6 +558,32 @@ mod tests {
     }
 
     #[test]
+    fn doc_link_for_every_topic_resolves_in_source_and_installed_copy() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let source_root = repo_root.join("docs/user-documents");
+        let installed_root = repo_root.join("target/phase-ae/staged-install-root/share/doc/atm");
+
+        for topic in HelpTopic::ALL {
+            let link = super::doc_link_for_topic(topic).expect("doc link");
+            assert!(
+                source_root.join(link.relative_path).is_file(),
+                "missing source doc for topic {} at {}",
+                topic.name(),
+                link.relative_path
+            );
+            assert!(
+                installed_root.join(link.relative_path).is_file(),
+                "missing installed doc for topic {} at {}",
+                topic.name(),
+                link.relative_path
+            );
+        }
+    }
+
+    #[test]
     fn concept_topics_are_case_insensitive() {
         assert_eq!(HelpTopic::parse("ConFiG"), Some(HelpTopic::Config));
         assert_eq!(HelpTopic::parse("ERRORS"), Some(HelpTopic::Errors));

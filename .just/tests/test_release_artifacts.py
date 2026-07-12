@@ -65,6 +65,11 @@ class ReleaseArtifactsTests(unittest.TestCase):
 
                 [[release_binaries]]
                 name = "atm"
+
+                [installed_docs]
+                source_root = "docs/user-documents"
+                install_root = "share/doc/atm"
+                entrypoint = "share/doc/atm/README.md"
                 """
             ).strip()
             + "\n",
@@ -75,6 +80,8 @@ class ReleaseArtifactsTests(unittest.TestCase):
             textwrap.dedent(crate_package_block).strip() + "\n",
             encoding="utf-8",
         )
+        (self.root / "docs" / "user-documents").mkdir(parents=True, exist_ok=True)
+        (self.root / "docs" / "user-documents" / "README.md").write_text("# Docs\n", encoding="utf-8")
         return workspace_toml, manifest_toml
 
     def run_validate_manifest(self, *, workspace_toml: Path, manifest_toml: Path) -> subprocess.CompletedProcess[str]:

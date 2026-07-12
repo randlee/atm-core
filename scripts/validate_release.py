@@ -183,6 +183,23 @@ def validate_staged_install_docs(
             )
         )
 
+    verify_cmd = [
+        "python3",
+        "scripts/verify_user_docs.py",
+        "--source-root",
+        "docs/user-documents",
+    ]
+    if staged_install_root is not None:
+        verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
+    completed = run_capture(verify_cmd, cwd=root)
+    append_completed_findings(
+        findings,
+        "installed-docs-verifier",
+        completed,
+        "installed docs verifier passed",
+        "installed docs verifier failed",
+    )
+
 
 def validate_manifest(root: Path, findings: list[Finding], *, staged_install_root: Path | None) -> None:
     commands = (
