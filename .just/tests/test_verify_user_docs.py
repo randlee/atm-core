@@ -94,6 +94,25 @@ class VerifyUserDocsTests(unittest.TestCase):
 
         self.assertEqual(errors, ["installed copy missing file `examples/demo.json`"])
 
+    def test_validate_reviewed_for_release_requires_matching_version(self) -> None:
+        self.write_doc(
+            "README.md",
+            """
+            ---
+            reviewed_for_release: 1.2.3
+            ---
+
+            # Docs
+            """,
+        )
+
+        errors = MODULE.validate_reviewed_for_release(self.root, "1.3.0")
+
+        self.assertEqual(
+            errors,
+            ["README.md: reviewed_for_release is 1.2.3, expected 1.3.0"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

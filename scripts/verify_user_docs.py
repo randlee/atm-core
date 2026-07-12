@@ -15,6 +15,7 @@ from pathlib import Path
 FENCE_START = "```"
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,19 @@ def doc_markdown_text(doc_path: Path, root: Path) -> str:
     return f"<!-- doc-path: {doc_path.relative_to(root).as_posix()} -->\n" + doc_path.read_text(encoding="utf-8")
 
 
+def extract_frontmatter(markdown_text: str) -> dict[str, str]:
+    match = FRONTMATTER_RE.match(markdown_text)
+    if match is None:
+        return {}
+    values: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip().strip("\"'")
+    return values
+
+
 def validate_relative_links(doc_root: Path) -> list[str]:
     errors: list[str] = []
     root = doc_root.resolve()
@@ -167,19 +181,41 @@ def verify_tree(doc_root: Path) -> list[str]:
     return [*validate_relative_links(doc_root), *validate_fenced_blocks(doc_root)]
 
 
+def validate_reviewed_for_release(doc_root: Path, release_version: str) -> list[str]:
+    errors: list[str] = []
+    for doc_path in sorted(doc_root.rglob("*.md")):
+        frontmatter = extract_frontmatter(doc_path.read_text(encoding="utf-8"))
+        actual = frontmatter.get("reviewed_for_release")
+        if actual is None:
+            errors.append(
+                f"{doc_path.relative_to(doc_root)}: missing reviewed_for_release field (expected {release_version})"
+            )
+            continue
+        if actual != release_version:
+            errors.append(
+                f"{doc_path.relative_to(doc_root)}: reviewed_for_release is {actual}, expected {release_version}"
+            )
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify ATM installed/source user docs")
     parser.add_argument("--source-root", required=True)
     parser.add_argument("--installed-root")
+    parser.add_argument("--release-version")
     args = parser.parse_args(argv)
 
     source_root = Path(args.source_root)
     installed_root = Path(args.installed_root) if args.installed_root else None
 
     errors = verify_tree(source_root)
+    if args.release_version:
+        errors.extend(validate_reviewed_for_release(source_root, args.release_version))
     if installed_root is not None:
         errors.extend(verify_installed_copy(source_root, installed_root))
         errors.extend(verify_tree(installed_root))
+        if args.release_version:
+            errors.extend(validate_reviewed_for_release(installed_root, args.release_version))
 
     if errors:
         for error in errors:

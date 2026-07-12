@@ -54,3 +54,24 @@ Five publishable crates were missing. Four internal crates lacked `publish = fal
 - `atm-daemon` intentionally depends on `atm-rusqlite` (SQLite coupling from commit
   34467437). Decoupling is deferred to a post-v1.2.0 sprint. Publishing as-is is
   authorized.
+
+## User-Doc Freshness Gate
+
+The retained publish surface now includes the installed end-user markdown corpus
+under `docs/user-documents/`. Release preflight treats that corpus as a
+blocking publish artifact.
+
+Required contract:
+
+- every markdown file under `docs/user-documents/` must carry
+  `reviewed_for_release: <release version>`
+- the value must match the release version under validation exactly
+- linked documents must exist and remain relative within the user-doc tree
+
+Canonical validation entrypoint:
+
+- `python3 scripts/validate_release.py validate --version <release version>`
+
+The release-preflight workflow invokes that exact entrypoint, and the user-doc
+freshness gate reuses `scripts/verify_user_docs.py` rather than maintaining a
+second partial checker.

@@ -14,6 +14,7 @@ from pathlib import Path
 
 PREFLIGHT_FULL = "full"
 PREFLIGHT_LOCKED = "locked"
+INSTALLED_DOC_REVIEW_FIELD = "reviewed_for_release"
 
 
 def require_relpath(obj: dict, key: str, label: str) -> Path:
@@ -25,6 +26,11 @@ def require_relpath(obj: dict, key: str, label: str) -> Path:
 
 def manifest_repo_root(manifest_path: Path) -> Path:
     return manifest_path.resolve().parent.parent
+
+
+def installed_docs_source_root(manifest_path: Path) -> Path:
+    manifest = load_manifest(manifest_path)
+    return manifest_repo_root(manifest_path) / manifest["installed_docs"]["source_root"]
 
 
 def load_manifest(path: Path) -> dict:
@@ -191,9 +197,7 @@ def list_release_binaries(args: argparse.Namespace) -> int:
 
 
 def installed_doc_source_files(manifest_path: Path) -> list[Path]:
-    manifest = load_manifest(manifest_path)
-    repo_root = manifest_repo_root(manifest_path)
-    source_root = repo_root / manifest["installed_docs"]["source_root"]
+    source_root = installed_docs_source_root(manifest_path)
     if not source_root.is_dir():
         raise SystemExit(f"installed docs source root does not exist: {source_root}")
     return sorted(path for path in source_root.rglob("*") if path.is_file())
@@ -201,8 +205,7 @@ def installed_doc_source_files(manifest_path: Path) -> list[Path]:
 
 def installed_doc_members(manifest_path: Path) -> list[Path]:
     manifest = load_manifest(manifest_path)
-    repo_root = manifest_repo_root(manifest_path)
-    source_root = repo_root / manifest["installed_docs"]["source_root"]
+    source_root = installed_docs_source_root(manifest_path)
     install_root = manifest["installed_docs"]["install_root"]
     members: list[Path] = []
     for path in installed_doc_source_files(manifest_path):
