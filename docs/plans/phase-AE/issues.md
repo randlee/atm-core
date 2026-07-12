@@ -22,6 +22,10 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/phase-AE
 ## Closure Notes
 
 - `AE.1` defines the corpus contract, metadata header, and required tree.
+- `AE.1` also fixes the accepted corpus/install contract used by
+  `integrate/phase-AE`:
+  - repo-owned end-user docs live in `docs/user-documents/`
+  - installed long-form docs ship under `share/doc/atm/`
 - `AE.2` through `AE.4` author the actual end-user content in bounded groups.
 - `AE.5` through `AE.8` make the corpus shippable, discoverable, and gated.
 - `AE.9` is the only sprint allowed to claim the installed-doc release proof.

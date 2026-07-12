@@ -24,9 +24,11 @@ class ReleaseArtifactsTests(unittest.TestCase):
         workspace_toml = self.root / "Cargo.toml"
         manifest_toml = self.root / "release" / "publish-artifacts.toml"
         crate_toml = self.root / "crates" / "demo-crate" / "Cargo.toml"
+        docs_readme = self.root / "docs" / "user-documents" / "README.md"
 
         manifest_toml.parent.mkdir(parents=True, exist_ok=True)
         crate_toml.parent.mkdir(parents=True, exist_ok=True)
+        docs_readme.parent.mkdir(parents=True, exist_ok=True)
 
         workspace_toml.write_text(
             textwrap.dedent(
@@ -80,8 +82,7 @@ class ReleaseArtifactsTests(unittest.TestCase):
             textwrap.dedent(crate_package_block).strip() + "\n",
             encoding="utf-8",
         )
-        (self.root / "docs" / "user-documents").mkdir(parents=True, exist_ok=True)
-        (self.root / "docs" / "user-documents" / "README.md").write_text("# Docs\n", encoding="utf-8")
+        docs_readme.write_text("# Demo ATM Docs\n", encoding="utf-8")
         return workspace_toml, manifest_toml
 
     def run_validate_manifest(self, *, workspace_toml: Path, manifest_toml: Path) -> subprocess.CompletedProcess[str]:

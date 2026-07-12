@@ -169,7 +169,10 @@ Commands:
         let readme = resolved_readme_string(executable_path);
         let topic_doc = resolved_topic_doc_string(executable_path, topic);
         let body = if let Some(topic_doc) = topic_doc.as_deref() {
-            format!("{}\nLong-form docs: {topic_doc}\nInstalled docs index: {readme}\n", topic.body())
+            format!(
+                "{}\nLong-form docs: {topic_doc}\nInstalled docs index: {readme}\n",
+                topic.body()
+            )
         } else {
             format!(
                 "{}\nInstalled docs index: {readme} (topic-specific docs resolve only from an installed atm binary)\n",
@@ -315,7 +318,7 @@ fn doc_link_for_topic(topic: HelpTopic) -> Option<HelpDocLink> {
         HelpTopic::Errors => "troubleshooting.md",
         HelpTopic::Hooks => "hooks.md",
         HelpTopic::Identity => "identity-and-team.md",
-        HelpTopic::Skills => "README.md",
+        HelpTopic::Skills => return None,
     };
     Some(HelpDocLink {
         topic,
@@ -484,8 +487,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        canonical_installed_doc_root, fallback_doc_readme_hint, HelpCommand, HelpResultKind,
-        HelpTopic, HelpTopicTier,
+        HelpCommand, HelpResultKind, HelpTopic, HelpTopicTier, canonical_installed_doc_root,
+        fallback_doc_readme_hint,
     };
 
     fn write_installed_tree(root: &Path) {
@@ -493,9 +496,41 @@ mod tests {
         fs::create_dir_all(root.join("share/doc/atm")).expect("doc root");
         fs::write(root.join("share/doc/atm/README.md"), "# ATM\n").expect("readme");
         fs::write(root.join("share/doc/atm/hooks.md"), "# Hooks\n").expect("hooks");
-        fs::write(root.join("share/doc/atm/identity-and-team.md"), "# Identity\n").expect("identity");
+        fs::write(
+            root.join("share/doc/atm/identity-and-team.md"),
+            "# Identity\n",
+        )
+        .expect("identity");
         fs::write(root.join("share/doc/atm/install-layout.md"), "# Install\n").expect("install");
-        fs::write(root.join("share/doc/atm/troubleshooting.md"), "# Troubleshooting\n").expect("troubleshooting");
+        fs::write(
+            root.join("share/doc/atm/troubleshooting.md"),
+            "# Troubleshooting\n",
+        )
+        .expect("troubleshooting");
+    }
+
+    fn copy_tree(source_root: &Path, destination_root: &Path) {
+        fn recurse(source_root: &Path, destination_root: &Path, current: &Path) {
+            for entry in fs::read_dir(current).expect("read source dir") {
+                let entry = entry.expect("dir entry");
+                let source_path = entry.path();
+                let relative = source_path
+                    .strip_prefix(source_root)
+                    .expect("relative source path");
+                let destination = destination_root.join(relative);
+                if source_path.is_dir() {
+                    fs::create_dir_all(&destination).expect("create destination dir");
+                    recurse(source_root, destination_root, &source_path);
+                    continue;
+                }
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent).expect("destination parent");
+                }
+                fs::copy(&source_path, &destination).expect("copy doc file");
+            }
+        }
+
+        recurse(source_root, destination_root, source_root);
     }
 
     #[cfg(unix)]
@@ -555,6 +590,12 @@ mod tests {
                 .iter()
                 .any(|topic| topic.name == "hooks" && topic.doc_relative_path == Some("hooks.md"))
         );
+        assert!(
+            result
+                .topics
+                .iter()
+                .any(|topic| topic.name == "skills" && topic.doc_relative_path.is_none())
+        );
     }
 
     #[test]
@@ -563,11 +604,16 @@ mod tests {
             .join("../..")
             .canonicalize()
             .expect("repo root");
+        let tempdir = TempDir::new().expect("tempdir");
         let source_root = repo_root.join("docs/user-documents");
-        let installed_root = repo_root.join("target/phase-ae/staged-install-root/share/doc/atm");
+        let installed_root = tempdir.path().join("share/doc/atm");
+        copy_tree(&source_root, &installed_root);
 
         for topic in HelpTopic::ALL {
-            let link = super::doc_link_for_topic(topic).expect("doc link");
+            let Some(link) = super::doc_link_for_topic(topic) else {
+                assert_eq!(topic, HelpTopic::Skills);
+                continue;
+            };
             assert!(
                 source_root.join(link.relative_path).is_file(),
                 "missing source doc for topic {} at {}",
@@ -627,6 +673,21 @@ mod tests {
         assert!(!hooks.body.contains("Y.2 will"));
         assert!(!identity.body.contains("Y.2 will"));
         assert!(!skills.body.contains("Y.2 will"));
+    }
+
+    #[test]
+    fn skills_topic_does_not_claim_installed_long_form_docs() {
+        let result = HelpCommand {
+            target: Some("skills".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("skills help");
+
+        assert_eq!(result.installed_doc_topic_path, None);
+        assert!(result.body.contains("Installed docs index:"));
+        assert!(!result.body.contains("Long-form docs:"));
     }
 
     #[test]

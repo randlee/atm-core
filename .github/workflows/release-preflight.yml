@@ -18,6 +18,7 @@ permissions:
 
 env:
   RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+  STAGED_INSTALL_ROOT: target/phase-ae/staged-install-root
 
 jobs:
   preflight:
@@ -87,6 +88,15 @@ jobs:
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release_version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Stage installed docs for validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${STAGED_INSTALL_ROOT}"
+          python3 scripts/release_artifacts.py stage-install-docs \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --output-root "${STAGED_INSTALL_ROOT}"
+
       - name: Run canonical retained release validation suite
         id: validate
         continue-on-error: true
@@ -95,6 +105,7 @@ jobs:
           set -euo pipefail
           python3 scripts/validate_release.py all \
             --version '${{ steps.meta.outputs.release_version }}' \
+            --staged-install-root "${STAGED_INSTALL_ROOT}" \
             --findings release-findings.json
 
       - name: Upload release findings
