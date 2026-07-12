@@ -16,6 +16,8 @@ state, and daemon-related surfaces are healthy.
 Common doctor usage:
 
 ```bash
+export ATM_TEAM=atm-dev
+
 atm doctor --team atm-dev
 atm doctor --team atm-dev --json
 ```
@@ -41,14 +43,18 @@ The retained CLI surface is:
 Examples:
 
 ```bash
+export ATM_TEAM=atm-dev
+export ATM_IDENTITY=arch-ctm
+
 atm log snapshot --limit 20
 atm log filter --level warn --match command=send
 atm log tail --level error
 ```
 
 Retained ATM logs live under the runtime state root, not under the installed
-document tree. The ordinary operator expectation is host-scoped ATM logs under
-`~/.atm/`.
+document tree. The ordinary operator expectation is the canonical retained log
+path `{ATM_HOME}/.atm/logs/atm.log.jsonl`, with `ATM_LOG_DIR` as the supported
+override when the retained log must live somewhere else.
 
 ## Separation Of Concerns
 

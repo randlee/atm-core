@@ -2,6 +2,6 @@
   <action>read atm --team {{team}}</action>
   <description>{{description}}</description>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task" />
-  <console announce="concise" pause="false" />
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
 </atm>
