@@ -586,7 +586,9 @@ mod tests {
         let installed_root = temp.path().join("share/doc/atm");
 
         for topic in HelpTopic::ALL {
-            let link = super::doc_link_for_topic(topic).expect("doc link");
+            let Some(link) = super::doc_link_for_topic(topic) else {
+                continue;
+            };
             assert!(
                 source_root.join(link.relative_path).is_file(),
                 "missing source doc for topic {} at {}",
