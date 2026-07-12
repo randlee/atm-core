@@ -1,1 +1,1 @@
-<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}" />
+<atm kind="ack" from="{{from}}" message-id="{{message_id}}" task-id="{{task_id}}"/>

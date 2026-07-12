@@ -3,6 +3,6 @@
   <action>ack the message</action>
   <task id="{{task_id}}">{{description}}</task>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task" />
-  <console announce="concise" pause="false" />
+  <when idle="immediate" busy="after-current-task"/>
+  <console announce="concise" pause="false"/>
 </atm>

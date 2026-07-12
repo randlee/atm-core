@@ -9,11 +9,11 @@ seconds = 60
 
 [[atm.post_send_hooks]]
 recipient = "quality-mgr"
-command = ["scripts/post-send-notify.sh"]
+command = ["post-send-notify.sh"]
 
 [[atm.post_send_hooks]]
 recipient = "*"
-command = ["python3", "scripts/post-send-audit.py"]
+command = ["post-send-audit.sh"]
 
 [startup.arch-ctm]
 all = [
