@@ -1,7 +1,7 @@
 ---
 id: AE.2
 title: Setup And Identity Corpus
-status: planned
+status: complete
 branch: feature/pAE-s2-setup-and-identity-corpus
 worktree: ../atm-core-worktrees/feature/pAE-s2-setup-and-identity-corpus
 target: integrate/phase-AE

@@ -1,7 +1,7 @@
 ---
 id: AE.7
 title: User-Doc Graph And Example Verification
-status: planned
+status: complete
 branch: feature/pAE-s7-user-doc-graph-verification
 worktree: ../atm-core-worktrees/feature/pAE-s7-user-doc-graph-verification
 target: integrate/phase-AE

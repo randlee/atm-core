@@ -1,7 +1,7 @@
 ---
 id: AE.9
 title: Phase-End Installed-Docs Proof
-status: planned
+status: complete
 branch: feature/pAE-s9-phase-end-installed-docs-proof
 worktree: ../atm-core-worktrees/feature/pAE-s9-phase-end-installed-docs-proof
 target: integrate/phase-AE

@@ -1,8 +1,8 @@
 ---
 title: Phase AE Plan
-status: planned
-branch: plan/phase-AE
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/phase-AE
+status: complete
+branch: integrate/phase-AE
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AE
 ---
 
 # Phase AE Plan

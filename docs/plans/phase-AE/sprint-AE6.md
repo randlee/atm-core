@@ -1,7 +1,7 @@
 ---
 id: AE.6
 title: Help Surfacing
-status: planned
+status: complete
 branch: feature/pAE-s6-help-surfacing
 worktree: ../atm-core-worktrees/feature/pAE-s6-help-surfacing
 target: integrate/phase-AE

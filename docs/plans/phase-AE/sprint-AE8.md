@@ -1,7 +1,7 @@
 ---
 id: AE.8
 title: Publisher Freshness Gate
-status: planned
+status: complete
 branch: feature/pAE-s8-publisher-freshness-gate
 worktree: ../atm-core-worktrees/feature/pAE-s8-publisher-freshness-gate
 target: integrate/phase-AE
