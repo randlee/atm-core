@@ -1,0 +1,22 @@
+[atm]
+default_team = "atm-dev"
+
+[atm.idle_notify]
+recipient = "team-lead"
+
+[atm.idle_notify.agent.arch-ctm]
+seconds = 60
+
+[[atm.post_send_hooks]]
+recipient = "quality-mgr"
+command = ["post-send-notify.sh"]
+
+[[atm.post_send_hooks]]
+recipient = "*"
+command = ["post-send-audit.sh"]
+
+[startup.arch-ctm]
+all = [
+  "Use atm_send or atm_ack for all messages to team-lead or quality-mgr",
+  "Use atm_read to read messages from team-members"
+]
