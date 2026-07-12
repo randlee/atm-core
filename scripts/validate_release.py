@@ -17,6 +17,7 @@ from datetime import timezone
 from pathlib import Path
 
 from release_artifacts import installed_doc_members
+from release_artifacts import installed_docs_source_root
 from release_artifacts import load_manifest
 
 
@@ -156,6 +157,7 @@ def validate_staged_install_docs(
     *,
     manifest_path: Path,
     staged_install_root: Path | None,
+    release_version: str,
 ) -> None:
     if staged_install_root is None:
         return
@@ -187,7 +189,9 @@ def validate_staged_install_docs(
         "python3",
         "scripts/verify_user_docs.py",
         "--source-root",
-        "docs/user-documents",
+        str(installed_docs_source_root(manifest_path).relative_to(root)),
+        "--release-version",
+        release_version,
     ]
     if staged_install_root is not None:
         verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
@@ -201,7 +205,13 @@ def validate_staged_install_docs(
     )
 
 
-def validate_manifest(root: Path, findings: list[Finding], *, staged_install_root: Path | None) -> None:
+def validate_manifest(
+    root: Path,
+    findings: list[Finding],
+    *,
+    staged_install_root: Path | None,
+    release_version: str,
+) -> None:
     commands = (
         (
             "manifest-coverage",
@@ -251,6 +261,7 @@ def validate_manifest(root: Path, findings: list[Finding], *, staged_install_roo
         findings,
         manifest_path=root / "release" / "publish-artifacts.toml",
         staged_install_root=staged_install_root,
+        release_version=release_version,
     )
 
 
@@ -806,6 +817,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         choices=(
             "all",
+            "validate",
             "lint",
             "support-files",
             "manifest",
@@ -841,7 +853,12 @@ def main(argv: list[str] | None = None) -> int:
     actions = {
         "support-files": lambda: validate_support_files(root, findings),
         "lint": lambda: validate_lint(root, findings),
-        "manifest": lambda: validate_manifest(root, findings, staged_install_root=staged_install_root),
+        "manifest": lambda: validate_manifest(
+            root,
+            findings,
+            staged_install_root=staged_install_root,
+            release_version=version,
+        ),
         "publish-surface": lambda: validate_publish_surface(
             root,
             version,
@@ -861,7 +878,8 @@ def main(argv: list[str] | None = None) -> int:
 
     findings_path = root / args.findings
     try:
-        if args.target == "all":
+        effective_target = "all" if args.target == "validate" else args.target
+        if effective_target == "all":
             for target in (
                 "support-files",
                 "lint",
@@ -876,7 +894,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"== validate {target} ==")
                 actions[target]()
         else:
-            actions[args.target]()
+            actions[effective_target]()
     finally:
         write_findings(root, version, findings_path, findings)
         print(f"wrote findings: {findings_path}")
