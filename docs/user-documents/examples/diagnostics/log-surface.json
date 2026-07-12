@@ -1,0 +1,12 @@
+{
+  "subcommands": [
+    "snapshot",
+    "filter",
+    "tail"
+  ],
+  "examples": [
+    "atm log snapshot --limit 20",
+    "atm log filter --level warn --match command=send",
+    "atm log tail --level error"
+  ]
+}
