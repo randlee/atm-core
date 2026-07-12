@@ -18,7 +18,7 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
     def test_release_preflight_passes_staged_install_root_to_validator(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 scripts/validate_release.py validate \\", text)
+        self.assertIn("python3 scripts/validate_release.py all \\", text)
         self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
 
 
