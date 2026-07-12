@@ -821,3 +821,11 @@ Implementation Branches:
 
 Authoritative sprint plan:
 - `docs/publishing-improvements/plan.md`
+
+## Winget Token Wiring
+
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `WINGET-TOKEN-DEV-1` | `complete` | `fix/winget-token-wiring` | `docs/plans/winget-token-wiring/sprint-winget-token-wiring.md`, `.github/workflows/release.yml`, `docs/WINGET_SETUP.md`, `.claude/agents/publisher.md`, `docs/requirements.md`, `docs/architecture.md` |
