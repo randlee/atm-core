@@ -1,0 +1,13 @@
+{
+  "precedence": [
+    "matching external [[atm.post_send_hooks]] command",
+    "team-scoped built-in template override",
+    "built-in product default"
+  ],
+  "states": {
+    "no_row": "product default",
+    "override_row": "stored non-empty template body",
+    "disabled_row": "no built-in nudge emission",
+    "clear_reset": "row deletion back to product default"
+  }
+}

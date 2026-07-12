@@ -1,0 +1,8 @@
+<atm from="{{from}}" message-id="{{message_id}}">
+  <action>read atm --team {{team}}</action>
+  <action>ack the message</action>
+  <description>{{description}}</description>
+  <action>execute the assigned task</action>
+  <when idle="immediate" busy="after-current-task" />
+  <console announce="concise" pause="false" />
+</atm>
