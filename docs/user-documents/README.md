@@ -34,3 +34,21 @@ These documents describe supported ATM usage only:
 
 These documents do not define developer implementation boundaries, direct
 SQLite editing steps, or repo-internal release procedures.
+
+## Common Starting Points
+
+If you are setting up a repo-local ATM workflow, start here:
+
+1. Read [Install Layout](./install-layout.md) to understand where ATM puts
+   installed files and where runtime state lives.
+2. Read [Identity And Team](./identity-and-team.md) before running commands
+   that mutate mailbox state.
+3. Use [Quickstart](./quickstart.md) for the smallest supported send, inspect,
+   read, and acknowledge workflows.
+
+## Example Files
+
+Repo-owned example files live under:
+
+- [`examples/quickstart/`](./examples/quickstart/)
+- [`examples/identity/`](./examples/identity/)
