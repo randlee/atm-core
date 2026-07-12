@@ -1,0 +1,16 @@
+{
+  "identity_or_team_unresolved": [
+    "export ATM_TEAM=atm-dev",
+    "export ATM_IDENTITY=arch-ctm",
+    "atm doctor --team atm-dev"
+  ],
+  "daemon_startup_or_connect_failure": [
+    "atm doctor --team atm-dev --json",
+    "atm log snapshot --limit 50",
+    "atm log filter --level error"
+  ],
+  "post_send_warning": [
+    "ATM_LOG=debug atm send quality-mgr@atm-dev \"review smoke lane\" --stderr-logs",
+    "atm log filter --level warn --match command=send"
+  ]
+}

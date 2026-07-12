@@ -1,7 +1,7 @@
 ---
 id: AE.6
 title: Help Surfacing
-status: planned
+status: complete
 branch: feature/pAE-s6-help-surfacing
 worktree: ../atm-core-worktrees/feature/pAE-s6-help-surfacing
 target: integrate/phase-AE
@@ -83,8 +83,8 @@ Accepted lookup rule:
 
 ## Required Validation
 
-- `cargo test -p atm commands::help::tests::installed_doc_root_resolves_symlinked_executable -- --nocapture`
-- `cargo test -p atm commands::help::tests::installed_doc_root_returns_none_for_dev_build_layout -- --nocapture`
+- `cargo test -p agent-team-mail commands::help::tests::installed_doc_root_resolves_symlinked_executable -- --nocapture`
+- `cargo test -p agent-team-mail commands::help::tests::installed_doc_root_returns_none_for_dev_build_layout -- --nocapture`
 - `python3 -c "from pathlib import Path; help_rs = Path('crates/atm/src/commands/help.rs').read_text(); help_md = Path('docs/atm/commands/help.md').read_text(); assert 'current_exe' in help_rs; assert 'share/doc/atm' in help_rs; assert '../share/doc/atm/README.md' in help_rs; assert 'ATM_HOME' not in help_rs; assert 'ATM_HOME' in help_md and 'runtime-only' in help_md"`
 - `rg -n "canonicaliz|symlink|ATM_HOME|share/doc/atm" docs/adr/ADR-025-installed-user-documentation-surface.md`
 - `git diff --check`

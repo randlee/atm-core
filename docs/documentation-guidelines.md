@@ -111,6 +111,7 @@ docs/
     requirements.md
     architecture.md
     commands/
+      help.md
       send.md
       read.md
       ack.md

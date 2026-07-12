@@ -1,0 +1,19 @@
+{
+  "inspection_only": {
+    "commands": [
+      "atm list quality-mgr@atm-dev --team atm-dev --as quality-mgr",
+      "atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr"
+    ],
+    "identity_source": "--as, else ATM_IDENTITY",
+    "team_source": "--team, else ATM_TEAM"
+  },
+  "mutating": {
+    "commands": [
+      "atm send quality-mgr@atm-dev \"review smoke lane\"",
+      "atm read --team atm-dev",
+      "atm ack 01KRFK5QTF2R6NRS3Q0F8Z9K0S \"received\""
+    ],
+    "identity_source": "resolved caller only; no impersonation flag",
+    "team_source": "--team, else ATM_TEAM"
+  }
+}

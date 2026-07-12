@@ -1,8 +1,8 @@
 ---
 title: Phase AE Readiness
-status: planned
-branch: plan/phase-AE
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/phase-AE
+status: complete
+branch: integrate/phase-AE
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AE
 ---
 
 # Phase AE Readiness
@@ -18,3 +18,16 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/phase-AE
 | `AE.7` | `feature/pAE-s7-user-doc-graph-verification` | `../atm-core-worktrees/feature/pAE-s7-user-doc-graph-verification` | one canonical verifier fails closed on both source-tree and AE.5-staged installed-copy doc breakage |
 | `AE.8` | `feature/pAE-s8-publisher-freshness-gate` | `../atm-core-worktrees/feature/pAE-s8-publisher-freshness-gate` | release/publisher preflight rejects stale or unreviewed user docs |
 | `AE.9` | `feature/pAE-s9-phase-end-installed-docs-proof` | `../atm-core-worktrees/feature/pAE-s9-phase-end-installed-docs-proof` | accepted-line artifact `reports/smoke/phase-AE-installed-docs-proof.md` proves installed docs ship and validate |
+
+## Accepted-Line Proof Artifact
+
+Phase AE is not fully closed until the accepted line contains
+`reports/smoke/phase-AE-installed-docs-proof.md` with:
+
+- `reviewed release version: <semver>`
+- the staged installed-doc root under `share/doc/atm/`
+- the verified installed entrypoint `share/doc/atm/README.md`
+- the exact copied corpus members from both `docs/user-documents/` and the
+  staged installed copy
+- confirmation that `release/release-notes.md` still names the installed-doc
+  location

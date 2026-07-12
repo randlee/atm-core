@@ -1,7 +1,7 @@
 ---
 id: AE.4
 title: Hooks And Nudge Template Corpus
-status: planned
+status: complete
 branch: feature/pAE-s4-hooks-and-nudge-template-corpus
 worktree: ../atm-core-worktrees/feature/pAE-s4-hooks-and-nudge-template-corpus
 target: integrate/phase-AE

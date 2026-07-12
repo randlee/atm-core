@@ -1,7 +1,7 @@
 ---
 id: AE.3
 title: Mailbox And Diagnostics Corpus
-status: planned
+status: complete
 branch: feature/pAE-s3-mailbox-and-diagnostics-corpus
 worktree: ../atm-core-worktrees/feature/pAE-s3-mailbox-and-diagnostics-corpus
 target: integrate/phase-AE

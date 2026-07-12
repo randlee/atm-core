@@ -46,6 +46,10 @@ The accepted architecture is:
   dev build under `target/debug`), the installed-doc resolver returns no path
   and the help surface falls back to a deterministic README hint instead of
   consulting `ATM_HOME`
+- the help JSON surface publishes the same resolver output explicitly:
+  `installed_doc_readme` for every help result and
+  `installed_doc_topic_path` for concept topics that map to a long-form
+  installed document
 - runtime state under `~/.atm/` remains a distinct runtime/data tree and is
   not the installed doc root
 - `ATM_HOME` remains the runtime/data root and is not an installed-doc locator

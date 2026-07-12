@@ -1,7 +1,7 @@
 ---
 id: AE.7
 title: User-Doc Graph And Example Verification
-status: planned
+status: complete
 branch: feature/pAE-s7-user-doc-graph-verification
 worktree: ../atm-core-worktrees/feature/pAE-s7-user-doc-graph-verification
 target: integrate/phase-AE
@@ -91,7 +91,7 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
 - `python3 scripts/release_artifacts.py stage-install-docs --manifest release/publish-artifacts.toml --output-root target/phase-ae/staged-install-root`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents`
 - `python3 scripts/verify_user_docs.py --source-root docs/user-documents --installed-root target/phase-ae/staged-install-root/share/doc/atm`
-- `cargo test -p atm commands::help::tests::doc_link_for_every_topic_resolves_in_source_and_installed_copy -- --nocapture`
+- `cargo test -p agent-team-mail commands::help::tests::doc_link_for_every_topic_resolves_in_source_and_installed_copy -- --nocapture`
 - `rg -n "verify_user_docs.py" .just Justfile scripts/validate_release.py`
 - `just test`
 - `git diff --check`

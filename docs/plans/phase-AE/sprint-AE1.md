@@ -1,7 +1,7 @@
 ---
 id: AE.1
 title: User-Doc Contract And Source Tree Baseline
-status: planned
+status: complete
 branch: feature/pAE-s1-user-doc-contract-and-source-tree
 worktree: ../atm-core-worktrees/feature/pAE-s1-user-doc-contract-and-source-tree
 target: integrate/phase-AE

@@ -1,7 +1,7 @@
 ---
 id: AE.5
 title: Installed Copy Packaging
-status: planned
+status: complete
 branch: feature/pAE-s5-installed-copy-packaging
 worktree: ../atm-core-worktrees/feature/pAE-s5-installed-copy-packaging
 target: integrate/phase-AE

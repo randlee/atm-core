@@ -1,7 +1,7 @@
 ---
 id: AE.9
 title: Phase-End Installed-Docs Proof
-status: planned
+status: complete
 branch: feature/pAE-s9-phase-end-installed-docs-proof
 worktree: ../atm-core-worktrees/feature/pAE-s9-phase-end-installed-docs-proof
 target: integrate/phase-AE
@@ -25,6 +25,13 @@ ships and validates on the accepted line.
 - `scripts/validate_release.py`
 - `reports/smoke/phase-AE-installed-docs-proof.md`
 
+## Scope Note
+
+- `AE.9` intentionally updates the shared staged-install-root / installed-doc
+  verifier path inside `scripts/validate_release.py` because the phase-end
+  proof artifact is emitted from the same validator seam introduced in `AE.8`.
+  That overlap is implementation reuse, not a new closure target.
+
 ## Deliverables
 
 - `docs/plans/phase-AE/readiness.md` records
@@ -40,6 +47,8 @@ ships and validates on the accepted line.
   `reviewed release version: <semver>`
 - release notes authored in `AE.5` are re-verified here for installed-doc
   location/scope, but not re-authored
+- the validator path used by `AE.9` discloses its shared staged-install-root
+  seam with `AE.8` rather than silently expanding scope
 
 ## Acceptance Criteria
 

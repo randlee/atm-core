@@ -1,0 +1,78 @@
+---
+title: Identity And Team
+audience: end-user
+reviewed_for_release: 1.3.0
+---
+
+# Identity And Team
+
+ATM commands depend on a resolved team and, for caller-owned workflows, a
+resolved identity.
+
+## Core Rule
+
+If a command needs caller identity, ATM must know who you are. That resolution
+comes from the supported CLI and environment surfaces for the active command.
+
+## Resolution Model
+
+The accepted operator model is:
+
+- inspection-only commands may inspect another mailbox explicitly
+- mutating commands act as the real caller only
+- command-line values override environment values when that command supports
+  the override
+
+Practical examples:
+
+```bash
+export ATM_TEAM=atm-dev
+export ATM_IDENTITY=arch-ctm
+
+# Real caller mutates their own workflow state.
+atm send quality-mgr@atm-dev "review smoke lane"
+atm read --team atm-dev
+atm ack 01KRFK5QTF2R6NRS3Q0F8Z9K0S "received"
+
+# Inspection-only commands may target another mailbox explicitly.
+atm list quality-mgr@atm-dev --team atm-dev --as quality-mgr
+atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr
+```
+
+## Safety Model
+
+Mailbox inspection and mailbox mutation are different surfaces:
+
+- inspection commands observe queue state
+- mutating commands act as the real caller
+
+Inspection-only surfaces:
+
+- `atm list`
+- `atm peek`
+
+Mutating surfaces:
+
+- `atm send`
+- `atm read`
+- `atm ack`
+- `atm clear`
+
+## Team And Identity Guidance
+
+- use `ATM_TEAM` when you normally operate in one ATM team
+- use `ATM_IDENTITY` when your caller identity should be resolved from the
+  environment
+- use `--team <team>` when the command supports an explicit team override
+- use `--as <agent>` only on inspection-only commands
+
+Do not assume that runtime state under `~/.atm/` changes your caller identity.
+Caller identity is resolved by ATM command inputs and environment rules, not by
+editing local state on disk.
+
+Additional machine-readable examples live in
+[examples/identity/](./examples/identity/).
+
+For queue workflows, continue to [Mailbox Workflows](./mailbox-workflows.md).
+
+Return to the [ATM User Guide](./README.md).

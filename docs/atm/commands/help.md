@@ -23,6 +23,12 @@ Concept/help policy:
   trying to inline the full manuals
 - installed-doc lookup is derived from the resolved installed `atm` binary
   location as `../share/doc/atm/`; it must not use `ATM_HOME`
+- `ATM_HOME` remains runtime-only and is not an installed-doc locator
+- the resolver canonicalizes the executable path first, so symlinked installs
+  still land on the real `<install-root>/share/doc/atm/` tree
+- when help runs from a dev-build layout such as `target/debug/atm`, the
+  resolver returns no installed-doc root and help falls back to the
+  deterministic executable-relative README hint `../share/doc/atm/README.md`
 - the conceptual `identity` topic must reinforce the accepted Phase AD rule:
   `atm peek` / `atm list` are inspection-only surfaces, while mutating
   commands resolve only the actual caller and do not expose impersonation
@@ -49,9 +55,10 @@ Output contract:
 
 - human output distinguishes command-help vs concept-topic results clearly
 - human topic output points to installed long-form docs when available
-- JSON output identifies the target and result kind and includes the rendered
-  help body
-- JSON topic output carries the same installed-doc pointer information
+- JSON output identifies the target and result kind, includes the rendered
+  help body, and carries `installed_doc_readme`
+- JSON concept-topic output also carries `installed_doc_topic_path` when the
+  topic has a long-form installed document
 
 JSON contract notes:
 
