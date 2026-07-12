@@ -43,6 +43,7 @@ the full blocker set in one preflight pass rather than one blocker per cycle.
 - Preflight workflow: `.github/workflows/release-preflight.yml`
 - Release workflow: `.github/workflows/release.yml`
 - Canonical local preflight: `just validate`
+- Operator checklist: `docs/release-preflight-checklist.md`
 - Gate script: `scripts/release_gate.sh`
 - Manifest helper: `scripts/release_artifacts.py`
 - Release inventory schema: `docs/release-inventory-schema.json`
@@ -55,17 +56,16 @@ the full blocker set in one preflight pass rather than one blocker per cycle.
 
 ### crates.io
 - User-facing continuity packages:
-  - `agent-team-mail-core`
   - `agent-team-mail`
+  - `agent-team-mail-core`
 - Supporting public crates published as part of the retained dependency chain:
   - `atm-storage`
-  - `atm-storage-claude`
   - `atm-storage-rusqlite`
-  - `atm-runtime`
   - `atm-daemon-client`
+  - `atm-runtime`
   - `atm-daemon-bootstrap`
   - `atm-daemon`
-  - `atm-graft`
+  - `atm-graft` (manifest-optional artifact)
 
 ### GitHub Releases
 - `atm` + `atm-daemon` binary archives for:
@@ -243,109 +243,62 @@ gh release edit v{VERSION} --notes "$(cat release/release-notes.md)"
 
 ## Inline Pre-Publish Audit
 
-While PR CI is running, publisher directly runs the following checks using
-`gh` CLI and standard shell/python3 commands. No sub-agents are spawned.
+While PR CI is running, publisher directly runs only the agent-specific checks
+that are intentionally not covered by `just validate`. No sub-agents are
+spawned. The checklist source of truth is
+`docs/release-preflight-checklist.md`.
 
-**Step A — Inventory file validation:**
+**Step A — Confirm completed release notes were provided by `team-lead`:**
 ```bash
-cat release/release-inventory.json
-
-python3 -c "
-import json, sys
-with open('release/release-inventory.json') as f:
-    inv = json.load(f)
-with open('docs/release-inventory-schema.json') as f:
-    schema = json.load(f)
-print('Inventory loaded. Keys:', list(inv.keys()))
-"
+test -f release/release-notes.md && sed -n '1,80p' release/release-notes.md
 ```
 
-**Step B — Confirm inventory exactly matches the manifest artifact set:**
+**Step B — Snapshot the current manifest publish surface for the release report:**
 ```bash
-python3 - <<'PY'
-import json, subprocess, sys
-with open('release/release-inventory.json', encoding='utf-8') as f:
-    inv = json.load(f)
-expected = set(subprocess.check_output(
-    ['python3', 'scripts/release_artifacts.py', 'list-artifacts',
-     '--manifest', 'release/publish-artifacts.toml'],
-    text=True,
-).splitlines())
-actual = {item.get('artifact') for item in inv.get('items', [])}
-missing = sorted(expected - actual)
-extra = sorted(actual - expected)
-print('Missing artifacts:', missing or 'none')
-print('Unexpected artifacts:', extra or 'none')
-sys.exit(1 if missing or extra else 0)
-PY
+python3 scripts/release_artifacts.py list-artifacts \
+  --manifest release/publish-artifacts.toml
 ```
 
-**Step C — Workspace version matches inventory:**
+**Step C — Collect the workflow findings artifact after preflight completes:**
 ```bash
-python3 -c "
-import json, re
-with open('Cargo.toml') as f:
-    content = f.read()
-ws_version = re.search(r'version\\s*=\\s*\"([^\"]+)\"', content).group(1)
-with open('release/release-inventory.json') as f:
-    inv = json.load(f)
-inv_version = inv.get('releaseVersion', '')
-print(f'Workspace: {ws_version}, Inventory: {inv_version}')
-assert ws_version == inv_version.lstrip('v'), 'VERSION MISMATCH'
-print('Version match: OK')
-"
+gh run download <preflight-run-id> --name release-findings --dir release/
+cat release/release-findings.json
 ```
 
-**Step D — Waiver records completeness (if any waivers present):**
+**Step D — Verify Homebrew / `winget` prerequisites that remain external to the local validator:**
 ```bash
-python3 -c "
-import json
-with open('release/release-inventory.json') as f:
-    inv = json.load(f)
-required_waiver_fields = {'approver', 'reason', 'gateCheck'}
-for item in inv.get('items', []):
-    if 'waiver' in item:
-        missing = required_waiver_fields - set(item['waiver'].keys())
-        if missing:
-            print(f'WAIVER INCOMPLETE for {item[\"artifact\"]}: missing {missing}')
-            exit(1)
-print('All waivers valid (or none present).')
-"
+sed -n '1,120p' docs/WINGET_SETUP.md
 ```
 
-**Step E — Confirm all manifest artifacts exist on crates.io before publish:**
-```bash
-# Use cargo search — crates.io blocks curl from CI/GH Actions IPs
-for crate in $(python3 scripts/release_artifacts.py list-artifacts \
-    --manifest release/publish-artifacts.toml --publishable-only); do
-  cargo search "$crate" --limit 1 2>/dev/null \
-    | grep -q "^$crate " && echo "$crate: found" || echo "$crate: not found"
-done
-```
-
-**Step F — Collect preflight artifacts after workflow completes:**
-```bash
-gh run download <preflight-run-id> --name release-preflight --dir release/
-cat release/publisher-preflight-report.json
-```
-
-Any failure in Steps A–F is a release blocker. Report to `team-lead` immediately.
+Any failure in Steps A-D is a release blocker. Report to `team-lead`
+immediately.
 
 ---
 
 ## Preflight Expectations
 `Release Preflight` is the mandatory release gate. The canonical local
-equivalent is `just validate`. It must validate:
+equivalent is `just validate`. See
+`docs/release-preflight-checklist.md` for the full coverage matrix.
+
+The script-covered local gate must validate:
+- release support files
 - `just lint`
 - release manifest coverage
 - preflight modes
 - publish ordering
-- unpublished target version
-- release inventory generation
-- workspace version alignment
-- crate-level dependency-aware preflight checks
-- release notes template / support-file existence
+- staged installed-doc membership / entrypoint
+- publish-surface version rules
 - required retained release binaries (`atm`, `atm-daemon`)
+- release inventory generation
+- release-window `Cargo.lock` drift
+- dependency currency
+- retained `phase-ad-readiness`
+
+The release-preflight workflow additionally owns:
+- publisher ownership assertion via `run_by_agent`
+- workflow input normalization for the release version
+- deterministic installed-doc staging before validation
+- upload of `release-findings.json`
 
 Preflight is expected to return the full blocker set in one pass. Publisher
 should batch fixes and avoid one-blocker-per-PR churn whenever the defects are
