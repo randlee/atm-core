@@ -52,3 +52,6 @@ Repo-owned example files live under:
 
 - [`examples/quickstart/`](./examples/quickstart/)
 - [`examples/identity/`](./examples/identity/)
+- [`examples/mailbox/`](./examples/mailbox/)
+- [`examples/diagnostics/`](./examples/diagnostics/)
+- [`examples/troubleshooting/`](./examples/troubleshooting/)

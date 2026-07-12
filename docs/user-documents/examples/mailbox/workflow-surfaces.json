@@ -1,0 +1,12 @@
+{
+  "inspection_only": [
+    "atm list quality-mgr@atm-dev --team atm-dev --as quality-mgr",
+    "atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr"
+  ],
+  "owner_only_mutating": [
+    "atm send quality-mgr@atm-dev \"review smoke lane\"",
+    "atm read --team atm-dev",
+    "atm ack 01KRFK5QTF2R6NRS3Q0F8Z9K0S \"received\"",
+    "atm clear --team atm-dev --dry-run"
+  ]
+}
