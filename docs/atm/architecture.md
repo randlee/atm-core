@@ -127,6 +127,11 @@ Follow-up work:
   document corpus itself.
 - installed-doc lookup for `atm help` is executable-relative from the resolved
   installed `atm` binary location and must not be derived from `ATM_HOME`.
+- the installed-user-documentation-surface follows ADR-025:
+  - the repo-owned source corpus is `docs/user-documents/`
+  - packaging installs that corpus under `<install-root>/share/doc/atm/`
+  - long-form help lookup resolves from the installed binary using the
+    executable-relative path `../share/doc/atm/`
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.
