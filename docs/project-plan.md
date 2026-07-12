@@ -816,8 +816,16 @@ Implementation Branches:
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
 | `PI.1` | `complete` | `feature/pPI-s1-validation-infra` | `Justfile`, `.just/print_help.py`, `scripts/validate_release.py`, `scripts/verify_release_archive.py`, `scripts/release_artifacts.py`, `release/publish-artifacts.toml`, `release/RELEASE-NOTES-TEMPLATE.md`, `.github/workflows/release-preflight.yml`, `.github/workflows/release.yml` |
-| `PI.2` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
-| `PI.3` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
+| `PI.2` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/release-preflight-checklist.md` |
+| `PI.3` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/release-preflight-checklist.md`, `.claude/commands/preflight.md` |
 
 Authoritative sprint plan:
-- `docs/publishing-improvements/plan.md`
+- `docs/plans/preflight-documentation/sprint-preflight.md`
+
+## Release Preflight Documentation
+
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `PREFLIGHT` | `complete` | `docs/preflight-documentation` | `docs/plans/preflight-documentation/sprint-preflight.md`, `docs/release-preflight-checklist.md`, `.claude/commands/preflight.md`, `.claude/agents/publisher.md` |

@@ -1,7 +1,7 @@
 ---
 title: Identity And Team
 audience: end-user
-reviewed_for_release: 1.3.0
+reviewed_for_release: 1.3.1
 ---
 
 # Identity And Team

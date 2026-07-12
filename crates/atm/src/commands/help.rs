@@ -746,7 +746,7 @@ mod tests {
     #[test]
     fn installed_doc_root_resolves_symlinked_executable() {
         let tempdir = TempDir::new().expect("tempdir");
-        let install_root = tempdir.path().join("versions/1.3.0");
+        let install_root = tempdir.path().join("versions/1.3.1");
         write_installed_tree(&install_root);
         let real_executable = install_root.join("bin/atm");
         fs::write(&real_executable, "atm").expect("atm binary");
