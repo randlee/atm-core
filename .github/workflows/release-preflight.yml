@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/validate_release.py validate \
+          python3 scripts/validate_release.py all \
             --version '${{ steps.meta.outputs.release_version }}' \
             --staged-install-root "${STAGED_INSTALL_ROOT}" \
             --findings release-findings.json
