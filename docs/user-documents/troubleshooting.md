@@ -50,6 +50,9 @@ Symptoms:
 Supported recovery:
 
 ```bash
+export ATM_TEAM=atm-dev
+export ATM_IDENTITY=arch-ctm
+
 atm doctor --team atm-dev --json
 atm log snapshot --limit 50
 atm log filter --level error
@@ -68,6 +71,9 @@ Symptoms:
 Supported recovery:
 
 ```bash
+export ATM_TEAM=atm-dev
+export ATM_IDENTITY=arch-ctm
+
 ATM_LOG=debug atm send quality-mgr@atm-dev "review smoke lane" --stderr-logs
 atm log filter --level warn --match command=send
 ```
