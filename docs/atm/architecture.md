@@ -122,6 +122,11 @@ Follow-up work:
 - `atm help` is CLI-owned conceptual help layered over clap command help and
   must delegate command flag truth to clap output instead of maintaining a
   parallel flag-documentation source.
+- `atm help` must surface installed-doc pointers for long-form operator
+  guidance; the CLI owns the pointer/rendering seam, but not the long-form
+  document corpus itself.
+- installed-doc lookup for `atm help` is executable-relative from the resolved
+  installed `atm` binary location and must not be derived from `ATM_HOME`.
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.

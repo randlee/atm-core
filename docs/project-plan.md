@@ -99,6 +99,18 @@ Phase-AD planning note:
   the mailbox peek surface, owner-only mutation reset, durable ack intent,
   self-address/self-ack closure, and final messaging regression closeout
 
+Phase-AE planning note:
+- `Phase AE` is the active installed user-documentation planning line on top of
+  the accepted `Phase AD` baseline
+- the authoritative planning document is
+  [`docs/plans/phase-AE/plan-phase-AE.md`](./plans/phase-AE/plan-phase-AE.md)
+- the planning branch is `plan/phase-AE`
+- the execution integration branch is `integrate/phase-AE`
+- `Phase AE` owns the repo-authored `docs/user-documents/` corpus, installed
+  delivery under `share/doc/atm/`, concise `atm help` surfacing, fenced
+  example and relative-link verification, release freshness gating, and the
+  phase-close installed-doc proof artifact
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -141,6 +153,8 @@ Status:
 - Phase AD is the active planning line for release-blocking caller-identity,
   post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
   baseline.
+- Phase AE is the active planning line for installed end-user documentation as
+  a shipped release surface.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`

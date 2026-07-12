@@ -2127,6 +2127,8 @@ syntax help without duplicating the flag/argument contract already exposed by
   documentation
 - keep concept topics in one typed topic registry rather than scattered prose
   fragments
+- keep topic output concise and point to installed long-form docs when the
+  topic has an authoritative user-doc file
 - keep this Phase `Y` slice narrowly on conceptual help plus wording cleanup
   rather than broadening into general structured JSON-input work
 
@@ -2144,6 +2146,8 @@ Tier-2 concept topics for the first delivery:
 Human output must:
 - clearly distinguish concept topics from command syntax help
 - preserve clap output verbatim when the target is a subcommand
+- include the installed-doc pointer when the concept topic has authoritative
+  long-form user docs
 
 JSON output must:
 - expose the requested topic or command target
@@ -2153,6 +2157,59 @@ JSON output must:
   - `concept_topic`
   - `command_help`
 - include the rendered help body in a structured field suitable for agent use
+- include the installed-doc pointer when the concept topic has authoritative
+  long-form user docs
+
+### 14.4 Installed User Documentation
+
+Product requirement ID:
+- `REQ-P-USER-DOCS-001` ATM must ship a versioned installed end-user document
+  corpus that complements `atm help`.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this spans repo-owned
+  documentation, release packaging, help rendering, and publisher preflight
+
+Required behavior:
+- the authoritative repo-owned source tree for installed end-user docs is
+  `docs/user-documents/`
+- the installed destination is `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
+- the default local-install root remains `~/.local/atm/<version>/`
+- installed-doc lookup at runtime is derived from the installed `atm` binary
+  location using the executable-relative path `../share/doc/atm/`
+- runtime state under `~/.atm/` must remain distinct from the installed
+  document tree
+- `ATM_HOME` is the runtime/data root only and must not be used to locate the
+  installed end-user document tree
+- `atm help` may stay concise, but it must point users to the installed corpus
+  for long-form operator guidance
+- end-user docs must remain operator-facing only:
+  - no direct SQLite queries
+  - no direct database edits
+  - no repo-internal development workflow instructions
+- hook and built-in nudge-template docs must enumerate the exact supported
+  operator surface and variables
+- all user-doc links must be relative so the copied installed tree remains
+  navigable after packaging
+
+- `REQ-P-USER-DOCS-002` Installed end-user docs are a release-gated artifact.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this spans repo-owned
+  validation and release/publisher automation
+
+Required behavior:
+- every file in `docs/user-documents/` must carry the accepted metadata header
+  with `reviewed_for_release`
+- the release/publisher gate must fail closed when a required user-doc file is
+  missing, stale for the target release version, or structurally invalid
+- fenced `json`, `xml`, `toml`, and `bash` examples in the user-doc corpus
+  must be mechanically validated
+- the same canonical verifier must validate both the repo-owned source tree and
+  the staged/installed copied tree
+- phase-close evidence must prove the installed/archive output contains the
+  expected copied corpus
 
 ## 15. Message And Workflow Model
 

@@ -84,6 +84,16 @@ The required documentation layout is:
 ```text
 docs/
   documentation-guidelines.md
+  user-documents/
+    README.md
+    install-layout.md
+    quickstart.md
+    identity-and-team.md
+    mailbox-workflows.md
+    doctor-and-log.md
+    hooks.md
+    nudge-templates.md
+    troubleshooting.md
   requirements.md
   architecture.md
   atm-error-codes.md
@@ -126,6 +136,8 @@ Notes:
 
 - Additional supporting docs may be added under `docs/atm/` or
   `docs/atm-core/` when justified.
+- `docs/user-documents/` is the repo-owned source tree for installed end-user
+  documentation and is distinct from developer architecture/requirements docs.
 - Top-level docs remain the only product-level source of truth.
 - Cross-subsystem schema ownership docs that define who owns a wire/storage
   schema belong at top level and must use explicit subsystem names in the file
@@ -220,6 +232,36 @@ Migration-only supporting documents now live under `docs/archive/`:
 - `archive/file-migration-plan.md`
 - `archive/migration-map.md`
 - `archive/obs-gap-analysis.md`
+
+### 4.5 Installed End-User Docs
+
+`docs/user-documents/` is the canonical authoring tree for installed user docs.
+
+It owns:
+
+- operator-facing walkthroughs
+- install-layout guidance
+- supported hook and nudge-template usage
+- supported troubleshooting and diagnostics guidance
+
+It is not the normative source of product behavior. When user-doc wording and
+product requirements disagree, product requirements and crate-owned command
+docs win and the user-doc corpus must be corrected.
+
+It must not own:
+
+- developer-only architectural rationale
+- direct SQLite or database-edit instructions
+- repo-internal release or implementation workflow instructions
+
+Additional rules:
+
+- all links must be relative so the tree remains valid after copy into
+  `<install-root>/share/doc/atm/`
+- fenced examples intended for operators must use supported syntax only and
+  must be mechanically validated
+- each file must carry the required metadata header including
+  `reviewed_for_release`
 
 If a supporting document becomes crate-specific, move it under the owning crate
 directory.
