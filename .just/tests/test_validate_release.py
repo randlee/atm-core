@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
 import tempfile
 import textwrap
@@ -29,8 +30,10 @@ class ValidateReleaseProofTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         (self.root / "release").mkdir(parents=True, exist_ok=True)
+        (self.root / "scripts").mkdir(parents=True, exist_ok=True)
         (self.root / "docs" / "user-documents").mkdir(parents=True, exist_ok=True)
         (self.root / "target").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / "scripts" / "verify_user_docs.py", self.root / "scripts" / "verify_user_docs.py")
 
         (self.root / "Cargo.toml").write_text(
             textwrap.dedent(
@@ -117,7 +120,61 @@ class ValidateReleaseProofTests(unittest.TestCase):
         self.assertIn("share/doc/atm/README.md", text)
         self.assertIn("release/release-notes.md", text)
         self.assertIn("docs/user-documents/README.md", text)
+        self.assertIn("- status: `passed`", text)
+        self.assertIn("- installed-doc verifier: `passed`", text)
         self.assertFalse(findings)
+
+    def test_write_phase_ae_installed_docs_proof_ignores_non_doc_blockers_in_status(self) -> None:
+        proof_path = self.root / "reports" / "smoke" / "phase-AE-installed-docs-proof.md"
+        findings = [
+            VALIDATE_RELEASE.Finding(
+                check="publish-version-unpublished",
+                severity="error",
+                summary="release version already published",
+            )
+        ]
+
+        VALIDATE_RELEASE.write_phase_ae_installed_docs_proof(
+            self.root,
+            version="1.3.0",
+            proof_output=proof_path,
+            staged_install_root=None,
+            findings=findings,
+        )
+
+        text = proof_path.read_text(encoding="utf-8")
+        self.assertIn("- status: `passed`", text)
+        self.assertIn("- installed-doc verifier: `passed`", text)
+
+    def test_validate_staged_install_docs_fails_closed_on_stale_reviewed_release(self) -> None:
+        staged_root = self.root / "target" / "phase-ae" / "staged-install-root"
+        VALIDATE_RELEASE.ensure_staged_install_docs(
+            self.root,
+            manifest_path=self.root / "release" / "publish-artifacts.toml",
+            staged_install_root=staged_root,
+        )
+        (self.root / "docs" / "user-documents" / "README.md").write_text(
+            "---\nreviewed_for_release: 0.0.0\n---\n# ATM Docs\n",
+            encoding="utf-8",
+        )
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_staged_install_docs(
+            self.root,
+            findings,
+            manifest_path=self.root / "release" / "publish-artifacts.toml",
+            staged_install_root=staged_root,
+            release_version="1.3.0",
+        )
+
+        self.assertTrue(
+            any(
+                finding.check == "installed-docs-verifier"
+                and finding.blocks
+                and "reviewed_for_release is 0.0.0" in finding.detail
+                for finding in findings
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -191,12 +191,11 @@ def validate_staged_install_docs(
         "python3",
         "scripts/verify_user_docs.py",
         "--source-root",
-        str(installed_docs_source_root(manifest_path).relative_to(root)),
+        relpath_display(installed_docs_source_root(manifest_path), root),
         "--release-version",
         release_version,
     ]
-    if staged_install_root is not None:
-        verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
+    verify_cmd.extend(["--installed-root", str(staged_install_root / "share/doc/atm")])
     completed = run_capture(verify_cmd, cwd=root)
     append_completed_findings(
         findings,
@@ -860,6 +859,10 @@ def ensure_phase_ae_proof_prereqs(root: Path, findings: list[Finding]) -> None:
         )
 
 
+def is_phase_ae_doc_finding(check: str) -> bool:
+    return check.startswith("installed-docs-") or check.startswith("phase-ae-proof-")
+
+
 def write_phase_ae_installed_docs_proof(
     root: Path,
     *,
@@ -898,18 +901,19 @@ def write_phase_ae_installed_docs_proof(
         )
 
     release_notes_path, release_notes_ok = release_notes_installed_docs_check(root)
-    overall_status = "passed" if not any(f.blocks for f in findings) else "failed"
+    doc_blockers = [finding for finding in findings if finding.blocks and is_phase_ae_doc_finding(finding.check)]
+    proof_status = "passed" if not doc_blockers else "failed"
     lines = [
         "# Phase AE Installed Docs Proof",
         "",
-        f"- status: `{overall_status}`",
+        f"- status: `{proof_status}`",
         f"- generated at: `{utc_now()}`",
         f"- reviewed release version: {version}",
         f"- source doc root: `{relpath_display(source_root, root)}`",
         f"- staged install doc root: `{relpath_display(install_root, root)}`",
         f"- installed entrypoint: `{manifest['installed_docs']['entrypoint'].as_posix()}`",
         f"- release notes check: `{'passed' if release_notes_ok else 'failed'}` (`{relpath_display(release_notes_path, root)}`)",
-        f"- installed-doc verifier: `{'passed' if overall_status == 'passed' else 'failed'}`",
+        f"- installed-doc verifier: `{proof_status}`",
         "",
         "## Verified Installed Corpus",
         "",
