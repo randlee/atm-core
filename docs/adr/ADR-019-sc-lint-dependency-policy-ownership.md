@@ -1,61 +1,47 @@
-# ADR-019 — sc-lint Dependency-Policy Ownership And Rollback Posture
+# Historical Reserved Draft — sc-lint Dependency-Policy Ownership And Rollback Posture
 
 | Field | Value |
 |---|---|
-| ID | ADR-019 |
-| Status | **Proposed** |
+| ID | Historical reserved draft; not an accepted ADR ID |
+| Status | **Retired draft** |
 | Date | 2026-07-02 |
-| Deciders | TBD during `AD.9` |
-| Placeholder | `AD9-PLACEHOLDER-NOT-ACCEPTED` |
-| Relates to | Phase `AD`, `docs/plans/phase-AD/sprint-AD9.md` |
+| Deciders | superseded by later namespace reuse; no decision ever taken here |
+| Placeholder | historical `AD9-PLACEHOLDER-NOT-ACCEPTED` reservation only |
+| Relates to | `docs/plans/sc-lint-migration/plan.md` |
 | Supersedes | — |
+| Replaced by | accepted ATM ADR-019 at `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` |
 
 ---
 
 ## Context
 
-Phase `AD` migrates ATM from vendored `sc-lint` crates to published
-`sc-lint` releases. Sprint `AD.9` is the point where ATM decides whether the
-released `Phase D.1` dependency-policy surface becomes the authoritative
-enforcement path for ATM boundary records.
+This file was created as a reserved draft while the sc-lint migration proposal
+still used the provisional `AD.*` sprint namespace.
 
-That decision cannot stay implicit because `AD.9` may:
+That sc-lint proposal never executed.
 
-- move dependency-policy ownership from ATM-local Python checks to published
-  `sc-lint`
-- delete or reduce duplicate ATM-local dependency-policy logic
-- require rollback posture if the released analyzer proves incomplete or weaker
-  than the current ATM-local coverage
+The `AD.*` namespace was later consumed by unrelated accepted ATM work. The
+accepted line recorded in `docs/project-plan.md` and
+`docs/plans/phase-AD/readiness.md` is caller-identity / post-send correction
+work through `AD.35`, not sc-lint migration work.
 
-The plan therefore reserves this ADR file up front so `AD.9` cannot claim
-closure without a concrete repository record for the ownership and rollback
-decision.
+This means:
 
-## Reserved Final Coverage
+- no sc-lint execution has occurred under any `AD.*` sprint
+- the original `AD.9` decision point named here is permanently obsolete
+- any future sc-lint execution line needs a new phase identifier plus explicit
+  human authorization before it can claim an ADR-backed decision point
+- this file is not part of the active ADR index and must not be treated as the
+  accepted ADR-019 for ATM
 
-The final `AD.9` implementation must update this ADR to record:
+## Current Disposition
 
-- the exact published `sc-lint` version adopted for dependency-policy
-  enforcement
-- the dependency-policy ownership boundary between published `sc-lint` and any
-  residual ATM-only governance checks
-- the rollback posture if the published `sc-lint` dependency-policy release is
-  insufficient
-- the checkpoint or follow-on-phase decision if the required published
-  analyzer release is unavailable when `AD.9` is ready to execute
+Use [docs/plans/sc-lint-migration/plan.md](../plans/sc-lint-migration/plan.md)
+as the source of truth for the current sc-lint migration inventory, namespace
+collision disclosure, and future authorization gate.
 
-## Placeholder Decision
+If a future sc-lint execution phase needs an ADR for dependency-policy
+ownership and rollback posture, author it under a new non-colliding ADR number
+and reference the new phase identifier rather than reviving this draft.
 
-This ADR number and file path are reserved now for the `AD.9` cutover.
-
-Placeholder marker: `AD9-PLACEHOLDER-NOT-ACCEPTED`
-
-The final `AD.9` implementation must remove that marker, replace `Status:
-**Proposed**` with an accepted decision status, replace the `Deciders` TBD
-text with the real decision owners, and add concrete `Decision`, `Ownership
-Boundary`, and `Rollback Posture` sections before the sprint can close.
-
-No architectural decision is accepted yet beyond this planning requirement:
-
-- `AD.9` must not close without an explicit ADR covering dependency-policy
-  ownership and rollback posture for the published `sc-lint` cutover
+No architectural decision is accepted in this file.

@@ -88,8 +88,8 @@ identifier before implementation starts.
 | Current ATM asset | Current use | Load-bearing detail | Migration impact |
 | --- | --- | --- | --- |
 | root `Cargo.toml` workspace members | vendors `crates/sc-lint-directives`, `crates/sc-lint-attributes`, `crates/sc-lint-boundary` | the analyzers compile as part of the ATM workspace today | must be removed from the workspace during cutover |
-| `crates/atm-core/Cargo.toml` | path dependency on `sc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }` | compile-time proc-macro dependency | must move to a published registry dependency |
-| `crates/atm-core/src/observability.rs` | uses `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` twice | ATM depends on the proc-macro compiling and preserving the current directive grammar | published `sc-lint-attributes` must remain source-compatible |
+| `crates/atm-core/Cargo.toml` | no current `sc-lint-*` library dependency | the accepted ATM line no longer depends on vendored `sc-lint` crates at compile time | any future cutover must establish an explicit published dependency only if ATM intentionally reintroduces one |
+| `crates/atm-core/src/observability.rs` | no current `#[sc_lint(...)]` usage | there is no live proc-macro call site in this file to retarget or keep source-compatible | a future execution branch must prove any newly introduced published proc-macro usage intentionally rather than assuming legacy carry-forward |
 
 ### B. Local lint wrappers and command entry points
 
@@ -190,7 +190,7 @@ release line. The migration therefore requires both:
 
 | Current ATM requirement | Current ATM source of truth | Expected published `sc-lint` coverage | Risk / note |
 | --- | --- | --- | --- |
-| compile-valid `#[sc_lint(...)]` proc-macro support for `boundary.allow`, `boundary.internal_only`, `boundary.forbid_external_impls` | vendored `sc-lint-attributes` + `sc-lint-directives` | expected yes | low risk if the published proc-macro grammar stays source-compatible |
+| compile-valid `#[sc_lint(...)]` proc-macro support for `boundary.allow`, `boundary.internal_only`, `boundary.forbid_external_impls` when ATM intentionally reintroduces those attributes | no live ATM compile-time dependency today | expected yes if a future execution branch chooses to restore the proc-macro surface | low risk, but currently unneeded because the accepted ATM line has no live `#[sc_lint(...)]` usage to retarget |
 | boundary-cycle and boundary-visibility findings from `sc-lint-boundary analyze --format json` | vendored `sc-lint-boundary` | expected yes | moderate risk: ATM must verify JSON field compatibility, not just rule existence |
 | graph export via `sc-lint-boundary export-graph` | vendored `sc-lint-boundary` | expected yes | low risk; no active ATM CI call site uses it today |
 | portability findings on demand (`sc-portability`) | vendored `sc-lint-boundary --rule portability` | expected yes through `sc-lint-portability` | moderate risk because the analyzer owner and command path changed |
@@ -339,23 +339,23 @@ Acceptance gate:
 
 Required code moves:
 
-- replace `crates/atm-core/Cargo.toml` path dependency on
-  `sc-lint-attributes` with the published version
-- update any internal version pins as needed
+- verify whether the migration branch actually needs any compile-time
+  `sc-lint-*` dependency at all
+- if a future execution branch intentionally reintroduces compile-time
+  `sc-lint` usage, add the published dependency explicitly instead of
+  restoring a vendored path dependency
 - verify `sc-lint-directives` resolves transitively or add it explicitly only
-  if the published proc-macro surface still requires it
+  if the intentionally reintroduced published proc-macro surface requires it
 
 Acceptance gate:
 
 - `cargo build --workspace` no longer depends on vendored `sc-lint-*` crates
-- the current `#[sc_lint(...)]` usage in `crates/atm-core/src/observability.rs`
-  compiles cleanly
-- a targeted compile/behavior check covers the exact proc-macro usage at
-  `crates/atm-core/src/observability.rs:209` and `:309`
-  - if no focused test already exists, the cutover branch adds one
-  - the minimum acceptable proof is a dedicated test or compile check that
-    exercises `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]`
-    under the published proc-macro dependency, not only a whole-workspace build
+- if the migration branch keeps zero compile-time `sc-lint` dependencies, that
+  zero-dependency state is documented explicitly and no fake retarget step is
+  claimed
+- if the migration branch intentionally introduces published proc-macro usage,
+  one targeted compile/behavior check covers the exact newly introduced call
+  sites rather than referencing deleted historical `observability.rs` lines
 
 ### Step 5: Remove vendored workspace members
 
