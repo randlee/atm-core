@@ -158,12 +158,9 @@ def validate_staged_install_docs(
     findings: list[Finding],
     *,
     manifest_path: Path,
-    staged_install_root: Path | None,
+    staged_install_root: Path,
     release_version: str,
 ) -> None:
-    if staged_install_root is None:
-        return
-
     manifest = load_manifest(manifest_path)
     entrypoint = staged_install_root / manifest["installed_docs"]["entrypoint"]
     if not entrypoint.is_file():
