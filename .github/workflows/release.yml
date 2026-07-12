@@ -364,6 +364,10 @@ jobs:
     needs: [gate-and-tag, release]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
         with:
@@ -371,33 +375,48 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
-      - name: Compute release tarball SHA256
-        id: sha
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect archives
         shell: bash
         run: |
           set -euo pipefail
-          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
-          version='${{ needs.gate-and-tag.outputs.release_version }}'
-          tarball_path="${RUNNER_TEMP:?RUNNER_TEMP is required}/release.tar.gz"
-          # Homebrew automation requires HOMEBREW_TAP_TOKEN to be configured on the atm-core repo.
-          tarball_url="https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz"
-          echo "tarball_url=${tarball_url}" >> "$GITHUB_OUTPUT"
-          curl -fsSL --retry 5 --retry-delay 30 --retry-all-errors -o "${tarball_path}" "${tarball_url}"
-          sha256=$(sha256sum "${tarball_path}" | awk '{print $1}')
-          echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Generate checksums
+        working-directory: release
+        run: sha256sum * > checksums.txt
 
       - name: Update Homebrew formulas
         shell: bash
         run: |
           set -euo pipefail
           version='${{ needs.gate-and-tag.outputs.release_version }}'
-          sha256='${{ steps.sha.outputs.sha256 }}'
-          tarball_url='${{ steps.sha.outputs.tarball_url }}'
-          for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do
-            sed -i "s|version \"[^\"]*\"|version \"${version}\"|g" "$formula"
-            sed -i "s|url \"[^\"]*\"|url \"${tarball_url}\"|g" "$formula"
-            sed -i "s|sha256 \"[^\"]*\"|sha256 \"${sha256}\"|g" "$formula"
-          done
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          python3 scripts/release_artifacts.py update-homebrew-formulas \
+            --release-dir release \
+            --version "${version}" \
+            --tag "${tag}" \
+            --formula homebrew-tap/Formula/agent-team-mail.rb \
+            --formula homebrew-tap/Formula/atm.rb
+
+      - name: Validate Homebrew formulas
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          python3 scripts/release_artifacts.py validate-homebrew-formulas \
+            --release-dir release \
+            --version "${version}" \
+            --tag "${tag}" \
+            --formula homebrew-tap/Formula/agent-team-mail.rb \
+            --formula homebrew-tap/Formula/atm.rb
 
       - name: Commit and push to homebrew-tap
         shell: bash
