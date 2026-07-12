@@ -16,6 +16,9 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 
+from release_artifacts import installed_doc_members
+from release_artifacts import load_manifest
+
 
 REQUIRED_RELEASE_FILES = (
     "release/publish-artifacts.toml",
@@ -147,7 +150,41 @@ def validate_lint(root: Path, findings: list[Finding]) -> None:
     )
 
 
-def validate_manifest(root: Path, findings: list[Finding]) -> None:
+def validate_staged_install_docs(
+    root: Path,
+    findings: list[Finding],
+    *,
+    manifest_path: Path,
+    staged_install_root: Path | None,
+) -> None:
+    if staged_install_root is None:
+        return
+
+    manifest = load_manifest(manifest_path)
+    entrypoint = staged_install_root / manifest["installed_docs"]["entrypoint"]
+    if not entrypoint.is_file():
+        findings.append(
+            Finding(
+                check="installed-docs-entrypoint",
+                severity="error",
+                summary="installed docs entrypoint is missing from the staged install root",
+                detail=str(entrypoint.relative_to(root)),
+            )
+        )
+
+    missing = [member for member in installed_doc_members(manifest_path) if not (staged_install_root / member).is_file()]
+    if missing:
+        findings.append(
+            Finding(
+                check="installed-docs-membership",
+                severity="error",
+                summary="staged install root is missing installed doc members",
+                detail=", ".join(member.as_posix() for member in missing),
+            )
+        )
+
+
+def validate_manifest(root: Path, findings: list[Finding], *, staged_install_root: Path | None) -> None:
     commands = (
         (
             "manifest-coverage",
@@ -192,6 +229,12 @@ def validate_manifest(root: Path, findings: list[Finding]) -> None:
     for check, cmd, summary in commands:
         completed = run_capture(cmd, cwd=root)
         append_completed_findings(findings, check, completed, f"{check} passed", summary)
+    validate_staged_install_docs(
+        root,
+        findings,
+        manifest_path=root / "release" / "publish-artifacts.toml",
+        staged_install_root=staged_install_root,
+    )
 
 
 def validate_release_binaries(root: Path, findings: list[Finding]) -> None:
@@ -759,6 +802,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
     parser.add_argument("--findings", default="release-findings.json", help="Path to findings JSON output")
+    parser.add_argument(
+        "--staged-install-root",
+        help="Optional deterministic staged install root to validate installed docs against",
+    )
     return parser
 
 
@@ -767,6 +814,7 @@ def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     explicit_version = args.version is not None
     version = args.version or workspace_version(root)
+    staged_install_root = Path(args.staged_install_root).resolve() if args.staged_install_root else None
     if version != workspace_version(root):
         raise SystemExit(
             f"release version mismatch: expected workspace version {workspace_version(root)}, got {version}"
@@ -776,7 +824,7 @@ def main(argv: list[str] | None = None) -> int:
     actions = {
         "support-files": lambda: validate_support_files(root, findings),
         "lint": lambda: validate_lint(root, findings),
-        "manifest": lambda: validate_manifest(root, findings),
+        "manifest": lambda: validate_manifest(root, findings, staged_install_root=staged_install_root),
         "publish-surface": lambda: validate_publish_surface(
             root,
             version,
