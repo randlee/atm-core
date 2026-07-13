@@ -15,6 +15,12 @@ never read a caller's stdin.
 ## Boundary contract
 
 ```rust
+pub enum CliSendMessageSource {
+    Inline(String),
+    Stdin,
+    File { path: PathBuf, message: Option<String> },
+}
+
 pub enum WireSendMessageSource {
     Inline(String),
     File { path: PathBuf, message: Option<String> },
@@ -36,7 +42,7 @@ and conflicting-input failures.
 
 | ID | Deliverable | Primary paths | Acceptance criteria | Required validation |
 | --- | --- | --- | --- | --- |
-| AF3-D1 | Separate CLI input selection from daemon-wire source | `crates/atm/src/commands/send.rs`, `crates/atm-core/src/send/mod.rs`, send request/RPC DTOs | CLI selects inline, file, or stdin; before `CliComposition::bootstrap` and RPC, stdin is read once and materialized into a wire-safe body. A daemon-bound compose request cannot encode `Stdin`. Existing `--file` semantics remain unchanged. | Unit tests cover source selection and prove a daemon-wire DTO cannot represent `Stdin`; RPC round-trip covers materialized stdin bytes. |
+| AF3-D1 | Separate CLI input selection from daemon-wire source | `crates/atm/src/commands/send.rs`, `crates/atm-core/src/send/mod.rs`, send request/RPC DTOs | `CliSendMessageSource` selects inline, file, or stdin; before `CliComposition::bootstrap` and RPC, `Stdin` is read once and materialized into `WireSendMessageSource`. A daemon-bound compose request cannot encode `Stdin`. Existing `--file` semantics remain unchanged. | Unit tests cover source selection and prove a daemon-wire DTO cannot represent `Stdin`; RPC round-trip covers materialized stdin bytes. |
 | AF3-D2 | Preserve local input error contract | `crates/atm-core/src/send/input.rs`, CLI error rendering/tests | Empty, whitespace-only, oversized, non-UTF-8, unreadable, and conflicting `--stdin` inputs fail at the CLI boundary with their typed ATM errors and recovery guidance. No daemon starts or receives a request after a local input failure. | Boundary tests for each failure mode plus a process test asserting daemon PID/count is unchanged after invalid stdin. |
 | AF3-D3 | Prove native input modes through the release daemon | CLI integration tests and `scripts/smoke/run_thorough_shared_host.py` | Inline, stdin, and file sends persist their exact expected bodies through a daemon whose stdin is null. The smoke lane reads the resulting message and compares the durable body, not merely command exit status. | Release-binary process tests pipe a non-empty 4 KiB fixture to `--stdin`, use equivalent `--file`, and send inline text; each readback is byte-for-byte correct and produces no unexpected daemon error event. |
 
