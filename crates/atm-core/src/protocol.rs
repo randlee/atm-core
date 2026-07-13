@@ -117,6 +117,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed

@@ -7,6 +7,7 @@ use std::thread;
 
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -113,7 +114,11 @@ pub(super) fn reject_connection_when_capped(
         return Ok(false);
     }
     let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::daemon_unavailable("daemon connection cap exceeded (max 64 concurrent accepts)")
+        &AtmError::new_with_code(
+            AtmErrorCode::DaemonConnectionSaturated,
+            atm_storage::AtmErrorKind::DaemonUnavailable,
+            "daemon connection cap exceeded (max 64 concurrent accepts)",
+        )
             .with_recovery(
                 "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
             ),

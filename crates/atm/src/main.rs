@@ -109,6 +109,8 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
