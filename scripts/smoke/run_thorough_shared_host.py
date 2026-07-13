@@ -19,7 +19,20 @@ def debug_binary(root: Path, name: str) -> Path:
     return root / "target" / "debug" / f"{name}{suffix}"
 
 
+def smoke_binary(root: Path, name: str) -> Path:
+    """Resolve the explicitly selected installed artifact, or CI's debug pair."""
+    install_root = os.environ.get("ATM_SMOKE_INSTALL_ROOT")
+    if not install_root:
+        return debug_binary(root, name)
+    binary = Path(install_root) / "bin" / f"{name}{'.exe' if os.name == 'nt' else ''}"
+    if not binary.is_file():
+        raise RuntimeError(f"installed-artifact smoke requires {binary}")
+    return binary
+
+
 def ensure_debug_binaries(root: Path) -> None:
+    if os.environ.get("ATM_SMOKE_INSTALL_ROOT"):
+        return
     completed = subprocess.run(
         ["cargo", "build", "-p", "agent-team-mail", "-p", "atm-daemon"],
         cwd=root,
@@ -48,7 +61,7 @@ def run_atm(root: Path, env: dict[str, str], cwd: Path, *args: str) -> str:
         mode="w+",
         encoding="utf-8",
     ) as stderr_handle:
-        command = [str(debug_binary(root, "atm")), *args]
+        command = [str(smoke_binary(root, "atm")), *args]
         try:
             completed = subprocess.run(
                 command,
@@ -202,7 +215,7 @@ def main() -> int:
     shared_b = shared_host_fixture_pair.workspace_b
     shared_env_a = smoke_env(shared_a, identity=shared_a.operator, root=root)
     shared_env_b = smoke_env(shared_b, identity=shared_b.operator, root=root)
-    debug_daemon = str(debug_binary(root, "atm-daemon"))
+    debug_daemon = str(smoke_binary(root, "atm-daemon"))
     shared_env_a["ATM_DAEMON_BIN"] = debug_daemon
     shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
     shared_daemon_pid: int | None = None
