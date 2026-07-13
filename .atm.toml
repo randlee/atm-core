@@ -27,17 +27,17 @@ approval_policy = "on-failure"
 
 [startup.team-lead]
 all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md",
-       "Use atm_send or atm_ack for all messages to arch-ctm or quality-mgr",
-       "Use atm_read to read messages from team-members" ]
+       "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
+       "Use native atm read to read messages from team-members" ]
 
 [startup.arch-ctm]
-all = ["Use atm_send or atm_ack for all messages to team-lead or quality-mgr",
-       "Use atm_read to read messages from team-members" ]
+all = ["Use native atm send or atm ack for messages to team-lead or quality-mgr",
+       "Use native atm read to read messages from team-members" ]
 
 [startup.quality-mgr]
 all = ["read .claude/agents/quality-mgr.md for directive",
-       "Use atm_send or atm_ack for all messages to team-lead or arch-ctm",
-       "Use atm_read to read messages from team-members" ]
+       "Use native atm send or atm ack for messages to team-lead or arch-ctm",
+       "Use native atm read to read messages from team-members" ]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
 [rmux]
