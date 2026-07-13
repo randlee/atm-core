@@ -655,7 +655,6 @@ pub fn decode_frame_header(
     header: [u8; ATM_FRAME_HEADER_BYTES],
     oversize_error: &'static str,
 ) -> Result<FrameHeader, AtmError> {
-
     let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
     if magic != ATM_FRAME_MAGIC {
         return Err(AtmError::validation(format!(
