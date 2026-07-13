@@ -1,3 +1,10 @@
+---
+title: AF-3 — Native send-input integrity
+status: complete
+branch: feature/1-3-0-smoke-test-fix-docs
+worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+---
+
 # AF-3 — Native send-input integrity
 
 ## Sprint intent

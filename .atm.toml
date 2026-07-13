@@ -7,18 +7,6 @@ recipient = "team-lead"
 [atm.idle_notify.agent.arch-ctm]
 seconds = 60
 
-[[atm.post_send_hooks]]
-recipient = "team-lead"
-command = ["scripts/atm-nudge.sh", "team-lead"]
-
-[[atm.post_send_hooks]]
-recipient = "arch-ctm"
-command = ["scripts/atm-nudge.sh", "arch-ctm"]
-
-[[atm.post_send_hooks]]
-recipient = "quality-mgr"
-command = ["scripts/atm-nudge.sh", "quality-mgr"]
-
 [plugins.atm-agent-mcp]
 codex_bin = "codex"
 identity = "arch-ctm"
@@ -49,20 +37,17 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "team-lead"
-tmux_pane_id = "%0"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "arch-ctm"
-tmux_pane_id = "%1"
 command = "codex -c features.hooks=true --yolo"
 env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "quality-mgr"
-tmux_pane_id = "%2"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }

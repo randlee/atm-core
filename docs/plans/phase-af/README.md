@@ -1,3 +1,10 @@
+---
+title: Phase AF — 1.3.1 Reliability Recovery
+status: complete
+branch: feature/1-3-0-smoke-test-fix-docs
+worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+---
+
 # Phase AF — 1.3.1 Reliability Recovery
 
 ## Decision
@@ -44,7 +51,7 @@ final merge must rebase in that order.
 | `docs/atm-core/{requirements,architecture,boundaries}.md`, `docs/atm-daemon/{requirements,architecture,boundaries}.md`, `docs/atm-daemon/protocol-icd.md`, planned `docs/adr/ADR-027-client-daemon-version-compatibility.md` | AF1-D3/D4, AF2-D1/D2/D5, and AF3-D1 align protocol, daemon admission, doctor, transport failure, and version-compatibility contracts. |
 | `boundaries/atm-daemon-client/{daemon-bootstrap,rpc-envelope}.toml`, `boundaries/atm/local-socket-client-transport.toml`, `boundaries/atm-daemon/{host-ownership-daemon,socket-server-transport}.toml`, `boundaries/atm-core/{atm-protocol,config-doctor}.toml` | The sprint that changes a listed boundary updates its machine-readable contract and runs its named lint/review gate; no boundary change is docs-only. |
 | `docs/testing-guidelines.md`, ADR-003, ADR-007, ADR-008, `scripts/lint_daemon_singleton.py` | AF1-D5/D6 own singleton/lifecycle and cross-platform test alignment; AF2-D4 and AF3-D3 extend the shared smoke only under the integration contract above. |
-| `release-findings.json`, `reports/smoke/smoke-thorough.md`, `docs/team-protocol.md` | AF2-D4 and AF3-D3 refresh issue disposition and release evidence; team protocol remains the QA/triage routing rule. |
+| `release-findings.json`, `reports/smoke/smoke-thorough.md`, `docs/plans/phase-af/readiness.md`, `docs/team-protocol.md` | AF2-D4 and AF3-D3 refresh issue disposition and release evidence; the readiness record is the phase-close gate, and team protocol remains the QA/triage routing rule. |
 
 ## Phase release decision criteria
 
@@ -64,8 +71,10 @@ This is the single authoritative Phase AF release checklist.
 
 ## Evidence baseline
 
-The authoritative smoke evidence is `reports/smoke/smoke-thorough.md` and
-`release-findings.json` in commit `9e01e19e`:
+The authoritative smoke evidence is maintained in
+`reports/smoke/smoke-thorough.md` and `release-findings.json`; its initial
+Phase AF capture was committed as `9e01e19e` and later plan corrections are
+recorded on this branch:
 
 - `SMOKE-FIND-001` is release-blocking: three daemons ran concurrently when
   launchers used distinct `ATM_HOME` roots.
