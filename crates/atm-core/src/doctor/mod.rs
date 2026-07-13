@@ -995,12 +995,14 @@ mod tests {
 
     #[test]
     fn post_send_report_projects_external_override_without_message_content() {
-        let mut config = AtmConfig::default();
-        config.config_root = PathBuf::from("/workspace");
-        config.post_send_hooks = vec![PostSendHookRule {
-            recipient: HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
-            command: vec!["hooks/nudge".to_string(), "--quiet".to_string()],
-        }];
+        let config = AtmConfig {
+            config_root: PathBuf::from("/workspace"),
+            post_send_hooks: vec![PostSendHookRule {
+                recipient: HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
+                command: vec!["hooks/nudge".to_string(), "--quiet".to_string()],
+            }],
+            ..AtmConfig::default()
+        };
         let roster = MembersList {
             team: TEST_TEAM.parse().expect("team"),
             members: vec![crate::team_admin::MemberSummary {

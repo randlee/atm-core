@@ -93,6 +93,16 @@ impl ProtocolErrorEnvelope {
 }
 
 const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
+    if let Some(kind) = structural_error_kind_for_code(code) {
+        kind
+    } else if let Some(kind) = observability_error_kind_for_code(code) {
+        kind
+    } else {
+        validation_error_kind_for_code(code)
+    }
+}
+
+const fn structural_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
     match code {
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
@@ -100,13 +110,38 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => AtmErrorKind::Config,
+        | AtmErrorCode::ConfigTeamMissing => Some(AtmErrorKind::Config),
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
-        | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
-        AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
-        AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
-        AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
+        | AtmErrorCode::WarningIdentityDrift
+        | AtmErrorCode::IdentityConflict => Some(AtmErrorKind::Identity),
+        AtmErrorCode::MemberAlreadyExists => Some(AtmErrorKind::Validation),
+        AtmErrorCode::MemberNotFound => Some(AtmErrorKind::AgentNotFound),
+        AtmErrorCode::AddressParseFailed => Some(AtmErrorKind::Address),
+        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => {
+            Some(AtmErrorKind::TeamNotFound)
+        }
+        AtmErrorCode::AgentNotFound => Some(AtmErrorKind::AgentNotFound),
+        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
+            Some(AtmErrorKind::MailboxRead)
+        }
+        AtmErrorCode::MailboxWriteFailed => Some(AtmErrorKind::MailboxWrite),
+        AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout
+        | AtmErrorCode::WarningStaleMailboxLock => Some(AtmErrorKind::MailboxLock),
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
+            Some(AtmErrorKind::FilePolicy)
+        }
+        AtmErrorCode::InternalError => Some(AtmErrorKind::Internal),
+        AtmErrorCode::SerializationFailed => Some(AtmErrorKind::Serialization),
+        AtmErrorCode::WaitTimeout => Some(AtmErrorKind::Timeout),
+        _ => None,
+    }
+}
+
+const fn observability_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
+    match code {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
@@ -122,33 +157,24 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
-        AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
-        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
-        AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,
-        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
-            AtmErrorKind::MailboxRead
-        }
-        AtmErrorCode::MailboxWriteFailed => AtmErrorKind::MailboxWrite,
-        AtmErrorCode::MailboxLockFailed
-        | AtmErrorCode::MailboxLockReadOnlyFilesystem
-        | AtmErrorCode::MailboxLockTimeout
-        | AtmErrorCode::WarningStaleMailboxLock => AtmErrorKind::MailboxLock,
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
-            AtmErrorKind::FilePolicy
-        }
-        AtmErrorCode::InternalError => AtmErrorKind::Internal,
-        AtmErrorCode::SerializationFailed => AtmErrorKind::Serialization,
-        AtmErrorCode::WaitTimeout => AtmErrorKind::Timeout,
-        AtmErrorCode::ObservabilityEmitFailed => AtmErrorKind::ObservabilityEmit,
-        AtmErrorCode::ObservabilityQueryFailed => AtmErrorKind::ObservabilityQuery,
-        AtmErrorCode::ObservabilityFollowFailed => AtmErrorKind::ObservabilityFollow,
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
+        | AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => Some(AtmErrorKind::DaemonUnavailable),
+        AtmErrorCode::ObservabilityEmitFailed => Some(AtmErrorKind::ObservabilityEmit),
+        AtmErrorCode::ObservabilityQueryFailed => Some(AtmErrorKind::ObservabilityQuery),
+        AtmErrorCode::ObservabilityFollowFailed => Some(AtmErrorKind::ObservabilityFollow),
         AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityHealthOk
-        | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
-        AtmErrorCode::WarningSqliteHealthDegraded
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
-        AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
+        | AtmErrorCode::WarningObservabilityHealthDegraded => {
+            Some(AtmErrorKind::ObservabilityHealth)
+        }
+        AtmErrorCode::ObservabilityBootstrapFailed => Some(AtmErrorKind::ObservabilityBootstrap),
+        _ => None,
+    }
+}
+
+const fn validation_error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
+    match code {
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -171,6 +197,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::TestFakeTransportInjectionFailed
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
+        _ => AtmErrorKind::Validation,
     }
 }
 
