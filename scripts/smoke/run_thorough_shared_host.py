@@ -56,9 +56,9 @@ def ensure_debug_binaries(root: Path) -> None:
         )
 
 
-def run_atm(
+def run_atm_result(
     root: Path, env: dict[str, str], cwd: Path, *args: str, stdin: str | None = None
-) -> str:
+) -> dict[str, object]:
     with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as stdout_handle, tempfile.NamedTemporaryFile(
         mode="w+",
         encoding="utf-8",
@@ -81,37 +81,32 @@ def run_atm(
         except subprocess.TimeoutExpired as error:
             stdout_handle.seek(0)
             stderr_handle.seek(0)
-            raise RuntimeError(
-                json.dumps(
-                    {
-                        "command": command,
-                        "cwd": str(cwd),
-                        "exit_code": "timeout",
-                        "timeout_seconds": error.timeout,
-                        "stdout": stdout_handle.read().strip(),
-                        "stderr": stderr_handle.read().strip(),
-                    },
-                    indent=2,
-                )
-            ) from error
+            return {
+                "command": command,
+                "cwd": str(cwd),
+                "exit_code": "timeout",
+                "timeout_seconds": error.timeout,
+                "stdout": stdout_handle.read().strip(),
+                "stderr": stderr_handle.read().strip(),
+            }
         stdout_handle.seek(0)
         stderr_handle.seek(0)
-        stdout = stdout_handle.read()
-        stderr = stderr_handle.read()
-    if completed.returncode != 0:
-        raise RuntimeError(
-            json.dumps(
-                {
-                    "command": command,
-                    "cwd": str(cwd),
-                    "exit_code": completed.returncode,
-                    "stdout": stdout.strip(),
-                    "stderr": stderr.strip(),
-                },
-                indent=2,
-            )
-        )
-    return stdout
+        return {
+            "command": command,
+            "cwd": str(cwd),
+            "exit_code": completed.returncode,
+            "stdout": stdout_handle.read().strip(),
+            "stderr": stderr_handle.read().strip(),
+        }
+
+
+def run_atm(
+    root: Path, env: dict[str, str], cwd: Path, *args: str, stdin: str | None = None
+) -> str:
+    completed = run_atm_result(root, env, cwd, *args, stdin=stdin)
+    if completed["exit_code"] != 0:
+        raise RuntimeError(json.dumps(completed, indent=2))
+    return str(completed["stdout"])
 
 
 def parse_json_output(raw: str) -> dict[str, object]:
@@ -134,6 +129,30 @@ def process_is_alive(pid: int) -> bool:
     except OSError:
         return False
     return True
+
+
+def running_daemon_count() -> int:
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq atm-daemon.exe"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return sum(1 for line in completed.stdout.splitlines() if line.lower().startswith("atm-daemon.exe"))
+    completed = subprocess.run(
+        ["pgrep", "-f", r"(^|/)atm-daemon( |$)"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0:
+        return 0
+    return len([line for line in completed.stdout.splitlines() if line.strip()])
 
 
 def terminate_process(pid: int | None) -> None:
@@ -236,6 +255,7 @@ def main() -> int:
         shared_pid_a = shared_doctor_a.get("runtime_status", {}).get("singleton_owner_pid")
         shared_pid_b = shared_doctor_b.get("runtime_status", {}).get("singleton_owner_pid")
         shared_daemon_pid = int(shared_pid_a) if shared_pid_a is not None else None
+        shared_daemon_count_before = running_daemon_count()
 
         for fixture_item, env_item in ((shared_a, shared_env_a), (shared_b, shared_env_b)):
             run_atm(
@@ -289,6 +309,32 @@ def main() -> int:
         file_note = "file-body-proof"
         file_path = shared_a.workspace_dir / "af3-input.txt"
         file_path.write_text("AF3 file fixture\n", encoding="utf-8")
+        invalid_stdin_send = run_atm_result(
+            root,
+            shared_env_a,
+            shared_a.workspace_dir,
+            "send",
+            f"{shared_a.recipient}@{shared_a.team_name}",
+            "--stdin",
+            "--json",
+            stdin=" \n\t ",
+        )
+        invalid_stdin_doctor = parse_json_output(
+            run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
+        )
+        invalid_stdin_pid = invalid_stdin_doctor.get("runtime_status", {}).get("singleton_owner_pid")
+        invalid_stdin_count_after = running_daemon_count()
+        invalid_stdin_error_text = (
+            f"{invalid_stdin_send.get('stdout', '')}\n{invalid_stdin_send.get('stderr', '')}"
+        )
+        invalid_stdin_invariant_ok = (
+            invalid_stdin_send.get("exit_code") not in (0, "timeout")
+            and "message text cannot be empty" in invalid_stdin_error_text
+            and shared_pid_a is not None
+            and invalid_stdin_pid == shared_pid_a
+            and invalid_stdin_count_after == shared_daemon_count_before
+            and process_is_alive(int(shared_pid_a))
+        )
         shared_stdin_send = run_send(
             shared_a, shared_env_a, stdin_body, "--stdin", stdin=stdin_body
         )
@@ -401,6 +447,7 @@ def main() -> int:
             and shared_stdin_send.get("outcome") == "sent"
             and shared_inline_send.get("outcome") == "sent"
             and shared_file_send.get("outcome") == "sent"
+            and invalid_stdin_invariant_ok
             and all(input_bodies_ok)
             and shared_read_ack_a["read"].get("selected_message_id") == shared_message_id_a
             and shared_read_ack_b["read"].get("selected_message_id") == shared_message_id_b
@@ -416,7 +463,7 @@ def main() -> int:
                 json.dumps(
                     {
                         "status": "passed",
-                        "note": "two workspaces with one shared ATM_HOME daemon/database/log root handled raw CLI send/read/ack traffic without cross-workspace leakage",
+                        "note": "two workspaces with one shared ATM_HOME daemon/database/log root handled raw CLI send/read/ack traffic without cross-workspace leakage; invalid stdin failed locally without changing daemon PID/count",
                     }
                 )
             )
@@ -430,6 +477,8 @@ def main() -> int:
                     "doctor_b": shared_doctor_b,
                     "send_a": shared_send_a,
                     "send_b": shared_send_b,
+                    "invalid_stdin_send": invalid_stdin_send,
+                    "invalid_stdin_doctor": invalid_stdin_doctor,
                     "read_ack_a": shared_read_ack_a,
                     "read_ack_b": shared_read_ack_b,
                     "list_a": shared_list_a,

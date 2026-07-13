@@ -206,10 +206,9 @@ fn read_request_frame_with_helper(
 fn read_request_frame(
     stream: &mut LocalSocketStream,
 ) -> Result<Option<atm_core::protocol::FramePayload>, AtmError> {
-    let Some(header_bytes) = atm_core::protocol::read_frame_header(
-        stream,
-        "failed to read daemon request frame",
-    )? else {
+    let Some(header_bytes) =
+        atm_core::protocol::read_frame_header(stream, "failed to read daemon request frame")?
+    else {
         return Ok(None);
     };
     let header = atm_core::protocol::decode_frame_header(

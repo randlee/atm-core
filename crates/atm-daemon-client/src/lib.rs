@@ -20,9 +20,7 @@ mod compatibility;
 mod rpc;
 mod wire;
 
-pub use compatibility::{
-    Connection, Unverified, VersionVerified, verify_connection_compatibility,
-};
+pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
 #[doc(inline)]
 pub use rpc::{RpcEnvelope, RpcHeader};
 pub use wire::{FramePayload, MessageKind, RequestId};

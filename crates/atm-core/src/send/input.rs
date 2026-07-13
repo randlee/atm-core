@@ -11,8 +11,10 @@ const MAX_STDIN_MESSAGE_BYTES: usize = 256 * 1024;
 /// # Errors
 ///
 /// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when stdin
-/// cannot be read.
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when stdin cannot
+/// be read or decoded as UTF-8 text, and
+/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when stdin is
+/// empty, whitespace-only, or exceeds the inline/stdin byte limit.
 pub fn read_message_from_stdin() -> Result<String, AtmError> {
     read_message_from_reader(std::io::stdin())
 }
@@ -26,7 +28,8 @@ pub fn read_message_from_stdin() -> Result<String, AtmError> {
 ///
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when the
-/// message body is empty or whitespace-only.
+/// message body is empty, whitespace-only, or exceeds the inline/stdin byte
+/// limit.
 pub fn validate_message_text(message: impl Into<String>) -> Result<String, AtmError> {
     let message = message.into();
     if message.trim().is_empty() {

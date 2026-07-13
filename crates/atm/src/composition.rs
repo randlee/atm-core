@@ -182,7 +182,10 @@ impl LocalIpcClientTransportAdapter {
 }
 
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
-    matches!(request, RequestEnvelope::Send(_) | RequestEnvelope::Clear(_))
+    matches!(
+        request,
+        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
+    )
 }
 
 impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
