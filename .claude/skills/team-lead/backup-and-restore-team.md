@@ -120,8 +120,10 @@ atm gh pr list
 ```
 
 Communication verification is also mandatory:
-1. `SendMessage` to another Claude teammate to prove Claude-side routing works.
-2. `atm send` to a non-Claude model to prove ATM mailbox routing works.
+1. `atm send --requires-ack` to another named teammate and receive its native
+   ATM acknowledgement.
+2. `atm send` to `quality-mgr` when that teammate is active to prove ATM
+   mailbox routing works.
 3. `atm send` to Codex and confirm the Codex-side nudge fires.
 
 ## Step 8 — Read Project Context

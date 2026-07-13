@@ -142,8 +142,9 @@ main
 
 - **Team**: `atm-dev` (persistent across sessions)
 - **ARCH-ATM** (you) is `team-lead` — start and maintain the `atm-dev` team for the session duration
-- **ARCH-CTM** is a Codex agent — communicates **exclusively** via ATM CLI messages (not Claude Code team API)
-- **All other Claude agents** communicate using Claude Code's built-in team messaging API (`SendMessage` tool)
+- **All team agents**, including Claude and Codex agents, communicate
+  **exclusively** through native ATM CLI messages (`atm send`, `atm read`, and
+  `atm ack`); Claude Code team messaging is not a supported routing channel
 
 ### Identity
 
@@ -151,9 +152,10 @@ ATM CLI commands that require caller context must receive it explicitly from the
 
 **Note**: ARCH-CTM gets his identity from `ATM_IDENTITY=arch-ctm` set in his tmux session (via rmux or manually).
 
-### Communicating with ARCH-CTM (Codex)
+### Communicating with Team Agents
 
-ARCH-CTM does **not** monitor Claude Code messages. Use ATM CLI only:
+Team agents do **not** use Claude Code messaging for team coordination. Use ATM
+CLI only:
 
 **Send a message:**
 ```bash

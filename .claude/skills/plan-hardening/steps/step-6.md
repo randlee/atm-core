@@ -49,9 +49,15 @@ memory.
 
 **2. Send to `quality-mgr`**
 
-Use the SendMessage tool to send the rendered XML content from
-`/tmp/step-6-message.xml` to the named teammate `quality-mgr`.
-Do not use `atm send` for this step.
+Use native ATM messaging to send the rendered task to the named teammate
+`quality-mgr`:
+
+```bash
+atm send quality-mgr --file /tmp/step-6-message.xml --team <team> --task-id <task_id>
+```
+
+Always use `--file` for this handoff. Do not use `--stdin`: its known input
+handling bug is tracked separately.
 
 **3. Handoff**
 
