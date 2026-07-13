@@ -205,8 +205,6 @@ def main() -> int:
                     "send",
                     target,
                     body,
-                    "--from",
-                    fixture_item.operator,  # type: ignore[attr-defined]
                     "--requires-ack",
                     "--json",
                 )
@@ -224,15 +222,14 @@ def main() -> int:
             message_id: str,
             ack_body: str,
         ) -> dict[str, object]:
+            recipient_env = env_item.copy()
+            recipient_env["ATM_IDENTITY"] = fixture_item.recipient  # type: ignore[attr-defined]
             read_payload = parse_json_output(
                 run_atm(
                     root,
-                    env_item,
+                    recipient_env,
                     fixture_item.workspace_dir,  # type: ignore[attr-defined]
                     "read",
-                    fixture_item.recipient,  # type: ignore[attr-defined]
-                    "--as",
-                    fixture_item.recipient,  # type: ignore[attr-defined]
                     "--team",
                     fixture_item.team_name,  # type: ignore[attr-defined]
                     "--all",
@@ -244,15 +241,13 @@ def main() -> int:
             ack_payload = parse_json_output(
                 run_atm(
                     root,
-                    env_item,
+                    recipient_env,
                     fixture_item.workspace_dir,  # type: ignore[attr-defined]
                     "ack",
                     message_id,
                     ack_body,
                     "--team",
                     fixture_item.team_name,  # type: ignore[attr-defined]
-                    "--as",
-                    fixture_item.recipient,  # type: ignore[attr-defined]
                     "--json",
                 )
             )
@@ -277,8 +272,6 @@ def main() -> int:
                 shared_env_a,
                 shared_a.workspace_dir,
                 "list",
-                "--as",
-                shared_a.operator,
                 "--team",
                 shared_a.team_name,
                 "--json",
@@ -290,8 +283,6 @@ def main() -> int:
                 shared_env_b,
                 shared_b.workspace_dir,
                 "list",
-                "--as",
-                shared_b.operator,
                 "--team",
                 shared_b.team_name,
                 "--json",
