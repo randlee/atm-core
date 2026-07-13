@@ -181,6 +181,7 @@ mod tests {
                 ),
             ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);
+            install_sqlite_retained_runtime_factory();
             f()
         }
     }
