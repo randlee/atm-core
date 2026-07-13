@@ -220,9 +220,9 @@ Satisfied by:
   - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
     `REQ-P-RUNTIME-003`
 
-- `REQ-P-RUNTIME-004` The supported same-host topology is one HOME-scoped
-  daemon, one host-scoped SQLite database, and one host-scoped retained log
-  root serving multiple ATM workspaces with different `ATM_HOME` values.
+- `REQ-P-RUNTIME-004` The supported same-host topology is one OS-user-scoped
+  daemon, one OS-user-scoped SQLite database, and one OS-user-scoped retained
+  log root serving multiple ATM workspaces with different `ATM_HOME` values.
 
   Required behavior:
   - distinct workspaces on the same host may carry different `ATM_HOME`
@@ -430,30 +430,36 @@ Satisfied by:
 
 ### 3.1 Home And Path Resolution
 
-Path resolution order:
+Workspace/config resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
 Runtime-root rule:
-- the invocation directory is not a selector for the retained ATM runtime root;
-  socket, lock, database, and retained-log paths derive from the accepted
-  `ATM_HOME` root, not from the shell working directory
-- after `ATM_HOME` resolves the canonical host runtime root, the invocation
-  directory is used only for workspace config discovery
+- under planned ADR-026, neither the invocation directory nor `ATM_HOME` is a
+  selector for daemon socket, lock, or SQLite durable-state paths; those derive
+  from one OS-user `HostRuntimeScope`
+- retained logs follow their host-scoped root under ADR-011 (or explicit
+  `ATM_LOG_DIR`), independently of workspace `ATM_HOME`
+- the invocation directory and `ATM_HOME` remain workspace/config discovery
+  inputs only
 
-Required canonical paths:
+Required workspace/config paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`
 - `{ATM_HOME}/.claude/teams/{team}`
 - `{ATM_HOME}/.claude/teams/{team}/config.json`
 - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
-- `{ATM_HOME}/.atm/daemon/launch.lock`
-- `{ATM_HOME}/.atm/db/mail.db`
-- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
 - `{ATM_HOME}/.config/atm/config.toml`
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`
+
+Required host-runtime paths:
+- the canonical endpoint, `launch.lock`, and `owner.lock` derive only from
+  `HostRuntimeScope.runtime_root`
+- the one SQLite durable database derives only from
+  `HostRuntimeScope.durable_state_root`
+- the retained log file derives only from the ADR-011 host log root unless
+  `ATM_LOG_DIR` explicitly overrides it
 
 ### 3.1.1 Security And Durability Boundaries
 

@@ -1261,6 +1261,10 @@ Public entrypoint:
 - current team member roster projected from canonical ATM roster truth and
   ordered against the live `config.json` baseline
 - observability health
+- informational post-send configuration and recipient delivery-path projection
+  with redacted matcher/argv/config-root fields only
+- distinct caller-context and daemon-process version/identity visibility for
+  compatibility diagnosis
 - aggregate-only subsystem doctor output from:
   - `MailStoreDoctor`
   - `RosterStoreDoctor`
@@ -1283,6 +1287,13 @@ daemon/runtime checks rather than assuming a daemon-free local-only model.
 Daemon/CLI orchestration stays aggregate-only: those top-level paths may
 compose the `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` reports,
 but they must not reimplement backend-specific store investigation logic.
+
+Phase AF compatibility rule:
+- following local-IPC connection and before a write-shaped dispatch, clients
+  perform the ADR-027 `CompatibilityPreflight`; an incompatible verdict is a
+  typed `ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE` response with no write
+- this compatibility check composes after ADR-026 host-runtime admission; it
+  cannot select an alternate daemon endpoint, state root, or transport path
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -1680,16 +1691,15 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
-- the default ATM-owned retained log file is
-  `{ATM_HOME}/.atm/logs/atm.log.jsonl`
+- the default ATM-owned retained log file is in the host-scoped retained-log
+  root governed by ADR-011; it is not selected by workspace `ATM_HOME`
 - `ATM_LOG_DIR` overrides the exact retained log directory
-- without `ATM_LOG_DIR`, the retained log path is derived from the accepted
-  `ATM_HOME` root for the active installation
-- the invocation directory is not a daemon/socket/database selector; daemon
-  socket, lock, database, and retained-log paths remain anchored to the
-  accepted `ATM_HOME` root
-- after `ATM_HOME` resolves the canonical host runtime root, the invocation
-  directory is used only for workspace config discovery
+- without `ATM_LOG_DIR`, the retained log path is derived from that host-scoped
+  retained-log root
+- under planned ADR-026, the invocation directory and `ATM_HOME` are not
+  daemon/socket/lock/database selectors; the OS-user `HostRuntimeScope` owns
+  those runtime and durable-state paths, while `ATM_HOME` remains only an
+  approved workspace/config discovery input
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version

@@ -8,7 +8,7 @@ bounded connection/exchange helpers, and RPC framing.
 
 ```text
 CLI input materialization → HostRuntimeScope launch gate → canonical endpoint
-    ├─ serving owner: connect and exchange RPC
+    ├─ serving owner: connect → compatibility preflight → exchange RPC
     └─ no owner: spawn once → daemon owner gate → canonical endpoint bind
 ```
 
@@ -17,7 +17,8 @@ CLI input materialization → HostRuntimeScope launch gate → canonical endpoin
 strings at the admission boundary. `RpcEnvelope` may carry canonical
 `RequestEnvelope`/`ResponseEnvelope` data, but it must not own daemon dispatch
 or backend storage. Caller stdin is materialized before this crate receives a
-compose request.
+compose request. Before any write-shaped RPC it performs the ADR-027
+compatibility preflight; an incompatible verdict returns before dispatch.
 
 The machine-readable contracts are
 `boundaries/atm-daemon-client/daemon-bootstrap.toml` and

@@ -20,6 +20,9 @@ from OS account/platform APIs rather than `HOME`, `USERPROFILE`, `ATM_HOME`,
 
 ```rust
 /// Production identity of the single runtime permitted for this OS user/host.
+pub struct HostRuntimeRoot(PathBuf);
+pub struct DurableStateRoot(PathBuf);
+
 pub struct HostRuntimeScope {
     pub runtime_root: HostRuntimeRoot,
     pub durable_state_root: DurableStateRoot,
