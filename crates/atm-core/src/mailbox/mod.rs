@@ -2,7 +2,6 @@
 
 pub(crate) mod atomic;
 pub(crate) mod hash;
-pub(crate) mod lock;
 pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod surface;
@@ -29,8 +28,8 @@ pub(crate) enum InboxReadItem {
 
 /// Append one message through the surviving mailbox projection rules.
 ///
-/// This helper stays test-only because production callers must also coordinate
-/// workflow persistence and delivery policy routing.
+/// This helper stays test-only because production callers persist mailbox state
+/// through the retained SQLite runtime and delivery-policy routing.
 ///
 /// # Errors
 ///
@@ -57,38 +56,6 @@ pub fn append_message(path: &Path, envelope: &InboxMessage) -> Result<(), AtmErr
     }
 
     atomic::append_message(path, envelope, export_policy)
-}
-
-/// Lock, load, mutate, and atomically rewrite one mailbox file.
-///
-/// This helper stays test-only so unit tests can exercise the shared mailbox
-/// lock contract directly without invoking production persistence.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`],
-/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
-/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
-/// acquire the mailbox lock, read the current mailbox contents, or atomically
-/// persist the rewritten file.
-#[cfg(test)]
-fn locked_read_modify_write<F>(
-    path: &Path,
-    timeout: std::time::Duration,
-    mutate: F,
-) -> Result<(), AtmError>
-where
-    F: FnOnce(&mut Vec<InboxMessage>) -> Result<(), AtmError>,
-{
-    let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
-    let mut messages = load_compat_mailbox_messages_strict(path)?;
-    mutate(&mut messages)?;
-    // ATM accepts Claude-authored JSONL as ingress, but test-only mutations
-    // rewrite through the same array-shaped compatibility projection ATM uses
-    // for its own exports.
-    store::write_compat_mailbox_projection(path, &messages)
 }
 
 /// Read all valid mailbox records from one shared inbox file.
@@ -584,9 +551,8 @@ mod tests {
 
     use super::{
         InboxReadItem, MAX_MAILBOX_READ_BYTES, append_message, load_compat_mailbox_items,
-        load_compat_mailbox_messages, locked_read_modify_write,
+        load_compat_mailbox_messages,
     };
-    use crate::mailbox::lock;
 
     #[test]
     fn append_message_persists_one_jsonl_record() {
@@ -619,49 +585,6 @@ mod tests {
         assert!(!object.contains_key("metadata"));
         assert!(object.contains_key("message_id"));
         assert!(!object.contains_key("source_team"));
-    }
-
-    #[test]
-    fn locked_read_modify_write_reads_mutates_and_rewrites_under_lock() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("locked-rmw.json");
-        let first = sample_message(AtmMessageId::new(), "first");
-        append_message(&path, &first).expect("seed");
-
-        locked_read_modify_write(&path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
-            assert_eq!(messages.len(), 1);
-            messages[0].read = true;
-            messages.push(sample_message(AtmMessageId::new(), "second"));
-            Ok(())
-        })
-        .expect("locked read modify write");
-
-        let messages = load_compat_mailbox_messages(&path).expect("read");
-        assert_eq!(messages.len(), 2);
-        assert!(messages[0].read);
-        assert_eq!(messages[1].text, "second");
-    }
-
-    #[test]
-    fn append_message_does_not_create_lock_sentinel() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-removes-lock.jsonl");
-
-        assert!(!lock::sentinel_path(&path).exists());
-        append_message(&path, &sample_message(AtmMessageId::new(), "first")).expect("append");
-
-        assert!(!lock::sentinel_path(&path).exists());
-    }
-
-    #[test]
-    fn append_message_does_not_remove_preexisting_lock_sentinel() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
-        fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
-
-        append_message(&path, &sample_message(AtmMessageId::new(), "first")).expect("append");
-
-        assert!(lock::sentinel_path(&path).exists());
     }
 
     #[test]

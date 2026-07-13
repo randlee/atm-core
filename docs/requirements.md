@@ -3028,13 +3028,8 @@ closed before the 1.0 release.
   - a stale-snapshot rename after late lock acquisition is forbidden even if
     the rename itself is atomic
 
-  Open hardening gap — `P.6` send-side workflow freshness:
-  - mailbox read/ack/clear paths satisfy this through
-    `mailbox::store::with_locked_source_files(...)`
-  - workflow-sidecar writes performed during `send` and the missing-config
-    team-lead notice path are already atomic and owner-routed, but they do not
-    yet provide a dedicated freshness proof across concurrent same-recipient
-    sends; P.6 is the tracked hardening item for that gap
+  Mailbox state is durable SQLite state; send, read, ack, clear, and
+  missing-config notices persist it through the retained mailbox runtime.
 
 - `REQ-CORE-PERSIST-ATOMIC-001B` Every shared mutable file family must have one
   documented write path and one owning helper boundary.
@@ -3054,10 +3049,9 @@ closed before the 1.0 release.
       `mailbox::store::with_locked_source_files(...)` for shared read/ack/clear
       lock+reload orchestration, and `mailbox::store::commit_mailbox_state(...)`
       / `mailbox::store::commit_source_files(...)` as the persistence leaf
-    - workflow-state sidecar:
-      `workflow::{load_workflow_state(...), save_workflow_state(...),
-      project_envelope(...), remember_initial_state(...),
-      apply_projected_state(...), remove_message_state(...)}`
+    - mailbox state:
+      the retained SQLite mailbox runtime (`persist_message_record(...)` and
+      `persist_message_state(...)`); no filesystem workflow sidecar exists
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
     - send-alert state:
@@ -3072,9 +3066,8 @@ closed before the 1.0 release.
       `team_admin::restore::clear_restore_marker(...)`,
       `team_admin::restore::prepare_restore_workspace(...)`, and
       `team_admin::restore::cleanup_restore_workspace(...)`
-  - send-side workflow seeding must not continue indefinitely as an open-coded
-    `load -> mutate -> save` sequence in command-layer logic; P.6 exists to
-    converge that path onto a dedicated owner-layer freshness boundary
+  - command-layer code must not add a filesystem workflow-state mirror; SQLite
+    remains the sole mailbox-state authority.
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.

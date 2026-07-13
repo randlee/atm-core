@@ -826,7 +826,6 @@ mod tests {
     use std::collections::VecDeque;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
-    use std::time::Duration;
 
     use super::{
         AckReplyDisposition, AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply,

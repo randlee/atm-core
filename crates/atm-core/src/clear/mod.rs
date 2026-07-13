@@ -295,7 +295,6 @@ mod tests {
         panic,
         panic::AssertUnwindSafe,
         path::{Path, PathBuf},
-        time::Duration,
     };
 
     use crate::test_support::{EnvGuard, lock_env, remove_env_var, set_env_var};

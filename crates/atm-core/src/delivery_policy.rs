@@ -598,7 +598,6 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
     use std::path::{Path, PathBuf};
-    use std::time::Duration;
 
     struct MissingRosterRuntime;
 
