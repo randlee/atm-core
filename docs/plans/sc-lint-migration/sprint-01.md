@@ -66,6 +66,7 @@ target, then capture the known capability gaps before any deletion starts.
 
 ## Required Validation
 
-- `rg -n "gap-register|sprint-01|sprint-99|native sc-lint" docs/plans/sc-lint-migration/plan.md docs/plans/sc-lint-migration/sprint-01.md docs/plans/sc-lint-migration/gap-register.md`
-- `rg -n "ubuntu-latest|macos-latest|windows-latest|validate_release|run_lint.py|Justfile" docs/plans/sc-lint-migration/sprint-01.md docs/plans/sc-lint-migration/gap-register.md`
+- `! rg -n 'released \`sc-lint\` version: \`TBD\`|Linux: \`TBD\`|macOS: \`TBD\`|Windows: \`TBD\`' docs/plans/sc-lint-migration/gap-register.md`
+- `rg -n '^## Pinned Release$|^## Initial Known Gaps To Review$|SCLINT-GAP-001|SCLINT-GAP-002|SCLINT-GAP-003|SCLINT-GAP-004' docs/plans/sc-lint-migration/gap-register.md`
+- `rg -n 'native sc-lint usage is the target end state|sprint-01.md|sprint-99.md' docs/plans/sc-lint-migration/plan.md`
 - `git diff --check`

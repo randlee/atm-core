@@ -53,5 +53,9 @@ direct released `sc-lint-boundary` usage.
 
 ## Required Validation
 
-- `rg -n "lint_sc_boundary.py|cargo run -q -p sc-lint-boundary" Justfile .just .github scripts docs || true`
+- Execution-branch proof:
+  - `test ! -e .just/lint_sc_boundary.py`
+  - `! rg -n 'lint_sc_boundary.py|cargo run -q -p sc-lint-boundary' Justfile .just/run_lint.py .just/tests/test_lint_sc_boundary.py scripts/validate_release.py .github/workflows/ci.yml`
+- Planning-time limitation:
+  - this planning branch cannot run `just lint sc-boundary` against the future published-tool wiring because that command surface does not exist until the execution branch lands it; the execution sprint must run `just lint sc-boundary` before closure
 - `git diff --check`

@@ -64,5 +64,9 @@ user-facing lint entrypoints and failure gating.
 
 ## Required Validation
 
-- `rg -n "run_lint.py|just lint|just lint fast|validate_release" Justfile .just/tests/test_run_lint.py scripts/validate_release.py`
+- Execution-branch proof:
+  - `rg -n 'just lint|just lint fast|just lint sc-boundary|just lint sc-portability|just lint unix-gating|just lint runtime-waits' Justfile .just/tests/test_run_lint.py scripts/validate_release.py`
+  - `if [ -e .just/run_lint.py ]; then rg -n 'compatibility shim|consumer-surface gap|deletion trigger' docs/plans/sc-lint-migration/gap-register.md && rg -n 'just lint fast|sc-boundary|sc-portability|unix-gating|runtime-waits' .just/run_lint.py .just/tests/test_run_lint.py; else ! rg -n 'run_lint.py' Justfile .just/tests/test_run_lint.py scripts/validate_release.py .github/workflows/ci.yml; fi`
+- Planning-time limitation:
+  - this planning branch cannot prove the final orchestrator behavior because the surviving direct-vs-shimmed implementation is an execution outcome; the execution sprint must run `just lint` and `just lint fast` before closure
 - `git diff --check`

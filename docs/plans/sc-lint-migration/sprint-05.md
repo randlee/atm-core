@@ -54,5 +54,13 @@ temporary ATM shim only if direct native `sc-lint` selection is not possible.
 
 ## Required Validation
 
-- `rg -n "unix-gating|PORT-004|PORT-005" docs/plans/sc-lint-migration/gap-register.md .just/tests/test_lint_unix_gating.py Justfile .just/run_lint.py`
+- Execution-branch proof, chosen by outcome:
+  - direct native path:
+    - `test ! -e .just/lint_unix_gating.py`
+    - `! rg -n 'lint_unix_gating.py' Justfile .just/run_lint.py .just/tests/test_lint_unix_gating.py scripts/validate_release.py .github/workflows/ci.yml`
+  - temporary shim path:
+    - `test -e .just/lint_unix_gating.py`
+    - `rg -n 'unix-gating|PORT-004|PORT-005|Deletion trigger|deletion trigger' docs/plans/sc-lint-migration/gap-register.md`
+- Planning-time limitation:
+  - this planning branch cannot run the final `just lint unix-gating` path because Sprint 05 explicitly allows one of two execution outcomes; the execution sprint must run `just lint unix-gating` against the chosen outcome before closure
 - `git diff --check`

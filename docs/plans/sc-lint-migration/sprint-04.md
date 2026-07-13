@@ -54,5 +54,9 @@ to direct released `sc-lint-portability` usage.
 
 ## Required Validation
 
-- `rg -n "lint_sc_portability.py|cargo run -q -p sc-lint-boundary -- .*--rule portability" Justfile .just .github scripts docs || true`
+- Execution-branch proof:
+  - `test ! -e .just/lint_sc_portability.py`
+  - `! rg -n 'lint_sc_portability.py|cargo run -q -p sc-lint-boundary -- .*--rule portability' Justfile .just/run_lint.py .just/tests/test_lint_sc_portability.py scripts/validate_release.py .github/workflows/ci.yml`
+- Planning-time limitation:
+  - this planning branch cannot run `just lint sc-portability` against the future published-tool wiring because that command surface does not exist until the execution branch lands it; the execution sprint must run `just lint sc-portability` before closure
 - `git diff --check`

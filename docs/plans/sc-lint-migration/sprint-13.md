@@ -48,5 +48,6 @@ unless the finding truly requires architecture changes.
 
 ## Required Validation
 
-- `rg -n "architecture blocker|upstream product gap|non-architectural" docs/plans/sc-lint-migration/gap-register.md docs/plans/sc-lint-migration/sprint-12.md docs/plans/sc-lint-migration/sprint-13.md`
+- `! rg -n 'non-architectural' docs/plans/sc-lint-migration/gap-register.md`
+- `rg -n 'architecture blocker|upstream product gap' docs/plans/sc-lint-migration/gap-register.md`
 - `git diff --check`

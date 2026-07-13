@@ -59,5 +59,6 @@ finding delta without suppressing warnings or disabling rules.
 
 ## Required Validation
 
-- `rg -n "allow\\(|deny\\(|warn\\(|sc-lint|feature" Justfile .github/workflows/ci.yml scripts/validate_release.py .just crates docs/plans/sc-lint-migration/gap-register.md`
+- `! git diff -U0 -- Justfile .github/workflows/ci.yml scripts/validate_release.py .just crates | rg -n '^\+.*(#\\[allow\\(|#\\[expect\\(|//\\s*sc-lint:ignore|--allow\\b|--ignore\\b|disable[-_]sc[-_]lint|cfg\\(feature *= *\".*sc-lint.*\")'`
+- `rg -n 'sc-lint|feature|gap-register' Justfile .github/workflows/ci.yml scripts/validate_release.py docs/plans/sc-lint-migration/gap-register.md`
 - `git diff --check`

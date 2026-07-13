@@ -54,6 +54,9 @@ justified replacement surfaces are already proven.
 
 ## Required Validation
 
-- `rg -n "sc-lint-directives|sc-lint-attributes|sc-lint-boundary" Cargo.toml Cargo.lock .just .github scripts docs || true`
+- `test ! -d crates/sc-lint-directives`
+- `test ! -d crates/sc-lint-attributes`
+- `test ! -d crates/sc-lint-boundary`
+- `! rg -n 'crates/sc-lint-directives|crates/sc-lint-attributes|crates/sc-lint-boundary|path *= *".*sc-lint-(directives|attributes|boundary)"' Cargo.toml Cargo.lock .just .github scripts`
 - `cargo build --workspace`
 - `git diff --check`

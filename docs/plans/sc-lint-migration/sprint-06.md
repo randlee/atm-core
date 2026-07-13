@@ -54,5 +54,13 @@ temporary ATM shim only if direct native `sc-lint` selection is not possible.
 
 ## Required Validation
 
-- `rg -n "runtime-waits|SCB-RUNTIME-001|SCB-RUNTIME-002" docs/plans/sc-lint-migration/gap-register.md .just/tests/test_lint_runtime_waits.py Justfile .just/run_lint.py`
+- Execution-branch proof, chosen by outcome:
+  - direct native path:
+    - `test ! -e .just/lint_runtime_waits.py`
+    - `! rg -n 'lint_runtime_waits.py' Justfile .just/run_lint.py .just/tests/test_lint_runtime_waits.py scripts/validate_release.py .github/workflows/ci.yml`
+  - temporary shim path:
+    - `test -e .just/lint_runtime_waits.py`
+    - `rg -n 'runtime-waits|SCB-RUNTIME-001|SCB-RUNTIME-002|Deletion trigger|deletion trigger' docs/plans/sc-lint-migration/gap-register.md`
+- Planning-time limitation:
+  - this planning branch cannot run the final `just lint runtime-waits` path because Sprint 06 explicitly allows one of two execution outcomes; the execution sprint must run `just lint runtime-waits` against the chosen outcome before closure
 - `git diff --check`

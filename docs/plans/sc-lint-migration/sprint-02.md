@@ -55,6 +55,6 @@ matches ATM needs and exactly where it does not.
 
 ## Required Validation
 
-- `rg -n "ATM wiring bug|product gap|consumer-specific behavior|sc-boundary|sc-portability|unix-gating|runtime-waits" docs/plans/sc-lint-migration/gap-register.md docs/plans/sc-lint-migration/sprint-02.md`
 - `test -d artifacts/sc-lint-migration/parity`
+- `rg -n '^## Gap Table Schema$|^## Initial Known Gaps To Review$|atm-wiring-bug|sc-lint-product-gap|atm-consumer-specific|sc-boundary|sc-portability|unix-gating|runtime-waits' docs/plans/sc-lint-migration/gap-register.md`
 - `git diff --check`
