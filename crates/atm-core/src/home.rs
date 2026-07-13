@@ -263,26 +263,6 @@ pub fn inbox_path_from_home(
         .join(format!("{agent}.json")))
 }
 
-/// Resolve the ATM-owned workflow-state path for `agent` in `team`.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team` or
-/// `agent` contains path traversal, path separators, or other invalid
-/// path-segment characters.
-pub fn workflow_state_path_from_home(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<PathBuf, AtmError> {
-    validate_path_segment(agent.as_str(), "agent")?;
-    Ok(team_dir_from_home(home_dir, team)?
-        .join(".atm-state")
-        .join("workflow")
-        .join(format!("{agent}.json")))
-}
-
 pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
     env::var_os("HOME")
         .filter(|value| !value.is_empty())
@@ -426,7 +406,7 @@ mod tests {
         atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
         host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
         host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
-        team_dir_from_home, workflow_state_path_from_home,
+        team_dir_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -809,26 +789,6 @@ mod tests {
 
         assert!(error.is_address());
         assert!(error.message.contains("agent name"));
-    }
-
-    #[test]
-    fn workflow_state_path_uses_atm_state_layout() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let team: TeamName = TEST_TEAM.parse().expect("team");
-        let agent: AgentName = TEST_SENDER.parse().expect("agent");
-
-        assert_eq!(
-            workflow_state_path_from_home(tempdir.path(), &team, &agent)
-                .expect("workflow state path"),
-            tempdir
-                .path()
-                .join(".claude")
-                .join("teams")
-                .join(TEST_TEAM)
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{TEST_SENDER}.json"))
-        );
     }
 
     #[cfg(unix)]

@@ -2203,8 +2203,8 @@ Current executed rule:
 - Claude inbox export is a compatibility projection only.
 
 Current executed requirement:
-- any remaining code or docs that still describe workflow sidecars or
-  `metadata.atm.messageId` are cleanup debt and must be removed in Phase U.
+- filesystem workflow sidecars are retired; SQLite is the exclusive mailbox
+  state authority and legacy `.atm-state/workflow` files are ignored.
 
 Unified-state ownership notes:
 - `mail_messages` keeps immutable content only

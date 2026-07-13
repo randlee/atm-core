@@ -17,8 +17,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 use super::{
-    DeliveryPersistenceResult, ResolvedRecipient, SendRequest, WarningEntry,
-    persist_message_and_seed_workflow,
+    DeliveryPersistenceResult, ResolvedRecipient, SendRequest, WarningEntry, persist_message,
 };
 
 pub(super) fn warn_missing_team_config<
@@ -184,14 +183,7 @@ fn persist_missing_config_notice(
     team_lead_inbox: &Path,
     notice: &InboxMessage,
 ) -> Result<(), AtmError> {
-    let persistence = persist_message_and_seed_workflow(
-        runtime,
-        home_dir,
-        snapshot,
-        team_lead_inbox,
-        notice,
-        true,
-    )?;
+    let persistence = persist_message(runtime, home_dir, snapshot, team_lead_inbox, notice, true)?;
     let plan = build_missing_config_delivery_plan(snapshot, team_lead_inbox, &persistence)?;
     let execution = execute_delivery_plan(runtime, None, &plan)?;
     for warning in plan.warnings {

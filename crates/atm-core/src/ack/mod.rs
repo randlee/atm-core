@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
-use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
+use crate::send::{ResolvedRecipient, input, persist_message, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -445,65 +445,44 @@ fn persist_source_ack_state<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     context: &AckPersistenceContext<'_>,
     ack_timestamp: IsoTimestamp,
 ) -> Result<PersistedSourceAck, AtmError> {
-    runtime.commit_workflow_state(
+    let source_record = load_ack_source_record(
+        runtime,
         home_dir(context.request),
         context.team,
         context.actor,
-        std::iter::empty(),
-        runtime.mailbox_timeout_policy().workflow_lock_timeout,
-        |workflow_state| {
-            let source_record = load_ack_source_record(
-                runtime,
-                home_dir(context.request),
-                context.team,
-                context.actor,
-                &context.source.row,
-            )?;
-            ensure_ack_is_pending(context.request.message_id, &source_record.envelope)?;
-            let reply_target = validate_reply_target(
-                runtime,
-                home_dir(context.request),
-                &source_record,
-                context.team,
-            )?;
+        &context.source.row,
+    )?;
+    ensure_ack_is_pending(context.request.message_id, &source_record.envelope)?;
+    let reply_target = validate_reply_target(
+        runtime,
+        home_dir(context.request),
+        &source_record,
+        context.team,
+    )?;
 
-            let mut projected_envelope = source_record.envelope.clone();
-            projected_envelope.read = true;
-            projected_envelope.pending_ack_at = None;
-            projected_envelope.acknowledged_at = Some(ack_timestamp);
+    let mut projected_envelope = source_record.envelope.clone();
+    projected_envelope.read = true;
+    projected_envelope.pending_ack_at = None;
+    projected_envelope.acknowledged_at = Some(ack_timestamp);
 
-            runtime.persist_message_state(boundary::MailMessageState {
-                team: context.team.clone(),
-                agent: context.actor.clone(),
-                actor: context.actor.clone(),
-                message_key: context.source.row.message_key.clone(),
-                read: true,
-                pending_ack_at: None,
-                acknowledged_at: Some(ack_timestamp),
-                expires_at: source_record.envelope.expires_at,
-                deleted_at: None,
-                updated_at: Some(ack_timestamp),
-            })?;
+    runtime.persist_message_state(boundary::MailMessageState {
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        actor: context.actor.clone(),
+        message_key: context.source.row.message_key.clone(),
+        read: true,
+        pending_ack_at: None,
+        acknowledged_at: Some(ack_timestamp),
+        expires_at: source_record.envelope.expires_at,
+        deleted_at: None,
+        updated_at: Some(ack_timestamp),
+    })?;
 
-            let changed = crate::workflow::apply_projected_state(
-                workflow_state,
-                &source_record.envelope,
-                &projected_envelope,
-            );
-            Ok((
-                PersistedSourceAck {
-                    task_id: source_record.envelope.task_id.clone(),
-                    suppressed_self_ack: is_self_ack_reply_target(
-                        context.actor,
-                        context.team,
-                        &reply_target,
-                    ),
-                    reply_target,
-                },
-                changed,
-            ))
-        },
-    )
+    Ok(PersistedSourceAck {
+        task_id: source_record.envelope.task_id.clone(),
+        suppressed_self_ack: is_self_ack_reply_target(context.actor, context.team, &reply_target),
+        reply_target,
+    })
 }
 
 fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -543,7 +522,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &persisted_source.reply_target.team,
         &persisted_source.reply_target.agent,
     )?;
-    let persistence = persist_message_and_seed_workflow(
+    let persistence = persist_message(
         runtime,
         home_dir(context.request),
         &reply_snapshot,
@@ -847,7 +826,6 @@ mod tests {
     use std::collections::VecDeque;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
-    use std::time::Duration;
 
     use super::{
         AckReplyDisposition, AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply,
@@ -865,11 +843,10 @@ mod tests {
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, TeamConfig};
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::workflow::WorkflowStateFile;
     use serde_json::Map;
 
     struct AckRuntime {
@@ -1008,12 +985,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -1053,22 +1024,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            unreachable!("ack writer-path test does not commit workflow state")
         }
     }
 
@@ -1126,12 +1081,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -1184,24 +1133,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            let (result, _changed) = body(&mut workflow)?;
-            Ok(result)
         }
     }
 
@@ -1328,12 +1259,6 @@ mod tests {
             unreachable!("ack reload test does not save seen watermark")
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -1377,24 +1302,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            let (result, _changed) = body(&mut workflow)?;
-            Ok(result)
         }
     }
 

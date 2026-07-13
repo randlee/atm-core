@@ -1,15 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
 
 use serde_json::{Map, Value};
 use tempfile::tempdir;
 
 use super::{
     DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    alert_state, build_send_delivery_plan, persist_message_and_seed_workflow,
-    prepare_threaded_message,
+    alert_state, build_send_delivery_plan, persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
@@ -30,11 +28,10 @@ use crate::protocol::NotificationEvent;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
-use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
-use crate::workflow::WorkflowStateFile;
 
 fn message(
     from: &str,
@@ -224,12 +221,6 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(())
     }
 
-    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-        RetainedMailboxTimeoutPolicy {
-            workflow_lock_timeout: Duration::from_millis(1),
-        }
-    }
-
     fn rebuild_compat_inbox_projection(
         &self,
         _inbox_path: &Path,
@@ -325,25 +316,6 @@ impl RetainedServiceRuntime for TestRuntime {
             &records,
         ))
     }
-    fn commit_workflow_state<T, I, F>(
-        &self,
-        _home_dir: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _extra_write_paths: I,
-        _timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-    {
-        if let Some(message) = self.commit_error_message {
-            return Err(AtmError::mailbox_write(message));
-        }
-        let mut workflow = WorkflowStateFile::default();
-        body(&mut workflow).map(|(value, _dirty)| value)
-    }
 }
 
 impl RetainedMailboxRuntime for TestRuntime {
@@ -368,6 +340,9 @@ impl RetainedMailboxRuntime for TestRuntime {
     }
 
     fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
+        if let Some(message) = self.commit_error_message {
+            return Err(AtmError::mailbox_write(message));
+        }
         Ok(())
     }
 
@@ -490,7 +465,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
-    let result = persist_message_and_seed_workflow(
+    let result = persist_message(
         &runtime,
         tempdir.path(),
         &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
@@ -520,7 +495,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
 
-    let result = persist_message_and_seed_workflow(
+    let result = persist_message(
         &runtime,
         tempdir.path(),
         &delivery_snapshot(DeliveryHarnessPath::NonClaude),

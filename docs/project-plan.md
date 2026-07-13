@@ -514,7 +514,7 @@ Acceptance:
 
 ### Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]
 
-- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, introduced the ATM-owned workflow sidecar, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
+- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. The temporary workflow sidecar introduced during this phase has since been retired; SQLite is the exclusive mailbox-state authority. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
 
 ## 5. Hard Rules
 

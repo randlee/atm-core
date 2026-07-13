@@ -50,9 +50,8 @@ Required implementation consequences:
 - `legacy_*` identity naming is removed from the active implementation path
   and from normal 1.2 SQLite bootstrap/migration support
 - `crates/atm-core/src/workflow.rs` may continue to accept `legacy:` workflow
-  sidecar keys as a read-compatibility shim only; all new writes use `atm:`,
-  and the shim can be removed once older workflow-state files no longer need
-  to be read in place
+  legacy workflow-sidecar keys as a historical read-compatibility shim only;
+  that shim is retired because SQLite is now the sole mailbox-state authority
 - UUID compatibility code is removed from retained CLI, daemon, storage, and
   schema/tooling paths
 - future ATM features must use `AtmMessageId` as the only ATM-owned message

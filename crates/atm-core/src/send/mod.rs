@@ -49,7 +49,7 @@ mod persistence;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
-pub(crate) use persistence::persist_message_and_seed_workflow;
+pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -591,7 +591,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
-    let persistence = persist_message_and_seed_workflow(
+    let persistence = persist_message(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
