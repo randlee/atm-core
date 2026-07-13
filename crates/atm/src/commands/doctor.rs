@@ -95,6 +95,7 @@ impl DoctorCommand {
 mod tests {
     use atm_core::error::AtmError;
     use atm_core::test_support::EnvGuard;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::DoctorCommand;
@@ -145,6 +146,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn execute_runs_direct_local_doctor_path() {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
