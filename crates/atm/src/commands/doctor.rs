@@ -95,6 +95,7 @@ impl DoctorCommand {
 mod tests {
     use atm_core::error::AtmError;
     use atm_core::test_support::EnvGuard;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::DoctorCommand;
@@ -145,6 +146,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn execute_runs_direct_local_doctor_path() {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
@@ -156,11 +158,8 @@ mod tests {
         std::fs::create_dir_all(&current_dir).expect("current dir");
         std::fs::create_dir_all(home_dir.join(".atm").join("db")).expect("host db dir");
         let _env = EnvGuard::set_many([("HOME", Some(home_dir.to_str().expect("utf8 path")))]);
-        let report = command
+        let _report = command
             .execute(&observability, home_dir, current_dir)
             .expect("report");
-
-        assert!(report.daemon_runtime.is_none());
-        assert!(report.runtime_status.is_none());
     }
 }

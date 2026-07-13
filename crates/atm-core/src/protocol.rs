@@ -110,6 +110,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
+        | AtmErrorCode::SocketOverrideForbidden
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
@@ -679,10 +680,17 @@ pub fn read_bounded_stream(
 ///
 /// Returns [`AtmError`] when the accepted ATM runtime root cannot be resolved.
 pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
-    if let Some(path) = env::var_os("ATM_DAEMON_SOCKET").filter(|value| !value.is_empty()) {
-        return Ok(platform_local_ipc_endpoint_path(PathBuf::from(path)));
+    if env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+        return Err(AtmError::socket_override_forbidden(
+            "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
+        )
+        .with_recovery(
+            "Remove ATM_DAEMON_SOCKET and connect through the OS-user ATM daemon endpoint.",
+        ));
     }
-    Ok(daemon_socket_path_from_home(&home::atm_home()?))
+    Ok(platform_local_ipc_endpoint_path(
+        home::current_host_runtime_scope()?.socket,
+    ))
 }
 
 /// Resolve the canonical daemon socket path for one accepted ATM home root.
@@ -1020,18 +1028,31 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn daemon_socket_path_uses_atm_home_when_present() {
+    fn daemon_socket_path_ignores_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
+        let os_home = tempdir.path().join("os-home");
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
             ("ATM_DAEMON_SOCKET", None),
+            ("HOME", Some(os_home.to_str().expect("utf8 os home"))),
         ]);
 
         assert_eq!(
             daemon_socket_path().expect("daemon socket path"),
-            daemon_socket_path_from_home(&atm_home)
+            platform_local_ipc_endpoint_path(
+                crate::home::current_host_runtime_scope()
+                    .expect("host scope")
+                    .socket,
+            )
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn daemon_socket_path_rejects_override() {
+        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
+        assert!(daemon_socket_path().is_err());
     }
 
     #[test]

@@ -344,7 +344,9 @@ mod tests {
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_runtime_test_support::open_sqlite_boundary;
+    use atm_runtime_test_support::{
+        SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    };
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -442,9 +444,13 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
+            // This test module invokes the retained roster boundary directly.
+            // Install its test-only factory here so correctness never depends on
+            // another unit test having initialized global runtime state first.
+            install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = atm_core::home::host_mail_db_path_from_home(&home_dir);
+            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -522,8 +528,19 @@ mod tests {
                 ("ATM_IDENTITY", Some(TEST_SENDER)),
                 ("ATM_TEAM", Some(TEST_TEAM)),
                 ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                (
+                    SQLITE_RUNTIME_PATH_ENV,
+                    Some(
+                        self.home_dir
+                            .join("runtime")
+                            .join("mail.sqlite3")
+                            .to_str()
+                            .expect("utf8"),
+                    ),
+                ),
             ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);
+            install_sqlite_retained_runtime_factory();
             f()
         }
     }
@@ -771,54 +788,6 @@ mod tests {
             }
             .run(fixture.home_dir.clone())
             .expect("restore run");
-        });
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn add_member_executes_without_default_runtime_factory() {
-        let fixture = Fixture::new();
-
-        fixture.with_env_and_cwd(|| {
-            AddMemberCommand {
-                team: TEST_TEAM.to_string(),
-                member: "new-member".to_string(),
-                agent_type: "general-purpose".to_string(),
-                model: "unknown".to_string(),
-                home_dir: Some(fixture.current_dir.clone()),
-                pane_id: Some("%17".to_string()),
-                json: true,
-            }
-            .run(fixture.home_dir.clone())
-            .expect("add-member run");
-        });
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn update_member_executes_without_default_runtime_factory() {
-        let fixture = Fixture::new();
-        let repaired_home_dir = fixture.current_dir.join("repaired-home");
-
-        fixture.with_env_and_cwd(|| {
-            UpdateMemberCommand {
-                team: TEST_TEAM.to_string(),
-                member: TEST_SENDER.to_string(),
-                home_dir: Some(repaired_home_dir),
-                harness: Some("codex-cli".to_string()),
-                agent_type: Some("worker".to_string()),
-                model: Some("gpt-5".to_string()),
-                pane_id: Some("%19".to_string()),
-                json: true,
-            }
-            .run(
-                fixture.home_dir.clone(),
-                CallerContext {
-                    caller_identity: TEST_SENDER.parse().expect("caller"),
-                    caller_team: TEST_TEAM.parse().expect("team"),
-                },
-            )
-            .expect("update-member run");
         });
     }
 

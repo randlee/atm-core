@@ -207,6 +207,17 @@ pub fn with_default_roster_store<T>(
     }
 }
 
+/// Invoke the retained roster boundary through the runtime selected by
+/// atm-core. This preserves fixture-scoped runtime installation in tests.
+pub fn with_installed_roster_store<T>(
+    f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    atm_core::with_default_local_service_runtime(|runtime| {
+        let roster_store = boundary_roster_store_view(runtime.shared_roster_store_arc());
+        f(roster_store.as_ref())
+    })
+}
+
 pub fn with_default_nudge_template_override_store<T>(
     f: impl FnOnce(&(dyn boundary::NudgeTemplateOverrideStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
