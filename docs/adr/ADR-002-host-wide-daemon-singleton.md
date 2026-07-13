@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | ID | ADR-002 |
-| Status | **Accepted** |
+| Status | **Superseded by ADR-026** |
 | Date | 2026-05-05 |
 | Deciders | Rand Lee |
 | Relates to | REQ-P-RUNTIME-002, REQ-P-RUNTIME-003, REQ-DAEMON-RUNTIME-001 |

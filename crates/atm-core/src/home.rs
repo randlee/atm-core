@@ -8,6 +8,58 @@ use crate::types::{AgentName, TeamName};
 
 const MAX_ATM_HOME_UTF8_BYTES: usize = 4096;
 const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
+pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
+pub const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
+pub const HOST_RUNTIME_SOCKET_FILE: &str = "atm-daemon.sock";
+
+/// OS-user-owned root for singleton admission artifacts.  This wrapper is
+/// intentionally not dereferenceable: admission paths must originate in
+/// [`current_host_runtime_scope`], not from caller-selected workspace paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostRuntimeRoot(PathBuf);
+
+impl AsRef<Path> for HostRuntimeRoot {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// OS-user-owned root for the one durable ATM SQLite state store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableStateRoot(PathBuf);
+
+impl AsRef<Path> for DurableStateRoot {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// The sole production source of daemon ownership, endpoint, and durable
+/// state paths. `ATM_HOME` remains workspace/config discovery only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostRuntimeScope {
+    pub runtime_root: HostRuntimeRoot,
+    pub durable_state_root: DurableStateRoot,
+    pub launch_lock: PathBuf,
+    pub owner_lock: PathBuf,
+    pub socket: PathBuf,
+}
+
+pub fn current_host_runtime_scope() -> Result<HostRuntimeScope, AtmError> {
+    // This intentionally does not use HOME, USERPROFILE, ATM_HOME, or the
+    // current directory: those are process-scoped inputs and therefore cannot
+    // define a host-wide singleton boundary.
+    let root = os_account_home()?.join(".atm");
+    let runtime_root = HostRuntimeRoot(root.join("daemon"));
+    let durable_state_root = DurableStateRoot(root.join("db"));
+    Ok(HostRuntimeScope {
+        launch_lock: runtime_root.as_ref().join(HOST_RUNTIME_LAUNCH_LOCK_FILE),
+        owner_lock: runtime_root.as_ref().join(HOST_RUNTIME_OWNER_LOCK_FILE),
+        socket: runtime_root.as_ref().join(HOST_RUNTIME_SOCKET_FILE),
+        runtime_root,
+        durable_state_root,
+    })
+}
 
 /// Resolve the ATM home directory for the current process.
 ///
@@ -57,7 +109,7 @@ pub fn command_invocation_dir() -> Result<PathBuf, AtmError> {
 ///
 /// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_dir_from_home(&atm_home()?))
+    Ok(current_host_runtime_scope()?.runtime_root.0)
 }
 
 /// Resolve the host-scoped ATM runtime directory from an explicit ATM home root.
@@ -71,7 +123,10 @@ pub fn host_runtime_dir_from_home(home_dir: &Path) -> PathBuf {
 ///
 /// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(&atm_home()?, file_name))
+    Ok(current_host_runtime_scope()?
+        .runtime_root
+        .as_ref()
+        .join(file_name))
 }
 
 /// Resolve the host-scoped ATM runtime lock-file path from an explicit ATM home root.
@@ -85,7 +140,7 @@ pub fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> Pat
 ///
 /// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_db_dir() -> Result<PathBuf, AtmError> {
-    Ok(host_db_dir_from_home(&atm_home()?))
+    Ok(current_host_runtime_scope()?.durable_state_root.0)
 }
 
 /// Resolve the host-scoped ATM durable-state directory from an explicit ATM home root.
@@ -99,7 +154,10 @@ pub fn host_db_dir_from_home(home_dir: &Path) -> PathBuf {
 ///
 /// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_mail_db_path() -> Result<PathBuf, AtmError> {
-    Ok(host_mail_db_path_from_home(&atm_home()?))
+    Ok(current_host_runtime_scope()?
+        .durable_state_root
+        .as_ref()
+        .join("mail.db"))
 }
 
 /// Resolve the host-scoped ATM durable mailbox database path from an explicit ATM home root.
@@ -144,7 +202,8 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
         return Ok(path);
     }
 
-    Ok(host_log_dir_from_home(&atm_home()?))
+    // Retained logs are host-owned observability state, not workspace state.
+    Ok(user_home()?.join(".atm").join("logs"))
 }
 
 /// Resolve the host-scoped ATM retained log directory from an explicit ATM home root.
@@ -236,6 +295,70 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
         .ok_or_else(AtmError::home_directory_unavailable)
 }
 
+/// Resolve the profile home for the operating-system account that owns this
+/// process. Unlike [`resolve_user_home`], this never consults shell environment
+/// variables; it is reserved for host-wide runtime ownership.
+#[cfg(unix)]
+fn os_account_home() -> Result<PathBuf, AtmError> {
+    use std::ffi::CStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    // SAFETY: `geteuid` has no preconditions. `getpwuid` returns either null or
+    // a pointer managed by libc whose `pw_dir` is valid until the next passwd
+    // lookup in this thread; copy it before returning.
+    let passwd = unsafe { libc::getpwuid(libc::geteuid()) };
+    if passwd.is_null() {
+        return Err(AtmError::home_directory_unavailable().with_recovery(
+            "Ensure the operating-system account has a resolvable profile directory before starting ATM.",
+        ));
+    }
+    // SAFETY: `passwd` was checked for null and `pw_dir` is a NUL-terminated
+    // C string supplied by libc for this account record.
+    let directory = unsafe { CStr::from_ptr((*passwd).pw_dir) };
+    if directory.to_bytes().is_empty() {
+        return Err(AtmError::home_directory_unavailable());
+    }
+    Ok(PathBuf::from(OsStr::from_bytes(directory.to_bytes())))
+}
+
+/// Resolve the Windows profile directory through the known-folder API rather
+/// than USERPROFILE, which a caller can redirect per process.
+#[cfg(windows)]
+fn os_account_home() -> Result<PathBuf, AtmError> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    use windows_sys::Win32::UI::Shell::{FOLDERID_Profile, SHGetKnownFolderPath};
+
+    let mut profile = std::ptr::null_mut();
+    // SAFETY: the API initializes `profile` on success; it is released with
+    // CoTaskMemFree below as required by SHGetKnownFolderPath.
+    let status = unsafe {
+        SHGetKnownFolderPath(
+            &FOLDERID_Profile,
+            0,
+            std::ptr::null_mut::<core::ffi::c_void>() as HANDLE,
+            &mut profile,
+        )
+    };
+    if status < 0 || profile.is_null() {
+        return Err(AtmError::home_directory_unavailable());
+    }
+    // SAFETY: `profile` is a null-terminated buffer allocated by the API.
+    let mut length = 0;
+    unsafe {
+        while *profile.add(length) != 0 {
+            length += 1;
+        }
+    }
+    // SAFETY: the range was measured up to the terminating null above.
+    let path =
+        unsafe { std::ffi::OsString::from_wide(std::slice::from_raw_parts(profile, length)) };
+    // SAFETY: SHGetKnownFolderPath documents CoTaskMemFree ownership.
+    unsafe { CoTaskMemFree(profile.cast()) };
+    Ok(PathBuf::from(path))
+}
+
 fn validate_atm_home_os(raw_path: &OsStr) -> Result<PathBuf, AtmError> {
     let raw_path = raw_path.to_str().ok_or_else(|| {
         AtmError::atm_home_unresolved("ATM_HOME must be valid UTF-8").with_recovery(
@@ -297,6 +420,8 @@ mod tests {
     use super::MAX_ATM_HOME_UTF8_BYTES;
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
+    #[cfg(unix)]
+    use super::os_account_home;
     use super::{
         atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
         host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
@@ -490,7 +615,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_runtime_dir_uses_atm_home_when_present() {
+    fn host_runtime_dir_ignores_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home_dir = TempDir::new().expect("atm home tempdir");
         let _env = LocalEnvGuard::set_many([
@@ -502,7 +627,13 @@ mod tests {
         ]);
 
         let resolved = host_runtime_dir().expect("host runtime dir");
-        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("daemon"));
+        assert_eq!(
+            resolved,
+            os_account_home()
+                .expect("account home")
+                .join(".atm")
+                .join("daemon")
+        );
     }
 
     #[test]
@@ -517,7 +648,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_db_dir_uses_atm_home_when_present() {
+    fn host_db_dir_ignores_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -532,7 +663,13 @@ mod tests {
         ]);
 
         let resolved = host_db_dir().expect("host db dir");
-        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("db"));
+        assert_eq!(
+            resolved,
+            os_account_home()
+                .expect("account home")
+                .join(".atm")
+                .join("db")
+        );
     }
 
     #[test]
@@ -547,7 +684,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_mail_db_path_uses_atm_home_when_present() {
+    fn host_mail_db_path_ignores_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -564,7 +701,11 @@ mod tests {
         let resolved = host_mail_db_path().expect("host mail db path");
         assert_eq!(
             resolved,
-            atm_home_dir.path().join(".atm").join("db").join("mail.db")
+            os_account_home()
+                .expect("account home")
+                .join(".atm")
+                .join("db")
+                .join("mail.db")
         );
     }
 
@@ -618,7 +759,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn host_log_dir_uses_atm_home_when_present() {
+    fn host_log_dir_ignores_atm_home() {
         let atm_home_dir = TempDir::new().expect("atm home");
         let os_home_dir = TempDir::new().expect("os home");
         let _env = LocalEnvGuard::set_many([
@@ -634,7 +775,7 @@ mod tests {
         ]);
 
         let resolved = host_log_dir().expect("host log dir");
-        assert_eq!(resolved, atm_home_dir.path().join(".atm").join("logs"));
+        assert_eq!(resolved, os_home_dir.path().join(".atm").join("logs"));
     }
 
     #[test]

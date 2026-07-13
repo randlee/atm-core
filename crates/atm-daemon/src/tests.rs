@@ -310,6 +310,7 @@ fn production_runtime_only_logs_notifications_after_successful_post_send_emissio
     let notification_path = atm_core::home::host_runtime_dir()
         .expect("host runtime dir")
         .join("notifications.jsonl");
+    let notifications_before = std::fs::read(&notification_path).unwrap_or_default();
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(&assembly, Arc::new(DaemonNonClaudeOutbound::new()));
 
@@ -330,8 +331,9 @@ fn production_runtime_only_logs_notifications_after_successful_post_send_emissio
 
     send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
 
-    assert!(
-        !notification_path.exists(),
+    assert_eq!(
+        std::fs::read(&notification_path).unwrap_or_default(),
+        notifications_before,
         "notification log should only be appended after a successful post-send emission"
     );
 }
