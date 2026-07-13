@@ -173,7 +173,12 @@ pub fn run_doctor_with_runtime_ports(
     );
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
-    let post_send = post_send_doctor_report(config.as_ref(), member_roster.as_ref());
+    let post_send = post_send_doctor_report(
+        config.as_ref(),
+        member_roster.as_ref(),
+        runtime,
+        resolved_team.as_ref(),
+    );
 
     Ok(DoctorReport {
         summary,
@@ -196,6 +201,8 @@ pub fn run_doctor_with_runtime_ports(
 fn post_send_doctor_report(
     config: Option<&crate::config::AtmConfig>,
     member_roster: Option<&MembersList>,
+    runtime: &LocalServiceRuntime,
+    team: Option<&TeamName>,
 ) -> PostSendDoctorReport {
     let Some(config) = config else {
         return PostSendDoctorReport::default();
@@ -213,19 +220,42 @@ fn post_send_doctor_report(
             })
         })
         .collect::<Vec<_>>();
+    // A disabled built-in delivery template is a team-level delivery policy.
+    // Report it before external matching so doctor describes the path that will
+    // actually be emitted, without exposing rendered message content.
+    let built_in_delivery_disabled = team
+        .and_then(|team| {
+            runtime
+                .load_nudge_template_override(
+                    team,
+                    crate::boundary::BuiltInNudgeTemplateKind::Delivery,
+                )
+                .ok()
+                .flatten()
+        })
+        .is_some_and(|row| {
+            matches!(
+                row.mode,
+                crate::boundary::TeamNudgeTemplateOverrideMode::Disabled
+            )
+        });
     let recipient_paths = member_roster
         .into_iter()
         .flat_map(|roster| roster.members.iter())
         .map(|member| {
-            let path = config
-                .post_send_hooks
-                .iter()
-                .position(|rule| rule.recipient.matches(&member.name))
-                .and_then(|index| u32::try_from(index).ok())
-                .map(|rule| RecipientDeliveryPath::ExternalOverride {
-                    rule: PostSendHookRuleIndex(rule),
-                })
-                .unwrap_or(RecipientDeliveryPath::BuiltIn);
+            let path = if built_in_delivery_disabled {
+                RecipientDeliveryPath::Disabled
+            } else {
+                config
+                    .post_send_hooks
+                    .iter()
+                    .position(|rule| rule.recipient.matches(&member.name))
+                    .and_then(|index| u32::try_from(index).ok())
+                    .map(|rule| RecipientDeliveryPath::ExternalOverride {
+                        rule: PostSendHookRuleIndex(rule),
+                    })
+                    .unwrap_or(RecipientDeliveryPath::BuiltIn)
+            };
             RecipientDeliveryPathReport {
                 recipient: member.name.clone(),
                 path,
@@ -986,7 +1016,13 @@ mod tests {
             }],
         };
 
-        let report = super::post_send_doctor_report(Some(&config), Some(&roster));
+        let runtime = test_runtime_with_roster(&[TEST_SENDER]);
+        let report = super::post_send_doctor_report(
+            Some(&config),
+            Some(&roster),
+            &runtime,
+            Some(&roster.team),
+        );
 
         assert_eq!(report.external_rules.len(), 1);
         assert_eq!(
