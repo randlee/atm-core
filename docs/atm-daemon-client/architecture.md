@@ -12,11 +12,12 @@ CLI input materialization → HostRuntimeScope launch gate → canonical endpoin
     └─ no owner: spawn once → daemon owner gate → canonical endpoint bind
 ```
 
-`HostRuntimeScope` and `DaemonAdmissionCode` are shared semantic types rather
-than raw paths or strings at the admission boundary. `RpcEnvelope` may carry
-canonical `RequestEnvelope`/`ResponseEnvelope` data, but it must not own
-daemon dispatch or backend storage. Caller stdin is materialized before this
-crate receives a compose request.
+`HostRuntimeScope`, `HostRuntimeRoot`, `DurableStateRoot`, and
+`DaemonAdmissionCode` are shared semantic types rather than raw paths or
+strings at the admission boundary. `RpcEnvelope` may carry canonical
+`RequestEnvelope`/`ResponseEnvelope` data, but it must not own daemon dispatch
+or backend storage. Caller stdin is materialized before this crate receives a
+compose request.
 
 The machine-readable contracts are
 `boundaries/atm-daemon-client/daemon-bootstrap.toml` and

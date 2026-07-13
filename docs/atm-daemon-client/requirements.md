@@ -7,11 +7,10 @@ SQLite, or business workflow semantics.
 ## AF requirements
 
 - The client must use the single OS-user host-runtime admission scope selected
-  by ADR-002; `ATM_HOME`, current directory, and `ATM_DAEMON_SOCKET` cannot
+  by planned ADR-026; `ATM_HOME`, current directory, and `ATM_DAEMON_SOCKET` cannot
   create a second launch gate or endpoint.
 - A contended client admission connects to the serving singleton or returns a
-  typed, recoverable admission/state-root error; it must not spawn a second
-  daemon.
+  typed, recoverable admission error; it must not spawn a second daemon.
 - Bootstrap and RPC failures preserve `AtmErrorCode`, cause context, and
   recovery through the CLI render boundary.
 - RPC message-source DTOs must not represent caller stdin. The CLI consumes
