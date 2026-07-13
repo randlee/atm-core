@@ -919,10 +919,9 @@ mod tests {
     use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
     use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
     use crate::send::ResolvedRecipient;
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
-    use crate::workflow::WorkflowStateFile;
 
     struct ConfigLookupRuntime {
         roster_entry: Option<RosterEntry>,
@@ -978,12 +977,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -1011,22 +1004,6 @@ mod tests {
 
         fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            unreachable!("config lookup test does not commit workflow state")
         }
     }
 
@@ -1094,12 +1071,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -1127,22 +1098,6 @@ mod tests {
 
         fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            unreachable!("hook emission test does not commit workflow state")
         }
     }
 

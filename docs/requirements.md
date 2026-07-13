@@ -609,8 +609,8 @@ Source-of-truth guardrails:
 
 - ATM must not rely on full-file rewrite of Claude-owned files as the long-term
   source of truth for ATM-local workflow state
-- if ATM-local semantics need durability independent of Claude’s native writes,
-  that state must move to ATM-owned sidecars or an equivalent ATM-owned store
+- if ATM-local semantics need durability independent of compatibility exports,
+  that state must live in the ATM-owned SQLite store
 - when a legacy compatibility path still rewrites a non-ATM-owned shared file,
   the requirements and architecture docs must call out the limitation
 

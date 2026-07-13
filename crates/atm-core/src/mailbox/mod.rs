@@ -61,11 +61,8 @@ pub fn append_message(path: &Path, envelope: &InboxMessage) -> Result<(), AtmErr
 
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
 ///
-/// Production mutation paths use equivalent lock coverage through
-/// `workflow::commit_workflow_state()`.
 /// This helper stays test-only so unit tests can exercise the shared mailbox
-/// lock contract directly without the workflow/state sidecars required in
-/// production commands.
+/// lock contract directly without invoking production persistence.
 ///
 /// # Errors
 ///

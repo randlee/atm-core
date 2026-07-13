@@ -307,11 +307,10 @@ mod tests {
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::schema::InboxMessage;
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
-    use crate::workflow::WorkflowStateFile;
     #[test]
     #[serial_test::serial(env)]
     fn env_guard_restores_original_value_after_panic() {
@@ -393,12 +392,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -438,22 +431,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            unreachable!("clear roster-truth tests do not commit workflow state")
         }
     }
 
