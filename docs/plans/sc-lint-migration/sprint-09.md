@@ -47,6 +47,11 @@ line, or document a zero-dependency outcome explicitly.
 
 ## Required Validation
 
-- `rg -n "sc-lint" Cargo.toml crates/atm-core/Cargo.toml crates/atm-core/src || true`
+- Execution-branch proof, chosen by outcome:
+  - zero-dependency path:
+    - `! rg -n 'sc-lint' Cargo.toml crates/atm-core/Cargo.toml crates/atm-core/src`
+  - retained released-dependency path:
+    - `rg -n 'sc-lint' Cargo.toml crates/atm-core/Cargo.toml`
+    - `rg -n '#\\[sc_lint|sc_lint::|use sc_lint' crates/atm-core/src`
 - `cargo build --workspace`
 - `git diff --check`
