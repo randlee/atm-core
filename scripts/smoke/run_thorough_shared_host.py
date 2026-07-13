@@ -56,7 +56,9 @@ def ensure_debug_binaries(root: Path) -> None:
         )
 
 
-def run_atm(root: Path, env: dict[str, str], cwd: Path, *args: str) -> str:
+def run_atm(
+    root: Path, env: dict[str, str], cwd: Path, *args: str, stdin: str | None = None
+) -> str:
     with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as stdout_handle, tempfile.NamedTemporaryFile(
         mode="w+",
         encoding="utf-8",
@@ -74,6 +76,7 @@ def run_atm(root: Path, env: dict[str, str], cwd: Path, *args: str) -> str:
                 errors="replace",
                 check=False,
                 timeout=30,
+                input=stdin,
             )
         except subprocess.TimeoutExpired as error:
             stdout_handle.seek(0)
@@ -256,7 +259,13 @@ def main() -> int:
                 "--json",
             )
 
-        def run_send(fixture_item: object, env_item: dict[str, str], body: str) -> dict[str, object]:
+        def run_send(
+            fixture_item: object,
+            env_item: dict[str, str],
+            body: str,
+            *source_args: str,
+            stdin: str | None = None,
+        ) -> dict[str, object]:
             target = f"{fixture_item.recipient}@{fixture_item.team_name}"  # type: ignore[attr-defined]
             return parse_json_output(
                 run_atm(
@@ -265,17 +274,34 @@ def main() -> int:
                     fixture_item.workspace_dir,  # type: ignore[attr-defined]
                     "send",
                     target,
-                    body,
+                    *source_args or (body,),
                     "--requires-ack",
                     "--json",
+                    stdin=stdin,
                 )
             )
 
         shared_send_a = run_send(shared_a, shared_env_a, "shared-host message from workspace A")
         shared_send_b = run_send(shared_b, shared_env_b, "shared-host message from workspace B")
 
+        stdin_body = "stdin-body-" + ("x" * (4 * 1024 - len("stdin-body-")))
+        inline_body = "inline-body-" + ("y" * 96)
+        file_note = "file-body-proof"
+        file_path = shared_a.workspace_dir / "af3-input.txt"
+        file_path.write_text("AF3 file fixture\n", encoding="utf-8")
+        shared_stdin_send = run_send(
+            shared_a, shared_env_a, stdin_body, "--stdin", stdin=stdin_body
+        )
+        shared_inline_send = run_send(shared_a, shared_env_a, inline_body)
+        shared_file_send = run_send(
+            shared_a, shared_env_a, file_note, "--file", str(file_path), file_note
+        )
+
         shared_message_id_a = str(shared_send_a["message_id"])
         shared_message_id_b = str(shared_send_b["message_id"])
+        shared_stdin_message_id = str(shared_stdin_send["message_id"])
+        shared_inline_message_id = str(shared_inline_send["message_id"])
+        shared_file_message_id = str(shared_file_send["message_id"])
 
         def read_and_ack(
             fixture_item: object,
@@ -326,6 +352,17 @@ def main() -> int:
             shared_message_id_b,
             "shared-host ack B",
         )
+        shared_input_reads = [
+            read_and_ack(shared_a, shared_env_a, shared_stdin_message_id, "stdin ack"),
+            read_and_ack(shared_a, shared_env_a, shared_inline_message_id, "inline ack"),
+            read_and_ack(shared_a, shared_env_a, shared_file_message_id, "file ack"),
+        ]
+        expected_file_body = f"{file_note}\n\nFile reference: {file_path}"
+        input_bodies_ok = [
+            shared_input_reads[0]["read"].get("message", {}).get("text") == stdin_body,
+            shared_input_reads[1]["read"].get("message", {}).get("text") == inline_body,
+            shared_input_reads[2]["read"].get("message", {}).get("text") == expected_file_body,
+        ]
 
         shared_list_a = parse_json_output(
             run_atm(
@@ -361,6 +398,10 @@ def main() -> int:
             and shared_pid_a == shared_pid_b
             and shared_send_a.get("outcome") == "sent"
             and shared_send_b.get("outcome") == "sent"
+            and shared_stdin_send.get("outcome") == "sent"
+            and shared_inline_send.get("outcome") == "sent"
+            and shared_file_send.get("outcome") == "sent"
+            and all(input_bodies_ok)
             and shared_read_ack_a["read"].get("selected_message_id") == shared_message_id_a
             and shared_read_ack_b["read"].get("selected_message_id") == shared_message_id_b
             and shared_read_ack_a["ack"].get("message_id") == shared_message_id_a

@@ -80,9 +80,18 @@ fn read_message_from_reader(reader: impl Read) -> Result<String, AtmError> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{self, Cursor, Read};
 
     use super::{MAX_STDIN_MESSAGE_BYTES, read_message_from_reader};
+    use crate::error_codes::AtmErrorCode;
+
+    struct Unreadable;
+
+    impl Read for Unreadable {
+        fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::other("stdin device failed"))
+        }
+    }
 
     #[test]
     fn read_message_from_reader_accepts_small_utf8_input() {
@@ -99,6 +108,7 @@ mod tests {
         let error = read_message_from_reader(Cursor::new(oversized)).expect_err("oversized stdin");
 
         assert!(error.is_validation());
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(error.message.contains("stdin message exceeds"));
         assert_eq!(
             error.primary_recovery(),
@@ -115,5 +125,30 @@ mod tests {
         let error = super::validate_message_text(oversized).expect_err("oversized inline message");
 
         assert!(error.message.contains("message text exceeds"));
+    }
+
+    #[test]
+    fn read_message_from_reader_rejects_empty_and_whitespace_input() {
+        for input in ["", " \n\t "] {
+            let error = read_message_from_reader(Cursor::new(input)).expect_err("empty stdin");
+            assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+            assert!(error.message.contains("cannot be empty"));
+        }
+    }
+
+    #[test]
+    fn read_message_from_reader_rejects_non_utf8_input() {
+        let error = read_message_from_reader(Cursor::new(vec![0xff])).expect_err("non UTF-8 stdin");
+
+        assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
+        assert!(error.message.contains("UTF-8"));
+    }
+
+    #[test]
+    fn read_message_from_reader_reports_unreadable_input() {
+        let error = read_message_from_reader(Unreadable).expect_err("unreadable stdin");
+
+        assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
+        assert!(error.message.contains("failed to read stdin"));
     }
 }
