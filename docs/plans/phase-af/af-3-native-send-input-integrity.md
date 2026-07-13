@@ -1,6 +1,6 @@
 ---
 title: AF-3 — Native send-input integrity
-status: complete
+status: planned
 branch: feature/1-3-0-smoke-test-fix-docs
 worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
 ---
