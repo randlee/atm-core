@@ -5,7 +5,6 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
@@ -25,11 +24,6 @@ pub fn with_default_local_service_runtime<T>(
 ) -> Result<T, AtmError> {
     let runtime = crate::service_runtime_store::default_runtime()?;
     f(&runtime)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RetainedMailboxTimeoutPolicy {
-    pub(crate) workflow_lock_timeout: Duration,
 }
 
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {

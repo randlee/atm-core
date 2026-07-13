@@ -175,7 +175,7 @@ mod tests {
             ("HOME", Some(home_dir.to_str().expect("utf8 path"))),
             ("USERPROFILE", None),
         ]);
-        let report = command
+        let _report = command
             .execute_direct_local(&observability, home_dir, current_dir)
             .expect("report");
     }
