@@ -84,6 +84,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     diagnostic: None,
                     detail: None,
                 },
+                post_send: atm_core::doctor::PostSendDoctorReport::default(),
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
