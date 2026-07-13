@@ -138,8 +138,43 @@ def terminate_process(pid: int | None) -> None:
         return
 
 
+def require_clean_host_daemon_state() -> None:
+    """Keep the shared-host smoke from attaching to a developer's daemon.
+
+    AF-1 deliberately has no alternate runtime-root escape hatch. The smoke
+    therefore must run under an isolated OS user/host with no pre-existing ATM
+    daemon, rather than redirecting HOME or killing a process it did not start.
+    """
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq atm-daemon.exe"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        active = "atm-daemon.exe" in completed.stdout.lower()
+    else:
+        completed = subprocess.run(
+            ["pgrep", "-f", r"(^|/)atm-daemon( |$)"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        active = completed.returncode == 0
+    if active:
+        raise RuntimeError(
+            "shared-host smoke requires an isolated OS user with no existing "
+            "atm-daemon; refusing to attach to or terminate an ambient daemon"
+        )
+
+
 def main() -> int:
     root = repo_root()
+    require_clean_host_daemon_state()
     ensure_debug_binaries(root)
     shared_host_fixture_pair = create_shared_host_fixture_pair(
         prefix="z21s.",
@@ -157,12 +192,8 @@ def main() -> int:
     debug_daemon = str(debug_binary(root, "atm-daemon"))
     shared_env_a["ATM_DAEMON_BIN"] = debug_daemon
     shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
-    shared_bootstrap_env = shared_env_a.copy()
-    shared_bootstrap_env.pop("ATM_IDENTITY", None)
-    shared_bootstrap_env.pop("ATM_TEAM", None)
     shared_daemon_pid: int | None = None
     try:
-        run_atm(root, shared_bootstrap_env, shared_a.workspace_dir, "doctor", "--json")
         shared_doctor_a = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
         )
