@@ -546,7 +546,6 @@ impl AtmGraftClient for CliComposition<'_> {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(unix)]
     use std::fs;
     use std::io;
     use std::io::Write;

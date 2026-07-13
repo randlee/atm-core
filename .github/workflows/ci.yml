@@ -157,4 +157,5 @@ jobs:
         run: cargo test -p atm-daemon --verbose
 
       - name: Run isolated shared-host singleton smoke
+        if: ${{ always() }}
         run: python scripts/smoke/run_thorough_shared_host.py
