@@ -27,7 +27,7 @@ pub fn install_sqlite_retained_runtime_factory() {
 pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
-    atm_runtime::with_default_roster_store(f)
+    atm_runtime::with_installed_roster_store(f)
 }
 
 /// Open the default SQLite boundary and expose only the approved built-in
