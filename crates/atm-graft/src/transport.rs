@@ -1,7 +1,9 @@
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
-use atm_core::protocol::{self, RequestEnvelope, RequestId as CoreRequestId, ResponseEnvelope};
+use atm_core::protocol::{
+    self, CompatibilityPreflight, RequestEnvelope, RequestId as CoreRequestId, ResponseEnvelope,
+};
 use atm_daemon_client::{
     DaemonLocalIpcEndpoint, FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
     exchange_envelope as daemon_exchange_envelope, try_connect as daemon_try_connect,
@@ -29,11 +31,26 @@ impl GraftLocalIpcClientTransport {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let (_, envelope) = encode_request_envelope(request)?;
-        let response =
-            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?;
+        let (_, envelope) = encode_request_envelope(request.clone())?;
+        let response = if request_requires_compatibility_verification(&request) {
+            let mut verified = atm_daemon_client::verify_connection_compatibility(
+                &self.endpoint,
+                CompatibilityPreflight {
+                    client_release: atm_daemon_client::ReleaseVersion::current(),
+                    wire_version: protocol::ATM_FRAME_VERSION_V1,
+                },
+                SAME_HOST_REQUEST_DEADLINE,
+            )?;
+            verified.dispatch_write(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?
+        } else {
+            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?
+        };
         decode_response_envelope(response)
     }
+}
+
+fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(request, RequestEnvelope::Send(_) | RequestEnvelope::Clear(_))
 }
 
 fn encode_request_envelope(
