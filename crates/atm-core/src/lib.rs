@@ -87,8 +87,6 @@ pub mod transport;
 pub mod types;
 
 pub use config::load_claude_team_config_document;
-/// Internal ATM-owned workflow-state helpers shared across mailbox services.
-pub(crate) mod workflow;
 
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]

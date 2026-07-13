@@ -1,4 +1,3 @@
-use std::iter;
 use std::path::Path;
 
 use serde_json::Map;
@@ -10,11 +9,10 @@ use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
-use crate::workflow;
 
 use super::{DeliveryPersistenceResult, WarningEntry, prepare_threaded_message};
 
-pub(crate) fn persist_message_and_seed_workflow(
+pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     recipient: &DeliveryRecipientSnapshot,
@@ -31,21 +29,7 @@ pub(crate) fn persist_message_and_seed_workflow(
         load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
-    let commit_result = runtime.commit_workflow_state(
-        home_dir,
-        &recipient.team,
-        &recipient.agent,
-        iter::empty(),
-        runtime.mailbox_timeout_policy().workflow_lock_timeout,
-        |workflow_state| {
-            mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared)?;
-            Ok((
-                (),
-                workflow::remember_initial_state(workflow_state, &prepared),
-            ))
-        },
-    );
-    match commit_result {
+    match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
         Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
         Err(error) if error.is_mailbox_write() => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
