@@ -36,6 +36,7 @@ const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
 // The operation under test has a 100 ms SQLite busy timeout. This outer
 // channel deadline only detects a wedged worker; it must retain enough
 // scheduler headroom for heavily contended macOS CI runners.
+#[cfg(unix)]
 const TEST_LOCK_COMPLETION_CEILING: Duration = Duration::from_secs(30);
 const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
