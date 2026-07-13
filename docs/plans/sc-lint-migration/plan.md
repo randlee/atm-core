@@ -46,6 +46,15 @@ published `sc-lint` release without weakening any current lint, CI, or release
 gates, while converging onto native released `sc-lint` surfaces instead of
 retaining unnecessary ATM-local wrappers or suppressing findings.
 
+Plain-language target end state:
+
+- vendored `sc-lint` crates are gone from the ATM workspace
+- most repo-local Python lint wrapper code is gone
+- ATM consumes released `sc-lint` tools directly for analyzer execution, JSON
+  output, and rule selection wherever the product already supports that
+- only narrowly justified ATM-owned policy code remains, and only where the
+  released `sc-lint` product does not and should not own that behavior
+
 This is planning only. No cutover begins until a published `sc-lint` version
 exists that covers the current `atm-core` dependency and analyzer surface.
 
@@ -189,6 +198,17 @@ Planning implication:
 - any ATM Python file that only invokes one of those Rust analyzers, parses its
   JSON, and reformats/filter-selects findings is presumed duplicate until
   proven otherwise
+- the current file-by-file default call is:
+  - delete `.just/lint_sc_boundary.py`
+  - delete `.just/lint_sc_portability.py`
+  - delete `.just/lint_unix_gating.py` unless one named portability gap blocks
+    direct native usage
+  - delete `.just/lint_runtime_waits.py` unless one named runtime gap blocks
+    direct native usage
+  - delete `.just/run_lint.py` unless one named consumer-surface gap requires a
+    temporary compatibility shim
+  - keep only the ATM-specific portions of `.just/lint_boundaries.py`, deleting
+    any logic the released `sc-lint` product now owns
 - future execution must explicitly inventory every `.just/lint_*.py` file into
   one of these buckets:
   - delete because published `sc-lint` already covers it directly
@@ -219,8 +239,9 @@ Duplicate implementation expected to be removed during execution:
 ATM-owned surface expected to remain after migration:
 
 - repo-local lint names in the `Justfile` and release/preflight surfaces
-- ATM-specific boundary schema / allowlist / review-gate checks in
-  `.just/lint_boundaries.py`
+- only the ATM-specific boundary schema / allowlist / review-gate checks in
+  `.just/lint_boundaries.py`; duplicated dependency-policy or analyzer-owned
+  enforcement must not remain there
 - only the minimum residual adapter code required during transition, with each
   survivor documented by a concrete justification, an upstream gap reference,
   and a deletion trigger back to native `sc-lint` usage
@@ -485,6 +506,9 @@ Required code moves:
 - review whether `.just/run_lint.py` is still needed once the thin wrappers are
   gone; delete it too if `Justfile`/published-tool wiring can preserve the
   current user-facing lint surface without extra Python
+- do not preserve a wrapper solely to reproduce today's internal implementation
+  shape; preserve only the externally visible ATM lint surface that users and
+  CI call
 - update or delete `.just/tests/test_lint_*.py` based on which wrappers
   actually survive
 - update `.just/tests/test_run_lint.py` and release-preflight tests to reflect
@@ -635,4 +659,10 @@ This planning line is complete when:
 - the current ATM `sc-lint` usage is fully inventoried
 - the vendored-snapshot vs published-release gap is explicit
 - the migration sequence is concrete enough to execute once a release exists
+- the documented target end state is unambiguous:
+  - vendored `sc-lint` crates are obsoleted
+  - most Python lint wrapper code is obsoleted
+  - released `sc-lint` tools are consumed directly wherever they provide
+    equivalent or better native functionality
+  - only explicitly justified ATM-specific policy layers remain
 - the open questions above are raised before ATM commits to the cutover
