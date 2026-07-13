@@ -67,16 +67,8 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<atm_core::doctor::DoctorReport> {
-        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
-        let runtime = assemble_default_runtime()?;
-        let local_report = doctor::run_doctor_with_runtime_ports(
-            query,
-            observability,
-            &runtime.service_runtime,
-            &runtime.doctor_ports,
-            None,
-        )
-        .map_err(anyhow::Error::from)?;
+        let local_report =
+            self.execute_direct_local(observability, home_dir.clone(), current_dir.clone())?;
         let query = self.build_query(home_dir, current_dir)?;
 
         match CliComposition::bootstrap(
@@ -88,6 +80,24 @@ impl DoctorCommand {
             Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
             Err(_) => Ok(local_report),
         }
+    }
+
+    fn execute_direct_local(
+        &self,
+        observability: &CliObservability,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    ) -> Result<atm_core::doctor::DoctorReport> {
+        let query = self.build_query(home_dir, current_dir)?;
+        let runtime = assemble_default_runtime()?;
+        doctor::run_doctor_with_runtime_ports(
+            query,
+            observability,
+            &runtime.service_runtime,
+            &runtime.doctor_ports,
+            None,
+        )
+        .map_err(anyhow::Error::from)
     }
 }
 
@@ -147,7 +157,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn execute_runs_direct_local_doctor_path() {
+    fn execute_runs_direct_local_doctor_path_without_inherited_bootstrap_configuration() {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
             team: None,
@@ -157,9 +167,24 @@ mod tests {
         std::fs::create_dir_all(&home_dir).expect("home dir");
         std::fs::create_dir_all(&current_dir).expect("current dir");
         std::fs::create_dir_all(home_dir.join(".atm").join("db")).expect("host db dir");
-        let _env = EnvGuard::set_many([("HOME", Some(home_dir.to_str().expect("utf8 path")))]);
-        let _report = command
-            .execute(&observability, home_dir, current_dir)
+        // Clear every
+        // bootstrap input that could otherwise make this unit test connect to
+        // or launch a caller-selected daemon.
+        let _env = EnvGuard::set_many([
+            ("ATM_DAEMON_BIN", None),
+            ("ATM_DAEMON_SOCKET", None),
+            ("ATM_HOME", None),
+            ("ATM_CONFIG_HOME", None),
+            ("HOME", Some(home_dir.to_str().expect("utf8 path"))),
+            ("USERPROFILE", None),
+        ]);
+        let report = command
+            .execute_direct_local(&observability, home_dir, current_dir)
             .expect("report");
+
+        assert!(
+            report.daemon_runtime.is_none(),
+            "hermetic local doctor must not report a daemon"
+        );
     }
 }
