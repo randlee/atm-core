@@ -33,6 +33,13 @@ pub enum DaemonAdmission {
     ServingExisting { endpoint: LocalIpcEndpoint },
     Rejected { code: DaemonAdmissionCode },
 }
+
+pub enum DaemonAdmissionCode {
+    LaunchGateContended,
+    OwnerAlreadyHeld,
+    StateRootMismatch,
+    SocketOverrideForbidden,
+}
 ```
 
 `HostRuntimeScope` is the sole source of the pre-spawn launch lock, daemon-side
@@ -62,6 +69,14 @@ the locks owned by that process and never unlinks another process's endpoint.
 | AF1-D4 | Runtime state mismatch is fail-closed | daemon bootstrap, request admission/health protocol, doctor projection | A client asking for a different daemon state root is told the active root fingerprint is incompatible; it neither creates a daemon nor mutates the active database. The message contains no private filesystem path unless doctor already permits it. | Process test from homes A/B: one daemon, B gets the documented mismatch code, and A's database is unchanged. |
 | AF1-D5 | Production-equivalent test and lint gates | `scripts/lint_daemon_singleton.py`, `scripts/smoke/run_thorough_shared_host.py`, CI workflow | Static gates scan Rust, Python, shell, and CI launch sites for alternate daemon roots/endpoints. Smoke harness cannot leave a daemon and contains no bypass. Tests run as an isolated OS user/CI host rather than using a runtime test escape hatch. | Grep/lint gate passes; controlled full-smoke process test reports one PID before/during/after; cleanup assertion is mandatory. |
 | AF1-D6 | Reliable lifecycle cleanup | daemon lifecycle/shutdown modules and integration tests | Graceful termination releases owned resources within the documented timeout; ungraceful death permits safe takeover only after ownership verification. No test relies on `SIGKILL` as normal cleanup. | TERM integration test, stale-owner recovery test, and repeat start/stop loop leave zero owned lock/socket artifacts. |
+
+## Paths to delete or replace
+
+| Retired path | Required replacement / proof |
+| --- | --- |
+| Per-`ATM_HOME` launch and owner-lock derivation through `host_runtime_lock_path*` | D1's `current_host_runtime_scope`; no caller may derive an admission lock from `ATM_HOME`. |
+| Per-`ATM_HOME` daemon endpoint selection through `daemon_socket_path_from_home` | D1's fixed singleton endpoint; state-root selection is admitted separately by D4. |
+| `launch_gate_isolated_per_atm_home_root` acceptance test and equivalent fixture assumptions | D2/D3 process test proving cross-home second launch is rejected and leaves one owner. |
 
 ## Required design review before coding D2–D6
 
