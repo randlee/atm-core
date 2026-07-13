@@ -349,6 +349,12 @@ fn print_doctor_environment(report: &DoctorReport) {
         && report.environment.atm_team.is_none()
         && report.environment.atm_identity.is_none()
         && report.environment.team_override.is_none()
+        && report.client_context.team.is_none()
+        && report.client_context.identity.is_none()
+        && report.client_context.version.is_none()
+        && report.daemon_context.as_ref().is_none_or(|context| {
+            context.team.is_none() && context.identity.is_none() && context.version.is_none()
+        })
     {
         return;
     }
@@ -366,6 +372,37 @@ fn print_doctor_environment(report: &DoctorReport) {
     }
     if let Some(team_override) = &report.environment.team_override {
         println!("  --team={team_override}");
+    }
+    if report.client_context.team.is_some()
+        || report.client_context.identity.is_some()
+        || report.client_context.version.is_some()
+    {
+        println!("  client_context:");
+        if let Some(team) = &report.client_context.team {
+            println!("    team={team}");
+        }
+        if let Some(identity) = &report.client_context.identity {
+            println!("    identity={identity}");
+        }
+        if let Some(version) = &report.client_context.version {
+            println!("    version={version}");
+        }
+    }
+    if let Some(daemon_context) = &report.daemon_context
+        && (daemon_context.team.is_some()
+            || daemon_context.identity.is_some()
+            || daemon_context.version.is_some())
+    {
+        println!("  daemon_context:");
+        if let Some(team) = &daemon_context.team {
+            println!("    team={team}");
+        }
+        if let Some(identity) = &daemon_context.identity {
+            println!("    identity={identity}");
+        }
+        if let Some(version) = &daemon_context.version {
+            println!("    version={version}");
+        }
     }
 }
 
