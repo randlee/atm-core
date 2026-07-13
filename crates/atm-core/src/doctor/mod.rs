@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
-    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PostSendDoctorReport,
-    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
+    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
+    DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -117,7 +117,13 @@ pub fn run_doctor_with_runtime(
         summary,
         findings,
         recommendations,
-        environment,
+        environment: environment.clone(),
+        client_context: report::DoctorExecutionContext {
+            team: environment.atm_team.clone(),
+            identity: environment.atm_identity.clone(),
+            version: Some(crate::protocol::ReleaseVersion::current()),
+        },
+        daemon_context: None,
         member_roster,
         observability: observability_health,
         post_send: PostSendDoctorReport::default(),
@@ -184,7 +190,13 @@ pub fn run_doctor_with_runtime_ports(
         summary,
         findings,
         recommendations,
-        environment,
+        environment: environment.clone(),
+        client_context: report::DoctorExecutionContext {
+            team: environment.atm_team.clone(),
+            identity: environment.atm_identity.clone(),
+            version: Some(crate::protocol::ReleaseVersion::current()),
+        },
+        daemon_context: None,
         member_roster,
         observability: observability_health,
         post_send,

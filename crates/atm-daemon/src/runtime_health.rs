@@ -9,8 +9,8 @@ use atm_core::{
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
-        self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-        DoctorStatus, DoctorSummary,
+        self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorKind},
     error_codes::AtmErrorCode,
@@ -821,6 +821,15 @@ impl DaemonRequestDispatcher {
             error_count,
         };
         report.runtime_status = Some(runtime_status);
+        report.daemon_context = Some(DoctorExecutionContext {
+            team: atm_core::caller_context::read_cli_team_from_env()
+                .ok()
+                .flatten(),
+            identity: atm_core::caller_context::read_cli_identity_from_env()
+                .ok()
+                .flatten(),
+            version: Some(ReleaseVersion::current()),
+        });
         Ok(report)
     }
 }

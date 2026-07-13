@@ -269,9 +269,9 @@ Deliverables:
   design
 
 Sprint line:
-- `AF-1` `feature/1-3-0-smoke-test-fix-docs`
-- `AF-2` `feature/1-3-0-smoke-test-fix-docs`
-- `AF-3` `feature/1-3-0-smoke-test-fix-docs`
+- `AF-1` `feature/atm-daemon-singleton-hardening`
+- `AF-2` `feature/pAF-s2-observability-release-gates`
+- `AF-3` `feature/pAF-s3-native-send-input-integrity`
 
 Acceptance:
 - Phase AF exit criteria are satisfied only through

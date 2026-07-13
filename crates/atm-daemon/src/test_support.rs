@@ -75,6 +75,8 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     atm_identity: None,
                     team_override: None,
                 },
+                client_context: atm_core::doctor::DoctorExecutionContext::default(),
+                daemon_context: None,
                 member_roster: None,
                 observability: AtmObservabilityHealth {
                     active_log_path: None,

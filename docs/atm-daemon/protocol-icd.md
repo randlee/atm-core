@@ -246,6 +246,7 @@ Phase S packet families:
 - `0x1005` `receive_response`
 - `0x1006` `clear_response`
 - `0x1007` `doctor_response`
+- `0x1009` `compatibility_verdict_response`
 
 ### 6.3 Error Packet Kind
 
@@ -273,6 +274,7 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
 | `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
 | `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
+| `0x0009` | `compatibility_preflight_request` | write-path daemon compatibility gate | same-host preflight before `atm send` and `atm clear` dispatch a write-shaped request |
 | `0x1001` | `send_sent_response` | response to `atm send` | success response |
 | `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
@@ -280,6 +282,7 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x1005` | `receive_response` | response to `atm read` | success response |
 | `0x1006` | `clear_response` | response to `atm clear` | success response |
 | `0x1007` | `doctor_response` | response to `atm doctor` | success response |
+| `0x1009` | `compatibility_verdict_response` | response to compatibility preflight | returns `CompatibilityVerdict` before write-shaped dispatch |
 | `0x1fff` | `error_response` | typed service failure | may answer any request kind |
 
 Current non-packet retained workflows:
@@ -334,10 +337,12 @@ Field-authority rule:
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
+| `compatibility_preflight_request` | `CompatibilityPreflight` | `RequestEnvelope::CompatibilityPreflight(...)` |
 | `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
 | `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
 | `list_response` | `ListOutcome` | `ResponseEnvelope::List(...)` |
+| `compatibility_verdict_response` | `CompatibilityVerdict` | `ResponseEnvelope::CompatibilityVerdict(...)` |
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
