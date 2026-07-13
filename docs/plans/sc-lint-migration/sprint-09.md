@@ -4,7 +4,7 @@ title: Compile-Time Dependency Retarget
 status: planned
 branch: TBD - requires new phase identifier and human sign-off
 worktree: TBD - execution worktree not assigned
-target: develop
+target: TBD - integrate/phase-<new-id>, not develop directly
 ---
 
 # Sprint 09 — Compile-Time Dependency Retarget

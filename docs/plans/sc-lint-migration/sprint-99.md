@@ -4,7 +4,7 @@ title: Final Implementation Review And Upstream Product Reports
 status: planned
 branch: TBD - requires new phase identifier and human sign-off
 worktree: TBD - execution worktree not assigned
-target: develop
+target: TBD - integrate/phase-<new-id>, not develop directly
 ---
 
 # Sprint 99 — Final Implementation Review And Upstream Product Reports
@@ -17,6 +17,7 @@ sc-lint work and remaining ATM cleanup.
 
 ## Hard Dependencies
 
+- `docs/plans/sc-lint-migration/sprint-08.md`
 - `docs/plans/sc-lint-migration/sprint-13.md`
 - `docs/plans/sc-lint-migration/gap-register.md`
 

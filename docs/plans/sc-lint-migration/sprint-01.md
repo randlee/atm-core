@@ -4,7 +4,7 @@ title: Published Release Target And Gap Register
 status: planned
 branch: TBD - requires new phase identifier and human sign-off
 worktree: TBD - execution worktree not assigned
-target: develop
+target: TBD - integrate/phase-<new-id>, not develop directly
 ---
 
 # Sprint 01 — Published Release Target And Gap Register
@@ -17,11 +17,9 @@ target, then capture the known capability gaps before any deletion starts.
 ## Hard Dependencies
 
 - `docs/plans/sc-lint-migration/plan.md`
-- `/Users/randlee/Documents/github/atm-core/.claude/skills/plan-hardening/sprint-planning-guidelines.md`
 
 ## Exact Targets
 
-- `docs/plans/sc-lint-migration/plan.md`
 - `docs/plans/sc-lint-migration/sprint-01.md`
 - `docs/plans/sc-lint-migration/gap-register.md`
 - `.github/workflows/ci.yml`
@@ -36,6 +34,9 @@ target, then capture the known capability gaps before any deletion starts.
   - `ubuntu-latest`
   - `macos-latest`
   - `windows-latest`
+- `docs/plans/sc-lint-migration/plan.md` is updated only as needed to keep the
+  top-level planning summary and sprint-package index aligned with the pinned
+  release / gap-register contract
 - `docs/plans/sc-lint-migration/gap-register.md` exists and records:
   - the pinned release version
   - the chosen install method

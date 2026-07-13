@@ -154,7 +154,7 @@ later.
 | --- | --- | --- | --- |
 | `.just/lint_sc_boundary.py` | `cargo run -q -p sc-lint-boundary -- analyze --root <repo> --format json` | manual full boundary analyzer wrapper | must stop calling the vendored workspace binary |
 | `.just/lint_sc_portability.py` | `cargo run -q -p sc-lint-boundary -- analyze --root <repo> --rule portability --format json` | manual portability analyzer wrapper | must retarget to published portability surface |
-| `.just/lint_unix_gating.py` | same portability command, then filter `PORT-004` and `PORT-005` | default-house lint wrapper for Unix gating | wrapper remains ATM-owned even after cutover |
+| `.just/lint_unix_gating.py` | same portability command, then filter `PORT-004` and `PORT-005` | default-house lint wrapper for Unix gating | default disposition is deletion; retention is allowed only if the gap register proves one named published portability gap and records a deletion trigger |
 | `.just/lint_runtime_waits.py` | `cargo run -q -p sc-lint-boundary -- analyze --root <repo> --rule boundaries --format json`, then filter `SCB-RUNTIME-001` / `SCB-RUNTIME-002` | default-house lint wrapper for production `Condvar` waits | must move to the published runtime analyzer surface |
 | `Justfile` | `_lint-sc-boundary`, `_lint-sc-portability`, `_lint-unix-gating`, `_lint-runtime-waits` | user-facing local lint entrypoints | targets remain, backend commands change |
 | `.just/run_lint.py` | `all` includes `unix-gating` and `runtime-waits`; `sc-boundary` and `sc-portability` stay manual extras | canonical local lint orchestrator | must preserve current lint names and failure formatting |
@@ -440,145 +440,32 @@ Reason:
 
 ## Execution Plan Once A Published Release Exists
 
-### Step 1: Freeze the release candidate ATM will target
+The authoritative deliverables, acceptance criteria, delete lists, and
+validation gates now live in the sprint docs named in the
+`Authoritative Sprint Package` section above.
 
-Deliverables:
+Execution summary only:
 
-- record the exact published version in the migration branch
-- verify whether ATM must install:
-  - crates from crates.io
-  - GitHub release binaries
-  - both
-- verify Windows installation is first-class and non-Homebrew
-- create a gap register for the chosen release containing:
-  - known parity matches
-  - known parity gaps already visible before implementation
-  - the exact ATM-local workaround, if any, allowed for each gap
+1. `sprint-01.md`
+   - freeze the target release and initial gap register
+2. `sprint-02.md`
+   - prove parity and classify every mismatch
+3. `sprint-03.md` through `sprint-07.md`
+   - delete or reduce wrapper surfaces in favor of native released `sc-lint`
+4. `sprint-08.md` through `sprint-11.md`
+   - remove duplicated governance where appropriate, retarget compile-time
+     dependencies, delete vendored crates, and move CI/preflight to the
+     published install path
+5. `sprint-12.md` and `sprint-13.md`
+   - enable adopted released features and clean all non-architectural ATM
+     findings instead of suppressing them
+6. `sprint-99.md`
+   - perform the terminal review, upstream gap report, residual adapter audit,
+     and sc-lint product-improvement report
 
-Acceptance gate:
-
-- one exact published version is named
-- one supported local/CI installation path is chosen for all three CI
-  platforms
-- known pre-existing gaps are recorded before wrapper deletion starts
-- the target end state for each adopted lint surface is recorded as either:
-  - direct native `sc-lint` invocation
-  - temporary ATM compatibility shim pending one named upstream gap
-
-### Step 2: Prove published crate and binary parity on a no-delete branch
-
-Deliverables:
-
-- add a temporary branch-local install path for the published tools
-- keep vendored crates present while wrappers are retargeted and compared
-- run side-by-side spot checks for:
-  - `sc-boundary`
-  - `sc-portability`
-  - `unix-gating`
-  - `runtime-waits`
-- for each parity failure, classify it as one of:
-  - published `sc-lint` already supports the capability and ATM wiring is wrong
-  - released `sc-lint` lacks the capability and must be queued upstream
-  - ATM has extra consumer-specific behavior that still needs a minimal local
-    adapter
-
-Acceptance gate:
-
-- published analyzers reproduce the required rule IDs
-- published proc-macro crates compile `atm-core` unchanged or with explicitly
-  approved attribute fixes
-- every parity failure is classified before any deletion proceeds
-- any ATM-local behavior that is not strictly consumer-specific is pushed back
-  into the sc-lint gap register rather than normalized as a permanent wrapper
-
-### Step 3: Delete or retarget ATM-local wrappers and tests
-
-Required code moves:
-
-- delete `.just/lint_sc_boundary.py` and replace its call sites with a direct
-  published `sc-lint-boundary` invocation
-- delete `.just/lint_sc_portability.py` and replace its call sites with a
-  direct published `sc-lint-portability` invocation
-- for `.just/lint_unix_gating.py` and `.just/lint_runtime_waits.py`, first
-  prove whether direct published-tool rule selection can replace them; if yes,
-  delete them, and if no, shrink them to the smallest justified ATM-specific
-  adapter
-- review whether `.just/run_lint.py` is still needed once the thin wrappers are
-  gone; delete it too if `Justfile`/published-tool wiring can preserve the
-  current user-facing lint surface without extra Python
-- do not preserve a wrapper solely to reproduce today's internal implementation
-  shape; preserve only the externally visible ATM lint surface that users and
-  CI call
-- update or delete `.just/tests/test_lint_*.py` based on which wrappers
-  actually survive
-- update `.just/tests/test_run_lint.py` and release-preflight tests to reflect
-  the reduced Python footprint and the preserved user-facing lint contract
-
-Acceptance gate:
-
-- vendored-wrapper behavior is gone wherever released `sc-lint` can replace it
-- ATM lint names stay the same
-- ATM report shape stays the same
-- every surviving Python file has a written justification and future deletion
-  trigger
-- the accepted long-term shape for every adopted lint surface is native
-  `sc-lint` usage, not an ATM-maintained wrapper
-
-### Step 4: Retarget compile-time dependencies
-
-Required code moves:
-
-- verify whether the migration branch actually needs any compile-time
-  `sc-lint-*` dependency at all
-- if a future execution branch intentionally reintroduces compile-time
-  `sc-lint` usage, add the published dependency explicitly instead of
-  restoring a vendored path dependency
-- verify `sc-lint-directives` resolves transitively or add it explicitly only
-  if the intentionally reintroduced published proc-macro surface requires it
-
-Acceptance gate:
-
-- `cargo build --workspace` no longer depends on vendored `sc-lint-*` crates
-- if the migration branch keeps zero compile-time `sc-lint` dependencies, that
-  zero-dependency state is documented explicitly and no fake retarget step is
-  claimed
-- if the migration branch intentionally introduces published proc-macro usage,
-  one targeted compile/behavior check covers the exact newly introduced call
-  sites rather than referencing deleted historical `observability.rs` lines
-
-### Step 5: Remove vendored workspace members
-
-Required code moves:
-
-- delete `crates/sc-lint-directives`, `crates/sc-lint-attributes`, and
-  `crates/sc-lint-boundary` from the ATM workspace
-- update `Cargo.lock`
-- update or delete any tests and helper scripts that assume those directories
-  or the old Python wrapper files still exist
-
-Acceptance gate:
-
-- no ATM workspace path dependency points at vendored `sc-lint-*`
-- no lint wrapper still shells through `cargo run -p <vendored crate>`
-- no deleted Python wrapper is still referenced by the `Justfile`, CI, release
-  validation, or repo docs
-
-### Step 6: Retarget CI and release-preflight install steps
-
-Required code moves:
-
-- add explicit installation of the published `sc-lint` tools in
-  `.github/workflows/ci.yml`
-- make the install path work on:
-  - `ubuntu-latest`
-  - `macos-latest`
-  - `windows-latest`
-- update `scripts/validate_release.py` assumptions if needed
-
-Acceptance gate:
-
-- `just lint` passes on all CI platforms using only the published tool install
-- release preflight no longer assumes analyzer crates are in the ATM workspace
+If any future execution sprint needs to change a deliverable or gate, that
+change must land in the sprint doc itself rather than by extending this summary
+section.
 
 ## Required Validation After Cutover
 
