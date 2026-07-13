@@ -109,10 +109,19 @@ pub(super) fn reject_connection_when_capped(
     stream: &mut LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
     active_connections: usize,
+    observability: &SubsystemObservability,
 ) -> Result<bool, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
         return Ok(false);
     }
+    observability.emit_or_warn(
+        "connection_admission",
+        "saturated",
+        format!(
+            "daemon rejected a same-host connection because the {}-connection cap was already exhausted",
+            MAX_CONCURRENT_CONNECTIONS
+        ),
+    );
     let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
         &AtmError::new_with_code(
             AtmErrorCode::DaemonConnectionSaturated,

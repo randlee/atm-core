@@ -21,6 +21,10 @@ use super::{
     write_shutdown_response,
 };
 
+const SAME_HOST_HEADER_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+const SAME_HOST_PAYLOAD_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
+const SAME_HOST_RESPONSE_WRITE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
 type DispatchWorkerHandle = std::thread::JoinHandle<()>;
@@ -202,20 +206,34 @@ fn read_request_frame_with_helper(
 fn read_request_frame(
     stream: &mut LocalSocketStream,
 ) -> Result<Option<atm_core::protocol::FramePayload>, AtmError> {
-    atm_core::protocol::read_frame(
+    let Some(header_bytes) = atm_core::protocol::read_frame_header(
         stream,
         "failed to read daemon request frame",
+    )? else {
+        return Ok(None);
+    };
+    let header = atm_core::protocol::decode_frame_header(
+        header_bytes,
         "daemon request frame exceeded the maximum supported size",
-    )
+    )?;
+    apply_optional_deadline(
+        stream.set_recv_timeout(Some(SAME_HOST_PAYLOAD_READ_DEADLINE)),
+        "failed to apply daemon request payload deadline",
+    )?;
+    Ok(Some(atm_core::protocol::read_frame_payload(
+        stream,
+        header,
+        "failed to read daemon request frame",
+    )?))
 }
 
 fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSupport, AtmError> {
     let read_deadline_support = apply_optional_deadline(
-        stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
-        "failed to apply daemon request read deadline",
+        stream.set_recv_timeout(Some(SAME_HOST_HEADER_READ_DEADLINE)),
+        "failed to apply daemon request header deadline",
     )?;
     apply_optional_deadline(
-        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        stream.set_send_timeout(Some(SAME_HOST_RESPONSE_WRITE_DEADLINE)),
         "failed to apply daemon response write deadline",
     )?;
     Ok(read_deadline_support)
@@ -331,6 +349,7 @@ fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
         | RequestEnvelope::Peek(_)
         | RequestEnvelope::Receive(_)
         | RequestEnvelope::Doctor(_) => RequestExecutionRisk::ReadOnly,
+        RequestEnvelope::CompatibilityPreflight(_) => RequestExecutionRisk::ReadOnly,
         RequestEnvelope::Send(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
             RequestExecutionRisk::SideEffecting
         }

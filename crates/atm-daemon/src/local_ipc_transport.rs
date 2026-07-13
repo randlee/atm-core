@@ -742,6 +742,7 @@ where
         &mut stream,
         context.codec,
         context.registry.active_connections(),
+        context.observability,
     )? {
         return Ok(AcceptLoopOutcome::Continue);
     }

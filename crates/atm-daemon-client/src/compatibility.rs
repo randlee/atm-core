@@ -1,67 +1,12 @@
-use std::fmt;
 use std::marker::PhantomData;
+use std::time::Duration;
 
+use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
 use atm_storage::{AtmError, AtmErrorCode, AtmErrorKind};
 
-/// Normalized release identity used by the client/daemon compatibility gate.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct ReleaseVersion(String);
-
-impl ReleaseVersion {
-    pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
-        let value = value
-            .as_ref()
-            .trim()
-            .strip_prefix('v')
-            .unwrap_or(value.as_ref().trim());
-        let mut parts = value.split('.');
-        let valid = (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        }) && parts.next().is_none();
-        if !valid {
-            return Err(AtmError::new_with_code(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                AtmErrorKind::DaemonUnavailable,
-                format!("invalid ATM release version `{value}`"),
-            )
-            .with_recovery(
-                "Install a matching released atm and atm-daemon pair before retrying.",
-            ));
-        }
-        Ok(Self(value.to_string()))
-    }
-
-    pub fn current() -> Self {
-        Self::parse(env!("CARGO_PKG_VERSION")).expect("package version must be semver")
-    }
-}
-
-impl fmt::Display for ReleaseVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct CompatibilityPreflight {
-    pub client_release: ReleaseVersion,
-    pub wire_version: u16,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum CompatibilityVerdict {
-    Compatible {
-        daemon_release: ReleaseVersion,
-    },
-    Incompatible {
-        client_release: ReleaseVersion,
-        daemon_release: ReleaseVersion,
-        code: AtmErrorCode,
-    },
-}
+use crate::rpc::RpcHeader;
+use crate::wire::MessageKind;
+use crate::{DaemonLocalIpcEndpoint, RpcEnvelope, exchange_envelope};
 
 pub struct Unverified;
 pub struct VersionVerified {
@@ -113,6 +58,51 @@ impl Connection<Unverified> {
 impl Connection<VersionVerified> {
     pub fn daemon_release(&self) -> &ReleaseVersion {
         &self.state.daemon_release
+    }
+
+    pub fn dispatch_write(
+        &mut self,
+        endpoint: &DaemonLocalIpcEndpoint,
+        request: RpcEnvelope,
+        request_deadline: Duration,
+    ) -> Result<RpcEnvelope, AtmError> {
+        exchange_envelope(endpoint, request, request_deadline)
+    }
+}
+
+pub fn verify_connection_compatibility(
+    endpoint: &DaemonLocalIpcEndpoint,
+    preflight: CompatibilityPreflight,
+    request_deadline: Duration,
+) -> Result<Connection<VersionVerified>, AtmError> {
+    let request = RpcEnvelope::encode_body(
+        RpcHeader::new(
+            crate::RequestId::new(atm_core::protocol::next_request_id().into_inner())?,
+            MessageKind::CompatibilityPreflightRequest,
+        ),
+        &preflight,
+    )?;
+    let response = exchange_envelope(endpoint, request, request_deadline)?;
+    let verdict: CompatibilityVerdict = response.decode_body()?;
+    let connection = Connection::<Unverified>::new(preflight.clone());
+    match verdict {
+        CompatibilityVerdict::Compatible { daemon_release } => {
+            connection.verify_compatibility(daemon_release)
+        }
+        CompatibilityVerdict::Incompatible {
+            client_release,
+            daemon_release,
+            code,
+        } => Err(AtmError::new_with_code(
+            code,
+            AtmErrorKind::DaemonUnavailable,
+            format!(
+                "ATM client release {client_release} is incompatible with daemon release {daemon_release}"
+            ),
+        )
+        .with_recovery(
+            "Install matching atm and atm-daemon releases; no request was dispatched.",
+        )),
     }
 }
 
