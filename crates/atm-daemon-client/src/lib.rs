@@ -14,9 +14,14 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
+mod compatibility;
 mod rpc;
 mod wire;
 
+pub use compatibility::{
+    CompatibilityPreflight, CompatibilityVerdict, Connection, ReleaseVersion, Unverified,
+    VersionVerified,
+};
 #[doc(inline)]
 pub use rpc::{RpcEnvelope, RpcHeader};
 pub use wire::{FramePayload, MessageKind, RequestId};
