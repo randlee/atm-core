@@ -59,7 +59,9 @@ mod tests {
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
+    use atm_runtime_test_support::{
+        SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    };
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -92,6 +94,10 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
+            // This test module invokes the retained roster boundary directly.
+            // Install its test-only factory here so correctness never depends on
+            // another unit test having initialized global runtime state first.
+            install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
             let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");

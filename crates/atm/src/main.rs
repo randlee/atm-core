@@ -1033,7 +1033,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn logger_level_override_accepts_debug() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("debug"), || {
             assert_eq!(
@@ -1044,7 +1044,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn logger_level_override_rejects_invalid_values() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("verbose"), || {
             let error = logger_level_override().expect_err("invalid override");
@@ -1066,7 +1066,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn init_observability_fails_closed_when_atm_log_dir_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([

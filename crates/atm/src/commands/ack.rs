@@ -120,6 +120,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn build_request_preserves_team_override_and_environment_identity() {
         let command = AckCommand {
             message_id: VALID_MESSAGE_ID.to_string(),
