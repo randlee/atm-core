@@ -33,6 +33,10 @@ use tempfile::TempDir;
 // architecture §18.3.
 #[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
+// The operation under test has a 100 ms SQLite busy timeout. This outer
+// channel deadline only detects a wedged worker; it must retain enough
+// scheduler headroom for heavily contended macOS CI runners.
+const TEST_LOCK_COMPLETION_CEILING: Duration = Duration::from_secs(30);
 const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
@@ -597,7 +601,7 @@ fn send_times_out_under_bounded_lock_contention() {
     });
 
     let error = rx
-        .recv_timeout(TEST_LOCK_BUDGET_CEILING)
+        .recv_timeout(TEST_LOCK_COMPLETION_CEILING)
         .expect("bounded send completion")
         .expect_err("timeout");
     join.join().expect("join send thread");
