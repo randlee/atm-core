@@ -155,3 +155,6 @@ jobs:
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test -p atm-daemon --verbose
+
+      - name: Run isolated shared-host singleton smoke
+        run: python scripts/smoke/run_thorough_shared_host.py

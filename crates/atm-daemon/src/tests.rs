@@ -84,7 +84,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path.clone())
+        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
         .expect("prepare runtime");
     let mut runtime = runtime;
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
@@ -187,7 +187,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         )
         .expect("test observability"),
     );
-    let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
+    let socket_path = tempdir.path().join("daemon.sock");
     let runtime =
         crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
     let (result_tx, result_rx) = mpsc::channel();

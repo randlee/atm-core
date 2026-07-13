@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from fixtures import create_shared_host_fixture_pair, repo_root, smoke_env
@@ -138,6 +139,18 @@ def terminate_process(pid: int | None) -> None:
         return
 
 
+def wait_for_process_exit(pid: int | None, timeout_seconds: float = 10.0) -> None:
+    if pid is None:
+        return
+    deadline = time.monotonic() + timeout_seconds
+    while process_is_alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if process_is_alive(pid):
+        raise RuntimeError(
+            f"shared-host smoke daemon pid {pid} did not exit within {timeout_seconds}s"
+        )
+
+
 def require_clean_host_daemon_state() -> None:
     """Keep the shared-host smoke from attaching to a developer's daemon.
 
@@ -194,6 +207,10 @@ def main() -> int:
     shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
     shared_daemon_pid: int | None = None
     try:
+        # `doctor` is the first CLI invocation that may auto-start a daemon.
+        # Recheck here so no process can appear during the build/fixture setup
+        # window after the initial fail-closed check.
+        require_clean_host_daemon_state()
         shared_doctor_a = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
         )
@@ -371,6 +388,7 @@ def main() -> int:
         return 1
     finally:
         terminate_process(shared_daemon_pid)
+        wait_for_process_exit(shared_daemon_pid)
         shutil.rmtree(shared_host_fixture_pair.root, ignore_errors=True)
 
 
