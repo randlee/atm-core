@@ -22,7 +22,8 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
     DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PostSendDoctorReport,
-    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -221,7 +222,9 @@ fn post_send_doctor_report(
                 .iter()
                 .position(|rule| rule.recipient.matches(&member.name))
                 .and_then(|index| u32::try_from(index).ok())
-                .map(|rule| RecipientDeliveryPath::ExternalOverride { rule })
+                .map(|rule| RecipientDeliveryPath::ExternalOverride {
+                    rule: PostSendHookRuleIndex(rule),
+                })
                 .unwrap_or(RecipientDeliveryPath::BuiltIn);
             RecipientDeliveryPathReport {
                 recipient: member.name.clone(),
@@ -795,6 +798,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::ordered_member_summaries;
+    use crate::config::AtmConfig;
+    use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
         DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
     };
@@ -807,6 +812,7 @@ mod tests {
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
+    use crate::team_admin::MembersList;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
 
@@ -955,6 +961,53 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn post_send_report_projects_external_override_without_message_content() {
+        let mut config = AtmConfig::default();
+        config.config_root = PathBuf::from("/workspace");
+        config.post_send_hooks = vec![PostSendHookRule {
+            recipient: HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
+            command: vec!["hooks/nudge".to_string(), "--quiet".to_string()],
+        }];
+        let roster = MembersList {
+            team: TEST_TEAM.parse().expect("team"),
+            members: vec![crate::team_admin::MemberSummary {
+                name: TEST_SENDER.parse().expect("member"),
+                agent_id: TEST_SENDER.to_string(),
+                agent_type: "general".to_string(),
+                model: Default::default(),
+                joined_at: None,
+                tmux_pane_id: None,
+                home_dir: PathBuf::from("/workspace").into(),
+                live_cwd: None,
+                extra: serde_json::Map::new(),
+            }],
+        };
+
+        let report = super::post_send_doctor_report(Some(&config), Some(&roster));
+
+        assert_eq!(report.external_rules.len(), 1);
+        assert_eq!(
+            report.external_rules[0].executable,
+            PathBuf::from("hooks/nudge")
+        );
+        assert_eq!(report.external_rules[0].argv, ["--quiet"]);
+        assert!(matches!(
+            report.recipient_paths.as_slice(),
+            [crate::doctor::RecipientDeliveryPathReport {
+                path: crate::doctor::RecipientDeliveryPath::ExternalOverride {
+                    rule: crate::doctor::PostSendHookRuleIndex(0),
+                },
+                ..
+            }]
+        ));
+        assert!(
+            !serde_json::to_string(&report)
+                .expect("serialize report")
+                .contains("message-body-must-never-appear")
+        );
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {

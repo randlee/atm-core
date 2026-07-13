@@ -101,11 +101,18 @@ pub struct PostSendHookRuleReport {
     pub config_root: PathBuf,
 }
 
+/// Stable, zero-based position of an external post-send rule in the active
+/// configuration.  Keeping this distinct from arbitrary integers prevents a
+/// consumer from treating a recipient index as a hook-rule reference.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct PostSendHookRuleIndex(pub u32);
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RecipientDeliveryPath {
     BuiltIn,
-    ExternalOverride { rule: u32 },
+    ExternalOverride { rule: PostSendHookRuleIndex },
     Disabled,
 }
 
