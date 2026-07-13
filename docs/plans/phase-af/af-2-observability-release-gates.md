@@ -1,0 +1,36 @@
+# AF-2 — Observability and release gates
+
+## Sprint intent
+
+Close the remaining 1.3.0 dogfood findings at production quality after AF-1's
+singleton design is accepted. This sprint makes the active delivery path and
+daemon health diagnosable, and makes release smoke reproducible against the
+installed artifacts.
+
+## Authoritative deliverables
+
+| ID | Deliverable | Primary paths | Acceptance criteria | Required validation |
+| --- | --- | --- | --- | --- |
+| AF2-D1 | Doctor reports active post-send delivery configuration | `crates/atm-core/src/doctor/mod.rs`, doctor CLI renderers/tests | JSON and text doctor output include an informational `post_send` section. For each configured external rule it shows recipient matcher, resolved executable/argv, and declaring config root; for each known recipient it shows built-in, external-override, or disabled-template selection. Valid overrides do not reduce health or create warnings. Payloads, environment values, and message content are never shown. | Fixture with one hook verifies JSON and text; fixture with no hook verifies built-in; disabled template verifies disabled state; secret-like env/payload strings are absent. |
+| AF2-D2 | Connection-worker errors become actionable and success traffic is clean | `crates/atm-daemon/src/local_ipc_transport/accept_loop.rs`, observability/log snapshot code | Expected peer disconnects are not retained as errors. Every remaining error record includes classified ATM code, safe message, request/correlation ID, and transport context. `atm log snapshot --level error` reads the same `level` schema written to JSONL. | End-to-end send/read/ack against one daemon yields zero error-level records; induced malformed request is returned and retained with code/request ID; snapshot finds that retained record. |
+| AF2-D3 | Hermetic doctor unit environment | `crates/atm/src/commands/doctor.rs` tests | Direct-local doctor test clears `ATM_DAEMON_BIN`, socket, home, and bootstrap-affecting inherited variables rather than inheriting caller state. | Test passes with a deliberately set daemon-binary override and proves no daemon report/process is created. |
+| AF2-D4 | Installed-artifact smoke preflight | `scripts/smoke/run_thorough_shared_host.py`, release CI/release checklist | Harness uses only released CLI syntax and runs the packaged `atm` and `atm-daemon` selected for release. It refuses to start if AF-1 singleton preflight is absent, records daemon PID/count before and after, and fails on any leaked process. | Fresh OS-user/CI-host run executes all rows; unsupported-flag mutation fails preflight; injected leaked child is detected. |
+| AF2-D5 | Version-cutover and configuration guardrails | daemon/client handshake, `atm doctor`, release documentation | Client and daemon exchange versions/protocol compatibility before writes. Unsupported mixed-version clients fail closed with a remediation message; doctor labels caller identity/team and daemon-process identity/team as separate contexts, and displays client invocation version and daemon version separately. Default dogfood configuration contains no compatibility hook or wrapper requirement. | Old-client/new-daemon incompatibility test causes no database write; matching 1.3.1 pair works; doctor displays both contexts and versions; clean-config built-in nudge test passes on tmux and Windows-compatible fallback paths. |
+
+## Release decision criteria
+
+1. AF-1's process-level singleton suite is green on macOS, Linux, and Windows.
+2. AF2-D1 through AF2-D5 validations are green using the release artifacts,
+   not `cargo run` or an arbitrary PATH binary.
+3. A fresh user-state database can create the team and roster through native
+   1.3.1 commands, send/read/ack a message, and show a healthy doctor with no
+   unexpected retained errors.
+4. The release report lists exact binary versions, PID/count evidence, hook
+   selection, doctor status, and any non-empty error snapshot. Any unexpected
+   error record is a release blocker until classified and waived explicitly.
+
+## Non-closure
+
+AF-2 does not preserve obsolete `atm_send`, `atm_read`, or `atm_ack` wrapper
+scripts. Native CLI commands are the supported interface. It also does not
+weaken AF-1 by adding an environment-selectable test daemon or socket.
