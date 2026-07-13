@@ -102,6 +102,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
+        | AtmErrorCode::SocketOverrideForbidden
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected

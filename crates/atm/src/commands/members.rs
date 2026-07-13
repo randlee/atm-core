@@ -59,7 +59,7 @@ mod tests {
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_runtime_test_support::open_sqlite_boundary;
+    use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -94,7 +94,7 @@ mod tests {
         fn new() -> Self {
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = atm_core::home::host_mail_db_path_from_home(&home_dir);
+            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -163,6 +163,16 @@ mod tests {
                 ("ATM_IDENTITY", Some(TEST_SENDER)),
                 ("ATM_TEAM", None),
                 ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                (
+                    SQLITE_RUNTIME_PATH_ENV,
+                    Some(
+                        self.home_dir
+                            .join("runtime")
+                            .join("mail.sqlite3")
+                            .to_str()
+                            .expect("utf8"),
+                    ),
+                ),
             ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);
             f()

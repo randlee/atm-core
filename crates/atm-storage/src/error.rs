@@ -260,6 +260,17 @@ impl AtmError {
         )
     }
 
+    pub fn socket_override_forbidden(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::SocketOverrideForbidden,
+            AtmErrorKind::Config,
+            message,
+        )
+        .with_recovery(
+            "Remove ATM_DAEMON_SOCKET; ATM always connects through the OS-user daemon endpoint.",
+        )
+    }
+
     pub fn daemon_may_have_executed(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonMayHaveExecuted,
