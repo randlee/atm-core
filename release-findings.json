@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-07-13T06:08:24.088771Z",
+  "branch": "feature/1-3-0-smoke-test-fix-docs",
+  "version": "1.3.1",
+  "status": "fail",
+  "findings": [
+    {
+      "finding_id": "SMOKE-FIND-001",
+      "smoke_level": "thorough",
+      "flow_or_command": "AD18-RUNTIME-ROOT-001 / shared-host raw CLI bootstrap",
+      "observed_behavior": "Three 1.3.0 atm-daemon processes ran concurrently under distinct ATM_HOME roots.",
+      "expected_behavior": "ADR-002 permits at most one atm-daemon process anywhere on the host.",
+      "root_cause": "Launch lock, owner lock, and IPC endpoint are all derived from ATM_HOME; tests explicitly accept separate gates for separate ATM_HOME values.",
+      "disposition": "promote-follow-on",
+      "recommended_sprint": "1.3.1",
+      "owner": "atm-dev",
+      "notes": "Release blocker. Replace per-ATM_HOME ownership with one stable host root and add cross-ATM_HOME process-level rejection coverage. No test-only exemption is permitted."
+    },
+    {
+      "finding_id": "SMOKE-FIND-002",
+      "smoke_level": "thorough",
+      "flow_or_command": "scripts/smoke/run_thorough_shared_host.py",
+      "observed_behavior": "Smoke runner used removed --from/--as CLI flags.",
+      "expected_behavior": "Smoke scripts exercise the released CLI contract.",
+      "root_cause": "Harness retained pre-1.3 command syntax and was not tested against the packaged binary.",
+      "disposition": "fix-in-active-sprint",
+      "recommended_sprint": "1.3.1",
+      "owner": "atm-dev",
+      "notes": "CLI syntax fix is present in this worktree; add installed-binary release preflight and daemon-count cleanup assertion."
+    },
+    {
+      "finding_id": "SMOKE-FIND-003",
+      "smoke_level": "thorough",
+      "flow_or_command": "AD11-CMD-DOCTOR-001",
+      "observed_behavior": "Doctor direct-local-path unit test observes a live daemon and fails.",
+      "expected_behavior": "Unit test is independent of caller runtime environment.",
+      "root_cause": "Test changes HOME but leaves inherited ATM_DAEMON_BIN and daemon bootstrap context intact.",
+      "disposition": "fix-in-active-sprint",
+      "recommended_sprint": "1.3.1",
+      "owner": "atm-dev",
+      "notes": "Clear ATM_DAEMON_BIN and other inherited daemon variables in the test fixture."
+    },
+    {
+      "finding_id": "SMOKE-FIND-004",
+      "smoke_level": "live dogfood",
+      "flow_or_command": "built-in local tmux post-send delivery",
+      "observed_behavior": "Local .atm.toml compatibility hooks suppressed the built-in Rust nudge.",
+      "expected_behavior": "Default 1.3.0 nudge path uses the daemon emitter without Bash configuration.",
+      "root_cause": "Dogfood configuration retained explicit post_send_hooks from the 1.2.3 nudge workaround.",
+      "disposition": "fixed",
+      "recommended_sprint": "1.3.0 dogfood configuration",
+      "owner": "arch-ctm",
+      "notes": "Removed external hooks and verified the exact built-in template on pane %13 with message 01KXD2055FH1GV0QQG0ADTMRR7."
+    },
+    {
+      "finding_id": "SMOKE-FIND-005",
+      "smoke_level": "live dogfood",
+      "flow_or_command": "successful daemon-backed send/read/doctor",
+      "observed_behavior": "Raw daemon JSONL records error-level connection_worker failures during normal successful traffic while doctor remains healthy.",
+      "expected_behavior": "Successful traffic leaves no error-level daemon records, and log snapshot exposes every retained error consistently.",
+      "root_cause": "Connection-worker boundary logs a generic error after handle_connection returns Err but drops the original AtmError; snapshot queries a schema different from raw JSONL.",
+      "disposition": "promote-follow-on",
+      "recommended_sprint": "1.3.1",
+      "owner": "atm-dev",
+      "notes": "Classify expected disconnects, preserve error detail for actual failures, and add a zero-daemon-error success-path test."
+    },
+    {
+      "finding_id": "SMOKE-FIND-006",
+      "smoke_level": "live dogfood",
+      "flow_or_command": "atm_ack wrapper",
+      "observed_behavior": "Wrapper passes removed --as flag and fails before acknowledgement.",
+      "expected_behavior": "Team-mandated wrappers work with the installed release CLI.",
+      "root_cause": "Global compatibility wrapper retained the pre-1.3 caller-context interface.",
+      "disposition": "fixed",
+      "recommended_sprint": "1.3.0 dogfood configuration",
+      "owner": "atm-dev",
+      "notes": "Deleted the three global wrappers and backing scripts; startup guidance now uses native 1.3.0 commands."
+    },
+    {
+      "finding_id": "SMOKE-FIND-007",
+      "smoke_level": "live dogfood",
+      "flow_or_command": "atm doctor --json with one configured post-send hook",
+      "observed_behavior": "Doctor reports healthy and exposes no active post-send override.",
+      "expected_behavior": "Doctor presents an external hook as active post-send configuration.",
+      "root_cause": "Doctor loads AtmConfig but never projects post_send_hooks into DoctorReport.",
+      "disposition": "promote-follow-on",
+      "recommended_sprint": "1.3.1",
+      "owner": "atm-dev",
+      "notes": "Expose recipient matcher, resolved command argv/config root, and selected path for hook debugging; never expose payloads or environment values. A valid override must not degrade doctor health."
+    }
+  ]
+}
