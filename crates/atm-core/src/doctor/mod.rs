@@ -21,7 +21,8 @@ use std::sync::Arc;
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
-    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PostSendDoctorReport,
+    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -118,6 +119,7 @@ pub fn run_doctor_with_runtime(
         environment,
         member_roster,
         observability: observability_health,
+        post_send: PostSendDoctorReport::default(),
         config: crate::boundary::ConfigDoctorReport::default(),
         mail_store: crate::boundary::MailStoreDoctorReport::default(),
         roster_store: crate::boundary::RosterStoreDoctorReport::default(),
@@ -170,6 +172,7 @@ pub fn run_doctor_with_runtime_ports(
     );
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
+    let post_send = post_send_doctor_report(config.as_ref(), member_roster.as_ref());
 
     Ok(DoctorReport {
         summary,
@@ -178,6 +181,7 @@ pub fn run_doctor_with_runtime_ports(
         environment,
         member_roster,
         observability: observability_health,
+        post_send,
         config: reports.config,
         mail_store: reports.mail_store,
         roster_store: reports.roster_store,
@@ -186,6 +190,50 @@ pub fn run_doctor_with_runtime_ports(
         runtime_status: None,
         bootstrap_trace: None,
     })
+}
+
+fn post_send_doctor_report(
+    config: Option<&crate::config::AtmConfig>,
+    member_roster: Option<&MembersList>,
+) -> PostSendDoctorReport {
+    let Some(config) = config else {
+        return PostSendDoctorReport::default();
+    };
+    let external_rules = config
+        .post_send_hooks
+        .iter()
+        .filter_map(|rule| {
+            let (program, argv) = rule.command.split_first()?;
+            Some(PostSendHookRuleReport {
+                recipient_matcher: rule.recipient.to_string(),
+                executable: std::path::PathBuf::from(program),
+                argv: argv.to_vec(),
+                config_root: config.config_root.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let recipient_paths = member_roster
+        .into_iter()
+        .flat_map(|roster| roster.members.iter())
+        .map(|member| {
+            let path = config
+                .post_send_hooks
+                .iter()
+                .position(|rule| rule.recipient.matches(&member.name))
+                .and_then(|index| u32::try_from(index).ok())
+                .map(|rule| RecipientDeliveryPath::ExternalOverride { rule })
+                .unwrap_or(RecipientDeliveryPath::BuiltIn);
+            RecipientDeliveryPathReport {
+                recipient: member.name.clone(),
+                path,
+            }
+        })
+        .collect();
+    PostSendDoctorReport {
+        config_root: config.config_root.clone(),
+        external_rules,
+        recipient_paths,
+    }
 }
 
 struct DoctorSectionReports {

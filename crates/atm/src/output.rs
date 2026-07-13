@@ -260,6 +260,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
 
     print_doctor_summary(report);
     print_doctor_observability(report);
+    print_doctor_post_send(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -281,6 +282,34 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_post_send(report: &DoctorReport) {
+    let post_send = &report.post_send;
+    if post_send.config_root.as_os_str().is_empty()
+        && post_send.external_rules.is_empty()
+        && post_send.recipient_paths.is_empty()
+    {
+        return;
+    }
+    println!(
+        "Post-send configuration: {}",
+        post_send.config_root.display()
+    );
+    for rule in &post_send.external_rules {
+        println!(
+            "  override recipient={} executable={} argv={:?}",
+            rule.recipient_matcher,
+            rule.executable.display(),
+            rule.argv
+        );
+    }
+    for recipient in &post_send.recipient_paths {
+        println!(
+            "  recipient={} path={:?}",
+            recipient.recipient, recipient.path
+        );
+    }
 }
 
 fn print_doctor_summary(report: &DoctorReport) {

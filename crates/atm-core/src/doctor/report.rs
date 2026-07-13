@@ -93,6 +93,35 @@ pub struct DaemonRuntimeDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PostSendHookRuleReport {
+    pub recipient_matcher: String,
+    pub executable: PathBuf,
+    pub argv: Vec<String>,
+    pub config_root: PathBuf,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RecipientDeliveryPath {
+    BuiltIn,
+    ExternalOverride { rule: u32 },
+    Disabled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecipientDeliveryPathReport {
+    pub recipient: AgentName,
+    pub path: RecipientDeliveryPath,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PostSendDoctorReport {
+    pub config_root: PathBuf,
+    pub external_rules: Vec<PostSendHookRuleReport>,
+    pub recipient_paths: Vec<RecipientDeliveryPathReport>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -102,6 +131,8 @@ pub struct DoctorReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
+    #[serde(default)]
+    pub post_send: PostSendDoctorReport,
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,
