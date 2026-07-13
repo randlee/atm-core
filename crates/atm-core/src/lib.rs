@@ -113,4 +113,6 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};
+pub use service_runtime::{
+    LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};

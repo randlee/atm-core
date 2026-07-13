@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | ID | ADR-005 |
-| Status | **Accepted** |
+| Status | **Superseded by ADR-026** |
 | Date | 2026-05-07 |
 | Deciders | Rand Lee |
 | Relates to | REQ-P-RUNTIME-002, REQ-CORE-RUNTIME-001, REQ-RUSQLITE-STORE-001, ADR-002 |

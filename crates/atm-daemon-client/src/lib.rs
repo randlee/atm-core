@@ -360,24 +360,6 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
     }
 }
 
-fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(resolve_user_home()?
-        .join(".atm")
-        .join("daemon")
-        .join(file_name))
-}
-
-fn resolve_user_home() -> Result<PathBuf, AtmError> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .ok_or_else(|| {
-            AtmError::daemon_unavailable("failed to resolve user home directory").with_recovery(
-                "Set HOME or USERPROFILE before invoking the same-host ATM daemon client.",
-            )
-        })
-}
-
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
     let ipc_name = wire::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
     let (result_tx, result_rx) = mpsc::sync_channel(1);
@@ -647,7 +629,7 @@ impl DaemonSupervisor {
             try_connect,
             publish_timeout,
             poll_interval,
-            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+            atm_core::home::current_host_runtime_scope()?.launch_lock,
             traceability,
         )
     }
@@ -864,8 +846,7 @@ impl DaemonSupervisor {
         command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .env("ATM_DAEMON_SOCKET", self.endpoint.as_ref());
+            .stderr(Stdio::inherit());
         command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",

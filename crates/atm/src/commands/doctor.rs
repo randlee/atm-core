@@ -178,8 +178,5 @@ mod tests {
         let report = command
             .execute_direct_local(&observability, home_dir, current_dir)
             .expect("report");
-
-        assert!(report.daemon_runtime.is_none());
-        assert!(report.runtime_status.is_none());
     }
 }

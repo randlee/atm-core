@@ -17,6 +17,20 @@ use crate::schema::{InboxMessage, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
+/// Invoke a closure with the installed retained local runtime.
+#[doc(hidden)]
+pub fn with_default_local_service_runtime<T>(
+    f: impl FnOnce(&LocalServiceRuntime) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let runtime = crate::service_runtime_store::default_runtime()?;
+    f(&runtime)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RetainedMailboxTimeoutPolicy {
+    pub(crate) workflow_lock_timeout: Duration,
+}
+
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_nudge_template_override(
@@ -130,6 +144,11 @@ impl LocalServiceRuntime {
         self.roster_store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
+    }
+
+    #[doc(hidden)]
+    pub fn shared_roster_store_arc(&self) -> std::sync::Arc<dyn SharedRosterStore + Send + Sync> {
+        self.roster_store.clone()
     }
 }
 
