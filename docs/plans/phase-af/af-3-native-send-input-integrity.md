@@ -38,13 +38,31 @@ contract, never an instruction to read daemon stdin. Client-side materializing
 must preserve the existing 256 KiB bound and typed empty, oversized, UTF-8,
 and conflicting-input failures.
 
+## Hard dependencies and delivery standard
+
+AF3-D1 and D2 start after AF1-D5 establishes the production singleton test
+baseline. AF3-D3 is the final integration row: it rebases after AF2-D4 under
+the README shared-smoke contract and retains both earlier assertion sets.
+Every row is expected to land production-ready with implementation, wire and
+CLI documentation/boundary alignment, typed failure behavior, and validation;
+none may be deferred while claiming AF-3 completion.
+
+## Error inventory
+
+| Failure mode | Stable code | Required recovery |
+| --- | --- | --- |
+| Empty or whitespace stdin | `MessageValidationFailed` | Supply non-empty UTF-8 message text. |
+| stdin exceeds 256 KiB | `MessageValidationFailed` | Use a shorter body or the documented `--file` path. |
+| stdin is not UTF-8 or cannot be read | existing input/read `AtmErrorCode` | Supply readable UTF-8 input and retry; do not send an empty daemon-side stdin marker. |
+| `--stdin` conflicts with positional text or `--file` | `MessageValidationFailed` | Select exactly one message source. |
+
 ## Authoritative deliverables
 
 | ID | Deliverable | Primary paths | Acceptance criteria | Required validation |
 | --- | --- | --- | --- | --- |
 | AF3-D1 | Separate CLI input selection from daemon-wire source | `crates/atm/src/commands/send.rs`, `crates/atm-core/src/send/mod.rs`, send request/RPC DTOs | `CliSendMessageSource` selects inline, file, or stdin; before `CliComposition::bootstrap` and RPC, `Stdin` is read once and materialized into `WireSendMessageSource`. A daemon-bound compose request cannot encode `Stdin`. Existing `--file` semantics remain unchanged. | Unit tests cover source selection and prove a daemon-wire DTO cannot represent `Stdin`; RPC round-trip covers materialized stdin bytes. |
 | AF3-D2 | Preserve local input error contract | `crates/atm-core/src/send/input.rs`, CLI error rendering/tests | Empty, whitespace-only, oversized, non-UTF-8, unreadable, and conflicting `--stdin` inputs fail at the CLI boundary with their typed ATM errors and recovery guidance. No daemon starts or receives a request after a local input failure. | Boundary tests for each failure mode plus a process test asserting daemon PID/count is unchanged after invalid stdin. |
-| AF3-D3 | Prove native input modes through the release daemon | CLI integration tests and `scripts/smoke/run_thorough_shared_host.py` | Inline, stdin, and file sends persist their exact expected bodies through a daemon whose stdin is null. The smoke lane reads the resulting message and compares the durable body, not merely command exit status. | Release-binary process tests pipe a non-empty 4 KiB fixture to `--stdin`, use equivalent `--file`, and send inline text; each readback is byte-for-byte correct and produces no unexpected daemon error event. |
+| AF3-D3 | Prove native input modes through the release daemon | CLI integration tests and `scripts/smoke/run_thorough_shared_host.py` | Inline, stdin, and file sends persist their exact expected bodies through a daemon whose stdin is null. The smoke lane reads the resulting message and compares the durable body, not merely command exit status. | Release-binary process tests pipe a non-empty 4 KiB fixture to `--stdin`, use equivalent `--file`, and send inline text; each readback is byte-for-byte correct, produces no unexpected daemon error event, and confirms AF-1/AF-2 assertions in the shared script remain intact. |
 
 ## Paths to delete or replace
 

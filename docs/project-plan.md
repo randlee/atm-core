@@ -111,6 +111,18 @@ Phase-AE planning note:
   example and relative-link verification, release freshness gating, and the
   phase-close installed-doc proof artifact
 
+Phase-AF planning note:
+- `Phase AF` is the 1.3.1 reliability recovery line following 1.3.0 dogfood
+  findings; it does not supersede the retained Phase AE installed-documentation
+  scope.
+- the authoritative phase plan is [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md)
+  with hardened sprint documents for AF-1 host-wide singleton, AF-2
+  observability/release gates, and AF-3 native send-input integrity.
+- the planning and implementation branch is
+  `feature/1-3-0-smoke-test-fix-docs`; integration target is `develop`.
+- AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
+  proceed until its process-level singleton proof is green.
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -155,6 +167,9 @@ Status:
   baseline.
 - Phase AE is the active planning line for installed end-user documentation as
   a shipped release surface.
+- Phase AF is the active 1.3.1 reliability recovery line; AF-1 singleton
+  closure blocks release progression, followed by AF-2 observability/release
+  gates and AF-3 native send-input integrity.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`

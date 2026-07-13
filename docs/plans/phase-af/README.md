@@ -8,6 +8,10 @@ work, and the native send-input data path cannot credibly close at production
 quality in one sprint. AF-1 is the release blocker; AF-2 and AF-3 may start
 only after AF-1 has an accepted design and its process-level proof is green.
 
+Every deliverable in the three sprint documents is a production-ready closure
+commitment. A sprint cannot report success while one of its table rows, its
+required documentation alignment, or its required validation is deferred.
+
 | Sprint | Closure | Sprint-local gate |
 | --- | --- | --- |
 | [AF-1: host singleton](af-1-host-singleton.md) | One `atm-daemon` per OS user/host, with no `ATM_HOME`, socket, or test exception bypass. | Required before any further full smoke that can launch a daemon, and before 1.3.1 RC. |
@@ -29,6 +33,18 @@ assertions while adding its input matrix. A merge/rebase that removes or masks
 an earlier assertion fails the later sprint's validation. The required merge
 order is **AF-1 → AF-2 → AF-3**; parallel work may prepare patches, but its
 final merge must rebase in that order.
+
+## Governance and boundary coverage
+
+| Required artifact | AF owner and required outcome |
+| --- | --- |
+| `docs/project-plan.md` | Phase registration and all-sprint closure summary are owned by this README. |
+| `docs/requirements.md`, `docs/architecture.md`, `docs/adr/ADR-002-host-wide-daemon-singleton.md`, `docs/adr/INDEX.md` | AF1-D0/D1 align the singleton contract, state-root migration, error codes, and ADR index. |
+| `docs/atm/{requirements,architecture,boundaries}.md`, `docs/atm-daemon-client/{requirements,architecture,boundaries}.md` | AF1-D1/D2 and AF3-D1 align CLI/client ownership and the no-daemon-stdin wire rule. |
+| `docs/atm-core/{requirements,architecture,boundaries}.md`, `docs/atm-daemon/{requirements,architecture,boundaries}.md`, `docs/atm-daemon/protocol-icd.md` | AF1-D3/D4, AF2-D1/D2, and AF3-D1 align protocol, daemon admission, doctor, and transport failure contracts. |
+| `boundaries/atm-daemon-client/{daemon-bootstrap,rpc-envelope}.toml`, `boundaries/atm/local-socket-client-transport.toml`, `boundaries/atm-daemon/{host-ownership-daemon,socket-server-transport}.toml`, `boundaries/atm-core/{atm-protocol,config-doctor}.toml` | The sprint that changes a listed boundary updates its machine-readable contract and runs its named lint/review gate; no boundary change is docs-only. |
+| `docs/testing-guidelines.md`, ADR-003, ADR-007, ADR-008, `scripts/lint_daemon_singleton.py` | AF1-D5/D6 own singleton/lifecycle and cross-platform test alignment; AF2-D4 and AF3-D3 extend the shared smoke only under the integration contract above. |
+| `release-findings.json`, `reports/smoke/smoke-thorough.md`, `docs/team-protocol.md` | AF2-D4 and AF3-D3 refresh issue disposition and release evidence; team protocol remains the QA/triage routing rule. |
 
 ## Phase release decision criteria
 

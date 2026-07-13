@@ -59,6 +59,23 @@ The implementation must retain three independent barriers:
 Failure at any barrier leaves no child daemon running. Shutdown removes only
 the locks owned by that process and never unlinks another process's endpoint.
 
+## Hard dependencies and delivery standard
+
+AF1-D0 must land before D1–D6. D1 precedes D2–D4; D2 and D3 precede D5; D3
+precedes D6. D5 is the phase dependency for AF-2/AF-3 shared-smoke work.
+Every table row is expected to land production-ready: code, governing docs and
+machine-readable boundary records, validation, and negative-path recovery
+must all close in the same sprint.
+
+## Error inventory
+
+| Failure mode | Stable code | Required recovery |
+| --- | --- | --- |
+| Caller supplies `ATM_DAEMON_SOCKET` | `SocketOverrideForbidden` | Remove the override and connect through the host singleton endpoint. |
+| Caller requests a state root incompatible with the serving daemon | `StateRootMismatch` | Use the active state root or stop the owner only through the documented lifecycle path. |
+| A second launcher or daemon attempts admission | `LaunchGateContended` or `OwnerAlreadyHeld` | Connect to the serving endpoint; never retry by changing `ATM_HOME`. |
+| Runtime-root permission or symlink validation fails | a documented `AtmErrorCode` selected by D0 | Repair ownership/permissions and remove the unsafe artifact; do not bypass the guard. |
+
 ## Authoritative deliverables
 
 | ID | Deliverable | Primary paths | Acceptance criteria | Required validation |
