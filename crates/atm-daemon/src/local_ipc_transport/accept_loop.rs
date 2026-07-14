@@ -192,13 +192,6 @@ pub(super) fn spawn_connection_worker<'scope>(
                 Ok(Err(error)) => {
                     #[cfg(test)]
                     eprintln!("daemon local IPC connection handling failed: {error}");
-                    super::request_worker::emit_connection_failure_event(
-                        &observability,
-                        &error,
-                        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)
-                            .expect("nonzero request id"),
-                        "connection_worker",
-                    );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
                         action = "connection_worker",
