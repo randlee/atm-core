@@ -1,8 +1,8 @@
 ---
 title: Phase AF Readiness
 status: in_progress
-branch: feature/1-3-0-smoke-test-fix-docs
-worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # Phase AF Readiness
@@ -11,9 +11,12 @@ This is the authoritative closeout gate for the Phase AF plan. It records the
 required execution evidence; it does not claim that the 1.3.1 implementation
 has shipped.
 
-AF-3 implementation evidence is tracked on
-`feature/pAF-s3-native-send-input-integrity`; phase readiness remains
-`in_progress` until all AF-1/AF-2/AF-3 accepted-line validations are green.
+AF-1, AF-2, and AF-3 are all merged into `integrate/phase-AF` (commit
+`52c5c338`). PR #539 (`integrate/phase-AF` -> `develop`) is the accepted
+develop candidate under phase-end review. Phase readiness remains
+`in_progress` until quality-mgr's phase-end QA gate and arch-ctm's
+production-readiness review both close, and the user authorizes merging
+PR #539.
 
 | Sprint | Plan closure | Required accepted-line evidence |
 | --- | --- | --- |
