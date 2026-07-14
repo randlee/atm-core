@@ -215,7 +215,7 @@
 
 - validation timestamp: `2026-07-14T05:56Z`
 - branch: `feature/pAF-s3-native-send-input-integrity`
-- binary SHA: `1cb5fb40dd6c1d4ab17ea9b0c353c6efd19b7448`
+- binary SHA: `be2a1b793847dc377e8c47344f92301b81fcac26`
 - command:
   `ATM_SMOKE_INSTALL_ROOT=<temp install> python3 scripts/smoke/run_thorough_shared_host.py`
 
