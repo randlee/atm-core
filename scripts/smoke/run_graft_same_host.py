@@ -31,7 +31,10 @@ def smoke_binary(root: Path, name: str) -> Path:
 
 def smoke_example_binary(root: Path, name: str) -> Path:
     suffix = ".exe" if os.name == "nt" else ""
-    return root / "target" / "debug" / "examples" / f"{name}{suffix}"
+    binary = root / "target" / "debug" / "examples" / f"{name}{suffix}"
+    if not binary.is_file():
+        raise RuntimeError(f"same-host graft smoke requires built example binary at {binary}")
+    return binary
 
 
 def ensure_debug_binaries(root: Path) -> None:
@@ -265,6 +268,8 @@ def ensure_member(root: Path, env: dict[str, str], workspace_dir: Path, team: st
         "add-member",
         team,
         member,
+        "--home-dir",
+        str(workspace_dir),
         "--json",
     )
     if completed["exit_code"] == 0:
@@ -275,6 +280,32 @@ def ensure_member(root: Path, env: dict[str, str], workspace_dir: Path, team: st
     raise RuntimeError(json.dumps(completed, indent=2))
 
 
+def update_member_harness(
+    root: Path,
+    env: dict[str, str],
+    workspace_dir: Path,
+    team: str,
+    member: str,
+    harness: str,
+) -> None:
+    completed = run_atm_result(
+        root,
+        env,
+        workspace_dir,
+        "teams",
+        "update-member",
+        team,
+        member,
+        "--harness",
+        harness,
+        "--agent-type",
+        "worker",
+        "--json",
+    )
+    if completed["exit_code"] != 0:
+        raise RuntimeError(json.dumps(completed, indent=2))
+
+
 def main() -> int:
     root = repo_root()
     daemon_pids_before = count_atm_daemon_processes()
@@ -282,9 +313,9 @@ def main() -> int:
     ensure_debug_binaries(root)
 
     unique = next(tempfile._get_candidate_names()).replace("_", "")[:8]
-    team_name = f"z21-graft-{unique}"
-    operator = f"z21-graft-operator-{unique}"
-    graft_agent = f"z21-graft-host-{unique}"
+    team_name = f"g{unique}"
+    operator = f"o{unique}"
+    graft_agent = f"a{unique}"
     fixture = create_clean_room_fixture(
         prefix="z21g.",
         team_name=team_name,
@@ -293,6 +324,8 @@ def main() -> int:
     )
     daemon_pid: int | None = None
     example_proc: subprocess.Popen[str] | None = None
+    example_stdout_handle = None
+    example_stderr_handle = None
     try:
         atm_toml = fixture.workspace_dir / ".atm.toml"
         atm_toml.write_text(
@@ -306,25 +339,14 @@ def main() -> int:
 
         ensure_member(root, operator_env, fixture.workspace_dir, team_name, operator)
         ensure_member(root, operator_env, fixture.workspace_dir, team_name, graft_agent)
-        run_atm(
+        update_member_harness(
             root,
             operator_env,
             fixture.workspace_dir,
-            "teams",
-            "update-member",
             team_name,
             graft_agent,
-            "--harness",
             "codex-cli",
-            "--agent-type",
-            "worker",
-            "--json",
         )
-
-        doctor = parse_json_output(run_atm(root, operator_env, fixture.workspace_dir, "doctor", "--json"))
-        owner_pid = doctor.get("runtime_status", {}).get("singleton_owner_pid")
-        daemon_pid = int(owner_pid) if owner_pid is not None else None
-        daemon_pids_during = count_atm_daemon_processes()
 
         ready_file = fixture.root / "graft-ready.txt"
         example_command = [
@@ -337,23 +359,34 @@ def main() -> int:
             operator,
             str(ready_file),
         ]
+        example_stdout_path = fixture.root / "example.stdout.log"
+        example_stderr_path = fixture.root / "example.stderr.log"
+        example_stdout_handle = example_stdout_path.open("w", encoding="utf-8")
+        example_stderr_handle = example_stderr_path.open("w", encoding="utf-8")
         example_proc = subprocess.Popen(
             example_command,
             cwd=root,
             env=graft_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=example_stdout_handle,
+            stderr=example_stderr_handle,
             text=True,
             encoding="utf-8",
             errors="replace",
         )
         wait_for_file(ready_file)
-        if os.name == "nt":
-            # GraftSession::activate() returns after spawning the receiver loop;
-            # on Windows the local IPC listener can publish just after the
-            # example writes its ready file. Give the listener a brief settle
-            # window before the first post-send nudge.
-            time.sleep(1.0)
+        daemon_pids_during = count_atm_daemon_processes()
+        if len(daemon_pids_during) != 1:
+            raise RuntimeError(
+                json.dumps(
+                    {
+                        "error": "graft same-host smoke expected exactly one daemon after graft host activation",
+                        "daemon_pids_before": daemon_pids_before,
+                        "daemon_pids_during": daemon_pids_during,
+                    },
+                    indent=2,
+                )
+            )
+        daemon_pid = daemon_pids_during[0]
 
         initial_send = parse_json_output(
             run_atm(
@@ -368,7 +401,17 @@ def main() -> int:
             )
         )
 
-        stdout, stderr = example_proc.communicate(timeout=60)
+        example_proc.wait(timeout=60)
+        stdout = (
+            example_stdout_path.read_text(encoding="utf-8")
+            if example_stdout_path.is_file()
+            else ""
+        )
+        stderr = (
+            example_stderr_path.read_text(encoding="utf-8")
+            if example_stderr_path.is_file()
+            else ""
+        )
         if example_proc.returncode != 0:
             raise RuntimeError(
                 json.dumps(
@@ -431,6 +474,10 @@ def main() -> int:
         )
         return 0
     finally:
+        if example_stdout_handle is not None:
+            example_stdout_handle.close()
+        if example_stderr_handle is not None:
+            example_stderr_handle.close()
         if example_proc is not None and example_proc.poll() is None:
             example_proc.terminate()
             try:

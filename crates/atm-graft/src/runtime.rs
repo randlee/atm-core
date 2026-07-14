@@ -6,7 +6,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-#[cfg(test)]
 use std::sync::mpsc::TrySendError;
 #[cfg(windows)]
 use std::time::Instant;
@@ -114,14 +113,12 @@ impl Drop for HelperThreadPermit {
     }
 }
 
-#[cfg(test)]
-pub(crate) struct TestReceiverReadyLatch {
+pub(crate) struct ReceiverReadyLatch {
     ready_tx: SyncSender<()>,
     ready_rx: Receiver<()>,
 }
 
-#[cfg(test)]
-impl TestReceiverReadyLatch {
+impl ReceiverReadyLatch {
     pub(crate) fn new() -> Self {
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
         Self { ready_tx, ready_rx }
@@ -131,6 +128,7 @@ impl TestReceiverReadyLatch {
         self.ready_tx.clone()
     }
 
+    #[cfg(test)]
     pub(crate) fn signal_listening(&self) -> Result<(), AtmError> {
         signal_ready_sender(&self.ready_tx)
     }
@@ -162,7 +160,6 @@ impl TestReceiverReadyLatch {
     }
 }
 
-#[cfg(test)]
 fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
     ready_tx.try_send(()).map_err(|error| match error {
         TrySendError::Full(()) => AtmError::new(
@@ -504,14 +501,12 @@ pub(crate) struct GraftReceiverLoopContext {
     pub(crate) injector: Arc<dyn HostNudgeInjector>,
     pub(crate) observability: Arc<dyn GraftObservability>,
     pub(crate) stop_rx: Receiver<()>,
-    #[cfg(test)]
     pub(crate) ready_tx: Option<SyncSender<()>>,
 }
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
     let listener = bind_graft_receiver_listener(&ctx.endpoint_path)?;
-    #[cfg(test)]
     if let Some(ready_tx) = ctx.ready_tx.as_ref() {
         signal_ready_sender(ready_tx)?;
     }
@@ -1005,7 +1000,7 @@ mod tests {
 
     use super::{
         BoundedHostNudgeInjector, GraftReceiverLoopContext, HOST_NUDGE_INJECTION_DEADLINE,
-        MAX_HOST_NUDGE_HELPERS, MAX_LISTENER_WAKE_HELPERS, TestReceiverReadyLatch,
+        MAX_HOST_NUDGE_HELPERS, MAX_LISTENER_WAKE_HELPERS, ReceiverReadyLatch,
         apply_receiver_deadline, bind_graft_receiver_listener, join_receive_loop_with_deadline,
         load_graft_config, read_snapshot, run_graft_receiver_loop, wake_graft_receiver_listener,
         wake_graft_receiver_listener_with_budget_and_connector,
@@ -1138,7 +1133,7 @@ mod tests {
         injector: Arc<dyn HostNudgeInjector>,
     ) -> SpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
-        let ready_latch = TestReceiverReadyLatch::new();
+        let ready_latch = ReceiverReadyLatch::new();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
@@ -1187,7 +1182,7 @@ mod tests {
 
     #[test]
     fn receiver_ready_latch_signals_and_waits() {
-        let latch = TestReceiverReadyLatch::new();
+        let latch = ReceiverReadyLatch::new();
         latch.signal_listening().expect("signal");
         latch
             .wait_until_listening(HOST_NUDGE_INJECTION_DEADLINE)

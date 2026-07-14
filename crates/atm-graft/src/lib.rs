@@ -32,13 +32,15 @@ mod runtime;
 mod transport;
 
 use runtime::{
-    GraftReceiverLoopContext, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-    run_graft_receiver_loop, set_session_state, wake_graft_receiver_listener,
+    GraftReceiverLoopContext, ReceiverReadyLatch, join_receive_loop_with_deadline,
+    load_graft_config, read_snapshot, run_graft_receiver_loop, set_session_state,
+    wake_graft_receiver_listener,
 };
 use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
+const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 
 pub use atm_core::{AtmConfig, GraftConfig};
 
@@ -368,14 +370,23 @@ impl GraftSession {
         worker_observability: Arc<dyn GraftObservability>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
+        let ready_latch = ReceiverReadyLatch::new();
         let join_handle = spawn_graft_receive_loop(
             endpoint_path,
             options,
             worker_snapshot,
             injector,
             worker_observability,
+            ready_latch.notifier(),
             stop_rx,
         )?;
+        ready_latch
+            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
+            .map_err(|error| {
+                error.with_recovery(
+                    "Retry graft activation after the same-host receiver loop can bind and signal readiness within the bounded startup deadline.",
+                )
+            })?;
         Ok((stop_tx, join_handle))
     }
 
@@ -451,6 +462,7 @@ fn spawn_graft_receive_loop(
     worker_snapshot: Arc<RwLock<SessionSnapshot>>,
     injector: Arc<dyn HostNudgeInjector>,
     worker_observability: Arc<dyn GraftObservability>,
+    ready_tx: std::sync::mpsc::SyncSender<()>,
     stop_rx: std::sync::mpsc::Receiver<()>,
 ) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
     let thread_name = format!("atm-graft-{}", options.agent());
@@ -463,8 +475,7 @@ fn spawn_graft_receive_loop(
                 injector,
                 observability: worker_observability,
                 stop_rx,
-                #[cfg(test)]
-                ready_tx: None,
+                ready_tx: Some(ready_tx),
             })
         })
         .map_err(spawn_receive_loop_error)
