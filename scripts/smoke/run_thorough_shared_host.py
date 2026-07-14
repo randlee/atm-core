@@ -257,27 +257,31 @@ def main() -> int:
         shared_daemon_pid = int(shared_pid_a) if shared_pid_a is not None else None
         shared_daemon_count_before = running_daemon_count()
 
+        def ensure_member(
+            fixture_item: object,
+            env_item: dict[str, str],
+            member: str,
+        ) -> None:
+            completed = run_atm_result(
+                root,
+                env_item,
+                fixture_item.workspace_dir,  # type: ignore[attr-defined]
+                "teams",
+                "add-member",
+                fixture_item.team_name,  # type: ignore[attr-defined]
+                member,
+                "--json",
+            )
+            if completed["exit_code"] == 0:
+                return
+            stderr = str(completed.get("stderr", ""))
+            if "already exists in team" in stderr:
+                return
+            raise RuntimeError(json.dumps(completed, indent=2))
+
         for fixture_item, env_item in ((shared_a, shared_env_a), (shared_b, shared_env_b)):
-            run_atm(
-                root,
-                env_item,
-                fixture_item.workspace_dir,
-                "teams",
-                "add-member",
-                fixture_item.team_name,
-                fixture_item.operator,
-                "--json",
-            )
-            run_atm(
-                root,
-                env_item,
-                fixture_item.workspace_dir,
-                "teams",
-                "add-member",
-                fixture_item.team_name,
-                fixture_item.recipient,
-                "--json",
-            )
+            ensure_member(fixture_item, env_item, fixture_item.operator)  # type: ignore[attr-defined]
+            ensure_member(fixture_item, env_item, fixture_item.recipient)  # type: ignore[attr-defined]
 
         def run_send(
             fixture_item: object,
@@ -398,14 +402,22 @@ def main() -> int:
             shared_message_id_b,
             "shared-host ack B",
         )
+        expected_shared_file_path = (
+            shared_a.home_dir
+            / ".config"
+            / "atm"
+            / "share"
+            / shared_a.team_name
+            / file_path.name
+        )
+        expected_file_body = (
+            f"{file_note}\n\nFile reference: {expected_shared_file_path}"
+        )
         shared_input_reads = [
             read_and_ack(shared_a, shared_env_a, shared_stdin_message_id, "stdin ack"),
             read_and_ack(shared_a, shared_env_a, shared_inline_message_id, "inline ack"),
             read_and_ack(shared_a, shared_env_a, shared_file_message_id, "file ack"),
         ]
-        expected_file_body = str(
-            shared_input_reads[2]["read"].get("message", {}).get("text", "")
-        )
         input_bodies_ok = [
             shared_input_reads[0]["read"].get("message", {}).get("text") == stdin_body,
             shared_input_reads[1]["read"].get("message", {}).get("text") == inline_body,
@@ -481,7 +493,11 @@ def main() -> int:
                     "send_b": shared_send_b,
                     "invalid_stdin_send": invalid_stdin_send,
                     "invalid_stdin_doctor": invalid_stdin_doctor,
+                    "shared_stdin_send": shared_stdin_send,
+                    "shared_inline_send": shared_inline_send,
+                    "shared_file_send": shared_file_send,
                     "shared_input_reads": shared_input_reads,
+                    "expected_shared_file_path": str(expected_shared_file_path),
                     "expected_file_body": expected_file_body,
                     "input_bodies_ok": input_bodies_ok,
                     "read_ack_a": shared_read_ack_a,
