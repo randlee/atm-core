@@ -186,5 +186,9 @@ mod tests {
             report.daemon_runtime.is_none(),
             "hermetic local doctor must not report a daemon"
         );
+        assert!(
+            report.runtime_status.is_none(),
+            "hermetic local doctor must not report live daemon runtime status"
+        );
     }
 }
