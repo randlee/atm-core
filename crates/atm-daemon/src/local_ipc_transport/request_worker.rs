@@ -90,7 +90,7 @@ pub(super) fn handle_connection(
         "daemon request frame accepted under configured size cap"
     );
     let (request_id, request) = decode_request_frame(&codec, frame, observability)?;
-    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
+    let response = dispatch_request(request_id, request, dispatcher, &registry, observability)?;
     if let Err(error) = write_response(&mut stream, &codec, request_id, response) {
         let classification = classify_connection_failure(&error);
         if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
@@ -134,10 +134,25 @@ fn emit_dispatch_panic_recovery(
 fn read_connection_frame(
     stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
-    _observability: &SubsystemObservability,
+    observability: &SubsystemObservability,
 ) -> Result<ReadRequestFrameResult, AtmError> {
-    let read_deadline_support = configure_request_deadlines(&stream)?;
-    match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)? {
+    let read_deadline_support = configure_request_deadlines(&stream).inspect_err(|error| {
+        emit_connection_failure_event(
+            observability,
+            error,
+            RequestId::new(1).expect("nonzero request id"),
+            "request_deadline_config",
+        );
+    })?;
+    match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)
+        .inspect_err(|error| {
+            emit_connection_failure_event(
+                observability,
+                error,
+                RequestId::new(1).expect("nonzero request id"),
+                "request_read",
+            );
+        })? {
         ReadRequestFrameResult::EndOfStream => Ok(ReadRequestFrameResult::EndOfStream),
         ReadRequestFrameResult::Frame { stream, frame } => {
             Ok(ReadRequestFrameResult::Frame { stream, frame })
@@ -154,8 +169,8 @@ fn read_connection_frame(
         }
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
-            _observability.emit_event_or_warn(
-                _observability
+            observability.emit_event_or_warn(
+                observability
                     .event(
                         "connection_worker",
                         ConnectionFailureClassification::TransportFailure.as_str(),
@@ -364,17 +379,24 @@ fn dispatch_request(
     request: RequestEnvelope,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
+    observability: &SubsystemObservability,
 ) -> Result<ResponseEnvelope, AtmError> {
     let execution_risk = request_execution_risk(&request);
-    let (result_rx, completion_rx, dispatch_handle) =
-        spawn_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
-    registry.push_dispatch_handle(
-        TrackedDispatchHandle {
-            completion_rx,
-            join_handle: dispatch_handle,
-        },
-        MAX_CONCURRENT_CONNECTIONS,
-    )?;
+    let result_rx = (|| {
+        let (result_rx, completion_rx, dispatch_handle) =
+            spawn_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
+        registry.push_dispatch_handle(
+            TrackedDispatchHandle {
+                completion_rx,
+                join_handle: dispatch_handle,
+            },
+            MAX_CONCURRENT_CONNECTIONS,
+        )?;
+        Ok::<DispatchResultRx, AtmError>(result_rx)
+    })()
+    .inspect_err(|error| {
+        emit_connection_failure_event(observability, error, request_id, "dispatch_request");
+    })?;
     Ok(await_dispatch_response(
         request_id,
         execution_risk,
