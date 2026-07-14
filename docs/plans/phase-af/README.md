@@ -1,6 +1,6 @@
 ---
 title: Phase AF — 1.3.1 Reliability Recovery
-status: planned
+status: in_progress
 branch: feature/1-3-0-smoke-test-fix-docs
 worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
 ---
@@ -24,6 +24,11 @@ required documentation alignment, or its required validation is deferred.
 | [AF-1: host singleton](af-1-host-singleton.md) | One `atm-daemon` per OS user/host, with no `ATM_HOME`, socket, or test exception bypass. | Required before any further full smoke that can launch a daemon, and before 1.3.1 RC. |
 | [AF-2: observability and release gates](af-2-observability-release-gates.md) | Accurate doctor hook disclosure, actionable daemon errors, hermetic validation, and cutover safeguards. | Required before declaring 1.3.1 release-ready. |
 | [AF-3: native send-input integrity](af-3-native-send-input-integrity.md) | `stdin`, inline, and file send sources reach the daemon with the intended bytes and typed local failures. | Required before declaring 1.3.1 release-ready. |
+
+AF-3 implementation now lives on
+`feature/pAF-s3-native-send-input-integrity`; its sprint doc is the
+authoritative closure record for the input-path fix and shared-host smoke
+evidence.
 
 ## Shared smoke-script integration contract
 

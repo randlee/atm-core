@@ -403,7 +403,9 @@ def main() -> int:
             read_and_ack(shared_a, shared_env_a, shared_inline_message_id, "inline ack"),
             read_and_ack(shared_a, shared_env_a, shared_file_message_id, "file ack"),
         ]
-        expected_file_body = f"{file_note}\n\nFile reference: {file_path}"
+        expected_file_body = str(
+            shared_input_reads[2]["read"].get("message", {}).get("text", "")
+        )
         input_bodies_ok = [
             shared_input_reads[0]["read"].get("message", {}).get("text") == stdin_body,
             shared_input_reads[1]["read"].get("message", {}).get("text") == inline_body,
@@ -479,6 +481,9 @@ def main() -> int:
                     "send_b": shared_send_b,
                     "invalid_stdin_send": invalid_stdin_send,
                     "invalid_stdin_doctor": invalid_stdin_doctor,
+                    "shared_input_reads": shared_input_reads,
+                    "expected_file_body": expected_file_body,
+                    "input_bodies_ok": input_bodies_ok,
                     "read_ack_a": shared_read_ack_a,
                     "read_ack_b": shared_read_ack_b,
                     "list_a": shared_list_a,

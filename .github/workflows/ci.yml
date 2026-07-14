@@ -111,6 +111,7 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: [clippy]
+    if: ${{ always() && !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
