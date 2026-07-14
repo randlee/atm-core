@@ -100,7 +100,7 @@ pub fn verify_connection_compatibility(
     request_deadline: Duration,
 ) -> Result<Connection<VersionVerified>, AtmError> {
     let request = RpcEnvelope::from_frame_payload(crate::FramePayload {
-        request_id: crate::RequestId::new(protocol::next_request_id().into_inner())?,
+        request_id: protocol::next_request_id(),
         message_kind: MessageKind::CompatibilityPreflightRequest,
         flags: protocol::ATM_FRAME_FLAGS_V1,
         bytes: serde_json::to_vec(&RequestEnvelope::CompatibilityPreflight(preflight.clone()))
@@ -166,8 +166,7 @@ mod tests {
             wire_version: 1,
         };
         let request = RpcEnvelope::from_frame_payload(crate::FramePayload {
-            request_id: crate::RequestId::new(atm_core::protocol::next_request_id().into_inner())
-                .expect("request id"),
+            request_id: atm_core::protocol::next_request_id(),
             message_kind: MessageKind::CompatibilityPreflightRequest,
             flags: atm_core::protocol::ATM_FRAME_FLAGS_V1,
             bytes: serde_json::to_vec(&RequestEnvelope::CompatibilityPreflight(preflight.clone()))

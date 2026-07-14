@@ -17,9 +17,8 @@ use super::{
     AcceptLoopOutcome, ActiveConnectionRegistry, CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
     LifecycleControlSourceAdapter, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, ServeLoopSignals,
     ShutdownBeacon, ShutdownResponseOutcome, SubsystemObservability,
-    TERMINATE_REJECTION_GRACE_DEADLINE, TERMINATE_REJECTION_REQUEST_ID, handle_connection,
-    record_serve_error, record_shutdown_signal, schedule_delayed_listener_wake, wake_listener,
-    write_shutdown_response,
+    TERMINATE_REJECTION_GRACE_DEADLINE, handle_connection, record_serve_error,
+    record_shutdown_signal, schedule_delayed_listener_wake, wake_listener, write_shutdown_response,
 };
 
 pub(super) fn take_accept_error(
@@ -143,18 +142,36 @@ pub(super) fn reject_connection_when_capped(
                 "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
             ),
     ));
-    let frame = codec.response_to_frame(
-        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
-        response,
-    )?;
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let _ = atm_core::protocol::write_frame(
+    let request_id = match atm_core::protocol::read_frame(
         stream,
-        &frame,
-        "failed to write daemon rejection response frame",
-    );
-    let _ = stream.flush();
+        "failed to read daemon request frame during connection-cap rejection",
+        "daemon request frame exceeded the maximum supported size during connection-cap rejection",
+    ) {
+        Ok(Some(frame)) => Some(frame.request_id),
+        Ok(None) => None,
+        Err(error) => {
+            tracing::debug!(
+                subsystem = "local_ipc_transport",
+                action = "connection_cap_rejection",
+                outcome = "request_frame_unavailable",
+                %error,
+                "connection-cap rejection could not read a request frame to correlate the error response"
+            );
+            None
+        }
+    };
+    if let Some(request_id) = request_id
+        && let Ok(frame) = codec.response_to_frame(request_id, response)
+    {
+        let _ = atm_core::protocol::write_frame(
+            stream,
+            &frame,
+            "failed to write daemon rejection response frame",
+        );
+        let _ = stream.flush();
+    }
     Ok(true)
 }
 
@@ -224,4 +241,91 @@ pub(super) fn spawn_connection_worker<'scope>(
                 )
                 .with_source(source)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reject_connection_when_capped;
+    use crate::test_observability::TestDaemonObservability;
+    use crate::test_support::connect_local_ipc_with_timeout;
+    use crate::{DaemonSubsystem, SubsystemObservability};
+    use atm_core::doctor::DoctorQuery;
+    use atm_core::error_codes::AtmErrorCode;
+    use atm_core::protocol::{
+        JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, daemon_local_ipc_name_from_path,
+        next_request_id, request_to_frame_payload, response_from_frame_payload, write_frame,
+    };
+    use interprocess::local_socket::ListenerOptions;
+    use interprocess::local_socket::traits::Listener as _;
+    use std::io::Write as _;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    #[test]
+    fn capped_rejection_uses_the_actual_request_id() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let socket_path = tempdir.path().join("cap-rejection.sock");
+        #[cfg(unix)]
+        if socket_path.exists() {
+            std::fs::remove_file(&socket_path).expect("remove stale socket");
+        }
+        let socket_name = daemon_local_ipc_name_from_path(&socket_path)
+            .expect("socket name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name.clone())
+            .create_sync()
+            .expect("bind listener");
+        let client_tempdir = tempdir.path().to_path_buf();
+        let request_id = next_request_id();
+        let client = std::thread::spawn(move || {
+            let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
+                .expect("connect");
+            let frame = request_to_frame_payload(
+                request_id,
+                RequestEnvelope::Doctor(DoctorQuery {
+                    home_dir: client_tempdir.join("home"),
+                    current_dir: client_tempdir.join("cwd"),
+                    team_override: None,
+                }),
+            )
+            .expect("request frame");
+            write_frame(&mut stream, &frame, "write capped request frame").expect("write");
+            stream.flush().expect("flush");
+            let response_frame = atm_core::protocol::read_frame(
+                &mut stream,
+                "read capped response frame",
+                "capped response frame too large",
+            )
+            .expect("read frame")
+            .expect("response frame");
+            let (response_id, response) =
+                response_from_frame_payload(response_frame).expect("decode response");
+            (response_id, response)
+        });
+
+        let mut server_stream = listener.accept().expect("accept");
+        let observability = Arc::new(
+            TestDaemonObservability::new(tempdir.path().join("logs")).expect("observability"),
+        );
+        let subsystem =
+            SubsystemObservability::new(DaemonSubsystem::LocalIpcTransport, observability);
+        let codec = JsonAtmProtocolCodec;
+
+        assert!(
+            reject_connection_when_capped(&mut server_stream, &codec, 64, &subsystem)
+                .expect("reject")
+        );
+
+        let (response_id, response) = client.join().expect("join client");
+        assert_eq!(response_id, request_id);
+        match response {
+            ResponseEnvelope::Error(error) => {
+                assert_eq!(error.code, AtmErrorCode::DaemonConnectionSaturated);
+                assert!(error.message.contains("connection cap exceeded"));
+            }
+            other => panic!("unexpected response: {other:?}"),
+        }
+    }
 }

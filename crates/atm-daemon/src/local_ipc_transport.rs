@@ -56,9 +56,6 @@ pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC connection worker panicked; transport thread recovered";
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
-pub(super) const RESERVED_PRE_DISPATCH_REQUEST_ID: u64 = u64::MAX;
-const TERMINATE_REJECTION_REQUEST_ID: u64 = RESERVED_PRE_DISPATCH_REQUEST_ID;
-
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
