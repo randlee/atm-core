@@ -224,14 +224,15 @@ def main() -> int:
     root = repo_root()
     require_clean_host_daemon_state()
     ensure_debug_binaries(root)
+    unique = next(tempfile._get_candidate_names()).replace("_", "")[:8]
     shared_host_fixture_pair = create_shared_host_fixture_pair(
         prefix="z21s.",
-        team_name_a="z21-shared-a",
-        team_name_b="z21-shared-b",
-        operator_a="z21-shared-operator-a",
-        operator_b="z21-shared-operator-b",
-        recipient_a="z21-shared-recipient-a",
-        recipient_b="z21-shared-recipient-b",
+        team_name_a=f"z21-shared-a-{unique}",
+        team_name_b=f"z21-shared-b-{unique}",
+        operator_a=f"z21-shared-operator-a-{unique}",
+        operator_b=f"z21-shared-operator-b-{unique}",
+        recipient_a=f"z21-shared-recipient-a-{unique}",
+        recipient_b=f"z21-shared-recipient-b-{unique}",
     )
     shared_a = shared_host_fixture_pair.workspace_a
     shared_b = shared_host_fixture_pair.workspace_b
@@ -403,7 +404,7 @@ def main() -> int:
             "shared-host ack B",
         )
         expected_shared_file_path = (
-            shared_a.home_dir
+            shared_a.atm_home
             / ".config"
             / "atm"
             / "share"
