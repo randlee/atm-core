@@ -1,0 +1,62 @@
+{
+  "level": "fast",
+  "timestamp": "2026-07-14T21:12:42.713284+00:00",
+  "binary_sha": "98a4e66cae3b5ede85361d11ccdaa2ce2e4e2e7e",
+  "duration_secs": 39.71,
+  "status": "passed",
+  "rows": [
+    {
+      "id": "AD11-CMD-SEND-001",
+      "flow": "send command preserves caller-context ownership across environment and explicit override paths",
+      "verdict": "PASS",
+      "notes": "send stays bound to the shared caller-context contract across environment and explicit override paths"
+    },
+    {
+      "id": "AD11-CMD-READ-001",
+      "flow": "read command preserves caller-context ownership across environment and explicit override paths",
+      "verdict": "PASS",
+      "notes": "read stays bound to the shared caller-context contract across environment and explicit override paths"
+    },
+    {
+      "id": "AD11-CMD-MEMBERS-001",
+      "flow": "members command remains daemon-independent while preserving explicit team override handling",
+      "verdict": "PASS",
+      "notes": "members remains daemon-independent while preserving retained caller-team semantics"
+    },
+    {
+      "id": "AD11-CMD-TEAMS-001",
+      "flow": "teams list command remains daemon-independent on the retained CLI surface",
+      "verdict": "PASS",
+      "notes": "teams list remains daemon-independent on the retained CLI surface"
+    },
+    {
+      "id": "AD11-CMD-LOG-001",
+      "flow": "log command remains daemon-independent with caller-context enforcement at the CLI boundary",
+      "verdict": "PASS",
+      "notes": "log remains daemon-independent and still fails locally when caller context is unavailable"
+    },
+    {
+      "id": "AD11-CMD-DOCTOR-001",
+      "flow": "doctor remains identity-free while preserving optional team scoping and the direct local path",
+      "verdict": "PASS",
+      "notes": "doctor remains identity-free while preserving optional team scoping and the direct local path"
+    },
+    {
+      "id": "AD11-POSTSEND-LOCAL-TMUX-001",
+      "flow": "local tmux post-send requires and uses authoritative pane metadata",
+      "verdict": "PASS",
+      "notes": "local tmux post-send remains bound to authoritative roster pane metadata"
+    },
+    {
+      "id": "AD11-POSTSEND-WARNING-001",
+      "flow": "sender-visible warning fallback survives failed post-send emission",
+      "verdict": "PASS",
+      "notes": "failed post-send emission still degrades into a sender-visible warning after durable send success"
+    }
+  ],
+  "summary": {
+    "pass": 8,
+    "fail": 0,
+    "skip": 0
+  }
+}
