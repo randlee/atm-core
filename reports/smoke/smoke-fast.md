@@ -1,9 +1,9 @@
 # Smoke Fast
 
 - status: `passed`
-- timestamp: `2026-07-14T23:41:48.297055+00:00`
-- binary SHA: `8a371683c21a2106b84ba77484d6a14882f652a2`
-- duration secs: `4.703`
+- timestamp: `2026-07-14T23:55:06.421015+00:00`
+- binary SHA: `fcf4cd25edbc89a86c575f91c47241161fd7e4a9`
+- duration secs: `2.736`
 - summary: `pass=8`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in

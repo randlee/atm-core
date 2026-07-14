@@ -7,138 +7,145 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/smoke-test/1.3.1-cr
 
 # Smoke 1.3.1 — Cross-host release-candidate plan
 
-## Scope split
+## Scope
 
-This sprint has two explicit lanes.
+This branch validates the 1.3.1 release candidate across the currently
+available same-host surfaces on macOS and Windows.
 
-- macOS lane: executed directly in this worktree by `arch-ctm` against
-  `develop` at `98a4e66c`
-- Windows lane: checklist only, to be executed separately by a Windows Codex
-  agent coordinated directly by the user
-
-No Windows pass/fail claim is made in this document.
+- macOS lane: executed directly in this worktree by `arch-ctm`
+- Windows lane: executed by the separate Windows agent and published back to
+  this branch
+- cross-host behavior: intentionally deferred; this document makes no
+  cross-machine pass claim
 
 ## Candidate under test
 
 - branch: `smoke-test/1.3.1-cross-host`
-- target branch: `develop`
-- candidate commit: `98a4e66c`
 - workspace version: `1.3.1`
-- publication state: not yet tagged or published
+- runtime-hardening baseline: `8a371683` (`fix: harden graft smoke runtime readiness`)
+- current validated smoke head: `fcf4cd25`
+
+`8a371683` is the commit that introduced the graft receiver readiness hardening
+that unblocked the same-host graft lane. The current head `fcf4cd25` closes the
+QA follow-up findings against that baseline by tightening runtime behavior,
+correcting smoke-script validation, and updating the evidence set.
 
 ## Authoritative references
 
 - `docs/plans/phase-af/readiness.md`
-- `docs/plans/phase-af/af-1-host-singleton.md`
-- `docs/plans/phase-af/af-2-observability-release-gates.md`
-- `docs/plans/phase-af/af-3-native-send-input-integrity.md`
-- `docs/plans/phase-AB/cross-host-smoke-checklist.md`
 - `scripts/smoke/run.py`
-- `scripts/smoke/run_thorough.py`
 - `scripts/smoke/run_thorough_shared_host.py`
-- `scripts/smoke/phase_ad_suite.py`
+- `scripts/smoke/run_graft_same_host.py`
+- `reports/smoke/smoke-fast.md`
+- `reports/smoke/smoke.md`
+- `reports/smoke/smoke-thorough.md`
+- `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
+- `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md`
+- `reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md`
 
-## Assignment mismatch noted at start
+## QA1 fix-round content
 
-The dispatch instructed this task to treat
-`docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md` as the authoritative
-source before coding, but that file did not exist in the assigned worktree at
-task start. This sprint document was therefore bootstrapped from the dispatch
-itself and becomes the authoritative source going forward.
+This fix round closed the local findings from `SMOKE-1.3.1-QA-1`:
+
+- updated this sprint doc so it matches the post-fix branch state
+- produced durable documentation for a direct passing
+  `run_thorough_shared_host.py` execution
+- rewrote `ReceiverReadyLatch` timeout/recovery text for production operators
+- changed the graft receiver loop to isolate per-connection failures instead of
+  terminating the listener on any single bad connection
+- ensured the session snapshot leaves `Listening` when the receiver thread
+  terminates unexpectedly
+- aligned the runtime test helper with the widened receiver-ready deadline
+- scoped the graft smoke daemon-ownership assertion to the current fixture
+  session
+- consolidated duplicated daemon lifecycle helpers into
+  `scripts/smoke/daemon_lifecycle.py`
+
+`ARCH-001` was not fixed by code on this branch. It was superseded by a fresh
+Windows rerun already published to the branch with a real commit SHA in
+`reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md`.
 
 ## macOS lane
 
-### Goal
-
-Revalidate the accepted AF-1, AF-2, and AF-3 release-critical behavior on the
-1.3.1 candidate in this macOS worktree, using the existing smoke scripts plus
-the accepted-line evidence already recorded in `readiness.md`.
-
-### Commands to execute
+### Commands
 
 1. `python3 scripts/smoke/run.py fast --write-artifacts`
 2. `python3 scripts/smoke/run.py normal --write-artifacts`
 3. `python3 scripts/smoke/run.py thorough --write-artifacts`
 4. `python3 scripts/smoke/run_thorough_shared_host.py`
+5. `python3 scripts/smoke/run_graft_same_host.py`
+6. `just test`
 
-### Pass criteria
+### Result
 
-- fast lane passes
-- normal lane passes
-- thorough lane passes
-- shared-host lane passes on an isolated macOS OS-user with no pre-existing
-  ambient `atm-daemon`
+All required macOS same-host checks passed at branch head `fcf4cd25`.
 
-### Failure criteria
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Fast smoke | `PASS` | `reports/smoke/smoke-fast.md` |
+| Normal smoke | `PASS` | `reports/smoke/smoke.md` |
+| Thorough smoke | `PASS` | `reports/smoke/smoke-thorough.md` |
+| Direct shared-host lane | `PASS` | `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md` |
+| Direct graft same-host lane | `PASS` | `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md` |
+| Full repo validation | `PASS` | local `just test` run at `fcf4cd25` |
 
-- any smoke row regression
-- any shared-host singleton failure
-- any retained AF-3 input integrity mismatch
-- inability to execute the shared-host lane because the host is not isolated
+### Direct shared-host rerun evidence
 
-### Executed macOS result
+The direct rerun that QA requested completed successfully and is documented
+separately instead of being inferred from the embedded AD18 row:
 
-The lane was executed directly in this worktree.
+- command: `python3 scripts/smoke/run_thorough_shared_host.py`
+- result: `PASS`
+- durable report:
+  `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
 
-- `fast`: PASS
-- `normal`: PASS
-- `thorough`: FAIL
-- direct `run_thorough_shared_host.py`: FAIL
+This closes the earlier evidentiary gap where only the embedded suite row had
+been published.
 
-The failure was not a code-surface regression in the tested rows that ran. It
-was an environment blocker in the shared-host release lane:
+### Graft lane interpretation
 
-- ambient daemon detected: pid `87512`
-- ambient daemon binary:
-  `/Users/randlee/.local/atm/1.3.0/bin/atm-daemon`
-- runner failure contract:
-  `shared-host smoke requires an isolated OS user with no existing atm-daemon; refusing to attach to or terminate an ambient daemon`
-
-That blocker is consistent with the AF-1 contract. The script is behaving as
-designed by refusing to produce a false singleton proof on a non-isolated host.
-
-### Interpretation
-
-- AF-2/AF-3 adjacent rows covered by `fast`, `normal`, and the non-shared-host
-  portion of `thorough` stayed green on `98a4e66c`
-- the release-critical AF-1/AF-2/AF-3 shared-host proof could not be freshly
-  re-executed on this host because the host was already in active ATM use
-- the previously accepted AF evidence recorded in
-  `docs/plans/phase-af/readiness.md` remains the last clean shared-host proof
-  line until this sprint is rerun on an isolated macOS OS-user
+The graft readiness fix landed in `8a371683`. This QA1 round keeps that
+baseline and closes the follow-up issues around operator-facing errors,
+receiver-loop resilience, readiness-deadline parity, and smoke validation
+discipline. The branch-head thorough smoke remains green, including `GRAFT-001`
+in `reports/smoke/smoke-thorough.md`.
 
 ## Windows lane
 
-The Windows lane is intentionally checklist-only in this sprint. Its durable
-execution handoff is published in:
+Windows reran the same-host smoke scope after the graft runtime fix and
+published new evidence back to this branch.
 
-- `docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Windows rerun | `PASS` | `reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md` |
 
-That checklist is the artifact the user’s Windows Codex agent should follow.
-Its durable published results must land back on this branch under:
+That rerun uses a real branch SHA:
 
-- `reports/smoke/<timestamp>-smoke-1.3.1-windows.md`
-- `reports/smoke/<timestamp>-smoke-1.3.1-windows.json`
+- binary SHA: `8a371683c21a2106b84ba77484d6a14882f652a2`
 
-The Windows lane also now explicitly includes the real same-host
-`atm-graft` host smoke surface through `python scripts/smoke/run_graft_same_host.py`.
+The Windows document explicitly states that cross-host behavior was not
+exercised.
 
-## Deliverables produced by this sprint
+## Deliverables produced
 
-- this plan:
+- authoritative sprint document:
   `docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md`
-- Windows checklist:
-  `docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`
-- macOS execution report:
-  `reports/smoke/2026-07-14-21-13-57-smoke-1.3.1.md`
-- machine-readable macOS execution payload:
-  `reports/smoke/2026-07-14-21-13-57-smoke-1.3.1.json`
+- macOS smoke reports:
+  - `reports/smoke/smoke-fast.md`
+  - `reports/smoke/smoke.md`
+  - `reports/smoke/smoke-thorough.md`
+- direct macOS lane reports:
+  - `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
+  - `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md`
+- Windows rerun report:
+  - `reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md`
 
 ## Closeout state
 
-This sprint document is complete because the requested plan, execution attempt,
-repo-published evidence, and Windows handoff checklist were all produced.
+This sprint is complete for the currently scoped same-host smoke surfaces.
 
-The macOS release-candidate smoke verdict itself is not green. It remains
-blocked on rerunning the shared-host lane under an isolated macOS OS-user with
-no ambient daemon.
+- macOS same-host smoke: green
+- Windows same-host smoke: green
+- direct shared-host rerun evidence: present
+- direct graft same-host evidence: present
+- cross-host behavior: not yet in scope for this release document

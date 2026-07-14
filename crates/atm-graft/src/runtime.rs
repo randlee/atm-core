@@ -28,9 +28,7 @@ use crate::{
     SessionSnapshot,
 };
 
-// Production and test both use the same bounded delivery deadline; readiness
-// synchronization must absorb scheduler jitter instead of widening the test
-// contract.
+pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
@@ -142,19 +140,19 @@ impl ReceiverReadyLatch {
             Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
                 AtmErrorKind::Timeout,
                 format!(
-                    "graft receiver test readiness was not signaled within {:?}",
+                    "graft receiver readiness was not signaled within {:?}",
                     timeout
                 ),
             )
             .with_recovery(
-                "Fix the receiver startup path so the test harness waits on an explicit readiness signal before asserting delivery.",
+                "Retry graft activation after the same-host receiver binds successfully and signals listener readiness within the bounded startup deadline.",
             )),
             Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
                 AtmErrorKind::Internal,
-                "graft receiver test readiness latch disconnected before signaling startup",
+                "graft receiver readiness latch disconnected before signaling startup",
             )
             .with_recovery(
-                "Fix the receiver startup path so the test harness keeps the readiness signal alive until the listener is bound.",
+                "Restart the graft-enabled host after fixing the receiver startup path so the readiness signal stays alive until the listener is bound.",
             )),
         }
     }
@@ -164,12 +162,12 @@ fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
     ready_tx.try_send(()).map_err(|error| match error {
         TrySendError::Full(()) => AtmError::new(
             AtmErrorKind::Internal,
-            "graft receiver test readiness was signaled more than once",
+            "graft receiver readiness was signaled more than once",
         )
         .with_recovery("Signal receiver readiness exactly once after the listener is bound."),
         TrySendError::Disconnected(()) => AtmError::new(
             AtmErrorKind::Internal,
-            "graft receiver test readiness latch is unavailable",
+            "graft receiver readiness latch is unavailable",
         )
         .with_recovery("Keep the readiness latch alive until the listener startup path completes."),
     })
@@ -506,20 +504,42 @@ pub(crate) struct GraftReceiverLoopContext {
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
-    let listener = bind_graft_receiver_listener(&ctx.endpoint_path)?;
-    if let Some(ready_tx) = ctx.ready_tx.as_ref() {
-        signal_ready_sender(ready_tx)?;
-    }
-    loop {
-        if stop_requested(&ctx.stop_rx) {
-            return Ok(());
+    let result = (|| {
+        let listener = bind_graft_receiver_listener(&ctx.endpoint_path)?;
+        if let Some(ready_tx) = ctx.ready_tx.as_ref() {
+            signal_ready_sender(ready_tx)?;
         }
-        let stream = accept_graft_receiver_connection(&listener, &ctx.endpoint_path)?;
-        if stop_requested(&ctx.stop_rx) {
-            return Ok(());
+        loop {
+            if stop_requested(&ctx.stop_rx) {
+                return Ok(());
+            }
+            let stream = accept_graft_receiver_connection(&listener, &ctx.endpoint_path)?;
+            if stop_requested(&ctx.stop_rx) {
+                return Ok(());
+            }
+            if let Err(error) = handle_graft_receiver_connection(&ctx, &injector, stream) {
+                warn_runtime_error(
+                    "handle_graft_receiver_connection",
+                    Some(&ctx.endpoint_path),
+                    &error,
+                );
+            }
         }
-        handle_graft_receiver_connection(&ctx, &injector, stream)?;
+    })();
+    let terminal_state = if result.is_ok() {
+        GraftSessionState::Closed
+    } else {
+        GraftSessionState::Degraded
+    };
+    if let Err(state_error) =
+        set_session_state(&ctx.snapshot, terminal_state, ctx.observability.as_ref())
+    {
+        if result.is_ok() {
+            return Err(state_error);
+        }
+        warn_runtime_error("set_session_state", Some(&ctx.endpoint_path), &state_error);
     }
+    result
 }
 
 pub(crate) fn wake_graft_receiver_listener(endpoint_path: &Path) -> Result<(), AtmError> {
@@ -999,8 +1019,8 @@ mod tests {
     use crate::{GraftObservability, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GraftReceiverLoopContext, HOST_NUDGE_INJECTION_DEADLINE,
-        MAX_HOST_NUDGE_HELPERS, MAX_LISTENER_WAKE_HELPERS, ReceiverReadyLatch,
+        BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
+        MAX_LISTENER_WAKE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
         apply_receiver_deadline, bind_graft_receiver_listener, join_receive_loop_with_deadline,
         load_graft_config, read_snapshot, run_graft_receiver_loop, wake_graft_receiver_listener,
         wake_graft_receiver_listener_with_budget_and_connector,
@@ -1149,7 +1169,7 @@ mod tests {
         };
         let join = std::thread::spawn(move || run_graft_receiver_loop(ctx));
         ready_latch
-            .wait_until_listening(HOST_NUDGE_INJECTION_DEADLINE)
+            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect("receiver ready");
         (stop_tx, join, snapshot)
     }
@@ -1185,7 +1205,7 @@ mod tests {
         let latch = ReceiverReadyLatch::new();
         latch.signal_listening().expect("signal");
         latch
-            .wait_until_listening(HOST_NUDGE_INJECTION_DEADLINE)
+            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect("wait");
     }
 
@@ -1353,7 +1373,7 @@ mod tests {
     fn receiver_loop_returns_typed_error_when_injector_fails() {
         let paths = test_paths();
         let endpoint_path = receiver_endpoint_path(&paths);
-        let (stop_tx, join, _snapshot) =
+        let (stop_tx, join, snapshot) =
             spawn_receiver(endpoint_path.clone(), Arc::new(FailingInjector));
 
         let request = GraftPostSendRequest {
@@ -1377,6 +1397,10 @@ mod tests {
                 );
             }
         }
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            GraftSessionState::Listening
+        );
 
         stop_receiver(&endpoint_path, stop_tx, join);
     }

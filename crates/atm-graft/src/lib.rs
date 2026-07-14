@@ -32,15 +32,14 @@ mod runtime;
 mod transport;
 
 use runtime::{
-    GraftReceiverLoopContext, ReceiverReadyLatch, join_receive_loop_with_deadline,
-    load_graft_config, read_snapshot, run_graft_receiver_loop, set_session_state,
-    wake_graft_receiver_listener,
+    GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
+    join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+    run_graft_receiver_loop, set_session_state, wake_graft_receiver_listener,
 };
 use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
-const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 
 pub use atm_core::{AtmConfig, GraftConfig};
 
