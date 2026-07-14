@@ -1,8 +1,8 @@
 ---
 title: AF-1 — Host-wide daemon singleton
-status: planned
-branch: feature/1-3-0-smoke-test-fix-docs
-worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+status: complete
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # AF-1 — Host-wide daemon singleton

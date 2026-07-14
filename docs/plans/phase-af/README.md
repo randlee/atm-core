@@ -1,8 +1,8 @@
 ---
 title: Phase AF — 1.3.1 Reliability Recovery
 status: in_progress
-branch: feature/1-3-0-smoke-test-fix-docs
-worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # Phase AF — 1.3.1 Reliability Recovery
@@ -19,16 +19,22 @@ Every deliverable in the three sprint documents is a production-ready closure
 commitment. A sprint cannot report success while one of its table rows, its
 required documentation alignment, or its required validation is deferred.
 
+AF-1, AF-2, and AF-3 are now merged on `integrate/phase-AF` at
+`52c5c338`; `d5420b0f` is the docs-only follow-up that corrected the
+accepted-line readiness record. This README remains `in_progress` only because
+phase-end review and release-gate evidence closeout continue on the accepted
+line.
+
 | Sprint | Closure | Sprint-local gate |
 | --- | --- | --- |
 | [AF-1: host singleton](af-1-host-singleton.md) | One `atm-daemon` per OS user/host, with no `ATM_HOME`, socket, or test exception bypass. | Required before any further full smoke that can launch a daemon, and before 1.3.1 RC. |
 | [AF-2: observability and release gates](af-2-observability-release-gates.md) | Accurate doctor hook disclosure, actionable daemon errors, hermetic validation, and cutover safeguards. | Required before declaring 1.3.1 release-ready. |
 | [AF-3: native send-input integrity](af-3-native-send-input-integrity.md) | `stdin`, inline, and file send sources reach the daemon with the intended bytes and typed local failures. | Required before declaring 1.3.1 release-ready. |
 
-AF-3 implementation now lives on
-`feature/pAF-s3-native-send-input-integrity`; its sprint doc is the
-authoritative closure record for the input-path fix and shared-host smoke
-evidence.
+The authoritative closure records for AF-1, AF-2, and AF-3 now live on the
+accepted `integrate/phase-AF` line. Historical feature branches remain part of
+the execution record, but they are no longer the authoritative branch/worktree
+for phase closure.
 
 ## Shared smoke-script integration contract
 

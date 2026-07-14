@@ -1,8 +1,8 @@
 ---
 title: AF-3 — Native send-input integrity
 status: complete
-branch: feature/pAF-s3-native-send-input-integrity
-worktree: ../atm-core-worktrees/feature/pAF-s3-native-send-input-integrity
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # AF-3 — Native send-input integrity

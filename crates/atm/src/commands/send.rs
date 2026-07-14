@@ -50,6 +50,15 @@ pub struct SendCommand {
 }
 
 impl SendCommand {
+    fn message_validation_error(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> anyhow::Error {
+        atm_core::error::AtmError::validation(message.into())
+            .with_recovery(recovery.into())
+            .into()
+    }
+
     /// Execute the `atm send` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
@@ -87,11 +96,17 @@ impl SendCommand {
 
     fn build_message_source(&self) -> Result<SendMessageSource> {
         if self.stdin && self.file.is_some() {
-            anyhow::bail!("--stdin and --file are mutually exclusive");
+            return Err(Self::message_validation_error(
+                "--stdin and --file are mutually exclusive",
+                "Choose exactly one message source: either pass `--stdin` or `--file <path>` before retrying `atm send`.",
+            ));
         }
 
         if self.stdin && self.message.is_some() {
-            anyhow::bail!("--stdin and positional message text are mutually exclusive");
+            return Err(Self::message_validation_error(
+                "--stdin and positional message text are mutually exclusive",
+                "Choose exactly one message source: either pass `--stdin` or provide positional message text before retrying `atm send`.",
+            ));
         }
 
         match (&self.file, self.stdin, &self.message) {
@@ -106,9 +121,10 @@ impl SendCommand {
                 .map(SendMessageSource::Inline)
                 .map_err(Into::into),
             (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
-            (None, false, None) => {
-                anyhow::bail!("provide message text, --file, or --stdin")
-            }
+            (None, false, None) => Err(Self::message_validation_error(
+                "provide message text, --file, or --stdin",
+                "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`.",
+            )),
             (Some(_), true, _) => unreachable!("validated above"),
             (None, true, Some(_)) => unreachable!("validated above"),
         }

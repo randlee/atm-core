@@ -5,6 +5,10 @@
 - binary SHA: `ef7e26a1bf242f9b57fc96018f51d2d491cdbb4a`
 - duration secs: `975.478`
 - summary: `pass=30`, `fail=1`, `skip=0`
+- accepted-line note: this top block is the initial 1.3.0 dogfood capture; the
+  follow-up sections below record the accepted-line AF-1 / AF-2 / AF-3 closure
+  evidence merged on `integrate/phase-AF`, including a fresh shared-host rerun
+  at `2026-07-14T17:30Z` after clearing ambient daemons
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
   that row were executed after the failure
@@ -213,8 +217,9 @@
 
 ## AF-3 Follow-up Validation
 
-- validation timestamp: `2026-07-14T05:56Z`
-- branch: `feature/pAF-s3-native-send-input-integrity`
+- validation timestamp: `2026-07-14T16:20Z`
+- branch: `integrate/phase-AF`
+- accepted-line merge commit: `52c5c338`
 - binary SHA: `be2a1b793847dc377e8c47344f92301b81fcac26`
 - command:
   `ATM_SMOKE_INSTALL_ROOT=<temp install> python3 scripts/smoke/run_thorough_shared_host.py`
@@ -222,3 +227,37 @@
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
 | `AF3-D3-SHARED-HOST-001` | release-binary shared-host inline/stdin/file durable readback | `PASS` | file-body expected value is now derived independently from `ATM_HOME/.config/atm/share/<team>/<filename>`; inline/stdin/file bodies all matched durable readback and invalid stdin still failed locally without changing daemon PID/count |
+
+## AF-1 Follow-up Validation
+
+- validation timestamp: `2026-07-14T17:30Z`
+- validation source: fresh shared-host rerun plus accepted-line PR evidence
+- branch: `integrate/phase-AF`
+- accepted-line merge commit: `dd61622e`
+- key closure commits: `e5051fba`, `164f2b32`, `30b31ab8`, `a071887b`
+- command: `python3 scripts/smoke/run_thorough_shared_host.py`
+- observed output: `{"status":"passed","daemon_pids_before":[],"daemon_pids_during":[86207]}`
+- CI result: PR #535 finished 8/8 green (`Format check`, `Clippy`, `Just lint`
+  x3, `Test` x3)
+
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
+| `AF1-D5-SHARED-HOST-001` | host-scoped singleton preflight, process-count capture, and cleanup assertions on the accepted line | `PASS` | the accepted line rejects ambient-daemon attachment in shared-host smoke, preserves the mandatory leak assertion, and carries the host-scoped singleton admission gate merged by PR #535 |
+
+## AF-2 Follow-up Validation
+
+- validation timestamp: `2026-07-14T17:30Z`
+- validation source: fresh shared-host rerun plus accepted-line PR evidence
+- branch: `integrate/phase-AF`
+- accepted-line merge commit: `2cfe358c`
+- key closure commits: `250f16c4`, `0b358642`, `14288caa`, `f0715d19`,
+  `f0511687`, `15f1a3ac`, `61bd9a9b`, `0b208fda`
+- command: `python3 scripts/smoke/run_thorough_shared_host.py`
+- observed output: `{"status":"passed","daemon_pids_before":[],"daemon_pids_during":[86207]}`
+- CI result: PR #537 finished 8/8 green (`Format check`, `Clippy`, `Just lint`
+  x3, `Test` x3)
+
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
+| `AF2-D4-INSTALLED-ARTIFACT-001` | installed-artifact shared-host smoke preflight on the accepted line | `PASS` | installed-artifact binary selection and the shared-host release preflight row are merged on `integrate/phase-AF`; AF-1 PID/count and cleanup assertions remain intact and are retained by the later AF-3 row |
+| `AF2-D5-CUTOVER-001` | client/daemon compatibility preflight and no-write cutover on the accepted line | `PASS` | typestate-gated compatibility, ADR-027 alignment, and the non-colliding classified-failure sentinel were merged by PR #537 and validated by its 8/8 green CI result |

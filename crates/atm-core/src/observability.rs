@@ -127,7 +127,7 @@ impl ConnectionFailureClassification {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DaemonConnectionFailureFields {
     pub code: AtmErrorCode,
-    pub request_id: RequestId,
+    pub request_id: Option<RequestId>,
     pub classification: ConnectionFailureClassification,
 }
 

@@ -23,7 +23,7 @@ use atm_core::error_codes::AtmErrorCode;
 use super::PreparedRuntimeServer;
 use super::{
     DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
-    RESERVED_PRE_DISPATCH_REQUEST_ID, write_shutdown_response,
+    write_shutdown_response,
 };
 
 const SAME_HOST_HEADER_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
@@ -103,14 +103,14 @@ pub(super) fn handle_connection(
                     )
                     .with_connection_failure(DaemonConnectionFailureFields {
                         code: error.code,
-                        request_id,
+                        request_id: Some(request_id),
                         classification,
                     })
                     .with_transport_context("response_write"),
             );
             return Ok(());
         }
-        emit_connection_failure_event(observability, &error, request_id, "response_write");
+        emit_connection_failure_event(observability, &error, Some(request_id), "response_write");
         return Err(error);
     }
     emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
@@ -137,23 +137,11 @@ fn read_connection_frame(
     observability: &SubsystemObservability,
 ) -> Result<ReadRequestFrameResult, AtmError> {
     let read_deadline_support = configure_request_deadlines(&stream).inspect_err(|error| {
-        emit_connection_failure_event(
-            observability,
-            error,
-            RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
-                .expect("u64::MAX is a valid nonzero sentinel"),
-            "request_deadline_config",
-        );
+        emit_connection_failure_event(observability, error, None, "request_deadline_config");
     })?;
     match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)
         .inspect_err(|error| {
-            emit_connection_failure_event(
-                observability,
-                error,
-                RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
-                    .expect("u64::MAX is a valid nonzero sentinel"),
-                "request_read",
-            );
+            emit_connection_failure_event(observability, error, None, "request_read");
         })? {
         ReadRequestFrameResult::EndOfStream => Ok(ReadRequestFrameResult::EndOfStream),
         ReadRequestFrameResult::Frame { stream, frame } => {
@@ -180,8 +168,7 @@ fn read_connection_frame(
                     )
                     .with_connection_failure(DaemonConnectionFailureFields {
                         code: AtmErrorCode::DaemonUnavailable,
-                        request_id: RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
-                            .expect("u64::MAX is a valid nonzero sentinel"),
+                        request_id: None,
                         classification: ConnectionFailureClassification::TransportFailure,
                     })
                     .with_transport_context("request_read"),
@@ -205,7 +192,7 @@ fn decode_request_frame(
 ) -> Result<(RequestId, RequestEnvelope), AtmError> {
     let request_id = frame.request_id;
     codec.request_from_frame(frame).inspect_err(|error| {
-        emit_connection_failure_event(observability, error, request_id, "request_decode");
+        emit_connection_failure_event(observability, error, Some(request_id), "request_decode");
     })
 }
 
@@ -240,7 +227,7 @@ pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailure
 pub(super) fn emit_connection_failure_event(
     observability: &SubsystemObservability,
     error: &AtmError,
-    request_id: RequestId,
+    request_id: Option<RequestId>,
     transport_context: &'static str,
 ) {
     let classification = classify_connection_failure(error);
@@ -398,7 +385,7 @@ fn dispatch_request(
         Ok::<DispatchResultRx, AtmError>(result_rx)
     })()
     .inspect_err(|error| {
-        emit_connection_failure_event(observability, error, request_id, "dispatch_request");
+        emit_connection_failure_event(observability, error, Some(request_id), "dispatch_request");
     })?;
     Ok(await_dispatch_response(
         request_id,
@@ -523,10 +510,15 @@ pub(crate) fn install_injected_accept_error_for_test(
 
 #[cfg(test)]
 mod tests {
-    use super::{RequestExecutionRisk, dispatch_timeout_response, request_execution_risk};
+    use super::{
+        RequestExecutionRisk, classify_connection_failure, dispatch_timeout_response,
+        request_execution_risk,
+    };
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::DoctorQuery;
+    use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
+    use atm_core::observability::ConnectionFailureClassification;
     use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
 
     #[test]
@@ -576,6 +568,50 @@ mod tests {
         assert_eq!(
             request_execution_risk(&request),
             RequestExecutionRisk::ReadOnly
+        );
+    }
+
+    #[test]
+    fn classify_connection_failure_marks_validation_errors_as_malformed_requests() {
+        let error = AtmError::validation("bad frame");
+
+        assert_eq!(
+            classify_connection_failure(&error),
+            ConnectionFailureClassification::MalformedRequest
+        );
+    }
+
+    #[test]
+    fn classify_connection_failure_marks_disconnect_strings_as_expected_peer_disconnects() {
+        let error = AtmError::daemon_unavailable("Broken pipe while writing response");
+
+        assert_eq!(
+            classify_connection_failure(&error),
+            ConnectionFailureClassification::ExpectedPeerDisconnect
+        );
+    }
+
+    #[test]
+    fn classify_connection_failure_marks_daemon_unavailable_as_transport_failure() {
+        let error = AtmError::daemon_unavailable("socket timed out");
+
+        assert_eq!(
+            classify_connection_failure(&error),
+            ConnectionFailureClassification::TransportFailure
+        );
+    }
+
+    #[test]
+    fn classify_connection_failure_marks_other_errors_as_request_failure() {
+        let error = AtmError::new_with_code(
+            AtmErrorCode::MailboxReadFailed,
+            atm_storage::AtmErrorKind::MailboxRead,
+            "mailbox lookup failed",
+        );
+
+        assert_eq!(
+            classify_connection_failure(&error),
+            ConnectionFailureClassification::RequestFailure
         );
     }
 }

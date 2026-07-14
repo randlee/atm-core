@@ -127,8 +127,7 @@ pub(super) fn reject_connection_when_capped(
             )
             .with_connection_failure(DaemonConnectionFailureFields {
                 code: AtmErrorCode::DaemonConnectionSaturated,
-                request_id: atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)
-                    .expect("nonzero request id"),
+                request_id: None,
                 classification: ConnectionFailureClassification::TransportFailure,
             })
             .with_transport_context("connection_cap")

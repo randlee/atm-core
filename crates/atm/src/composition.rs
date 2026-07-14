@@ -1832,18 +1832,18 @@ mod tests {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
 
+        use atm_core::test_support::{remove_env_var, set_env_var};
+
         struct SocketEnvRestore(Option<OsString>);
 
         impl Drop for SocketEnvRestore {
             fn drop(&mut self) {
                 match self.0.take() {
                     Some(value) => {
-                        // SAFETY: this test is serialized on the shared env lock.
-                        unsafe { std::env::set_var("ATM_DAEMON_SOCKET", value) };
+                        set_env_var("ATM_DAEMON_SOCKET", value);
                     }
                     None => {
-                        // SAFETY: this test is serialized on the shared env lock.
-                        unsafe { std::env::remove_var("ATM_DAEMON_SOCKET") };
+                        remove_env_var("ATM_DAEMON_SOCKET");
                     }
                 }
             }
@@ -1860,13 +1860,10 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let _socket_restore = SocketEnvRestore(std::env::var_os("ATM_DAEMON_SOCKET"));
-        // SAFETY: this test is serialized on the shared env lock.
-        unsafe {
-            std::env::set_var(
-                "ATM_DAEMON_SOCKET",
-                OsString::from_vec(vec![0x66, 0x6f, 0x80]),
-            );
-        }
+        set_env_var(
+            "ATM_DAEMON_SOCKET",
+            OsString::from_vec(vec![0x66, 0x6f, 0x80]),
+        );
 
         let error = CliComposition::bootstrap(
             "send",

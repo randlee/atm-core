@@ -1,8 +1,8 @@
 ---
 title: AF-2 — Observability and release gates
-status: in_progress
-branch: feature/pAF-s2-observability-release-gates
-worktree: ../atm-core-worktrees/feature/pAF-s2-observability-release-gates
+status: complete
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # AF-2 — Observability and release gates
