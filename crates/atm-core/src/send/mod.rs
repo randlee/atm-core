@@ -41,7 +41,7 @@ pub(crate) mod hook;
     reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
 )]
 mod hook_tmux;
-pub(crate) mod input;
+pub mod input;
 mod missing_config_notice;
 #[doc(hidden)]
 pub mod nudge_template;
@@ -56,7 +56,6 @@ pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
-    Stdin,
     File {
         path: PathBuf,
         message: Option<String>,
@@ -702,7 +701,6 @@ fn resolve_message_body(
 ) -> Result<String, AtmError> {
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
-        SendMessageSource::Stdin => input::read_message_from_stdin(),
         SendMessageSource::File { path, message } => {
             input::validate_message_text(file_policy::process_file_reference(
                 path,

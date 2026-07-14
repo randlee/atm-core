@@ -210,3 +210,15 @@
   delivery path. Do not expose `ATM_POST_SEND` payloads or environment values.
   Add a JSON/text regression test using one configured override. A valid
   override must not by itself downgrade doctor health or create a warning.
+
+## AF-3 Follow-up Validation
+
+- validation timestamp: `2026-07-14T05:56Z`
+- branch: `feature/pAF-s3-native-send-input-integrity`
+- binary SHA: `be2a1b793847dc377e8c47344f92301b81fcac26`
+- command:
+  `ATM_SMOKE_INSTALL_ROOT=<temp install> python3 scripts/smoke/run_thorough_shared_host.py`
+
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
+| `AF3-D3-SHARED-HOST-001` | release-binary shared-host inline/stdin/file durable readback | `PASS` | file-body expected value is now derived independently from `ATM_HOME/.config/atm/share/<team>/<filename>`; inline/stdin/file bodies all matched durable readback and invalid stdin still failed locally without changing daemon PID/count |

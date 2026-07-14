@@ -118,6 +118,9 @@ Phase-AF planning note:
 - the authoritative phase plan is [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md)
   with hardened sprint documents for AF-1 host-wide singleton, AF-2
   observability/release gates, and AF-3 native send-input integrity.
+- the AF-3 execution branch is
+  `feature/pAF-s3-native-send-input-integrity`, which owns the client-side
+  stdin materialization closure and shared-host durable-input smoke evidence.
 - the planning and implementation branch is
   `feature/1-3-0-smoke-test-fix-docs`; integration target is `develop`.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may

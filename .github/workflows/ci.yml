@@ -111,6 +111,7 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: [clippy]
+    if: ${{ always() && !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +146,20 @@ jobs:
 
       - name: Build workspace
         run: cargo build --verbose
+
+      - name: Build release smoke binaries
+        run: cargo build --release -p agent-team-mail -p atm-daemon --verbose
+
+      - name: Prepare installed smoke binaries
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "atm-smoke-install"
+          $binDir = Join-Path $installRoot "bin"
+          New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+          $suffix = if ($env:RUNNER_OS -eq "Windows") { ".exe" } else { "" }
+          Copy-Item "target/release/atm$suffix" (Join-Path $binDir "atm$suffix") -Force
+          Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
+          "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run workspace tests excluding atm-daemon on Windows
         env:

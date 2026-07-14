@@ -177,6 +177,23 @@ Required rules:
   host-scoped override storage remains `atm-storage-rusqlite` implementation
   detail behind the accepted `atm-core` contract
 
+## 3.2 Native Send Input Materialization
+
+Requirement ID:
+- `REQ-ATM-CMD-003`
+
+Required rules:
+- `atm` owns `--stdin` as a CLI-only input source and must consume it before
+  daemon bootstrap and before request dispatch over the same-host RPC surface
+- a daemon-bound send request may encode only durable inline bytes or the
+  retained `--file` reference contract; it must never encode a `stdin`
+  instruction for the daemon to resolve later
+- invalid `--stdin` input (empty, whitespace-only, oversized, unreadable, or
+  non-UTF-8) must fail at the CLI boundary with the typed ATM error returned by
+  `atm-core`
+- invalid `--stdin` input must not start a daemon and must not dispatch any
+  request over `AtmProtocol` or `ClientTransport`
+
 ## 4. Command Ownership
 
 Per-command documentation lives under:

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendRequest, input};
 use atm_core::types::TaskId;
 use clap::Args;
 
@@ -99,7 +99,12 @@ impl SendCommand {
                 path: path.clone(),
                 message: message.clone(),
             }),
-            (None, true, None) => Ok(SendMessageSource::Stdin),
+            // stdin is a CLI-owned input source. Materialize it before
+            // bootstrapping the daemon so a wire request can never ask the
+            // daemon (whose stdin is intentionally null) to read it.
+            (None, true, None) => input::read_message_from_stdin()
+                .map(SendMessageSource::Inline)
+                .map_err(Into::into),
             (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
             (None, false, None) => {
                 anyhow::bail!("provide message text, --file, or --stdin")

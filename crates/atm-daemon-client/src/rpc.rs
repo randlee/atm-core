@@ -151,7 +151,7 @@ mod tests {
     use super::{MessageKind, RpcEnvelope, RpcHeader};
     use crate::wire::{
         RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-        next_request_id,
+        next_request_id, request_from_frame_payload,
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
@@ -249,6 +249,56 @@ mod tests {
                 assert_eq!(decoded.current_dir, current_dir);
                 assert_eq!(decoded.summary_override.as_deref(), Some("body"));
                 assert_eq!(decoded.to.to_string(), RPC_TEST_QUALITY_MGR_ADDRESS);
+            }
+            other => panic!("unexpected request envelope: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rpc_send_request_wire_surface_has_no_stdin_variant() {
+        fn assert_wire_surface(source: &SendMessageSource) {
+            match source {
+                SendMessageSource::Inline(_) | SendMessageSource::File { .. } => {}
+            }
+        }
+
+        let temp = tempdir().expect("tempdir");
+        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
+            home_dir: temp.path().join("home"),
+            current_dir: temp.path().join("cwd"),
+            caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
+            caller_team: RPC_TEST_TEAM.parse().expect("team"),
+            to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
+            message_source: SendMessageSource::Inline("stdin materialized locally".to_string()),
+            summary_override: None,
+            requires_ack: false,
+            task_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            dry_run: false,
+        }));
+
+        let envelope = RpcEnvelope::encode_request(request).expect("encode request");
+        let frame = envelope.into_frame_payload();
+        let payload_text = String::from_utf8(frame.bytes.clone()).expect("utf-8 payload");
+        assert!(
+            !payload_text.contains("Stdin"),
+            "wire payload unexpectedly retained a stdin marker: {payload_text}"
+        );
+
+        let (_, decoded) = request_from_frame_payload(frame).expect("decode request");
+        match decoded {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(decoded)) => {
+                assert_wire_surface(&decoded.message_source);
+                match decoded.message_source {
+                    SendMessageSource::Inline(message) => {
+                        assert_eq!(message, "stdin materialized locally");
+                    }
+                    SendMessageSource::File { .. } => {
+                        panic!("expected inline wire source after local stdin materialization")
+                    }
+                }
             }
             other => panic!("unexpected request envelope: {other:?}"),
         }
