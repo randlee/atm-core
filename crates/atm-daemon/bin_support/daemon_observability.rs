@@ -608,6 +608,26 @@ fn daemon_event_fields(event: &DaemonEvent) -> Map<String, serde_json::Value> {
             fields.insert(key.to_string(), serde_json::Value::String(value));
         }
     }
+    if let Some(connection_failure) = &event.connection_failure {
+        fields.insert(
+            "connection_failure".to_string(),
+            serde_json::to_value(connection_failure)
+                .expect("daemon connection failure fields must serialize"),
+        );
+    }
+    if let Some(context) = &event.transport_context {
+        fields.insert(
+            "transport_context".to_string(),
+            serde_json::Value::String(context.to_string()),
+        );
+    }
+    if let Ok(extra) = serde_json::to_value(&event.extra_fields) {
+        if let Some(extra_fields) = extra.as_object() {
+            for (key, value) in extra_fields {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+    }
     fields
 }
 
@@ -783,6 +803,9 @@ fn observability_test_event(
         message_id: None,
         task_id: None,
         detail: detail.into(),
+        connection_failure: None,
+        transport_context: None,
+        extra_fields: atm_core::observability::LogFieldMap::default(),
     }
 }
 
@@ -949,8 +972,10 @@ fn level_for_outcome(subsystem: &str, action: &ActionName, outcome: &str) -> Lev
 
     match outcome {
         "ok" | "sent" | "dry_run" => Level::Info,
+        "expected_peer_disconnect" => Level::Info,
         "timeout" => Level::Warn,
-        "error" | "failed" => Level::Error,
+        "error" | "failed" | "malformed_request" | "transport_failure" | "request_failure"
+        | "saturated" => Level::Error,
         other => {
             tracing::warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,

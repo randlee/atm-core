@@ -13,6 +13,12 @@ from pathlib import Path
 
 from fixtures import create_shared_host_fixture_pair, repo_root, smoke_env
 
+AF1_REQUIRED_MARKERS = (
+    "require_clean_host_daemon_state",
+    "count_atm_daemon_processes",
+    "assert_no_process_leak",
+)
+
 
 def debug_binary(root: Path, name: str) -> Path:
     suffix = ".exe" if os.name == "nt" else ""
@@ -111,6 +117,26 @@ def run_atm(root: Path, env: dict[str, str], cwd: Path, *args: str) -> str:
     return stdout
 
 
+def run_atm_raw(
+    root: Path,
+    env: dict[str, str],
+    cwd: Path,
+    *args: str,
+) -> subprocess.CompletedProcess[str]:
+    command = [str(smoke_binary(root, "atm")), *args]
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        timeout=30,
+    )
+
+
 def parse_json_output(raw: str) -> dict[str, object]:
     return json.loads(raw)
 
@@ -131,6 +157,37 @@ def process_is_alive(pid: int) -> bool:
     except OSError:
         return False
     return True
+
+
+def count_atm_daemon_processes() -> list[int]:
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["tasklist", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        pids: list[int] = []
+        for line in completed.stdout.splitlines():
+            if not line.lower().startswith('"atm-daemon.exe"'):
+                continue
+            columns = [item.strip('"') for item in line.split('","')]
+            if len(columns) > 1 and columns[1].isdigit():
+                pids.append(int(columns[1]))
+        return pids
+    completed = subprocess.run(
+        ["pgrep", "-f", r"(^|/)atm-daemon( |$)"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0:
+        return []
+    return [int(line) for line in completed.stdout.splitlines() if line.strip().isdigit()]
 
 
 def terminate_process(pid: int | None) -> None:
@@ -198,8 +255,52 @@ def require_clean_host_daemon_state() -> None:
         )
 
 
+def verify_af1_preflight_contract() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    missing = [marker for marker in AF1_REQUIRED_MARKERS if marker not in source]
+    if missing:
+        raise RuntimeError(
+            "shared-host smoke refuses to start because AF-1 preflight/cleanup "
+            f"markers are absent: {', '.join(missing)}"
+        )
+
+
+def verify_removed_cli_flags_stay_rejected(root: Path, env: dict[str, str], cwd: Path) -> None:
+    removed_flag_commands = [
+        ("send", "nobody@test-team", "probe", "--from", "legacy-sender"),
+        ("ack", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "probe", "--as", "legacy-sender"),
+    ]
+    for command in removed_flag_commands:
+        completed = run_atm_raw(root, env, cwd, *command)
+        if completed.returncode == 0:
+            raise RuntimeError(
+                f"shared-host smoke preflight expected removed CLI syntax to fail but it succeeded: {' '.join(command)}"
+            )
+
+
+def assert_no_process_leak(before: list[int], after: list[int]) -> None:
+    leaked = sorted(set(after) - set(before))
+    if leaked:
+        raise RuntimeError(
+            f"shared-host smoke detected leaked atm-daemon pid(s): {', '.join(str(pid) for pid in leaked)}"
+        )
+
+
+def maybe_inject_leaked_child() -> subprocess.Popen[str] | None:
+    if os.environ.get("ATM_SMOKE_INJECT_LEAK_CHILD") != "1":
+        return None
+    return subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+
 def main() -> int:
     root = repo_root()
+    verify_af1_preflight_contract()
+    daemon_pids_before = count_atm_daemon_processes()
     require_clean_host_daemon_state()
     ensure_debug_binaries(root)
     shared_host_fixture_pair = create_shared_host_fixture_pair(
@@ -219,7 +320,9 @@ def main() -> int:
     shared_env_a["ATM_DAEMON_BIN"] = debug_daemon
     shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
     shared_daemon_pid: int | None = None
+    injected_leak_child = maybe_inject_leaked_child()
     try:
+        verify_removed_cli_flags_stay_rejected(root, shared_env_a, shared_a.workspace_dir)
         # `doctor` is the first CLI invocation that may auto-start a daemon.
         # Recheck here so no process can appear during the build/fixture setup
         # window after the initial fail-closed check.
@@ -233,6 +336,7 @@ def main() -> int:
         shared_pid_a = shared_doctor_a.get("runtime_status", {}).get("singleton_owner_pid")
         shared_pid_b = shared_doctor_b.get("runtime_status", {}).get("singleton_owner_pid")
         shared_daemon_pid = int(shared_pid_a) if shared_pid_a is not None else None
+        daemon_pids_during = count_atm_daemon_processes()
 
         for fixture_item, env_item in ((shared_a, shared_env_a), (shared_b, shared_env_b)):
             run_atm(
@@ -376,6 +480,8 @@ def main() -> int:
                     {
                         "status": "passed",
                         "note": "two workspaces with one shared ATM_HOME daemon/database/log root handled raw CLI send/read/ack traffic without cross-workspace leakage",
+                        "daemon_pids_before": daemon_pids_before,
+                        "daemon_pids_during": daemon_pids_during,
                     }
                 )
             )
@@ -394,6 +500,8 @@ def main() -> int:
                     "list_a": shared_list_a,
                     "list_b": shared_list_b,
                     "log_snapshot_a": shared_log_snapshot_a,
+                    "daemon_pids_before": daemon_pids_before,
+                    "daemon_pids_during": daemon_pids_during,
                 },
                 indent=2,
             )
@@ -402,6 +510,14 @@ def main() -> int:
     finally:
         terminate_process(shared_daemon_pid)
         wait_for_process_exit(shared_daemon_pid)
+        daemon_pids_after = count_atm_daemon_processes()
+        if injected_leak_child is not None and injected_leak_child.poll() is None:
+            injected_leak_child.terminate()
+            injected_leak_child.wait(timeout=5)
+            raise RuntimeError(
+                "shared-host smoke leak fault injection detected a surviving child process"
+            )
+        assert_no_process_leak(daemon_pids_before, daemon_pids_after)
         shutil.rmtree(shared_host_fixture_pair.root, ignore_errors=True)
 
 

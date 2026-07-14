@@ -3,8 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
+    FramePayload, JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId,
+    ResponseEnvelope,
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
@@ -68,7 +70,7 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    let frame = match read_connection_frame(stream, force_shutdown)? {
+    let frame = match read_connection_frame(stream, force_shutdown, observability)? {
         ReadRequestFrameResult::EndOfStream => return Ok(()),
         ReadRequestFrameResult::Frame {
             stream: resumed_stream,
@@ -84,9 +86,30 @@ pub(super) fn handle_connection(
         max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
         "daemon request frame accepted under configured size cap"
     );
-    let (request_id, request) = codec.request_from_frame(frame)?;
+    let (request_id, request) = decode_request_frame(&codec, frame, observability)?;
     let response = dispatch_request(request_id, request, dispatcher, &registry)?;
-    write_response(&mut stream, &codec, request_id, response)?;
+    if let Err(error) = write_response(&mut stream, &codec, request_id, response) {
+        let classification = classify_connection_failure(&error);
+        if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
+            observability.emit_event_or_warn(
+                observability
+                    .event(
+                        "connection_worker",
+                        classification.as_str(),
+                        "same-host peer disconnected before the daemon response frame completed",
+                    )
+                    .with_connection_failure(DaemonConnectionFailureFields {
+                        code: error.code,
+                        request_id,
+                        classification,
+                    })
+                    .with_transport_context("response_write"),
+            );
+            return Ok(());
+        }
+        emit_connection_failure_event(observability, &error, request_id, "response_write");
+        return Err(error);
+    }
     emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
     Ok(())
 }
@@ -108,6 +131,7 @@ fn emit_dispatch_panic_recovery(
 fn read_connection_frame(
     stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
+    _observability: &SubsystemObservability,
 ) -> Result<ReadRequestFrameResult, AtmError> {
     let read_deadline_support = configure_request_deadlines(&stream)?;
     match read_request_frame_with_deadline(stream, force_shutdown, read_deadline_support)? {
@@ -127,6 +151,20 @@ fn read_connection_frame(
         }
         #[cfg(windows)]
         ReadRequestFrameResult::TimedOut => {
+            _observability.emit_event_or_warn(
+                _observability
+                    .event(
+                        "connection_worker",
+                        ConnectionFailureClassification::TransportFailure.as_str(),
+                        "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection",
+                    )
+                    .with_connection_failure(DaemonConnectionFailureFields {
+                        code: AtmErrorCode::DaemonUnavailable,
+                        request_id: RequestId::new(1).expect("nonzero request id"),
+                        classification: ConnectionFailureClassification::TransportFailure,
+                    })
+                    .with_transport_context("request_read"),
+            );
             tracing::warn!(
                 subsystem = "local_ipc",
                 action = "request_read",
@@ -137,6 +175,69 @@ fn read_connection_frame(
             Ok(ReadRequestFrameResult::TimedOut)
         }
     }
+}
+
+fn decode_request_frame(
+    codec: &JsonAtmProtocolCodec,
+    frame: FramePayload,
+    observability: &SubsystemObservability,
+) -> Result<(RequestId, RequestEnvelope), AtmError> {
+    let request_id = frame.request_id;
+    codec.request_from_frame(frame).map_err(|error| {
+        emit_connection_failure_event(observability, &error, request_id, "request_decode");
+        error
+    })
+}
+
+pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailureClassification {
+    if error.is_validation() {
+        return ConnectionFailureClassification::MalformedRequest;
+    }
+    let haystacks = [
+        error.message.to_ascii_lowercase(),
+        error
+            .source
+            .as_ref()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default()
+            .to_ascii_lowercase(),
+    ];
+    if haystacks.iter().any(|value| {
+        value.contains("broken pipe")
+            || value.contains("connection reset")
+            || value.contains("connection aborted")
+            || value.contains("unexpected eof")
+            || value.contains("end of file")
+    }) {
+        return ConnectionFailureClassification::ExpectedPeerDisconnect;
+    }
+    if error.is_daemon_unavailable() || error.is_timeout() {
+        return ConnectionFailureClassification::TransportFailure;
+    }
+    ConnectionFailureClassification::RequestFailure
+}
+
+pub(super) fn emit_connection_failure_event(
+    observability: &SubsystemObservability,
+    error: &AtmError,
+    request_id: RequestId,
+    transport_context: &'static str,
+) {
+    let classification = classify_connection_failure(error);
+    observability.emit_event_or_warn(
+        observability
+            .event(
+                "connection_worker",
+                classification.as_str(),
+                error.message.clone(),
+            )
+            .with_connection_failure(DaemonConnectionFailureFields {
+                code: error.code,
+                request_id,
+                classification,
+            })
+            .with_transport_context(transport_context),
+    );
 }
 
 fn read_request_frame_with_deadline(

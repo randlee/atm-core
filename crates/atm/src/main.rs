@@ -795,7 +795,7 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
         })?;
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
-        severity: map_level_back(event.level),
+        level: map_level_back(event.level),
         service: service_name(event.service.as_str().to_string())?,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),

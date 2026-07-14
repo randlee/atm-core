@@ -645,7 +645,7 @@ fn print_log_record_line(record: &AtmLogRecord) {
     println!(
         "{} {:?} {} {} {}",
         record.timestamp.into_inner().to_rfc3339(),
-        record.severity,
+        record.level,
         record.service,
         target,
         action
