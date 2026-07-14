@@ -23,7 +23,7 @@ use atm_core::error_codes::AtmErrorCode;
 use super::PreparedRuntimeServer;
 use super::{
     DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
-    write_shutdown_response,
+    RESERVED_PRE_DISPATCH_REQUEST_ID, write_shutdown_response,
 };
 
 const SAME_HOST_HEADER_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
@@ -140,7 +140,8 @@ fn read_connection_frame(
         emit_connection_failure_event(
             observability,
             error,
-            RequestId::new(1).expect("nonzero request id"),
+            RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
+                .expect("u64::MAX is a valid nonzero sentinel"),
             "request_deadline_config",
         );
     })?;
@@ -149,7 +150,8 @@ fn read_connection_frame(
             emit_connection_failure_event(
                 observability,
                 error,
-                RequestId::new(1).expect("nonzero request id"),
+                RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
+                    .expect("u64::MAX is a valid nonzero sentinel"),
                 "request_read",
             );
         })? {
@@ -178,7 +180,8 @@ fn read_connection_frame(
                     )
                     .with_connection_failure(DaemonConnectionFailureFields {
                         code: AtmErrorCode::DaemonUnavailable,
-                        request_id: RequestId::new(1).expect("nonzero request id"),
+                        request_id: RequestId::new(RESERVED_PRE_DISPATCH_REQUEST_ID)
+                            .expect("u64::MAX is a valid nonzero sentinel"),
                         classification: ConnectionFailureClassification::TransportFailure,
                     })
                     .with_transport_context("request_read"),
