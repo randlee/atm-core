@@ -1,5 +1,4 @@
 use std::io::Write;
-use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,8 +56,6 @@ pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC connection worker panicked; transport thread recovered";
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
-const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
-
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
@@ -742,6 +739,7 @@ where
         &mut stream,
         context.codec,
         context.registry.active_connections(),
+        context.observability,
     )? {
         return Ok(AcceptLoopOutcome::Continue);
     }

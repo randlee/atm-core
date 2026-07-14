@@ -15,7 +15,6 @@ use crate::boundary::{RosterEntry, RosterStore};
 use crate::config::load_claude_team_config_document;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
-use crate::mailbox::lock;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
@@ -532,10 +531,6 @@ pub(super) fn apply_restored_inboxes(
         .with_source(error)
         .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
-    lock::sweep_stale_lock_sentinels(&inboxes_dir).map_err(|error| {
-        error.with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
-    })?;
-
     let inbox_staging_dir = restore_staging_inboxes_dir(team_dir);
     fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
         AtmError::mailbox_write(format!(

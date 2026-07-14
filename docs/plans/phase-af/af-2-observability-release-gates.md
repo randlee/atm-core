@@ -1,8 +1,8 @@
 ---
 title: AF-2 — Observability and release gates
-status: planned
-branch: feature/1-3-0-smoke-test-fix-docs
-worktree: ../atm-core-worktrees/feature/1-3-0-smoke-test-fix-docs
+status: complete
+branch: integrate/phase-AF
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
 
 # AF-2 — Observability and release gates

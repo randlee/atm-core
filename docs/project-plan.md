@@ -118,8 +118,11 @@ Phase-AF planning note:
 - the authoritative phase plan is [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md)
   with hardened sprint documents for AF-1 host-wide singleton, AF-2
   observability/release gates, and AF-3 native send-input integrity.
-- the planning and implementation branch is
-  `feature/1-3-0-smoke-test-fix-docs`; integration target is `develop`.
+- the accepted implementation branch is `integrate/phase-AF`; AF-1, AF-2, and
+  AF-3 are merged there at `52c5c338`, with docs-only readiness corrections at
+  `d5420b0f`.
+- PR #539 (`integrate/phase-AF` -> `develop`) is the active phase-end review
+  candidate.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
   proceed until its process-level singleton proof is green.
 
@@ -167,9 +170,9 @@ Status:
   baseline.
 - Phase AE is the active planning line for installed end-user documentation as
   a shipped release surface.
-- Phase AF is the active 1.3.1 reliability recovery line; AF-1 singleton
-  closure blocks release progression, followed by AF-2 observability/release
-  gates and AF-3 native send-input integrity.
+- Phase AF is the active 1.3.1 reliability recovery line under phase-end
+  review on `integrate/phase-AF`; AF-1, AF-2, and AF-3 are merged and the
+  remaining closeout work is release-evidence and QA-gate completion.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`
@@ -241,12 +244,13 @@ Phase R sequencing rule:
 
 ## 4. Work Sequence
 
-### Phase AF: 1.3.1 Reliability Recovery [PLANNED]
+### Phase AF: 1.3.1 Reliability Recovery [PHASE-END REVIEW]
 
 Status summary:
 - Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
-- Planning and implementation branch:
-  `feature/1-3-0-smoke-test-fix-docs`.
+- AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
+  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+- Accepted implementation branch: `integrate/phase-AF`.
 - Integration target: `develop`.
 - The authoritative plan is
   [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md).
@@ -269,9 +273,9 @@ Deliverables:
   design
 
 Sprint line:
-- `AF-1` `feature/1-3-0-smoke-test-fix-docs`
-- `AF-2` `feature/1-3-0-smoke-test-fix-docs`
-- `AF-3` `feature/1-3-0-smoke-test-fix-docs`
+- `AF-1` `feature/atm-daemon-singleton-hardening`
+- `AF-2` `feature/pAF-s2-observability-release-gates`
+- `AF-3` `feature/pAF-s3-native-send-input-integrity`
 
 Acceptance:
 - Phase AF exit criteria are satisfied only through
@@ -514,7 +518,7 @@ Acceptance:
 
 ### Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]
 
-- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, introduced the ATM-owned workflow sidecar, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
+- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. The temporary workflow sidecar introduced during this phase has since been retired; SQLite is the exclusive mailbox-state authority. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
 
 ## 5. Hard Rules
 

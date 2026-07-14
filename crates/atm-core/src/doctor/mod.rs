@@ -20,8 +20,10 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
-    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
+    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
+    DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -115,9 +117,16 @@ pub fn run_doctor_with_runtime(
         summary,
         findings,
         recommendations,
-        environment,
+        environment: environment.clone(),
+        client_context: report::DoctorExecutionContext {
+            team: environment.atm_team.clone(),
+            identity: environment.atm_identity.clone(),
+            version: Some(crate::protocol::ReleaseVersion::current()),
+        },
+        daemon_context: None,
         member_roster,
         observability: observability_health,
+        post_send: PostSendDoctorReport::default(),
         config: crate::boundary::ConfigDoctorReport::default(),
         mail_store: crate::boundary::MailStoreDoctorReport::default(),
         roster_store: crate::boundary::RosterStoreDoctorReport::default(),
@@ -170,14 +179,27 @@ pub fn run_doctor_with_runtime_ports(
     );
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
+    let post_send = post_send_doctor_report(
+        config.as_ref(),
+        member_roster.as_ref(),
+        runtime,
+        resolved_team.as_ref(),
+    );
 
     Ok(DoctorReport {
         summary,
         findings,
         recommendations,
-        environment,
+        environment: environment.clone(),
+        client_context: report::DoctorExecutionContext {
+            team: environment.atm_team.clone(),
+            identity: environment.atm_identity.clone(),
+            version: Some(crate::protocol::ReleaseVersion::current()),
+        },
+        daemon_context: None,
         member_roster,
         observability: observability_health,
+        post_send,
         config: reports.config,
         mail_store: reports.mail_store,
         roster_store: reports.roster_store,
@@ -186,6 +208,77 @@ pub fn run_doctor_with_runtime_ports(
         runtime_status: None,
         bootstrap_trace: None,
     })
+}
+
+fn post_send_doctor_report(
+    config: Option<&crate::config::AtmConfig>,
+    member_roster: Option<&MembersList>,
+    runtime: &LocalServiceRuntime,
+    team: Option<&TeamName>,
+) -> PostSendDoctorReport {
+    let Some(config) = config else {
+        return PostSendDoctorReport::default();
+    };
+    let external_rules = config
+        .post_send_hooks
+        .iter()
+        .filter_map(|rule| {
+            let (program, argv) = rule.command.split_first()?;
+            Some(PostSendHookRuleReport {
+                recipient_matcher: rule.recipient.to_string(),
+                executable: std::path::PathBuf::from(program),
+                argv: argv.to_vec(),
+                config_root: config.config_root.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
+    // A disabled built-in delivery template is a team-level delivery policy.
+    // Report it before external matching so doctor describes the path that will
+    // actually be emitted, without exposing rendered message content.
+    let built_in_delivery_disabled = team
+        .and_then(|team| {
+            runtime
+                .load_nudge_template_override(
+                    team,
+                    crate::boundary::BuiltInNudgeTemplateKind::Delivery,
+                )
+                .ok()
+                .flatten()
+        })
+        .is_some_and(|row| {
+            matches!(
+                row.mode,
+                crate::boundary::TeamNudgeTemplateOverrideMode::Disabled
+            )
+        });
+    let recipient_paths = member_roster
+        .into_iter()
+        .flat_map(|roster| roster.members.iter())
+        .map(|member| {
+            let path = if built_in_delivery_disabled {
+                RecipientDeliveryPath::Disabled
+            } else {
+                config
+                    .post_send_hooks
+                    .iter()
+                    .position(|rule| rule.recipient.matches(&member.name))
+                    .and_then(|index| u32::try_from(index).ok())
+                    .map(|rule| RecipientDeliveryPath::ExternalOverride {
+                        rule: PostSendHookRuleIndex(rule),
+                    })
+                    .unwrap_or(RecipientDeliveryPath::BuiltIn)
+            };
+            RecipientDeliveryPathReport {
+                recipient: member.name.clone(),
+                path,
+            }
+        })
+        .collect();
+    PostSendDoctorReport {
+        config_root: config.config_root.clone(),
+        external_rules,
+        recipient_paths,
+    }
 }
 
 struct DoctorSectionReports {
@@ -747,6 +840,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::ordered_member_summaries;
+    use crate::config::AtmConfig;
+    use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
         DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
     };
@@ -759,6 +854,7 @@ mod tests {
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
+    use crate::team_admin::MembersList;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
 
@@ -907,6 +1003,61 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn post_send_report_projects_external_override_without_message_content() {
+        let config = AtmConfig {
+            config_root: PathBuf::from("/workspace"),
+            post_send_hooks: vec![PostSendHookRule {
+                recipient: HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
+                command: vec!["hooks/nudge".to_string(), "--quiet".to_string()],
+            }],
+            ..AtmConfig::default()
+        };
+        let roster = MembersList {
+            team: TEST_TEAM.parse().expect("team"),
+            members: vec![crate::team_admin::MemberSummary {
+                name: TEST_SENDER.parse().expect("member"),
+                agent_id: TEST_SENDER.to_string(),
+                agent_type: "general".to_string(),
+                model: Default::default(),
+                joined_at: None,
+                tmux_pane_id: None,
+                home_dir: PathBuf::from("/workspace").into(),
+                live_cwd: None,
+                extra: serde_json::Map::new(),
+            }],
+        };
+
+        let runtime = test_runtime_with_roster(&[TEST_SENDER]);
+        let report = super::post_send_doctor_report(
+            Some(&config),
+            Some(&roster),
+            &runtime,
+            Some(&roster.team),
+        );
+
+        assert_eq!(report.external_rules.len(), 1);
+        assert_eq!(
+            report.external_rules[0].executable,
+            PathBuf::from("hooks/nudge")
+        );
+        assert_eq!(report.external_rules[0].argv, ["--quiet"]);
+        assert!(matches!(
+            report.recipient_paths.as_slice(),
+            [crate::doctor::RecipientDeliveryPathReport {
+                path: crate::doctor::RecipientDeliveryPath::ExternalOverride {
+                    rule: crate::doctor::PostSendHookRuleIndex(0),
+                },
+                ..
+            }]
+        ));
+        assert!(
+            !serde_json::to_string(&report)
+                .expect("serialize report")
+                .contains("message-body-must-never-appear")
+        );
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {

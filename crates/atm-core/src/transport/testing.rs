@@ -78,6 +78,9 @@ impl ClientTransport for LoopbackClientTransport {
                     ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
                 })
             }
+            RequestEnvelope::CompatibilityPreflight(_) => Err(AtmError::daemon_unavailable(
+                "loopback compatibility preflight is not wired outside the daemon runtime",
+            )),
             RequestEnvelope::Heartbeat(_) => Err(AtmError::daemon_unavailable(
                 "loopback heartbeat transport is not wired outside the daemon runtime",
             )),

@@ -412,7 +412,7 @@ mod tests {
             snapshot: Mutex::new(Some(Ok(AtmLogSnapshot {
                 records: vec![AtmLogRecord {
                     timestamp: chrono::Utc::now().into(),
-                    severity: LogLevelFilter::Info,
+                    level: LogLevelFilter::Info,
                     service: atm_core::observability::service_name("atm")
                         .expect("valid service name"),
                     target: None,

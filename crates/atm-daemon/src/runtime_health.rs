@@ -9,8 +9,8 @@ use atm_core::{
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
-        self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-        DoctorStatus, DoctorSummary,
+        self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorKind},
     error_codes::AtmErrorCode,
@@ -21,8 +21,9 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        RuntimeLivenessState, RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
+        SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
@@ -607,6 +608,9 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
+            RequestEnvelope::CompatibilityPreflight(preflight) => Ok(
+                ResponseEnvelope::CompatibilityVerdict(self.compatibility_verdict(preflight)?),
+            ),
             RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
                 query,
                 self.observability.as_ref(),
@@ -630,6 +634,23 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn compatibility_verdict(
+        &self,
+        preflight: atm_core::protocol::CompatibilityPreflight,
+    ) -> Result<CompatibilityVerdict, AtmError> {
+        let daemon_release = ReleaseVersion::current();
+        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
+            && preflight.client_release == daemon_release
+        {
+            return Ok(CompatibilityVerdict::Compatible { daemon_release });
+        }
+        Ok(CompatibilityVerdict::Incompatible {
+            client_release: preflight.client_release,
+            daemon_release,
+            code: AtmErrorCode::ClientDaemonVersionIncompatible,
+        })
+    }
+
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
         let roster_store = self
             .roster_store
@@ -800,6 +821,15 @@ impl DaemonRequestDispatcher {
             error_count,
         };
         report.runtime_status = Some(runtime_status);
+        report.daemon_context = Some(DoctorExecutionContext {
+            team: atm_core::caller_context::read_cli_team_from_env()
+                .ok()
+                .flatten(),
+            identity: atm_core::caller_context::read_cli_identity_from_env()
+                .ok()
+                .flatten(),
+            version: Some(ReleaseVersion::current()),
+        });
         Ok(report)
     }
 }

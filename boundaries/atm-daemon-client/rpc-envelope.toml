@@ -42,9 +42,9 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["RpcEnvelope", "RpcHeader"]
-response_types = ["RpcEnvelope"]
-error_types = ["AtmError"]
+request_types = ["RpcEnvelope", "RpcHeader", "CompatibilityPreflight"]
+response_types = ["RpcEnvelope", "CompatibilityVerdict"]
+error_types = ["AtmError", "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE"]
 
 [testing]
 allowed_test_double_paths = []
@@ -66,5 +66,7 @@ state = "active"
 notes = [
   "AC.5 makes atm-daemon-client the owner of the generic transport envelope while canonical message and roster bodies come from atm-storage",
   "the current wire format still encodes RequestEnvelope and ResponseEnvelope inside RpcEnvelope body bytes for protocol v1",
+  "AF2 requires compatibility preflight and verdict before write-shaped dispatch; Connection<Unverified> has no write dispatch surface and Connection<VersionVerified>::dispatch_write is the only write-shaped RPC path",
+  "CompatibilityPreflight request and CompatibilityVerdict response are part of the public same-host envelope contract for release-compatibility gating",
   "Phase AD's accepted boundary excludes graft-specific advisory-stream transport roots even if older code paths still exist pending deletion",
 ]

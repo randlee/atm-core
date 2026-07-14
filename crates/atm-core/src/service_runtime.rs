@@ -5,7 +5,6 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
@@ -16,14 +15,15 @@ use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::{InboxMessage, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
-use crate::workflow::{self, WorkflowStateFile};
-
-const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RetainedMailboxTimeoutPolicy {
-    pub(crate) workflow_lock_timeout: Duration,
+/// Invoke a closure with the installed retained local runtime.
+#[doc(hidden)]
+pub fn with_default_local_service_runtime<T>(
+    f: impl FnOnce(&LocalServiceRuntime) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let runtime = crate::service_runtime_store::default_runtime()?;
+    f(&runtime)
 }
 
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
@@ -56,7 +56,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
-    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
     #[allow(
         dead_code,
         reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
@@ -91,19 +90,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
             &records,
         ))
     }
-
-    fn commit_workflow_state<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>;
 }
 
 #[derive(Clone)]
@@ -153,6 +139,11 @@ impl LocalServiceRuntime {
         self.roster_store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
+    }
+
+    #[doc(hidden)]
+    pub fn shared_roster_store_arc(&self) -> std::sync::Arc<dyn SharedRosterStore + Send + Sync> {
+        self.roster_store.clone()
     }
 }
 
@@ -341,12 +332,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         seen_state::save_seen_watermark(home_dir, team, agent, timestamp)
     }
 
-    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-        RetainedMailboxTimeoutPolicy {
-            workflow_lock_timeout: WORKFLOW_LOCK_TIMEOUT,
-        }
-    }
-
     fn rebuild_compat_inbox_projection(
         &self,
         inbox_path: &Path,
@@ -385,22 +370,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
-    }
-
-    fn commit_workflow_state<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-    {
-        workflow::commit_workflow_state(home_dir, team, agent, extra_write_paths, timeout, body)
     }
 }
 

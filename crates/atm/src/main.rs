@@ -102,12 +102,15 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
+        | AtmErrorCode::SocketOverrideForbidden
         | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
@@ -792,7 +795,7 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
         })?;
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
-        severity: map_level_back(event.level),
+        level: map_level_back(event.level),
         service: service_name(event.service.as_str().to_string())?,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
@@ -1032,7 +1035,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn logger_level_override_accepts_debug() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("debug"), || {
             assert_eq!(
@@ -1043,7 +1046,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn logger_level_override_rejects_invalid_values() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("verbose"), || {
             let error = logger_level_override().expect_err("invalid override");
@@ -1065,7 +1068,7 @@ mod adapter_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn init_observability_fails_closed_when_atm_log_dir_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([

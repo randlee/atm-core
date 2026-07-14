@@ -75,6 +75,8 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     atm_identity: None,
                     team_override: None,
                 },
+                client_context: atm_core::doctor::DoctorExecutionContext::default(),
+                daemon_context: None,
                 member_roster: None,
                 observability: AtmObservabilityHealth {
                     active_log_path: None,
@@ -84,6 +86,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     diagnostic: None,
                     detail: None,
                 },
+                post_send: atm_core::doctor::PostSendDoctorReport::default(),
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
