@@ -57,6 +57,7 @@ pub enum MessageKind {
     SendComposeRequest = 0x0001,
     SendAcknowledgeRequest = 0x0002,
     HeartbeatRequest = 0x0003,
+    CompatibilityPreflightRequest = 0x0009,
     ListRequest = 0x0004,
     PeekRequest = 0x0005,
     ReceiveRequest = 0x0006,
@@ -65,6 +66,7 @@ pub enum MessageKind {
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
+    CompatibilityVerdictResponse = 0x1009,
     ListResponse = 0x1004,
     PeekResponse = 0x1005,
     ReceiveResponse = 0x1006,
@@ -84,6 +86,7 @@ impl MessageKind {
             Self::SendComposeRequest
                 | Self::SendAcknowledgeRequest
                 | Self::HeartbeatRequest
+                | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
                 | Self::PeekRequest
                 | Self::ReceiveRequest
@@ -105,6 +108,7 @@ impl TryFrom<u16> for MessageKind {
             0x0001 => Ok(Self::SendComposeRequest),
             0x0002 => Ok(Self::SendAcknowledgeRequest),
             0x0003 => Ok(Self::HeartbeatRequest),
+            0x0009 => Ok(Self::CompatibilityPreflightRequest),
             0x0004 => Ok(Self::ListRequest),
             0x0005 => Ok(Self::PeekRequest),
             0x0006 => Ok(Self::ReceiveRequest),
@@ -113,6 +117,7 @@ impl TryFrom<u16> for MessageKind {
             0x1001 => Ok(Self::SendSentResponse),
             0x1002 => Ok(Self::SendAcknowledgedResponse),
             0x1003 => Ok(Self::HeartbeatResponse),
+            0x1009 => Ok(Self::CompatibilityVerdictResponse),
             0x1004 => Ok(Self::ListResponse),
             0x1005 => Ok(Self::PeekResponse),
             0x1006 => Ok(Self::ReceiveResponse),
@@ -372,6 +377,7 @@ fn message_kind_for_request(request: &RequestEnvelope) -> MessageKind {
         Send(atm_core::protocol::SendRequestEnvelope::Acknowledge(_)) => {
             MessageKind::SendAcknowledgeRequest
         }
+        CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
         Heartbeat(_) => MessageKind::HeartbeatRequest,
         List(_) => MessageKind::ListRequest,
         Peek(_) => MessageKind::PeekRequest,
@@ -389,6 +395,7 @@ fn message_kind_for_response(response: &ResponseEnvelope) -> MessageKind {
         Send(atm_core::protocol::SendResponseEnvelope::Acknowledged(_)) => {
             MessageKind::SendAcknowledgedResponse
         }
+        CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         Heartbeat(_) => MessageKind::HeartbeatResponse,
         List(_) => MessageKind::ListResponse,
         Peek(_) => MessageKind::PeekResponse,

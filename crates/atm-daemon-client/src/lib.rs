@@ -14,9 +14,13 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::sync::Mutex;
 
+pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
+
+mod compatibility;
 mod rpc;
 mod wire;
 
+pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
 #[doc(inline)]
 pub use rpc::{RpcEnvelope, RpcHeader};
 pub use wire::{FramePayload, MessageKind, RequestId};

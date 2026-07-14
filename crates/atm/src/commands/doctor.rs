@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn execute_runs_direct_local_doctor_path() {
+    fn execute_runs_direct_local_doctor_path_without_inherited_bootstrap_configuration() {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
             team: None,
@@ -167,6 +167,9 @@ mod tests {
         std::fs::create_dir_all(&home_dir).expect("home dir");
         std::fs::create_dir_all(&current_dir).expect("current dir");
         std::fs::create_dir_all(home_dir.join(".atm").join("db")).expect("host db dir");
+        // Clear every
+        // bootstrap input that could otherwise make this unit test connect to
+        // or launch a caller-selected daemon.
         let _env = EnvGuard::set_many([
             ("ATM_DAEMON_BIN", None),
             ("ATM_DAEMON_SOCKET", None),
@@ -175,8 +178,13 @@ mod tests {
             ("HOME", Some(home_dir.to_str().expect("utf8 path"))),
             ("USERPROFILE", None),
         ]);
-        let _report = command
+        let report = command
             .execute_direct_local(&observability, home_dir, current_dir)
             .expect("report");
+
+        assert!(
+            report.daemon_runtime.is_none(),
+            "hermetic local doctor must not report a daemon"
+        );
     }
 }

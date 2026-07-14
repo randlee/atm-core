@@ -7,6 +7,8 @@ use std::thread;
 
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
+use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
 use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -108,12 +110,36 @@ pub(super) fn reject_connection_when_capped(
     stream: &mut LocalSocketStream,
     codec: &JsonAtmProtocolCodec,
     active_connections: usize,
+    observability: &SubsystemObservability,
 ) -> Result<bool, AtmError> {
     if active_connections < MAX_CONCURRENT_CONNECTIONS {
         return Ok(false);
     }
+    observability.emit_event_or_warn(
+        observability
+            .event(
+                "connection_admission",
+                "saturated",
+                format!(
+                    "daemon rejected a same-host connection because the {}-connection cap was already exhausted",
+                    MAX_CONCURRENT_CONNECTIONS
+                ),
+            )
+            .with_connection_failure(DaemonConnectionFailureFields {
+                code: AtmErrorCode::DaemonConnectionSaturated,
+                request_id: atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)
+                    .expect("nonzero request id"),
+                classification: ConnectionFailureClassification::TransportFailure,
+            })
+            .with_transport_context("connection_cap")
+            .with_extra_string_field("active_connections", active_connections.to_string()),
+    );
     let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::daemon_unavailable("daemon connection cap exceeded (max 64 concurrent accepts)")
+        &AtmError::new_with_code(
+            AtmErrorCode::DaemonConnectionSaturated,
+            atm_storage::AtmErrorKind::DaemonUnavailable,
+            "daemon connection cap exceeded (max 64 concurrent accepts)",
+        )
             .with_recovery(
                 "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
             ),
@@ -166,15 +192,10 @@ pub(super) fn spawn_connection_worker<'scope>(
                 Ok(Err(error)) => {
                     #[cfg(test)]
                     eprintln!("daemon local IPC connection handling failed: {error}");
-                    observability.emit_or_warn(
-                        "connection_worker",
-                        "failed",
-                        "daemon local IPC connection handling failed",
-                    );
                     tracing::warn!(
                         subsystem = "local_ipc_transport",
                         action = "connection_worker",
-                        outcome = "failed",
+                        outcome = "classified_failure",
                         %error,
                         "daemon local IPC connection handling failed"
                     );

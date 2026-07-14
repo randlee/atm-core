@@ -40,6 +40,8 @@ pub enum AtmErrorCode {
     DaemonServingStateRejected,
     DaemonStaleOwnerRecoveryFailed,
     DaemonAutoStartFailed,
+    DaemonConnectionSaturated,
+    ClientDaemonVersionIncompatible,
     DaemonAdvisorySessionAlreadyRegistered,
     DaemonAdvisorySessionNotRegistered,
     DaemonAdvisorySessionCleanupFailed,
@@ -141,6 +143,8 @@ impl AtmErrorCode {
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
             Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
             Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
+            Self::DaemonConnectionSaturated => "ATM_DAEMON_CONNECTION_SATURATED",
+            Self::ClientDaemonVersionIncompatible => "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE",
             Self::DaemonAdvisorySessionAlreadyRegistered => {
                 "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED"
             }
@@ -268,6 +272,8 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_DAEMON_SERVING_STATE_REJECTED" => AtmErrorCode::DaemonServingStateRejected,
         "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
         "ATM_DAEMON_AUTO_START_FAILED" => AtmErrorCode::DaemonAutoStartFailed,
+        "ATM_DAEMON_CONNECTION_SATURATED" => AtmErrorCode::DaemonConnectionSaturated,
+        "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE" => AtmErrorCode::ClientDaemonVersionIncompatible,
         "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {
             AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         }

@@ -43,6 +43,7 @@ pub enum SendResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
     Send(SendRequestEnvelope),
+    CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     List(ListQuery),
     Peek(PeekQuery),
@@ -55,6 +56,7 @@ pub enum RequestEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
+    CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
     Peek(Box<ReadOutcome>),
@@ -92,7 +94,76 @@ impl ProtocolErrorEnvelope {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct ReleaseVersion(String);
+
+impl ReleaseVersion {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
+        let value = value
+            .as_ref()
+            .trim()
+            .strip_prefix('v')
+            .unwrap_or(value.as_ref().trim());
+        let mut parts = value.split('.');
+        let valid = (0..3).all(|_| {
+            parts.next().is_some_and(|part| {
+                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        }) && parts.next().is_none();
+        if !valid {
+            return Err(AtmError::new_with_code(
+                AtmErrorCode::ClientDaemonVersionIncompatible,
+                AtmErrorKind::DaemonUnavailable,
+                format!("invalid ATM release version `{value}`"),
+            )
+            .with_recovery(
+                "Install a matching released atm and atm-daemon pair before retrying.",
+            ));
+        }
+        Ok(Self(value.to_string()))
+    }
+
+    pub fn current() -> Self {
+        Self::parse(env!("CARGO_PKG_VERSION")).expect("package version must be semver")
+    }
+}
+
+impl fmt::Display for ReleaseVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CompatibilityPreflight {
+    pub client_release: ReleaseVersion,
+    pub wire_version: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompatibilityVerdict {
+    Compatible {
+        daemon_release: ReleaseVersion,
+    },
+    Incompatible {
+        client_release: ReleaseVersion,
+        daemon_release: ReleaseVersion,
+        code: AtmErrorCode,
+    },
+}
+
 const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
+    if let Some(kind) = structural_error_kind_for_code(code) {
+        kind
+    } else if let Some(kind) = observability_error_kind_for_code(code) {
+        kind
+    } else {
+        validation_error_kind_for_code(code)
+    }
+}
+
+const fn structural_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
     match code {
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
@@ -100,13 +171,38 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => AtmErrorKind::Config,
+        | AtmErrorCode::ConfigTeamMissing => Some(AtmErrorKind::Config),
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
-        | AtmErrorCode::WarningIdentityDrift => AtmErrorKind::Identity,
-        AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
-        AtmErrorCode::MemberAlreadyExists => AtmErrorKind::Validation,
-        AtmErrorCode::MemberNotFound => AtmErrorKind::AgentNotFound,
+        | AtmErrorCode::WarningIdentityDrift
+        | AtmErrorCode::IdentityConflict => Some(AtmErrorKind::Identity),
+        AtmErrorCode::MemberAlreadyExists => Some(AtmErrorKind::Validation),
+        AtmErrorCode::MemberNotFound => Some(AtmErrorKind::AgentNotFound),
+        AtmErrorCode::AddressParseFailed => Some(AtmErrorKind::Address),
+        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => {
+            Some(AtmErrorKind::TeamNotFound)
+        }
+        AtmErrorCode::AgentNotFound => Some(AtmErrorKind::AgentNotFound),
+        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
+            Some(AtmErrorKind::MailboxRead)
+        }
+        AtmErrorCode::MailboxWriteFailed => Some(AtmErrorKind::MailboxWrite),
+        AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout
+        | AtmErrorCode::WarningStaleMailboxLock => Some(AtmErrorKind::MailboxLock),
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
+            Some(AtmErrorKind::FilePolicy)
+        }
+        AtmErrorCode::InternalError => Some(AtmErrorKind::Internal),
+        AtmErrorCode::SerializationFailed => Some(AtmErrorKind::Serialization),
+        AtmErrorCode::WaitTimeout => Some(AtmErrorKind::Timeout),
+        _ => None,
+    }
+}
+
+const fn observability_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
+    match code {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
@@ -117,36 +213,29 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
-        AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
-        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
-        AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,
-        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
-            AtmErrorKind::MailboxRead
-        }
-        AtmErrorCode::MailboxWriteFailed => AtmErrorKind::MailboxWrite,
-        AtmErrorCode::MailboxLockFailed
-        | AtmErrorCode::MailboxLockReadOnlyFilesystem
-        | AtmErrorCode::MailboxLockTimeout
-        | AtmErrorCode::WarningStaleMailboxLock => AtmErrorKind::MailboxLock,
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
-            AtmErrorKind::FilePolicy
-        }
-        AtmErrorCode::InternalError => AtmErrorKind::Internal,
-        AtmErrorCode::SerializationFailed => AtmErrorKind::Serialization,
-        AtmErrorCode::WaitTimeout => AtmErrorKind::Timeout,
-        AtmErrorCode::ObservabilityEmitFailed => AtmErrorKind::ObservabilityEmit,
-        AtmErrorCode::ObservabilityQueryFailed => AtmErrorKind::ObservabilityQuery,
-        AtmErrorCode::ObservabilityFollowFailed => AtmErrorKind::ObservabilityFollow,
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
+        | AtmErrorCode::WarningSqliteHealthDegraded
+        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => Some(AtmErrorKind::DaemonUnavailable),
+        AtmErrorCode::ObservabilityEmitFailed => Some(AtmErrorKind::ObservabilityEmit),
+        AtmErrorCode::ObservabilityQueryFailed => Some(AtmErrorKind::ObservabilityQuery),
+        AtmErrorCode::ObservabilityFollowFailed => Some(AtmErrorKind::ObservabilityFollow),
         AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityHealthOk
-        | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
-        AtmErrorCode::WarningSqliteHealthDegraded
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => AtmErrorKind::DaemonUnavailable,
-        AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
+        | AtmErrorCode::WarningObservabilityHealthDegraded => {
+            Some(AtmErrorKind::ObservabilityHealth)
+        }
+        AtmErrorCode::ObservabilityBootstrapFailed => Some(AtmErrorKind::ObservabilityBootstrap),
+        _ => None,
+    }
+}
+
+const fn validation_error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
+    match code {
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -169,6 +258,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::TestFakeTransportInjectionFailed
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
+        _ => AtmErrorKind::Validation,
     }
 }
 
@@ -224,6 +314,7 @@ pub enum MessageKind {
     SendComposeRequest = 0x0001,
     SendAcknowledgeRequest = 0x0002,
     HeartbeatRequest = 0x0003,
+    CompatibilityPreflightRequest = 0x0009,
     ListRequest = 0x0004,
     PeekRequest = 0x0005,
     ReceiveRequest = 0x0006,
@@ -232,6 +323,7 @@ pub enum MessageKind {
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
+    CompatibilityVerdictResponse = 0x1009,
     ListResponse = 0x1004,
     PeekResponse = 0x1005,
     ReceiveResponse = 0x1006,
@@ -251,6 +343,7 @@ impl MessageKind {
             Self::SendComposeRequest
                 | Self::SendAcknowledgeRequest
                 | Self::HeartbeatRequest
+                | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
                 | Self::PeekRequest
                 | Self::ReceiveRequest
@@ -272,6 +365,7 @@ impl TryFrom<u16> for MessageKind {
             0x0001 => Self::SendComposeRequest,
             0x0002 => Self::SendAcknowledgeRequest,
             0x0003 => Self::HeartbeatRequest,
+            0x0009 => Self::CompatibilityPreflightRequest,
             0x0004 => Self::ListRequest,
             0x0005 => Self::PeekRequest,
             0x0006 => Self::ReceiveRequest,
@@ -280,6 +374,7 @@ impl TryFrom<u16> for MessageKind {
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
+            0x1009 => Self::CompatibilityVerdictResponse,
             0x1004 => Self::ListResponse,
             0x1005 => Self::PeekResponse,
             0x1006 => Self::ReceiveResponse,
@@ -544,6 +639,22 @@ pub fn read_frame(
         return Ok(None);
     };
 
+    let header = decode_frame_header(header, oversize_error)?;
+    Ok(Some(read_frame_payload(reader, header, read_error)?))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrameHeader {
+    pub request_id: RequestId,
+    pub message_kind: MessageKind,
+    pub flags: u16,
+    pub payload_length: usize,
+}
+
+pub fn decode_frame_header(
+    header: [u8; ATM_FRAME_HEADER_BYTES],
+    oversize_error: &'static str,
+) -> Result<FrameHeader, AtmError> {
     let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
     if magic != ATM_FRAME_MAGIC {
         return Err(AtmError::validation(format!(
@@ -585,19 +696,32 @@ pub fn read_frame(
         ));
     }
 
-    let mut bytes = vec![0u8; payload_length];
-    reader
-        .read_exact(&mut bytes)
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
-    Ok(Some(FramePayload {
+    Ok(FrameHeader {
         request_id,
         message_kind,
         flags,
-        bytes,
-    }))
+        payload_length,
+    })
 }
 
-fn read_frame_header(
+pub fn read_frame_payload(
+    reader: &mut impl Read,
+    header: FrameHeader,
+    read_error: &'static str,
+) -> Result<FramePayload, AtmError> {
+    let mut bytes = vec![0u8; header.payload_length];
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+    Ok(FramePayload {
+        request_id: header.request_id,
+        message_kind: header.message_kind,
+        flags: header.flags,
+        bytes,
+    })
+}
+
+pub fn read_frame_header(
     reader: &mut impl Read,
     read_error: &'static str,
 ) -> Result<Option<[u8; ATM_FRAME_HEADER_BYTES]>, AtmError> {
@@ -620,6 +744,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
             MessageKind::SendAcknowledgeRequest
         }
+        RequestEnvelope::CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
         RequestEnvelope::List(_) => MessageKind::ListRequest,
         RequestEnvelope::Peek(_) => MessageKind::PeekRequest,
@@ -635,6 +760,7 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
             MessageKind::SendAcknowledgedResponse
         }
+        ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
         ResponseEnvelope::List(_) => MessageKind::ListResponse,
         ResponseEnvelope::Peek(_) => MessageKind::PeekResponse,
