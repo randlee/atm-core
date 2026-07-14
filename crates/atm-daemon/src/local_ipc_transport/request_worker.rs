@@ -16,6 +16,9 @@ use crate::active_connection_registry::{
     ActiveConnectionRegistry, DispatchReapSummary, TrackedDispatchHandle,
 };
 
+#[cfg(windows)]
+use atm_core::error_codes::AtmErrorCode;
+
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{
