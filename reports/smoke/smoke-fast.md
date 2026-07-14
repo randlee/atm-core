@@ -1,17 +1,21 @@
 # Smoke Fast
 
 - status: `passed`
-- timestamp: `2026-05-26T16:17:52.338956+00:00`
-- binary SHA: `84935774c720e06a9e5ae36b9c6073f2231450c2`
-- duration secs: `1.179`
-- summary: `pass=7`, `fail=0`, `skip=0`
+- timestamp: `2026-07-14T23:17:21.910225+00:00`
+- binary SHA: `85249bbc38dd58e5d6735560611ff7ad5f443be1`
+- duration secs: `11.655`
+- summary: `pass=8`, `fail=0`, `skip=0`
+- row semantics: `PASS` means every command in the row exited `0`; `FAIL`
+  records the first failing command only and does not claim sibling commands in
+  that row were executed after the failure
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
-| `Z1-001` | build approved smoke baseline | `PASS` | release smoke binaries built successfully |
-| `Z1-002` | clean-room daemon/runtime bring-up | `PASS` | doctor auto-started the daemon and reported healthy readiness on the clean-room baseline |
-| `Z1-003` | retained team/member inspection on clean-room baseline | `PASS` | teams and members returned the retained clean-room roster after explicit add-member setup |
-| `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot all succeeded on the clean-room empty-mailbox baseline |
-| `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes succeeded; the ack-required message was read from the recipient mailbox and acknowledged successfully |
-| `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events |
-| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning records and no unexpected error records during the healthy smoke path |
+| `AD11-CMD-SEND-001` | send command preserves caller-context ownership across environment and explicit override paths | `PASS` | send stays bound to the shared caller-context contract across environment and explicit override paths |
+| `AD11-CMD-READ-001` | read command preserves caller-context ownership across environment and explicit override paths | `PASS` | read stays bound to the shared caller-context contract across environment and explicit override paths |
+| `AD11-CMD-MEMBERS-001` | members command remains daemon-independent while preserving explicit team override handling | `PASS` | members remains daemon-independent while preserving retained caller-team semantics |
+| `AD11-CMD-TEAMS-001` | teams list command remains daemon-independent on the retained CLI surface | `PASS` | teams list remains daemon-independent on the retained CLI surface |
+| `AD11-CMD-LOG-001` | log command remains daemon-independent with caller-context enforcement at the CLI boundary | `PASS` | log remains daemon-independent and still fails locally when caller context is unavailable |
+| `AD11-CMD-DOCTOR-001` | doctor remains identity-free while preserving optional team scoping and the direct local path | `PASS` | doctor remains identity-free while preserving optional team scoping and the direct local path |
+| `AD11-POSTSEND-LOCAL-TMUX-001` | local tmux post-send requires and uses authoritative pane metadata | `PASS` | local tmux post-send remains bound to authoritative roster pane metadata |
+| `AD11-POSTSEND-WARNING-001` | sender-visible warning fallback survives failed post-send emission | `PASS` | failed post-send emission still degrades into a sender-visible warning after durable send success |
