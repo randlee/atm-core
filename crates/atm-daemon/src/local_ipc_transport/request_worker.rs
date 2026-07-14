@@ -183,9 +183,8 @@ fn decode_request_frame(
     observability: &SubsystemObservability,
 ) -> Result<(RequestId, RequestEnvelope), AtmError> {
     let request_id = frame.request_id;
-    codec.request_from_frame(frame).map_err(|error| {
-        emit_connection_failure_event(observability, &error, request_id, "request_decode");
-        error
+    codec.request_from_frame(frame).inspect_err(|error| {
+        emit_connection_failure_event(observability, error, request_id, "request_decode");
     })
 }
 

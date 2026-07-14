@@ -621,11 +621,11 @@ fn daemon_event_fields(event: &DaemonEvent) -> Map<String, serde_json::Value> {
             serde_json::Value::String(context.to_string()),
         );
     }
-    if let Ok(extra) = serde_json::to_value(&event.extra_fields) {
-        if let Some(extra_fields) = extra.as_object() {
-            for (key, value) in extra_fields {
-                fields.insert(key.clone(), value.clone());
-            }
+    if let Ok(extra) = serde_json::to_value(&event.extra_fields)
+        && let Some(extra_fields) = extra.as_object()
+    {
+        for (key, value) in extra_fields {
+            fields.insert(key.clone(), value.clone());
         }
     }
     fields
