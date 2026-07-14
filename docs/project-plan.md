@@ -244,12 +244,13 @@ Phase R sequencing rule:
 
 ## 4. Work Sequence
 
-### Phase AF: 1.3.1 Reliability Recovery [PLANNED]
+### Phase AF: 1.3.1 Reliability Recovery [PHASE-END REVIEW]
 
 Status summary:
 - Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
-- Planning and implementation branch:
-  `feature/1-3-0-smoke-test-fix-docs`.
+- AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
+  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+- Accepted implementation branch: `integrate/phase-AF`.
 - Integration target: `develop`.
 - The authoritative plan is
   [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md).
