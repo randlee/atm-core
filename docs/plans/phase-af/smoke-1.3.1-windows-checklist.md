@@ -13,6 +13,22 @@ No macOS verdict should be inferred from this file. This is Windows-only.
 - branch/worktree content should match `develop` at `98a4e66c`
 - workspace version should resolve to `1.3.1`
 
+## Durable Windows result publication
+
+The Windows agent must publish its durable results back into this branch under
+`reports/smoke/` using the same timestamped convention as the macOS lane.
+
+Required result files:
+
+- `reports/smoke/<timestamp>-smoke-1.3.1-windows.md`
+- `reports/smoke/<timestamp>-smoke-1.3.1-windows.json`
+
+The Windows agent should also keep the standard smoke artifacts emitted by:
+
+- `python scripts/smoke/run.py fast --write-artifacts`
+- `python scripts/smoke/run.py normal --write-artifacts`
+- `python scripts/smoke/run.py thorough --write-artifacts`
+
 ## Required evidence to collect
 
 For every row below, record:
@@ -42,6 +58,7 @@ For every row below, record:
 | `AF31-WIN-006` | AF-1 singleton expectation | inspect `AF31-WIN-005` output plus doctor artifacts | exactly one daemon owner pid during the run; no leaked daemon afterward |
 | `AF31-WIN-007` | AF-2 observability/release gates | inspect `AF31-WIN-003`/`004` artifacts | doctor path, retained logs, removed-flag preflight, and version/report rows stay green |
 | `AF31-WIN-008` | AF-3 native send-input integrity | inspect `AF31-WIN-005` output | inline, stdin, and file send paths all preserve expected durable bodies; invalid stdin fails locally without changing daemon pid set |
+| `AF31-WIN-009` | real same-host `atm-graft` host lane | `python scripts/smoke/run_graft_same_host.py` | exits `0`; the real graft host registers, consumes an advisory nudge, and completes unary read/ack/send through the shared daemon contract |
 
 ## Required command details
 
@@ -126,6 +143,32 @@ Fail if:
 - invalid stdin succeeds or mutates the daemon pid set
 - inline/stdin/file durable bodies do not match expected values exactly
 
+### 6. Real same-host graft host lane
+
+Run:
+
+```bash
+python scripts/smoke/run_graft_same_host.py
+```
+
+Pass if:
+
+- command exits `0`
+- output status is `passed`
+- the real `atm-graft` host registers against the shared daemon contract
+- the graft host receives an advisory nudge
+- the graft host completes unary `read`, `ack`, and `send`
+- the CLI operator can read the graft host follow-up message
+- no leaked daemon remains after the run
+
+Fail if:
+
+- graft activation does not reach the listening state
+- no advisory nudge is delivered to the graft host
+- `read`, `ack`, or `send` fails inside the graft host lane
+- the operator cannot read the graft host follow-up message
+- the lane requires a second daemon or leaks one after completion
+
 ## AF evidence this checklist must reproduce
 
 - AF-1:
@@ -141,10 +184,32 @@ Specifically, the Windows run must reproduce:
 - no leaked daemon artifacts after the shared-host smoke
 - retained observability/release-gate rows staying green
 - native inline/stdin/file send-input integrity
+- the real same-host `atm-graft` advisory plus unary host lane
 
 ## Windows verdict rules
 
-- Only mark Windows green if `AF31-WIN-002` through `AF31-WIN-008` all pass.
+- Only mark Windows green if `AF31-WIN-002` through `AF31-WIN-009` all pass.
 - If `AF31-WIN-005` cannot run because of an ambient daemon, mark the lane
   `FAIL`, not `SKIP`.
-- Do not waive singleton or send-input failures.
+- Do not waive singleton, send-input, or graft-host failures.
+
+## Windows result payload minimum
+
+The Windows JSON result should include at minimum:
+
+```json
+{
+  "level": "smoke-1.3.1-windows",
+  "platform": "Windows",
+  "candidate_version": "1.3.1",
+  "binary_sha": "<git sha>",
+  "status": "passed|failed",
+  "rows": [
+    {
+      "id": "AF31-WIN-009",
+      "verdict": "PASS",
+      "notes": "real same-host atm-graft host lane succeeded"
+    }
+  ]
+}
+```

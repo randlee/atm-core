@@ -115,6 +115,13 @@ execution handoff is published in:
 - `docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`
 
 That checklist is the artifact the user’s Windows Codex agent should follow.
+Its durable published results must land back on this branch under:
+
+- `reports/smoke/<timestamp>-smoke-1.3.1-windows.md`
+- `reports/smoke/<timestamp>-smoke-1.3.1-windows.json`
+
+The Windows lane also now explicitly includes the real same-host
+`atm-graft` host smoke surface through `python scripts/smoke/run_graft_same_host.py`.
 
 ## Deliverables produced by this sprint
 
