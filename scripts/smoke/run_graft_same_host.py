@@ -29,6 +29,11 @@ def smoke_binary(root: Path, name: str) -> Path:
     return binary
 
 
+def smoke_example_binary(root: Path, name: str) -> Path:
+    suffix = ".exe" if os.name == "nt" else ""
+    return root / "target" / "debug" / "examples" / f"{name}{suffix}"
+
+
 def ensure_debug_binaries(root: Path) -> None:
     if os.environ.get("ATM_SMOKE_INSTALL_ROOT"):
         return
@@ -59,6 +64,39 @@ def run_atm_result(
     root: Path, env: dict[str, str], cwd: Path, *args: str, stdin: str | None = None
 ) -> dict[str, object]:
     command = [str(smoke_binary(root, "atm")), *args]
+    if os.name == "nt":
+        capture_dir = cwd / ".atm-smoke-captures"
+        capture_dir.mkdir(exist_ok=True)
+        stem = f"{os.getpid()}-{time.monotonic_ns()}"
+        stdout_path = capture_dir / f"{stem}.stdout"
+        stderr_path = capture_dir / f"{stem}.stderr"
+        with stdout_path.open("w+", encoding="utf-8", errors="replace") as stdout_file, stderr_path.open(
+            "w+", encoding="utf-8", errors="replace"
+        ) as stderr_file:
+            completed = subprocess.run(
+                command,
+                cwd=cwd,
+                env=env,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+                timeout=30,
+                input=stdin,
+            )
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read()
+            stderr = stderr_file.read()
+        return {
+            "command": command,
+            "cwd": str(cwd),
+            "exit_code": completed.returncode,
+            "stdout": stdout.strip(),
+            "stderr": stderr.strip(),
+        }
     completed = subprocess.run(
         command,
         cwd=cwd,
@@ -268,6 +306,20 @@ def main() -> int:
 
         ensure_member(root, operator_env, fixture.workspace_dir, team_name, operator)
         ensure_member(root, operator_env, fixture.workspace_dir, team_name, graft_agent)
+        run_atm(
+            root,
+            operator_env,
+            fixture.workspace_dir,
+            "teams",
+            "update-member",
+            team_name,
+            graft_agent,
+            "--harness",
+            "codex-cli",
+            "--agent-type",
+            "worker",
+            "--json",
+        )
 
         doctor = parse_json_output(run_atm(root, operator_env, fixture.workspace_dir, "doctor", "--json"))
         owner_pid = doctor.get("runtime_status", {}).get("singleton_owner_pid")
@@ -276,13 +328,7 @@ def main() -> int:
 
         ready_file = fixture.root / "graft-ready.txt"
         example_command = [
-            "cargo",
-            "run",
-            "-p",
-            "atm-graft",
-            "--example",
-            "smoke_same_host",
-            "--",
+            str(smoke_example_binary(root, "smoke_same_host")),
             str(fixture.workspace_dir),
             team_name,
             graft_agent,
@@ -302,6 +348,12 @@ def main() -> int:
             errors="replace",
         )
         wait_for_file(ready_file)
+        if os.name == "nt":
+            # GraftSession::activate() returns after spawning the receiver loop;
+            # on Windows the local IPC listener can publish just after the
+            # example writes its ready file. Give the listener a brief settle
+            # window before the first post-send nudge.
+            time.sleep(1.0)
 
         initial_send = parse_json_output(
             run_atm(
@@ -325,6 +377,8 @@ def main() -> int:
                         "exit_code": example_proc.returncode,
                         "stdout": stdout.strip(),
                         "stderr": stderr.strip(),
+                        "initial_send": initial_send,
+                        "daemon_pids_during": daemon_pids_during,
                     },
                     indent=2,
                 )
