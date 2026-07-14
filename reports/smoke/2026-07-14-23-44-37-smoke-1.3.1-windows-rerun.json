@@ -1,0 +1,72 @@
+{
+  "status": "passed",
+  "platform": "Windows",
+  "branch": "smoke-test/1.3.1-cross-host",
+  "binary_sha": "8a371683c21a2106b84ba77484d6a14882f652a2",
+  "candidate_version": "1.3.1",
+  "evidence_timestamp": "2026-07-14T23:44:37Z",
+  "scope": "same-host Windows smoke only; cross-host validation intentionally deferred",
+  "checks": [
+    {
+      "name": "preflight",
+      "verdict": "PASS",
+      "evidence": "HEAD 8a371683; Cargo.toml version 1.3.1; no ambient atm-daemon process before smoke"
+    },
+    {
+      "name": "fast_smoke",
+      "command": "python scripts/smoke/run.py fast --write-artifacts",
+      "verdict": "PASS",
+      "summary": {
+        "pass": 8,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "name": "normal_smoke",
+      "command": "python scripts/smoke/run.py normal --write-artifacts",
+      "verdict": "PASS",
+      "summary": {
+        "pass": 28,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "name": "thorough_smoke",
+      "command": "python scripts/smoke/run.py thorough --write-artifacts",
+      "verdict": "PASS",
+      "summary": {
+        "pass": 32,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "name": "shared_host_same_host_smoke",
+      "command": "python scripts/smoke/run_thorough_shared_host.py",
+      "verdict": "PASS",
+      "daemon_pids_before": [],
+      "daemon_pids_during": [
+        66424
+      ]
+    },
+    {
+      "name": "graft_same_host_smoke",
+      "command": "python scripts/smoke/run_graft_same_host.py",
+      "verdict": "PASS",
+      "daemon_pids_before": [],
+      "daemon_pids_during": [
+        34616
+      ],
+      "initial_message_id": "01KXHG5TX204T032QN39V6B0JQ",
+      "follow_up_message_id": "01KXHG5TZYGN954CBRFN7Q3008"
+    },
+    {
+      "name": "final_test_gate",
+      "command": "just test",
+      "verdict": "PASS"
+    }
+  ],
+  "windows_specific_regressions": []
+}
