@@ -78,7 +78,8 @@ explicit transport-security disposition before any release-usable verdict:
   of the validation artifacts
 - if the release implementation remains plain TCP, open or maintain a named
   `PRODUCT-BUG` / requirement-drift finding against the transport requirement
-  and keep the final AG verdict blocked
+  and ensure any AG release-usable statement explicitly excludes
+  transport-security coverage
 
 ## macOS Bring-Up Checklist
 
@@ -175,7 +176,7 @@ Classify the first failure before moving on:
   - network/firewall/certificate/host-policy issue prevented validation
 
 Use the `classification` enum defined in `plan-phase-AG.md`. This runbook is a
-consumer of that enum, not a second authority.
+consumer of that enum only.
 
 ## Immediate Recovery Rules
 

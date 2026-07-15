@@ -29,9 +29,8 @@ Use exactly one of:
 - `PRODUCT-BUG`
 - `EXTERNAL-BLOCKER`
 
-These tokens are defined in `plan-phase-AG.md` and
-must not be restated with alternate prose. `plan-phase-AG.md` is the sole
-authority; this ledger only consumes the enum.
+See `plan-phase-AG.md` for the sole authoritative definition. This ledger only
+consumes that enum.
 
 ## Owner Enum
 
@@ -48,3 +47,4 @@ Use exactly one of:
 
 | Finding ID | Discovered In | Linked Row ID | Summary | Severity | Classification | Owner | Status | Required Fix Scope | Revalidation Result | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `AG-FIND-001` | `AG-VAL-011` | `AG-VAL-011` | Cross-host transport requirement still documents TCP/TLS, but the current `1.3.1` implementation uses plain `TcpStream` with no TLS crate in the workspace. | `blocking` | `PRODUCT-BUG` | `shared` | `open` | Track transport-security gap separately from AG functional validation; do not expand AG dev scope to implement TLS in this phase. | `TBD` | Any AG release-usable verdict must explicitly exclude TLS / transport-security coverage while this finding remains open. |

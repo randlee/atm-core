@@ -98,6 +98,7 @@ Release claim this phase must validate:
 Release claim this phase must not make without evidence:
 
 - that the product is cross-host ready just because same-host smoke passed
+- that cross-host transport is secure or TLS-backed on `1.3.1`
 
 ## Scope
 
@@ -181,7 +182,8 @@ Required shape:
 - pre-send configuration validation so peer-transport misconfiguration fails
   fast rather than appearing as a later write-path mystery
 - transport-security disposition is captured explicitly against the documented
-  TCP/TLS requirement before AG can claim cross-host release-usability
+  TCP/TLS requirement, but TLS implementation itself is not expanded inside AG
+  scope; the phase records the gap as a named finding instead
 
 ### Lane B — Disposable Copied-State Revalidation
 
@@ -238,8 +240,8 @@ These details are recorded in:
 - copied-state rerun of the approved subset only after clean-room success
 - transport-security requirement disposition against
   `REQ-CORE-TRANSPORT-001/003/005`; if the implementation remains plain TCP,
-  AG must open and carry a named `PRODUCT-BUG` or requirement-drift finding and
-  must not declare cross-host communication release-usable
+  AG must carry a named `PRODUCT-BUG` or requirement-drift finding and any
+  release-usable statement must explicitly exclude transport-security coverage
 
 ## Evidence Contract
 
@@ -270,8 +272,8 @@ The sole authoritative `classification` enum for Phase AG findings is:
 - `PRODUCT-BUG`
 - `EXTERNAL-BLOCKER`
 
-All other Phase AG docs must reference this enum and must not claim separate or
-joint authority over it.
+All other Phase AG docs must reference this enum only and must not claim
+separate or joint authority over it.
 
 Rows may end in one of two useful states:
 

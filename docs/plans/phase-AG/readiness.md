@@ -14,7 +14,7 @@ release line.
 - `AG.2` does not begin until `AG.1` resolves the first live-channel outcome
   to either a working channel or a named blocking finding
 - transport-security disposition is recorded against the documented TCP/TLS
-  requirement, and any plain-TCP mismatch remains a named blocker instead of an
+  requirement, and any plain-TCP mismatch remains a named finding instead of an
   implicit waiver
 
 ## Per-Sprint Closure Results
@@ -49,8 +49,9 @@ Allowed closure-result values:
   `cross-host-findings-ledger.md`
 - the final verdict states whether `1.3.1` cross-host communication is
   release-usable
-- no final release-usable verdict is allowed while the transport-security
-  requirement remains open as a `PRODUCT-BUG` or unresolved requirement drift
+- any final release-usable verdict must explicitly state that it does not cover
+  TLS / transport-security guarantees while the transport requirement remains an
+  open `PRODUCT-BUG` or unresolved requirement drift
 
 ## Initial Verdict
 

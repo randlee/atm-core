@@ -58,5 +58,3 @@ Validate the main cross-host interface set on clean-room state:
 
 - every core interface row ends in `PASS` or a named finding
 - no speculative code work begins without one failing row and artifacts
-- AG.1's first live-channel outcome is no longer unresolved, per the Entry
-  Gate section above
