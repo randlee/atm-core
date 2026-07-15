@@ -1,9 +1,11 @@
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -19,6 +21,7 @@ use atm_core::protocol::{
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
+use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::{DaemonSubsystem, SubsystemObservability};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
@@ -36,6 +39,11 @@ const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
 const PEER_LISTENER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const PEER_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const PEER_CONNECTION_IO_SLICE: Duration = Duration::from_millis(200);
+const PEER_LISTENER_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
+const PEER_ACCEPT_ERROR_RETRY_BACKOFF: Duration = Duration::from_millis(200);
+const MAX_CONCURRENT_PEER_CONNECTIONS: usize = 64;
+const MAX_TRACKED_PEER_DISPATCH_HANDLES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -145,7 +153,7 @@ struct PeerServerHandle {
 
 #[derive(Debug)]
 struct PeerServerTransport {
-    listen_addr: Option<SocketAddr>,
+    listen_addr: Mutex<Option<SocketAddr>>,
     observability: SubsystemObservability,
     state: Mutex<Option<PeerServerHandle>>,
 }
@@ -153,14 +161,18 @@ struct PeerServerTransport {
 impl PeerServerTransport {
     fn new(listen_addr: Option<SocketAddr>, observability: SubsystemObservability) -> Self {
         Self {
-            listen_addr,
+            listen_addr: Mutex::new(listen_addr),
             observability,
             state: Mutex::new(None),
         }
     }
 
     fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        let Some(listen_addr) = self.listen_addr else {
+        let listen_addr = *self.listen_addr.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener config lock poisoned")
+                .with_recovery("Restart atm-daemon before retrying cross-host peer startup.")
+        })?;
+        let Some(listen_addr) = listen_addr else {
             return Ok(());
         };
         let mut state = self.state.lock().map_err(|_| {
@@ -234,14 +246,85 @@ impl PeerServerTransport {
             return Ok(());
         };
         handle.terminate.store(true, Ordering::SeqCst);
-        match handle.join_handle.join() {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => Err(error),
-            Err(_) => Err(AtmError::daemon_unavailable(
-                "daemon peer listener thread panicked unexpectedly",
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("peer-transport-join-helper".to_string())
+            .spawn(move || {
+                let result = match handle.join_handle.join() {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(error)) => Err(error),
+                    Err(_) => Err(AtmError::daemon_unavailable(
+                        "daemon peer listener thread panicked unexpectedly",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon before retrying cross-host peer transport.",
+                    )),
+                };
+                let _ = result_tx.send(result);
+            })
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to spawn peer listener join helper")
+                    .with_recovery(
+                        "Restart atm-daemon before retrying cross-host peer listener shutdown.",
+                    )
+                    .with_source(source)
+            })?;
+        match result_rx.recv_timeout(PEER_LISTENER_SHUTDOWN_DEADLINE) {
+            Ok(result) => result,
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+                "daemon peer listener shutdown exceeded the bounded join deadline",
             )
-            .with_recovery("Restart atm-daemon before retrying cross-host peer transport.")),
+            .with_recovery(
+                "Restart atm-daemon after confirming no inbound peer connection is stalled beyond the bounded deadline.",
+            )),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
+                "daemon peer listener join helper disconnected unexpectedly",
+            )
+            .with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener shutdown.",
+            )),
         }
+    }
+
+    fn reload(
+        &self,
+        listen_addr: Option<SocketAddr>,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<(), AtmError> {
+        let previous = {
+            let mut configured = self.listen_addr.lock().map_err(|_| {
+                AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
+                    "Restart atm-daemon before retrying cross-host peer listener reload.",
+                )
+            })?;
+            let previous = *configured;
+            if previous == listen_addr {
+                return Ok(());
+            }
+            *configured = listen_addr;
+            previous
+        };
+
+        if previous.is_some() {
+            self.shutdown()?;
+        }
+        if listen_addr.is_some() {
+            self.start(dispatcher).inspect_err(|error| {
+                tracing::warn!(
+                    subsystem = "peer_transport",
+                    action = "reload_listener",
+                    outcome = "degraded",
+                    %error,
+                    "daemon peer listener reload failed to rebind the configured address"
+                );
+                self.observability.emit_or_warn(
+                    "peer_listener_reload",
+                    "degraded",
+                    "daemon peer listener reload failed to rebind the configured address",
+                );
+            })?;
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -929,6 +1012,14 @@ impl PeerTransportRuntime {
         self.server.shutdown()
     }
 
+    pub(crate) fn reload_listener(
+        &self,
+        listen_addr: Option<SocketAddr>,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<(), AtmError> {
+        self.server.reload(listen_addr, dispatcher)
+    }
+
     #[cfg(test)]
     pub(crate) fn new_for_test(
         endpoint: SocketAddr,
@@ -996,48 +1087,116 @@ fn serve_peer_listener(
     terminate: Arc<AtomicBool>,
     observability: SubsystemObservability,
 ) -> Result<(), AtmError> {
-    let codec = JsonAtmProtocolCodec;
-    while !terminate.load(Ordering::SeqCst) {
-        match listener.accept() {
-            Ok((mut stream, _peer_addr)) => {
-                if let Err(error) =
-                    handle_peer_connection(&mut stream, Arc::clone(&dispatcher), &codec)
-                {
-                    emit_peer_connection_failure_event(
-                        &observability,
-                        &error,
-                        None,
-                        "peer_connection",
-                    );
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                thread::sleep(PEER_LISTENER_ACCEPT_POLL_INTERVAL);
-            }
-            Err(error) => {
-                return Err(
-                    AtmError::daemon_unavailable(
-                        "daemon peer listener stopped accepting TCP connections",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon after confirming the configured daemon peer listen address is still available.",
-                    )
-                    .with_source(error),
+    let registry = Arc::new(ActiveConnectionRegistry::default());
+    thread::scope(|scope| {
+        while !terminate.load(Ordering::SeqCst) {
+            let reap_summary = registry.reap_finished_dispatches()?;
+            if reap_summary.recovered_panics > 0 {
+                observability.emit_or_warn(
+                    "peer_dispatch_worker",
+                    "panic_recovered",
+                    "peer dispatch worker panicked; listener recovered and continued",
                 );
             }
+            match listener.accept() {
+                Ok((stream, peer_addr)) => {
+                    if registry.active_connections() >= MAX_CONCURRENT_PEER_CONNECTIONS {
+                        tracing::warn!(
+                            subsystem = "peer_transport",
+                            action = "accept_connection",
+                            outcome = "rejected",
+                            %peer_addr,
+                            max_concurrent_connections = MAX_CONCURRENT_PEER_CONNECTIONS,
+                            "daemon peer listener rejected a connection because the bounded concurrency cap was reached"
+                        );
+                        observability.emit_or_warn(
+                            "peer_connection_cap",
+                            "degraded",
+                            "daemon peer listener rejected a connection because the bounded concurrency cap was reached",
+                        );
+                        continue;
+                    }
+                    let dispatcher = Arc::clone(&dispatcher);
+                    let terminate = Arc::clone(&terminate);
+                    let observability = observability.clone();
+                    let registry = Arc::clone(&registry);
+                    scope.spawn(move || {
+                        let codec = JsonAtmProtocolCodec;
+                        let _connection = registry.register();
+                        let result = catch_unwind(AssertUnwindSafe(|| {
+                            handle_peer_connection(
+                                stream,
+                                dispatcher,
+                                &codec,
+                                terminate,
+                                registry,
+                            )
+                        }));
+                        match result {
+                            Ok(Ok(())) => {}
+                            Ok(Err(error)) => emit_peer_connection_failure_event(
+                                &observability,
+                                &error,
+                                None,
+                                "peer_connection",
+                            ),
+                            Err(_) => {
+                                let error = AtmError::daemon_unavailable(
+                                    "daemon peer listener worker panicked while handling a peer connection",
+                                )
+                                .with_recovery(
+                                    "Restart atm-daemon after reviewing the retained log for the panicking peer request.",
+                                );
+                                emit_peer_connection_failure_event(
+                                    &observability,
+                                    &error,
+                                    None,
+                                    "peer_connection",
+                                );
+                            }
+                        }
+                    });
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(PEER_LISTENER_ACCEPT_POLL_INTERVAL);
+                }
+                Err(error) => {
+                    tracing::error!(
+                        subsystem = "peer_transport",
+                        action = "accept_connection",
+                        outcome = "retrying",
+                        kind = ?error.kind(),
+                        %error,
+                        "daemon peer listener accept failed; keeping the listener alive and retrying"
+                    );
+                    observability.emit_or_warn(
+                        "peer_listener_accept",
+                        "degraded",
+                        "daemon peer listener accept failed; keeping the listener alive and retrying",
+                    );
+                    thread::sleep(PEER_ACCEPT_ERROR_RETRY_BACKOFF);
+                }
+            }
         }
-    }
-    Ok(())
+        registry.interrupt_all();
+        registry.join_tracked_dispatches(PEER_REQUEST_DEADLINE)
+    })
 }
 
 fn handle_peer_connection(
-    stream: &mut TcpStream,
+    mut stream: TcpStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<(), AtmError> {
-    configure_peer_request_deadlines(stream)?;
-    let Some(header_bytes) =
-        atm_core::protocol::read_frame_header(stream, "failed to read remote peer request frame")?
+    let deadline = Instant::now() + PEER_REQUEST_DEADLINE;
+    let Some(header_bytes) = read_peer_frame_header_until(
+        &mut stream,
+        deadline,
+        terminate.as_ref(),
+        "failed to read remote peer request frame",
+    )?
     else {
         return Ok(());
     };
@@ -1045,18 +1204,22 @@ fn handle_peer_connection(
         header_bytes,
         "remote peer request frame exceeded the maximum supported size",
     )?;
-    let frame = atm_core::protocol::read_frame_payload(
-        stream,
+    let frame = read_peer_frame_payload_until(
+        &mut stream,
         header,
+        deadline,
+        terminate.as_ref(),
         "failed to read remote peer request frame",
     )?;
     let request_id = frame.request_id;
     let (_, request) = codec.request_from_frame(frame)?;
-    let response = dispatch_peer_request(request, dispatcher)?;
+    let response = dispatch_peer_request(request, dispatcher, registry)?;
     let response_frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(
-        stream,
+    write_peer_frame_until(
+        &mut stream,
         &response_frame,
+        deadline,
+        terminate.as_ref(),
         "failed to write remote peer response frame",
     )?;
     stream.flush().map_err(|source| {
@@ -1067,37 +1230,30 @@ fn handle_peer_connection(
     Ok(())
 }
 
-fn configure_peer_request_deadlines(stream: &TcpStream) -> Result<(), AtmError> {
-    stream
-        .set_read_timeout(Some(PEER_REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply remote peer read deadline")
-                .with_recovery(
-                    "Restart atm-daemon after confirming the host permits bounded TCP read deadlines for peer transport.",
-                )
-                .with_source(source)
-        })?;
-    stream
-        .set_write_timeout(Some(PEER_REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply remote peer write deadline")
-                .with_recovery(
-                    "Restart atm-daemon after confirming the host permits bounded TCP write deadlines for peer transport.",
-                )
-                .with_source(source)
-        })?;
-    Ok(())
-}
-
 fn dispatch_peer_request(
     request: RequestEnvelope,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<ResponseEnvelope, AtmError> {
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    thread::Builder::new()
+    let (result_tx, result_rx): (SyncSender<Result<ResponseEnvelope, AtmError>>, Receiver<_>) =
+        mpsc::sync_channel(1);
+    let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+    let dispatch_registry = Arc::clone(&registry);
+    let join_handle = thread::Builder::new()
         .name("peer-transport-dispatch".to_string())
         .spawn(move || {
-            let _ = result_tx.send(dispatcher.dispatch(request));
+            let _dispatch = dispatch_registry.register_dispatch_work();
+            let result = catch_unwind(AssertUnwindSafe(|| dispatcher.dispatch(request)));
+            let _ = match result {
+                Ok(result) => result_tx.send(result),
+                Err(_) => result_tx.send(Err(AtmError::daemon_unavailable(
+                    "daemon peer dispatch worker panicked unexpectedly",
+                )
+                .with_recovery(
+                    "Restart atm-daemon after confirming the destination daemon can complete peer request dispatches safely.",
+                ))),
+            };
+            let _ = completion_tx.send(());
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon peer dispatch worker")
@@ -1106,15 +1262,22 @@ fn dispatch_peer_request(
                 )
                 .with_source(source)
         })?;
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle,
+        },
+        MAX_TRACKED_PEER_DISPATCH_HANDLES,
+    )?;
     match result_rx.recv_timeout(PEER_REQUEST_DEADLINE) {
         Ok(result) => result,
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             "remote peer request dispatch exceeded the bounded daemon deadline",
         )
         .with_recovery(
             "Retry the cross-host peer operation after confirming the destination daemon is healthy and not stalled on request dispatch.",
         )),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(
             AtmError::daemon_unavailable("daemon peer dispatch worker disconnected unexpectedly")
                 .with_recovery(
                     "Restart atm-daemon after confirming the destination daemon can complete peer request dispatches.",
@@ -1150,6 +1313,211 @@ fn emit_peer_connection_failure_event(
             })
             .with_transport_context(transport_context),
     );
+}
+
+fn read_peer_frame_header_until(
+    stream: &mut TcpStream,
+    deadline: Instant,
+    terminate: &AtomicBool,
+    read_error: &'static str,
+) -> Result<Option<[u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES]>, AtmError> {
+    let mut header = [0u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES];
+    let read = read_with_deadline(
+        stream,
+        &mut header[..1],
+        deadline,
+        terminate,
+        read_error,
+        true,
+    )?;
+    if read == 0 {
+        return Ok(None);
+    }
+    read_exact_with_deadline(stream, &mut header[1..], deadline, terminate, read_error)?;
+    Ok(Some(header))
+}
+
+fn read_peer_frame_payload_until(
+    stream: &mut TcpStream,
+    header: atm_core::protocol::FrameHeader,
+    deadline: Instant,
+    terminate: &AtomicBool,
+    read_error: &'static str,
+) -> Result<atm_core::protocol::FramePayload, AtmError> {
+    let mut bytes = vec![0u8; header.payload_length];
+    read_exact_with_deadline(stream, &mut bytes, deadline, terminate, read_error)?;
+    Ok(atm_core::protocol::FramePayload {
+        request_id: header.request_id,
+        message_kind: header.message_kind,
+        flags: header.flags,
+        bytes,
+    })
+}
+
+fn write_peer_frame_until(
+    stream: &mut TcpStream,
+    frame: &atm_core::protocol::FramePayload,
+    deadline: Instant,
+    terminate: &AtomicBool,
+    write_error: &'static str,
+) -> Result<(), AtmError> {
+    if frame.flags != atm_core::protocol::ATM_FRAME_FLAGS_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame flags 0x{:04x} for version {}",
+            frame.flags,
+            atm_core::protocol::ATM_FRAME_VERSION_V1
+        ))
+        .with_recovery(
+            "Retry with a supported ATM daemon client/server build that uses protocol version 1 flags.",
+        ));
+    }
+    if frame.bytes.len() > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(
+            "daemon frame exceeded the maximum supported size",
+        )
+        .with_recovery(
+            "Reduce the daemon request/response payload size before retrying the ATM command.",
+        ));
+    }
+    let mut header = [0u8; atm_core::protocol::ATM_FRAME_HEADER_BYTES];
+    header[0..4].copy_from_slice(&atm_core::protocol::ATM_FRAME_MAGIC.to_be_bytes());
+    header[4..6].copy_from_slice(&atm_core::protocol::ATM_FRAME_VERSION_V1.to_be_bytes());
+    header[6..8].copy_from_slice(&frame.message_kind.code().to_be_bytes());
+    header[8..10].copy_from_slice(&frame.flags.to_be_bytes());
+    header[10..18].copy_from_slice(&frame.request_id.into_inner().to_be_bytes());
+    header[18..22].copy_from_slice(&(frame.bytes.len() as u32).to_be_bytes());
+    write_all_with_deadline(stream, &header, deadline, terminate, write_error)?;
+    write_all_with_deadline(stream, &frame.bytes, deadline, terminate, write_error)
+}
+
+fn read_exact_with_deadline(
+    stream: &mut TcpStream,
+    mut buffer: &mut [u8],
+    deadline: Instant,
+    terminate: &AtomicBool,
+    read_error: &'static str,
+) -> Result<(), AtmError> {
+    while !buffer.is_empty() {
+        let read = read_with_deadline(stream, buffer, deadline, terminate, read_error, false)?;
+        if read == 0 {
+            return Err(AtmError::daemon_unavailable(read_error).with_recovery(
+                "Retry after the remote daemon reconnects and completes a bounded peer request/response exchange.",
+            ));
+        }
+        let (_, rest) = buffer.split_at_mut(read);
+        buffer = rest;
+    }
+    Ok(())
+}
+
+fn write_all_with_deadline(
+    stream: &mut TcpStream,
+    mut buffer: &[u8],
+    deadline: Instant,
+    terminate: &AtomicBool,
+    write_error: &'static str,
+) -> Result<(), AtmError> {
+    while !buffer.is_empty() {
+        apply_peer_io_slice_deadline(stream, deadline, terminate)?;
+        match stream.write(buffer) {
+            Ok(0) => {
+                return Err(AtmError::daemon_unavailable(write_error).with_recovery(
+                    "Retry after the remote daemon reconnects and completes a bounded peer request/response exchange.",
+                ));
+            }
+            Ok(written) => buffer = &buffer[written..],
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut
+                        | io::ErrorKind::WouldBlock
+                        | io::ErrorKind::Interrupted
+                ) =>
+            {
+                continue;
+            }
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(write_error)
+                    .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+                    .with_source(source));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn read_with_deadline(
+    stream: &mut TcpStream,
+    buffer: &mut [u8],
+    deadline: Instant,
+    terminate: &AtomicBool,
+    read_error: &'static str,
+    allow_eof: bool,
+) -> Result<usize, AtmError> {
+    loop {
+        apply_peer_io_slice_deadline(stream, deadline, terminate)?;
+        match stream.read(buffer) {
+            Ok(0) if allow_eof => return Ok(0),
+            Ok(0) => {
+                return Err(AtmError::daemon_unavailable(read_error).with_recovery(
+                    "Retry after the remote daemon reconnects and completes a bounded peer request/response exchange.",
+                ));
+            }
+            Ok(read) => return Ok(read),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut
+                        | io::ErrorKind::WouldBlock
+                        | io::ErrorKind::Interrupted
+                ) =>
+            {
+                continue;
+            }
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(read_error)
+                    .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+                    .with_source(source));
+            }
+        }
+    }
+}
+
+fn apply_peer_io_slice_deadline(
+    stream: &TcpStream,
+    deadline: Instant,
+    terminate: &AtomicBool,
+) -> Result<(), AtmError> {
+    if terminate.load(Ordering::SeqCst) {
+        return Err(AtmError::daemon_unavailable(
+            "daemon shutdown interrupted an in-flight peer connection",
+        )
+        .with_recovery(
+            "Retry the cross-host operation after atm-daemon restarts and resumes pending remote replay work.",
+        ));
+    }
+    let remaining = deadline.checked_duration_since(Instant::now()).ok_or_else(|| {
+        AtmError::daemon_unavailable("remote peer connection exceeded the bounded lifetime deadline")
+            .with_recovery(
+                "Retry the cross-host peer operation after confirming the destination daemon is healthy and not stalled on request handling.",
+            )
+    })?;
+    let slice = remaining.min(PEER_CONNECTION_IO_SLICE);
+    stream.set_read_timeout(Some(slice)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to apply remote peer read deadline")
+            .with_recovery(
+                "Restart atm-daemon after confirming the host permits bounded TCP read deadlines for peer transport.",
+            )
+            .with_source(source)
+    })?;
+    stream.set_write_timeout(Some(slice)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to apply remote peer write deadline")
+            .with_recovery(
+                "Restart atm-daemon after confirming the host permits bounded TCP write deadlines for peer transport.",
+            )
+            .with_source(source)
+    })?;
+    Ok(())
 }
 
 fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
@@ -1577,9 +1945,6 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn peer_transport_aborts_before_connect_when_terminate_is_requested() {
-        const TEST_TEAM: &str = "test-team";
-        const TEST_MEMBER: &str = "test-sender";
-
         let _reset = install_shared_lifecycle_reset_guard();
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         lifecycle.set_terminate_for_test(true);
@@ -1603,8 +1968,8 @@ mod tests {
         let error = transport
             .client_transport()
             .send(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-                team: TEST_TEAM.parse().expect("team"),
-                member: TEST_MEMBER.parse().expect("member"),
+                team: atm_core::test_support::TEST_TEAM.parse().expect("team"),
+                member: atm_core::test_support::TEST_SENDER.parse().expect("member"),
                 pid: std::process::id(),
                 observed_at: IsoTimestamp::now(),
                 activity: HeartbeatActivity::ActiveToolUse,

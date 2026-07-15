@@ -223,6 +223,26 @@ Notes:
   used by the same-host local IPC boundary; host-host traffic is not a second
   daemon message system.
 
+## PeerServerTransportAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-server-transport.toml](../../boundaries/atm-daemon/peer-server-transport.toml)
+
+Purpose:
+- Owns the daemon-side inbound peer listener used for remote daemon-to-daemon
+  request handling.
+
+Notes:
+- The concrete `PeerServerTransport` implementation stays runtime-private inside
+  `atm_daemon::peer_transport`.
+- This is intentionally a distinct daemon-private boundary rather than an
+  implementation of the same-host `ServerTransport` trait; see
+  [../../docs/adr/ADR-028-peer-server-transport-boundary.md](../../docs/adr/ADR-028-peer-server-transport-boundary.md).
+- The listener must reuse the shared ATM frame header and request/response
+  envelopes.
+- The listener must keep accept-loop recovery, connection concurrency,
+  request-dispatch tracking, and shutdown drain bounded.
+
 ## FileWatchEventSourceAdapter
 
 Canonical machine-readable boundary source:

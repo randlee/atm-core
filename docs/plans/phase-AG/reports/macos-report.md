@@ -89,3 +89,8 @@
     daemon to bind and accept
 - linked finding:
   - `AG-FIND-004`
+- current fix state:
+  - PR #551 on `feature/pAG-s1-macos-execution` already contains the first
+    production inbound peer-listener implementation plus runtime wiring; AG.1
+    remains blocked only until that fix round is validated and the live channel
+    attempt is rerun on the patched daemon

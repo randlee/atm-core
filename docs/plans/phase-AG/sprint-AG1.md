@@ -4,7 +4,7 @@ title: Cross-Host Setup Contract And Channel Bring-Up
 status: in_progress
 branch: feature/pAG-s1-macos-execution
 worktree: ../atm-core-worktrees/feature/pAG-s1-macos-execution
-target: integrate/phase-AG
+target: develop
 ---
 
 # Sprint AG.1 — Cross-Host Setup Contract And Channel Bring-Up
@@ -34,6 +34,8 @@ attempt the first live cross-host daemon-to-daemon channel.
 - exact evidence contract for setup and bring-up failures
 - one AG.1-only first-live-channel viability attempt that can open a finding
   but does not formally close `AG-VAL-003` or later rows
+- production inbound peer-listener fix for `AG-FIND-004`, landed in-sprint
+  after the viability attempt exposed a real daemon-to-daemon bring-up defect
 
 ## Required Validation
 

@@ -138,7 +138,8 @@ pub(crate) struct RuntimeComposition {
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
-    _config_ingress: DaemonConfigIngress,
+    config_ingress: DaemonConfigIngress,
+    config_current_dir: PathBuf,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -203,8 +204,11 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let peer_transport_config =
-            load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
+        let peer_transport_config = load_peer_transport_config(
+            current_dir.clone(),
+            &config_ingress,
+            &composition_observability,
+        )?;
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
@@ -230,7 +234,8 @@ impl RuntimeComposition {
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
-            _config_ingress: config_ingress,
+            config_ingress,
+            config_current_dir: current_dir,
             peer_transport_runtime,
         })
     }
@@ -279,6 +284,20 @@ impl RuntimeComposition {
 
     fn finalize_shutdown(&self) {
         self.request_dispatcher.finalize_storage_shutdown();
+    }
+
+    fn reload_runtime(&self) -> Result<(), AtmError> {
+        self.request_dispatcher.reload_runtime_view()?;
+        let peer_transport_config = load_peer_transport_config(
+            self.config_current_dir.clone(),
+            &self.config_ingress,
+            &self.composition_observability,
+        )?;
+        self.peer_transport_runtime.reload_listener(
+            peer_transport_config.peer_listen_addr,
+            self.request_dispatcher(),
+        )?;
+        Ok(())
     }
 
     fn begin_startup(&self) -> Result<(), AtmError> {
@@ -363,7 +382,6 @@ impl RuntimeComposition {
     where
         P: Fn() -> Result<(), AtmError>,
     {
-        let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -372,7 +390,7 @@ impl RuntimeComposition {
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
                 force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
                 begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
+                reload_runtime_view: || self.reload_runtime(),
                 finalize_shutdown: || self.finalize_shutdown(),
                 publish_ready,
             },
