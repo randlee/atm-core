@@ -444,14 +444,9 @@ Runtime-root rule:
   inputs only
 
 Required workspace/config paths:
-- `{ATM_HOME}/.claude`
-- `{ATM_HOME}/.claude/teams`
-- `{ATM_HOME}/.claude/teams/{team}`
-- `{ATM_HOME}/.claude/teams/{team}/config.json`
-- `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- `{ATM_HOME}/.config/atm/config.toml`
-- `{ATM_HOME}/.config/atm/state.json`
+- `{ATM_HOME}/.atm.toml` when workspace defaults are used
 - `{ATM_HOME}/.config/atm/share/{team}/`
+- optional historical compatibility files under `{ATM_HOME}/.claude/teams/...` may exist, but ATM runtime commands must not require them
 
 Required host-runtime paths:
 - the canonical endpoint, `launch.lock`, and `owner.lock` derive only from
@@ -499,11 +494,11 @@ Required behavior:
 
 ### 3.2 Team Mail Store
 
-Per-team layout:
-- `{ATM_HOME}/.claude/teams/{team}/config.json`
-- `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- optional origin inbox files:
-  - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.{origin}.json`
+Per-team durable layout:
+- host-scoped SQLite mailbox + roster state under `~/.atm/db/mail.db`
+- team task/share state under `{ATM_HOME}/.config/atm/share/{team}/`
+- optional historical compatibility inbox files may still exist under
+  `{ATM_HOME}/.claude/teams/{team}/inboxes/...`, but they are not durable team truth
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
@@ -662,8 +657,9 @@ Runtime caller-context rules:
 - obsolete config identity fields (`[atm].identity` and legacy top-level
   `identity`) may remain temporarily for migration, but ATM must ignore them
   for runtime identity resolution and `atm doctor` must flag them for removal
-- `.atm.toml` may define `[atm].team_members` as the baseline team roster that
-  should always be present in `config.json`
+- `.atm.toml` may define `[atm].team_members` as a preferred ordering baseline
+  for doctor/member presentation; ATM runtime truth does not require
+  corresponding `config.json` entries
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
@@ -1069,25 +1065,14 @@ Recipients use `message_id` for:
 - read-time duplicate collapse
 - acknowledgement targeting
 
-### 6.3.1 Missing Team Config Fallback
+### 6.3.1 Removed Missing Team Config Fallback
 
-When team `config.json` is missing, `atm send` may still proceed only when:
-- the resolved team directory exists
-- the target inbox path already exists
-- no team, agent, or routing identity must be guessed
+`atm send` must not depend on team `config.json` at runtime.
 
-When `atm send` uses this fallback, it must:
-- surface an actionable warning to the sender that delivery used inbox fallback
-  because team config is missing
-- keep the original delivery path best-effort and non-interactive
-- send a best-effort repair notification to `team-lead` when that recipient can
-  be resolved without guesswork
-- deduplicate repeated repair notifications for the same unresolved missing-team
-  config condition so inboxes do not accumulate hundreds of identical messages
-
-When team `config.json` is malformed rather than missing:
-- `atm send` must fail with a structured configuration error
-- malformed config must not silently degrade into missing-config fallback
+Required behavior:
+- canonical roster and mailbox routing come only from the SQLite-backed ATM runtime state
+- missing or malformed `config.json` must not alter normal send behavior
+- no synthetic missing-config repair notice is emitted to `team-lead`
 
 ### 6.4 Message Source Semantics
 
@@ -1851,7 +1836,7 @@ Phase-AA target direction:
 
 ### 11.3 Required Checks
 
-The initial doctor implementation must cover:
+The doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - caller identity/team visibility and optional diagnostic scope behavior
@@ -1861,19 +1846,11 @@ The initial doctor implementation must cover:
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when the current runtime is
   active
-- baseline `[atm].team_members` coverage against `config.json.members`
-- team directory existence
-- team config existence and parse health
-- inbox directory existence and writability
-- stale mailbox lock detection across `~/.claude/teams/*/inboxes/*.lock` using
-  start-of-run and end-of-run snapshots; a lock present in both snapshots is
-  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK` as a
-  transitional compatibility finding rather than a normal mail-correctness
-  dependency in the current SQLite/daemon architecture
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- current ATM roster visibility from SQLite truth only
 
 Caller-context behavior for `atm doctor`:
 
@@ -1889,7 +1866,7 @@ Caller-context behavior for `atm doctor`:
 Human output must provide:
 - overall status summary
 - findings grouped by severity
-- full current member roster from `config.json`, with baseline
+- full current member roster from ATM roster truth, with baseline
   `[atm].team_members` shown first and `team-lead` first among that baseline
 - concrete remediation guidance when the user can act
 
@@ -1954,15 +1931,14 @@ Bare `atm teams` must:
   count, to pick a target team for restore or repair work
 
 `atm teams add-member` must:
-- validate that the target team exists
+- create the target team implicitly when the canonical ATM roster is empty
 - reject duplicate member names
-- persist the new member entry deterministically in team config
-- persist the member's durable `home_dir` on the canonical ATM roster row and
-  project that same `home_dir` into compatibility `config.json.members`
-- create any required local inbox state atomically with the roster update
+- persist the new member entry deterministically in canonical ATM roster truth
+- persist the member's durable `home_dir` on the canonical ATM roster row
+- not require or rewrite compatibility `config.json`
 
 `atm teams update-member` must:
-- validate that the target team exists
+- validate that the target team exists in canonical ATM roster truth
 - validate that the target member already exists
 - update existing canonical roster metadata without creating a new member
 - accept point updates for the accepted mutable roster metadata:
@@ -1976,13 +1952,10 @@ Bare `atm teams` must:
 - reject operator attempts to set `cwd`, `live_cwd`, or `launch_cwd`; runtime
   working location and startup-location logging are not operator-settable
   through `update-member`
-- project the repaired metadata deterministically into compatibility
-  `config.json`
 - preserve unchanged member metadata when a field is not supplied
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
-- capture the current `config.json`
 - capture the ATM-owned `.atm-state` tree for workflow compatibility state when
   present
 - capture the selected team's durable state from the host-scoped SQLite
@@ -3170,26 +3143,17 @@ The intentionally forbidden shape is:
 
 ### 21.3 Restore Transaction Atomicity
 
-- `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must write `config.json` as
-  the last mutation step, only after all other restore mutations succeed.
-
-  Rationale: ARCH-CR-002 — `team_admin.rs:372-400` copies inboxes, restores
-  tasks, recomputes highwatermark, then writes config. If the process dies
-  between inbox copy and config write, the team has partially restored inbox
-  files that do not match the config roster.
+- `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must restore inbox/task
+  compatibility artifacts atomically without rewriting team roster truth from
+  `config.json`.
 
   Required behavior:
   - restore planning and backup validation happen before the marker is written
-  - config.json is written last, after all inbox copies and task restores succeed
-  - a `.restore-in-progress` marker file is written to the team directory before
-    mutation begins and removed after config is successfully fsynced
-  - the config-last step must continue using the existing `write_team_config(...)`
-    atomic temp-file + rename pattern instead of introducing a second config
-    persistence path
+  - canonical ATM roster truth remains in SQLite; restore does not rewrite it
+  - a `.restore-in-progress` marker file is written before mutation begins and
+    removed after inbox/task restore succeeds
   - on next `atm teams restore`, if a `.restore-in-progress` marker exists, warn
     the operator and recommend re-running the restore
-  - `atm doctor` must check for stale `.restore-in-progress` markers and report
-    them as findings with recovery guidance
 
 - `REQ-CORE-RESTORE-ATOMIC-002` Restored inbox files must be staged before
   being placed in the live inbox directory.

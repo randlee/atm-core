@@ -182,17 +182,6 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(None)
     }
 
-    fn load_team_config_for_doctor_compare(
-        &self,
-        _team_dir: &Path,
-    ) -> Result<crate::schema::TeamConfig, AtmError> {
-        Ok(crate::schema::TeamConfig::default())
-    }
-
-    fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-        Ok(home_dir.to_path_buf())
-    }
-
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -217,15 +206,6 @@ impl RetainedServiceRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
         _timestamp: IsoTimestamp,
-    ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn rebuild_compat_inbox_projection(
-        &self,
-        _inbox_path: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
     ) -> Result<(), AtmError> {
         Ok(())
     }
@@ -292,30 +272,6 @@ impl RetainedServiceRuntime for TestRuntime {
         }])
     }
 
-    fn load_claude_code_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
-        let records = self
-            .claude_roster_members
-            .iter()
-            .cloned()
-            .map(|agent_name| RosterEntry {
-                team_name: team.clone(),
-                agent_name,
-                member_kind: RosterMemberKind::Permanent,
-                harness: RosterHarness::ClaudeCode,
-                agent_type: crate::schema::AgentType::default(),
-                model: crate::types::ModelName::default(),
-                recipient_pane_id: None,
-                metadata_json: Map::new(),
-            })
-            .collect::<Vec<_>>();
-        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
-            team.clone(),
-            &records,
-        ))
-    }
 }
 
 impl RetainedMailboxRuntime for TestRuntime {
@@ -780,12 +736,7 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
             .len(),
         1
     );
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(
-        outcome.warnings[0]
-            .message
-            .contains("'recipient' is not on claude code roster")
-    );
+    assert!(outcome.warnings.is_empty(), "{outcome:#?}");
 }
 
 #[test]

@@ -42,7 +42,6 @@ pub(crate) mod hook;
 )]
 mod hook_tmux;
 pub mod input;
-mod missing_config_notice;
 #[doc(hidden)]
 pub mod nudge_template;
 mod persistence;
@@ -317,9 +316,6 @@ fn finalize_send_outcome<
         &persistence,
     );
     if !request.dry_run {
-        if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
-            outcome.warnings.push(warning);
-        }
         let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
         hook::emit_post_send_effects(
             runtime,
@@ -355,48 +351,6 @@ fn finalize_send_outcome<
         &context.canonical_sender,
     );
     Ok(outcome)
-}
-
-fn build_claude_roster_warning<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-) -> Result<Option<WarningEntry>, AtmError> {
-    if !matches!(
-        context.delivery_snapshot.harness,
-        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode
-    ) {
-        return Ok(None);
-    }
-    let team_dir = runtime.team_dir(&request.home_dir, &context.recipient.team)?;
-    if !team_dir.join("config.json").is_file() {
-        if !context.inbox_path.exists() {
-            return Ok(None);
-        }
-        let mut warnings = Vec::new();
-        missing_config_notice::warn_missing_team_config(
-            runtime,
-            request,
-            &context.recipient,
-            &team_dir,
-            &context.inbox_path,
-            &mut warnings,
-        )?;
-        return Ok(warnings.into_iter().next());
-    }
-    let roster = runtime.load_claude_code_team_roster(&context.recipient.team)?;
-    if roster.contains_member(&context.recipient.agent) {
-        return Ok(None);
-    }
-    Ok(Some(WarningEntry::new(
-        format!(
-            "'{}' is not on claude code roster {}/config.json",
-            context.recipient.agent, context.recipient.team
-        ),
-        Some(
-            "Import the member through the approved Claude config-ingress path or project ATM roster truth back into config.json before relying on Claude compatibility delivery.",
-        ),
-    )))
 }
 
 #[expect(
@@ -513,10 +467,6 @@ fn prepare_send_context<
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
     validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
-    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&recipient.team));
-    }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =

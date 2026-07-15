@@ -9,8 +9,6 @@ use crate::address::validate_path_segment;
 use crate::boundary::RosterStore;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
-use crate::schema::TeamConfig;
-
 use super::BackupOutcome;
 
 pub(super) fn backup_team_from_roster_store(
@@ -18,17 +16,6 @@ pub(super) fn backup_team_from_roster_store(
     request: super::BackupRequest,
 ) -> Result<BackupOutcome, AtmError> {
     let team_dir = crate::home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let config_path = team_dir.join("config.json");
-    if !config_path.is_file() {
-        return Err(AtmError::missing_document(format!(
-            "team config is missing at {}",
-            config_path.display()
-        )));
-    }
 
     let backup_dir = backup_root_from_home(&request.home_dir, &request.team)?.join(timestamp_dir());
     fs::create_dir_all(backup_dir.join("inboxes")).map_err(|error| {
@@ -38,16 +25,6 @@ pub(super) fn backup_team_from_roster_store(
         ))
         .with_source(error)
         .with_recovery("Check backup directory permissions under ATM_HOME and retry the backup.")
-    })?;
-
-    fs::copy(&config_path, backup_dir.join("config.json")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to copy {} into backup {}: {error}",
-            config_path.display(),
-            backup_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source and backup directory permissions and retry the backup.")
     })?;
 
     copy_regular_files(
@@ -100,12 +77,6 @@ pub(super) fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
     Ok(true)
 }
 
-pub(super) fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmError> {
-    let config_path = team_dir.join("config.json");
-    let encoded = serde_json::to_vec_pretty(config).map_err(AtmError::from)?;
-    atomic_write(&config_path, &encoded)
-}
-
 pub(super) fn backup_root_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
     validate_path_segment(team, "team")?;
     Ok(teams_root_from_home(home_dir).join(".backups").join(team))
@@ -125,26 +96,6 @@ where
     F: Fn(&str) -> bool,
 {
     copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
-}
-
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
-    // Test seam for deterministic rollback coverage in integration tests.
-    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
-        return Err(AtmError::file_policy(format!(
-            "forced team config write failure for {}",
-            path.display()
-        ))
-        .with_recovery(
-            "Unset ATM_TEST_FAIL_TEAM_CONFIG_WRITE or rerun without the injected test failure.",
-        ));
-    }
-    persistence::atomic_write_bytes(
-        path,
-        bytes,
-        AtmErrorKind::FilePolicy,
-        "config",
-        "Check config directory permissions and rerun the operation.",
-    )
 }
 
 fn teams_root_from_home(home_dir: &Path) -> PathBuf {

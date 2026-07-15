@@ -1296,15 +1296,12 @@ Phase AF compatibility rule:
   cannot select an alternate daemon endpoint, state root, or transport path
 
 Roster output rules:
-- show all current `config.json` members in doctor output
+- show the current canonical ATM roster in doctor output
 - show baseline `[atm].team_members` first
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
-- snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
-  path present in both snapshots is stale and should surface as
-  `ATM_WARNING_STALE_MAILBOX_LOCK` with recovery guidance that explicitly marks
-  the lock as a transitional compatibility diagnostic rather than a current-runtime
-  mail-correctness dependency
+- stale mailbox-lock scanning is historical-only and must not be part of the
+  current SQLite/runtime correctness contract for doctor
 
 ### 6.8 Team Recovery Services
 
@@ -1455,10 +1452,11 @@ The doctor pipeline stages are:
 1. resolve config and environment overrides
 2. resolve optional diagnostic team scope and inspect caller-context visibility
 3. inspect ATM config for obsolete fields such as `[atm].identity`
-4. verify local team/mailbox/config paths
+4. verify local runtime/config visibility without requiring compatibility team
+   directories or `config.json`
 5. verify caller-context visibility and invalid override situations without
    making caller identity/team mandatory
-6. compare baseline `[atm].team_members` against `config.json.members`
+6. order canonical ATM roster output against baseline `[atm].team_members`
 7. verify observability initialization and health
 8. verify observability query readiness for `atm log`
 9. assemble findings, recommendations, and ordered roster output
@@ -2357,12 +2355,14 @@ CI remains bounded and repeatable across macOS, Linux, and Windows.
 1. Copy inbox files to the live inbox directory
 2. Restore task bucket
 3. Recompute highwatermark
-4. Write `config.json`
+4. Preserve any pre-existing compatibility shell state without treating it as
+   roster truth
 
-If the process crashes between steps 1 and 4, inbox files for members not in config
-exist with no detection mechanism.
+If the process crashes between steps 1 and 4, canonical ATM roster truth is
+still unchanged because restore does not rebuild team membership from
+`config.json`.
 
-### 19.2 Revised Restore Ordering (Config-Last with Staging)
+### 19.2 Revised Restore Ordering (Compatibility Artifacts Only)
 
 ```
 1. Validate backup and compute restore plan (no mutations)
@@ -2371,28 +2371,28 @@ exist with no detection mechanism.
 4. Move staged files to live inboxes/ (fs::rename — atomic same-filesystem)
 5. Restore task bucket
 6. Recompute highwatermark
-7. Write config.json + fsync (atomic temp+rename via write_team_config)
-8. Remove .restore-in-progress marker
+7. Remove .restore-in-progress marker
 ```
 
 Key properties:
-- crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
+- crash at steps 2-6: canonical roster truth is unchanged, extra compatibility
+  inbox files are bounded to the restore lane, marker signals re-run
 - read-only failure during the pre-copy stale-sentinel sweep aborts before live
   inbox replacement begins, preserving the pre-restore team state
-- crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
-  temp-file + rename path, so no partial config write is possible
-- crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
+- crash at step 7: restore content is already in place; stale marker is cleaned
+  up by next restore run
 
 ### 19.3 Staging Directory
 
 - location: `{team_dir}/.restore-staging/inboxes/`
-- lifecycle: created at step 3, contents moved at step 4, directory removed after config write
-- failure path: staging directory cleaned up, no config written
+- lifecycle: created at step 3, contents moved at step 4, directory removed
+  after restore completion
+- failure path: staging directory cleaned up, no roster rewrite occurs
 
 ### 19.4 Doctor Integration
 
-New check: scan for `.restore-in-progress` in team directories.
-- Severity: warning
+No required doctor dependency remains on `.restore-in-progress` scanning for
+runtime correctness. Any future marker reporting is advisory-only.
 - Recovery guidance: "A previous `atm teams restore` was interrupted. Re-run the restore
   command to complete it, or remove the marker file manually if the restore is no longer needed."
 

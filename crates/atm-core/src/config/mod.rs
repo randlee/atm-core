@@ -18,16 +18,21 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
+#[cfg(test)]
 use serde_json::Value;
 use toml::Value as TomlValue;
+#[cfg(test)]
 use tracing::warn;
 
 pub use types::AtmConfig;
 
 use crate::caller_context::read_cli_team_from_env;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+#[cfg(test)]
 use crate::schema::{AgentMember, TeamConfig};
-use crate::types::{AgentName, TeamName};
+#[cfg(test)]
+use crate::types::AgentName;
+use crate::types::TeamName;
 use discovery::normalize_post_send_hooks;
 use types::{ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
 
@@ -144,6 +149,7 @@ fn parse_daemon_config(
 /// document does not exist, or
 /// [`crate::error_codes::AtmErrorCode::ConfigTeamParseFailed`] when the JSON
 /// document is malformed or violates the required team-config shape.
+#[cfg(test)]
 pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {
@@ -465,6 +471,7 @@ fn normalize_aliases(
         .collect()
 }
 
+#[cfg(test)]
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
     let root: Value = serde_json::from_str(raw).map_err(|error| {
         AtmError::new_with_code(
@@ -519,6 +526,7 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
     Ok(TeamConfig { members, extra })
 }
 
+#[cfg(test)]
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
         Value::String(name) => match name.parse::<AgentName>() {

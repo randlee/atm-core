@@ -168,13 +168,9 @@ fn validate_clear_target<R: RetainedServiceRuntime>(
     home_dir: &std::path::Path,
     target: &ResolvedTarget,
 ) -> Result<(), AtmError> {
-    let team_dir = runtime.team_dir(home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm clear`.",
-        ));
-    }
-
+    let _ = runtime;
+    let _ = home_dir;
+    let _ = target;
     Ok(())
 }
 
@@ -338,7 +334,6 @@ mod tests {
     }
 
     struct ClearRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
     }
 
@@ -350,17 +345,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, AtmError> {
-            unreachable!("clear roster-truth tests must not load team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -389,15 +373,6 @@ mod tests {
             _timestamp: crate::types::IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("clear roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -481,10 +456,7 @@ mod tests {
     #[test]
     fn clear_mail_targets_only_the_owner_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ClearRuntime {
-            team_dir,
             roster_present: true,
         };
 
