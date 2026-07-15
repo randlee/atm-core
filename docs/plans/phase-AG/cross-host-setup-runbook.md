@@ -129,12 +129,51 @@ Rules:
 - `ATM_DAEMON_PEER_ADDR` tells the local daemon where to dial
 - `daemon.peer_listen_addr` tells the local daemon what local TCP address to
   bind and accept on
+- for AG.2 operator setup, prefer wildcard listener bind
+  `0.0.0.0:43101` unless a host policy requires a narrower literal interface
+  bind
 - both values must be literal `IP:port`
 - the two hosts must use opposite values:
   - Windows `.atm.toml` listener address = address macOS uses in
     `ATM_DAEMON_PEER_ADDR`
   - macOS `.atm.toml` listener address = address Windows uses in
     `ATM_DAEMON_PEER_ADDR`
+
+### VPN / multi-interface address selection rule
+
+Do not assume both hosts share the same IPv4 subnet.
+
+For AG.2 the outbound peer target must be the remote host address that is
+actually reachable on the route used between the two hosts, not a guessed LAN
+address on the same-looking local subnet.
+
+Operator procedure:
+
+1. determine the route to the remote host IP
+2. identify the local interface/address used on that route
+3. bind the local listener on `0.0.0.0:43101` unless a narrower bind is
+   required
+4. set `ATM_DAEMON_PEER_ADDR` to the remote host's route-reachable
+   `IP:43101`
+
+Current AG.2 VPN lane example:
+
+- Windows host IP: `10.10.100.98`
+- macOS route to Windows uses `utun6`
+- macOS VPN address on that route: `10.212.36.11`
+- therefore:
+  - Windows should dial `10.212.36.11:43101`
+  - macOS should dial `10.10.100.98:43101`
+
+Useful verification commands:
+
+- macOS:
+  - `route -n get <windows-ip>`
+  - `ifconfig <reported-interface>`
+  - `lsof -nP -iTCP:43101 -sTCP:LISTEN`
+- Windows:
+  - `route print <mac-ip>`
+  - `Test-NetConnection <mac-ip> -Port 43101`
 
 ### Minimal macOS / Windows demo pair
 
