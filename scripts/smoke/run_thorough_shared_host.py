@@ -240,28 +240,6 @@ def main() -> int:
             raise RuntimeError(json.dumps(completed, indent=2))
         daemon_pids_during = count_atm_daemon_processes()
 
-        def ensure_member(
-            fixture_item: object,
-            env_item: dict[str, str],
-            member: str,
-        ) -> None:
-            completed = run_atm_result(
-                root,
-                env_item,
-                fixture_item.workspace_dir,  # type: ignore[attr-defined]
-                "teams",
-                "add-member",
-                fixture_item.team_name,  # type: ignore[attr-defined]
-                member,
-                "--json",
-            )
-            if completed["exit_code"] == 0:
-                return
-            stderr = str(completed.get("stderr", ""))
-            if "already exists in team" in stderr:
-                return
-            raise RuntimeError(json.dumps(completed, indent=2))
-
         for fixture_item, env_item in ((shared_a, shared_env_a), (shared_b, shared_env_b)):
             ensure_member(fixture_item, env_item, fixture_item.operator)  # type: ignore[attr-defined]
             ensure_member(fixture_item, env_item, fixture_item.recipient)  # type: ignore[attr-defined]

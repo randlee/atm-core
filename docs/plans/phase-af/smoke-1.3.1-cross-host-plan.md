@@ -53,8 +53,9 @@ This fix round closed the local findings from `SMOKE-1.3.1-QA-1`:
 - rewrote `ReceiverReadyLatch` timeout/recovery text for production operators
 - changed the graft receiver loop to isolate per-connection failures instead of
   terminating the listener on any single bad connection
-- ensured the session snapshot leaves `Listening` when the receiver thread
-  terminates unexpectedly
+- ensured the session snapshot transitions from `Listening` to `Closed` on
+  clean shutdown and to `Degraded` when the receiver thread terminates
+  unexpectedly
 - aligned the runtime test helper with the widened receiver-ready deadline
 - scoped the graft smoke daemon-ownership assertion to the current fixture
   session
