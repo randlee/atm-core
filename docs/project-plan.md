@@ -83,6 +83,9 @@ Phase-AG planning note:
 - this planning package is a documented single-branch docs/evidence-only
   exception to the usual integrate-branch policy; PR #542 targets `develop`
   directly while the phase remains validation-only
+- a post-`1.3.1` Phase AG extension now also tracks future multihost hardening
+  plan work for multi-endpoint advertisement and deny-by-default host
+  allowlisting on branch `plan/phase-ag-multihost-advertise-allowlist`
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -693,6 +696,8 @@ Execution shape:
 - `AG.3` degraded path and retry-visible recovery
 - `AG.4` copied-state revalidation
 - `AG.5` findings closeout and release verdict
+- `AG.6` multi-endpoint advertisement and staleness lifecycle
+- `AG.7` cross-host listener allowlist enforcement
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
@@ -705,6 +710,8 @@ Immediate planning outputs:
 - `docs/plans/phase-AG/sprint-AG3.md`
 - `docs/plans/phase-AG/sprint-AG4.md`
 - `docs/plans/phase-AG/sprint-AG5.md`
+- `docs/plans/phase-AG/sprint-AG6.md`
+- `docs/plans/phase-AG/sprint-AG7.md`
 
 Acceptance / Phase Entry Gate:
 - `Phase Z` must remain closed on `develop`

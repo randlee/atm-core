@@ -28,6 +28,8 @@ Expected planning artifacts:
 - `sprint-AG3.md`
 - `sprint-AG4.md`
 - `sprint-AG5.md`
+- `sprint-AG6.md`
+- `sprint-AG7.md`
 
 Historical input:
 

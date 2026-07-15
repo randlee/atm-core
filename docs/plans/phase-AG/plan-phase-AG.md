@@ -431,6 +431,65 @@ Verification owner:
 
 - `quality-mgr`
 
+### AG.6 Multi-Endpoint Advertisement And Staleness Lifecycle
+
+Primary objective:
+
+- replace the single static peer-address assumption with a durable
+  multi-endpoint advertisement model that can represent LAN, VPN, and other
+  concurrently valid listener paths for one roaming host
+
+Outputs:
+
+- draft DDL for `daemon_advertised_endpoints`
+- explicit refresh, withdrawal, and expiry contract for advertised addresses
+- exact scoping note that runtime interface enumeration and stale-path
+  lifecycle handling are new product capabilities beyond the original `1.3.1`
+  validation line
+
+Entry gate:
+
+- `AG.1` through `AG.5` remain the completed or planned validation line for the
+  original static-address release claim
+- `AG.6` starts only as a future extension after the original validation scope
+  is captured; it does not retroactively shrink into a "config-only" task
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.7 Cross-Host Listener Allowlist Enforcement
+
+Primary objective:
+
+- add the explicit host authorization layer that denies inbound daemon peers by
+  default unless the connecting hostname is present in an exact-match
+  allowlist
+
+Outputs:
+
+- draft DDL for `daemon_host_allowlist`
+- exact no-wildcard allowlist policy
+- connection-time enforcement contract that rejects unauthorized hosts before
+  mailbox state mutation
+
+Entry gate:
+
+- `AG.6` should already define how a host publishes the reachable addresses the
+  allowlisted peers will connect to
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
 ## Exit Criteria
 
 Phase `AG` is complete only when all of the following are true:
@@ -443,3 +502,8 @@ Phase `AG` is complete only when all of the following are true:
   release-usable
 - if code changes were needed, they came from concrete findings rather than
   speculative pre-work
+
+Future post-`1.3.1` multihost hardening extensions may continue under the
+Phase `AG` namespace, but they must remain explicitly scoped as new
+capabilities rather than being retroactively described as part of the original
+release-validation-only closure contract.
