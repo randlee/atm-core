@@ -13,9 +13,10 @@ This lint flags:
     function whose body forwards its string parameter straight into
     `env::var`/`env::var_os` (e.g. `read_env_raw("ATM_IDENTITY")` where
     `read_env_raw(key: &str)` calls `env::var_os(key)`), and
-  * calls to the explicitly configured `boundary_reader_functions` (the
-    known CLI-only resolver functions that read these variables internally),
-    from any other production source file in the restricted crate roots.
+  * calls to the explicitly configured `boundary_reader_functions` and any
+    same-file wrapper functions that call them transitively (the known
+    CLI-only resolver functions that read these variables internally), from
+    any other production source file in the restricted crate roots.
 
 Findings for pre-existing call sites may be allowlisted in
 `.just/allowlists/env_var_boundary_allowlist.toml` while the follow-up
@@ -229,6 +230,58 @@ def find_boundary_reader_definition_files(
     return definition_files
 
 
+def find_function_definition_line(lines: list[str], function_name: str) -> int | None:
+    for index, line in enumerate(lines):
+        match = FN_DEF_RE.match(line.strip())
+        if match is not None and match.group(1) == function_name:
+            return index
+    return None
+
+
+def expand_boundary_reader_functions(
+    file_lines: dict[Path, list[str]],
+    boundary_reader_functions: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Treat same-file wrappers around boundary readers as boundary readers too.
+
+    The configured names are the seed readers at the actual client boundary.
+    Any function defined in the same file that calls one of those readers is
+    itself also a boundary reader, because callers outside that file still
+    trigger an ATM_TEAM/ATM_IDENTITY read indirectly through the wrapper.
+    """
+    expanded = set(boundary_reader_functions)
+    definition_files = find_boundary_reader_definition_files(file_lines, boundary_reader_functions)
+    boundary_files = {path for path in definition_files.values()}
+
+    changed = True
+    while changed:
+        changed = False
+        for rel_path in boundary_files:
+            lines = file_lines[rel_path]
+            for index, line in enumerate(lines):
+                match = FN_DEF_RE.match(line.strip())
+                if match is None:
+                    continue
+                function_name = match.group(1)
+                if function_name in expanded:
+                    continue
+                start = index
+                _, end = function_body_bounds(lines, start)
+                body_lines = lines[start : end + 1]
+                if any(
+                    re.search(
+                        rf"\b(?:[A-Za-z_][A-Za-z0-9_]*::)*{re.escape(boundary_reader)}\s*\(",
+                        body_line,
+                    )
+                    for boundary_reader in expanded
+                    for body_line in body_lines
+                ):
+                    expanded.add(function_name)
+                    changed = True
+
+    return tuple(sorted(expanded))
+
+
 def collect_file_violations(
     *,
     rel_path: Path,
@@ -310,6 +363,7 @@ def collect_env_var_boundary_violations(
         rel_path = abs_path.relative_to(repo_root)
         file_lines[rel_path] = abs_path.read_text(encoding="utf-8").splitlines()
 
+    boundary_reader_functions = expand_boundary_reader_functions(file_lines, boundary_reader_functions)
     boundary_reader_definition_files = find_boundary_reader_definition_files(
         file_lines, boundary_reader_functions
     )

@@ -24,6 +24,8 @@ config_home_env = "ATM_CONFIG_HOME"
 [env_var_boundary]
 forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY"]
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
+# Seed boundary readers. The lint expands this set transitively to include
+# same-file wrappers (for example `*_or_warn`) that call these functions.
 boundary_reader_functions = [
   "read_cli_identity_from_env",
   "read_cli_team_from_env",

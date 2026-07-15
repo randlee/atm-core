@@ -194,6 +194,55 @@ pub fn resolve_team() -> Option<String> {
                 kinds,
             )
 
+    def test_flags_calls_to_same_file_wrapper_boundary_reader_functions(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/caller_context.rs").write_text(
+                """\
+use std::env;
+
+pub fn read_cli_team_from_env() -> Option<String> {
+    env::var("ATM_TEAM").ok()
+}
+
+pub fn read_cli_team_from_env_or_warn() -> Option<String> {
+    read_cli_team_from_env()
+}
+""",
+                encoding="utf-8",
+            )
+            (repo_root / "crates/atm-core/src/health.rs").write_text(
+                """\
+use crate::caller_context::read_cli_team_from_env_or_warn;
+
+pub fn environment_visibility() -> Option<String> {
+    read_cli_team_from_env_or_warn()
+}
+""",
+                encoding="utf-8",
+            )
+
+            violations = self.collect(repo_root)
+
+            kinds = {(violation.path, violation.symbol, violation.kind) for violation in violations}
+            self.assertIn(
+                (
+                    "crates/atm-core/src/caller_context.rs",
+                    "read_cli_team_from_env",
+                    "direct_literal_env_read",
+                ),
+                kinds,
+            )
+            self.assertIn(
+                (
+                    "crates/atm-core/src/health.rs",
+                    "environment_visibility",
+                    "boundary_reader_function_call",
+                ),
+                kinds,
+            )
+
     def test_does_not_flag_internal_calls_within_the_defining_file(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
