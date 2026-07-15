@@ -283,6 +283,7 @@ pub fn resolve_team_from_env() -> Option<String> {
 rule = "ATM-ENV-BOUNDARY-001"
 path = "crates/atm-core/src/example.rs"
 symbol = "resolve_team_from_env"
+line = 'env::var("ATM_TEAM").ok()'
 why = "test fixture"
 sunset_sprint = "n/a"
 """,
@@ -292,6 +293,48 @@ sunset_sprint = "n/a"
             violations = self.collect(repo_root)
 
             self.assertEqual(violations, [])
+
+    def test_allowlist_does_not_suppress_a_new_violation_in_the_same_function(self) -> None:
+        """A second, distinct env-read line added to an already-allowlisted
+        function must still be reported -- the allowlist entry only covers
+        the exact call site it was written for, not the whole enclosing
+        function body."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/example.rs").write_text(
+                """\
+use std::env;
+
+pub fn resolve_team_from_env() -> Option<String> {
+    let _ = env::var("ATM_TEAM").ok();
+    env::var("ATM_IDENTITY").ok()
+}
+""",
+                encoding="utf-8",
+            )
+            (repo_root / ".just/allowlists").mkdir(parents=True)
+            (repo_root / ".just/allowlists/env_var_boundary_allowlist.toml").write_text(
+                """\
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/example.rs"
+symbol = "resolve_team_from_env"
+line = 'let _ = env::var("ATM_TEAM").ok();'
+why = "test fixture: only the ATM_TEAM read is reviewed/allowlisted"
+sunset_sprint = "n/a"
+""",
+                encoding="utf-8",
+            )
+
+            violations = self.collect(repo_root)
+
+            # The allowlisted ATM_TEAM line is suppressed, but the new
+            # ATM_IDENTITY read in the same function must still be flagged.
+            self.assertEqual(len(violations), 1)
+            self.assertEqual(violations[0].path, "crates/atm-core/src/example.rs")
+            self.assertEqual(violations[0].symbol, "resolve_team_from_env")
+            self.assertEqual(violations[0].line, 'env::var("ATM_IDENTITY").ok()')
 
 
 if __name__ == "__main__":

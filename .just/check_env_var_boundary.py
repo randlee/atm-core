@@ -72,6 +72,7 @@ class AllowlistEntry:
     rule: str
     path: Path
     symbol: str
+    line: str
     why: str
     sunset_sprint: str
 
@@ -120,7 +121,7 @@ def load_allowlist(repo_root: Path) -> list[AllowlistEntry]:
     for index, raw_entry in enumerate(raw_entries):
         if not isinstance(raw_entry, dict):
             raise SystemExit(f"[allow][{index}] must be a TOML table")
-        required = ("rule", "path", "symbol", "why", "sunset_sprint")
+        required = ("rule", "path", "symbol", "line", "why", "sunset_sprint")
         for field in required:
             value = raw_entry.get(field)
             if not isinstance(value, str) or not value.strip():
@@ -130,6 +131,7 @@ def load_allowlist(repo_root: Path) -> list[AllowlistEntry]:
                 rule=raw_entry["rule"],
                 path=Path(raw_entry["path"]),
                 symbol=raw_entry["symbol"],
+                line=raw_entry["line"],
                 why=raw_entry["why"],
                 sunset_sprint=raw_entry["sunset_sprint"],
             )
@@ -142,8 +144,20 @@ def is_allowlisted(
     *,
     rel_path: Path,
     symbol: str,
+    line: str,
 ) -> bool:
-    return any(entry.path == rel_path and entry.symbol == symbol for entry in entries)
+    """Match an exact previously-reviewed call site, not the whole function.
+
+    Allowlist entries are keyed on (path, symbol, exact violated line text) so
+    that a genuinely new env-boundary violation added inside an already
+    allowlisted function -- even one that shares the same enclosing symbol --
+    still requires its own allowlist entry instead of being silently
+    swallowed by the enclosing function's existing entry.
+    """
+    return any(
+        entry.path == rel_path and entry.symbol == symbol and entry.line == line
+        for entry in entries
+    )
 
 
 def restricted_rust_files(repo_root: Path, restricted_crate_roots: tuple[Path, ...]) -> list[Path]:
@@ -312,7 +326,12 @@ def collect_env_var_boundary_violations(
             boundary_reader_definition_files=boundary_reader_definition_files,
         )
         for violation in file_violations:
-            if is_allowlisted(allowlist, rel_path=rel_path, symbol=violation.symbol):
+            if is_allowlisted(
+                allowlist,
+                rel_path=rel_path,
+                symbol=violation.symbol,
+                line=violation.line,
+            ):
                 continue
             violations.append(violation)
 
