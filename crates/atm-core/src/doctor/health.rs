@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::caller_context::{read_cli_identity_from_env, read_cli_team_from_env};
+use crate::caller_context::{read_cli_identity_from_env_or_warn, read_cli_team_from_env_or_warn};
 use crate::doctor::report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorSeverity, DoctorStatus,
 };
@@ -36,11 +36,16 @@ pub fn environment_visibility(
     caller_identity: Option<AgentName>,
 ) -> DoctorEnvironmentVisibility {
     DoctorEnvironmentVisibility {
+        // `atm_home` intentionally continues to reflect this process env
+        // directly; re-plumbing ATM_HOME precedence is out of scope for #548.
         atm_home: std::env::var_os("ATM_HOME")
             .map(PathBuf::from)
             .or(Some(home_dir)),
-        atm_team: caller_team.or_else(|| read_cli_team_from_env().ok().flatten()),
-        atm_identity: caller_identity.or_else(|| read_cli_identity_from_env().ok().flatten()),
+        atm_team: caller_team
+            .or_else(|| read_cli_team_from_env_or_warn("atm_core::doctor::environment_visibility")),
+        atm_identity: caller_identity.or_else(|| {
+            read_cli_identity_from_env_or_warn("atm_core::doctor::environment_visibility")
+        }),
         team_override,
     }
 }

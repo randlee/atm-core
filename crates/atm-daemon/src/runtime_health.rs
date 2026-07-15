@@ -830,12 +830,12 @@ impl DaemonRequestDispatcher {
         // it explains why an earlier release appeared to report a stale team or
         // identity for every caller (see issue #548).
         report.daemon_context = Some(DoctorExecutionContext {
-            team: atm_core::caller_context::read_cli_team_from_env()
-                .ok()
-                .flatten(),
-            identity: atm_core::caller_context::read_cli_identity_from_env()
-                .ok()
-                .flatten(),
+            team: atm_core::caller_context::read_cli_team_from_env_or_warn(
+                "atm_daemon::runtime_health::daemon_context",
+            ),
+            identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
+                "atm_daemon::runtime_health::daemon_context",
+            ),
             version: Some(ReleaseVersion::current()),
         });
         Ok(report)
