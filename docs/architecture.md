@@ -2295,9 +2295,7 @@ Current owner-layer boundaries:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
   apply_projected_state(...), remove_message_state(...)}`,
-  `read::seen_state::save_seen_watermark(...)`,
-  `send::alert_state::{register_missing_team_config_alert(...),
-  clear_missing_team_config_alert(...), save(...)}`, and
+  `read::seen_state::save_seen_watermark(...)`, and
   `team_admin::write_team_config(...)`
 - ATM-owned restore/task state:
   `team_admin::restore::restore_task_state_from_backup(...)`,

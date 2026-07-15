@@ -3027,9 +3027,6 @@ closed before the 1.0 release.
       `persist_message_state(...)`); no filesystem workflow sidecar exists
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
-    - send-alert state:
-      `send::alert_state::{register_missing_team_config_alert(...),
-      clear_missing_team_config_alert(...), save(...), acquire_lock(...)}`
     - team config:
       `team_admin::write_team_config(...)`
     - task bucket and `.highwatermark`:

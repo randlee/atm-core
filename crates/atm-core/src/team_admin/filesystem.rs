@@ -5,11 +5,11 @@ use chrono::Utc;
 use serde_json::json;
 use tracing::warn;
 
+use super::BackupOutcome;
 use crate::address::validate_path_segment;
 use crate::boundary::RosterStore;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
-use super::BackupOutcome;
 
 pub(super) fn backup_team_from_roster_store(
     roster_store: &dyn RosterStore,

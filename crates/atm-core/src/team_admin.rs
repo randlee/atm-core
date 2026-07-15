@@ -908,7 +908,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -964,7 +963,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -981,7 +979,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -1027,7 +1024,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: "other-team".parse().expect("team"),
@@ -1055,7 +1051,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -1083,7 +1078,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),

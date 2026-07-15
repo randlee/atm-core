@@ -432,7 +432,9 @@ fn missing_team_config_no_longer_seeds_team_lead_notice_state() {
     .expect("missing-config send");
 
     assert!(
-        fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD).is_empty(),
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
         "team-lead inbox should not receive a synthetic missing-config notice"
     );
 }
@@ -492,7 +494,9 @@ fn concurrent_normal_send_and_sqlite_only_delivery_complete_without_data_loss() 
         "missing-config recipient send was not persisted"
     );
     assert!(
-        fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD).is_empty(),
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
         "team-lead inbox should not receive a synthetic missing-config notice during concurrent send"
     );
 }

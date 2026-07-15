@@ -94,7 +94,6 @@ pub fn run_doctor_with_runtime(
         load_member_roster(
             runtime,
             team,
-            config.as_ref(),
             doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut findings,
@@ -135,7 +134,6 @@ pub fn run_doctor_with_runtime_ports(
         load_member_roster(
             runtime,
             team,
-            config.as_ref(),
             doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut drift_findings,
@@ -466,7 +464,6 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
 fn load_member_roster(
     runtime: &impl RetainedServiceRuntime,
     team: &TeamName,
-    _config: Option<&config::AtmConfig>,
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
     findings: &mut Vec<DoctorFinding>,

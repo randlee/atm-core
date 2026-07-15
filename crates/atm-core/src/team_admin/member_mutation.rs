@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::Utc;
 use serde::Serialize;
@@ -125,7 +125,9 @@ pub fn add_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
-    let MemberAddContext { mut existing_roster } = load_member_add_context(roster_store, &request)?;
+    let MemberAddContext {
+        mut existing_roster,
+    } = load_member_add_context(roster_store, &request)?;
 
     let inbox_path = home::inbox_path_from_home(
         request.atm_home_dir.as_ref(),
@@ -152,7 +154,6 @@ pub fn add_member_with_roster_store(
 /// or roster/config persistence fails.
 pub fn update_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    _atm_home_dir: &Path,
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
     validate_update_member_caller(roster_store, &request)?;
@@ -168,9 +169,9 @@ pub fn update_member_with_roster_store(
         .replace_roster(&request.team, &existing_roster, None)
         .map_err(|error| {
             error.with_recovery(
-            "Check ATM roster store availability and rerun `atm teams update-member`.",
-        )
-    })?;
+                "Check ATM roster store availability and rerun `atm teams update-member`.",
+            )
+        })?;
 
     Ok(UpdateMemberOutcome {
         action: "update-member",

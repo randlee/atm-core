@@ -376,7 +376,6 @@ fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Res
 
 fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    _home_dir: &std::path::Path,
     source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
@@ -443,12 +442,7 @@ fn persist_source_ack_state<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &context.source.row,
     )?;
     ensure_ack_is_pending(context.request.message_id, &source_record.envelope)?;
-    let reply_target = validate_reply_target(
-        runtime,
-        home_dir(context.request),
-        &source_record,
-        context.team,
-    )?;
+    let reply_target = validate_reply_target(runtime, &source_record, context.team)?;
 
     let mut projected_envelope = source_record.envelope.clone();
     projected_envelope.read = true;

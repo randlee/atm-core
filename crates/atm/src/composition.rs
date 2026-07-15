@@ -1142,8 +1142,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn loopback_transport_no_longer_emits_missing_config_notice_under_concurrency()
-     {
+    fn loopback_transport_no_longer_emits_missing_config_notice_under_concurrency() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
         fixture.write_inbox_values(TEST_RECIPIENT, &[]);

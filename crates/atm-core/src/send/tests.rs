@@ -271,7 +271,6 @@ impl RetainedServiceRuntime for TestRuntime {
             metadata_json: Map::new(),
         }])
     }
-
 }
 
 impl RetainedMailboxRuntime for TestRuntime {
