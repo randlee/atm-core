@@ -1,7 +1,7 @@
 ---
 id: AG.2
 title: Core Cross-Host Interface Validation
-status: planned
+status: reclassified
 branch: feature/cross-host-communication
 worktree: ../atm-core-worktrees/feature/cross-host-communication
 target: develop
@@ -15,22 +15,39 @@ phase: AG
 sprint: AG.2
 worktree: ../atm-core-worktrees/feature/cross-host-communication
 branch: feature/cross-host-communication
-status: planned
+status: reclassified
 estimated_scope: medium
 ```
 
 ## Goal
 
-Validate the main cross-host interface set on clean-room state:
+Original intent:
+
+- validate the main cross-host interface set on clean-room state:
 
 - durable send in both directions
 - receiver-side read in both directions
 - `--requires-ack` ack round-trip
 
+Actual outcome:
+
+- live attempts were valuable, but they did not close the sprint
+- they exposed a missing product control plane:
+  - no durable CLI-managed interface/bind surface
+  - no durable CLI-managed inbound host allowlist
+  - no SQLite-owned configuration for either
+  - no `atm doctor` projection for either
+- the original AG.2 closure target is therefore reclassified as provisional and
+  moved behind the later control-plane sprints plus the renewed live validation
+  sprint
+
 ## Deliverables
 
-- validation rows `AG-VAL-003` through `AG-VAL-007`
-- evidence-backed findings for every failed interface row
+- initial validation attempts for rows `AG-VAL-003` through `AG-VAL-007`
+- evidence-backed findings showing why those rows cannot be treated as
+  production-meaningful closure on the original product surface
+- explicit handoff into the later AG control-plane sprints that unblock real
+  closure
 
 ## Required Validation
 
@@ -56,5 +73,7 @@ Validate the main cross-host interface set on clean-room state:
 
 ## Acceptance Criteria
 
-- every core interface row ends in `PASS` or a named finding
-- no speculative code work begins without one failing row and artifacts
+- the sprint record preserves the failed assumption that existing product
+  controls were sufficient
+- the missing control-plane surface is promoted into explicit later AG sprint
+  scope instead of being treated as ad hoc implementation fallout

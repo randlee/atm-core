@@ -1,13 +1,13 @@
 ---
 id: AG.7
-title: Cross-Host Listener Allowlist Enforcement
+title: Live Cross-Host Revalidation
 status: planned
 branch: plan/phase-ag-multihost-advertise-allowlist
 worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
 target: develop
 ---
 
-# Sprint AG.7 — Cross-Host Listener Allowlist Enforcement
+# Sprint AG.7 — Live Cross-Host Revalidation
 
 ```yaml
 plan_type: sprint_plan
@@ -21,70 +21,58 @@ estimated_scope: medium
 
 ## Goal
 
-Design the deny-by-default host allowlist that gates inbound cross-host daemon
-connections before they can mutate mailbox state.
-
-This is a new runtime enforcement capability, not a documentation cleanup. It
-requires persistent allowlist state, handshake-time hostname evaluation,
-explicit rejection behavior, and operator-visible diagnostics for refused
-connections.
+Rerun the clean-room live host-pair matrix on the now-complete cross-host
+product surface.
 
 ## Deliverables
 
-- schema and policy contract for host-based inbound allowlisting
-- exact deny-by-default rule for every inbound cross-host connection
-- exact-hostname-only matching rule with no wildcard support
-- acceptance criteria for future implementation and verification
-
-## Schema Design
-
-Draft DDL:
-
-```sql
-CREATE TABLE daemon_host_allowlist (
-    host_name TEXT PRIMARY KEY,
-    added_at TEXT NOT NULL,
-    added_by TEXT NOT NULL,
-    disabled_at TEXT,
-    note TEXT
-);
-
-CREATE INDEX idx_daemon_host_allowlist_enabled
-ON daemon_host_allowlist (disabled_at, host_name);
-```
-
-## Enforcement Contract
-
-- inbound cross-host connections are denied unless the remote host presents a
-  hostname that matches one enabled allowlist row exactly
-- wildcard matching is forbidden
-- prefix, suffix, glob, regex, and subnet-derived trust are forbidden
-- disabled rows remain stored for auditability but do not authorize access
-- hostname comparison uses one canonical lowercase hostname string on both the
-  presented peer value and the stored allowlist row; after canonicalization,
-  matching is still exact-string-only
-- allowlist rejection happens before any mailbox write, ack mutation, or team
-  roster mutation
-- every rejection must emit a structured log record containing:
-  - presented hostname
-  - remote socket address
-  - reason for denial
-  - whether the failure was missing entry or disabled entry
+- explicit ownership of unauthorized-host rejection row `AG-VAL-003A`
+- renewed ownership of live host-pair validation rows `AG-VAL-003` through
+  `AG-VAL-009`
+- explicit first-choice execution order:
+  - simplest LAN host pair first
+  - VPN/routed host pair second
+- integration findings clearly separated from AG.4 / AG.5 product-surface
+  findings
 
 ## Required Validation
 
-- design review that proves no inbound host is trusted by default
-- proof that the contract covers:
-  - unknown host rejection
-  - disabled host rejection
-  - exact configured host acceptance
-  - rejection logging without mutating mailbox state
+- real host-pair validation is rerun only after AG.4, AG.5, and AG.6 land
+- simplest network path first:
+  - Windows <-> Mac Studio on LAN if available
+  - VPN/routed pair afterward
+- the loopback lane from AG.3 remains a prerequisite diagnostic, but not a
+  substitute for real host-pair evidence
+
+## Unit-Test Plan
+
+- n/a beyond targeted harness helpers; the sprint closes through integration and
+  smoke evidence rather than new local-only unit semantics
+
+## Integration-Test Plan
+
+- daemon-to-daemon integration tests on controlled host pairs proving:
+  - unauthorized host rejected before delivery
+  - authorized host send succeeds
+  - authorized host read succeeds
+  - authorized host `--requires-ack` round-trip succeeds
+  - degraded notification does not misclassify durable success
+  - retry-visible recovery remains bounded
+
+## Smoke-Test Plan
+
+- LAN smoke:
+  - Windows <-> Mac Studio first, if available
+  - unauthorized-host rejection row `AG-VAL-003A`
+  - authorized send/read/ack rows
+- routed/VPN smoke:
+  - rerun the same matrix once LAN is green
+- copied-state remains explicitly deferred to AG.9
 
 ## Entry Gate
 
-- `AG.6` should already have defined how a host advertises its own reachable
-  endpoints, because allowlist enforcement applies to the resulting
-  cross-host listener
+- AG.4 and AG.5 product work is complete
+- AG.6 doctor visibility is complete
 
 ## Ownership
 
@@ -93,10 +81,8 @@ ON daemon_host_allowlist (disabled_at, host_name);
 
 ## Acceptance Criteria
 
-- the schema is concrete enough for a dev sprint to implement directly
-- deny-by-default is explicit and load-bearing, not implied
-- no wildcard matching is allowed anywhere in the design
-- exact hostname entries are the only authorization mechanism in scope
-- the sprint text states clearly that connection-time enforcement is new
-  product work, not a small config follow-up
-- the design requires rejection before any mailbox or roster mutation occurs
+- real host-pair validation runs on the intended product surface rather than env
+  hacks
+- LAN-first execution preference is explicit
+- integration blockers such as firewall/routing/VPN are recorded as such rather
+  than causing new transport-design hacks

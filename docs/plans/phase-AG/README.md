@@ -1,16 +1,29 @@
 # Phase AG
 
-Phase `AG` owns Windows/macOS cross-host interface validation for the `1.3.1`
-release line.
+Phase `AG` owns completion of the Windows/macOS cross-host product surface and
+the validation needed to declare it release-usable.
 
-This is a validation-first phase:
+This phase no longer assumes the intended cross-host interfaces already exist.
+Work completed so far proved the opposite: the original `1.3.1` cross-host line
+was missing durable interface selection, inbound host authorization, and
+operator-visible diagnostics. Phase `AG` now treats those as prerequisite
+product work before live cross-host validation can close for real.
 
-- assume the intended cross-host interfaces already exist
-- prove they work on real binaries before authorizing any code change
-- treat every failure as a concrete product finding with exact reproduction
-- keep code changes out of scope unless the validation matrix exposes a real bug
-- never imply that AG validated TLS or transport security on `1.3.1`; that gap
-  is tracked separately if the implementation remains plain TCP
+Current phase framing:
+
+- `AG.1` and `AG.2` capture the setup/runbook work and the first real
+  cross-host attempts that exposed the missing control-plane surface
+- `AG.3` captures the daemon loopback self-test surface that now exists and
+  remains part of the supported product contract
+- later AG sprints add the missing durable control plane:
+  - SQLite-backed interface configuration
+  - SQLite-backed inbound host allowlist enforcement
+  - CLI administration for both
+  - `atm doctor` visibility for both
+- only after that control plane lands does Phase AG return to live host-pair
+  validation and release closeout
+- TLS / transport security remains a late AG concern and must not be implied by
+  earlier functional cross-host closure
 
 Planning source of truth:
 
@@ -30,6 +43,9 @@ Expected planning artifacts:
 - `sprint-AG5.md`
 - `sprint-AG6.md`
 - `sprint-AG7.md`
+- `sprint-AG8.md`
+- `sprint-AG9.md`
+- `sprint-AG10.md`
 
 Historical input:
 

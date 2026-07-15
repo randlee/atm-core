@@ -1,13 +1,13 @@
 ---
 id: AG.6
-title: Multi-Endpoint Advertisement And Staleness Lifecycle
+title: Doctor Visibility For The Cross-Host Control Plane
 status: planned
 branch: plan/phase-ag-multihost-advertise-allowlist
 worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
 target: develop
 ---
 
-# Sprint AG.6 — Multi-Endpoint Advertisement And Staleness Lifecycle
+# Sprint AG.6 — Doctor Visibility For The Cross-Host Control Plane
 
 ```yaml
 plan_type: sprint_plan
@@ -21,92 +21,105 @@ estimated_scope: medium
 
 ## Goal
 
-Design the first real replacement for the single static
-`ATM_DAEMON_PEER_ADDR` model by defining a SQLite-backed advertised-endpoints
-surface that lets one host publish multiple concurrently reachable daemon
-addresses and retire stale paths as network conditions change.
+After the AG.4 / AG.5 control-plane work lands, define the `atm doctor`
+projection for that control plane.
 
-This is a new runtime capability, not a config tweak. It requires runtime
-interface enumeration, durable advertisement state, refresh scheduling, stale
-endpoint withdrawal, and explicit operator-facing failure behavior when no
-usable advertised path remains.
+This sprint converts the new durable control-plane state into an operator-safe
+diagnostic surface:
+
+- `atm doctor` must show the configured/bound cross-host interfaces
+- `atm doctor` must show host allowlist population/enforcement state
+- AG.7 host-pair validation depends on this surface, but that closure stays in
+  a separate sprint
 
 ## Deliverables
 
-- schema and lifecycle contract for a daemon-advertised endpoint table
-- explicit refresh, withdraw, and expiry rules for roaming hosts
-- exact ownership boundary for who writes rows and who consumes them
-- acceptance criteria for future implementation and operator verification
+- exact `atm doctor` output contract for:
+  - configured listener/bind interface rows
+  - currently bound/reachable cross-host endpoints
+  - allowlist enabled/disabled state
+  - degraded/misconfigured listener warnings
+- requirements/architecture wording aligned to the doctor-visible control-plane
+  state
+- integration-test contract for doctor/runtime projection
+- smoke-test contract for same-host doctor + loopback preflight
 
-## Schema Design
+## Doctor Contract
 
-Draft DDL:
+- `atm doctor` must report the configured cross-host interface rows from AG.4
+- `atm doctor` must report whether the daemon actually bound each enabled row
+- if a configured row did not bind, `atm doctor` must name the row and the bind
+  failure reason
+- `atm doctor` must report:
+  - whether inbound host allowlist enforcement is enabled
+  - whether the allowlist is empty while enforcement is enabled
+  - the exact allowed host entries currently active
+- `atm doctor` must tell the operator which command to run next when no usable
+  listener/bind configuration exists
 
-```sql
-CREATE TABLE daemon_advertised_endpoints (
-    endpoint_id INTEGER PRIMARY KEY,
-    host_name TEXT NOT NULL,
-    interface_name TEXT NOT NULL,
-    address TEXT NOT NULL,
-    port INTEGER NOT NULL,
-    address_family INTEGER NOT NULL CHECK (address_family IN (4, 6)),
-    interface_kind TEXT NOT NULL CHECK (
-        interface_kind IN ('vpn', 'lan', 'loopback', 'other')
-    ),
-    advertisement_source TEXT NOT NULL CHECK (
-        advertisement_source IN ('runtime_probe', 'operator_override')
-    ),
-    observed_at TEXT NOT NULL,
-    refresh_deadline_at TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    withdrawn_at TEXT,
-    last_error TEXT,
-    UNIQUE (host_name, interface_name, address, port)
-);
+Illustrative output shape:
 
-CREATE INDEX idx_daemon_advertised_endpoints_host_live
-ON daemon_advertised_endpoints (host_name, withdrawn_at, expires_at);
+```json
+{
+  "cross_host": {
+    "interfaces": [
+      {
+        "interface_name": "en0",
+        "bind_addr": "10.10.0.15",
+        "advertise_addr": "10.10.0.15",
+        "port": 43101,
+        "enabled": true,
+        "last_bound_at": "2026-07-15T20:00:00Z",
+        "last_bind_error": null,
+        "stale_at": null
+      }
+    ],
+    "allowlist": {
+      "enforced": true,
+      "hosts": [
+        { "host_name": "windows-dev-1", "enabled": true }
+      ]
+    }
+  }
+}
 ```
-
-## Lifecycle Contract
-
-- the local daemon is the only writer for its own `host_name` rows
-- at daemon start, the cross-host listener binds its configured port and
-  performs an initial interface snapshot before the host is considered
-  advertisement-ready
-- every refresh cycle:
-  - currently reachable listener addresses are upserted
-  - `observed_at` is set to the current timestamp
-  - `refresh_deadline_at` is set to `observed_at + refresh_interval`
-  - `expires_at` is set to `observed_at + expiry_interval`
-- if an address from the previous snapshot is absent in the new snapshot:
-  - it is not deleted immediately
-  - `withdrawn_at` is set to the current timestamp
-  - the row remains queryable for diagnosis until `expires_at`
-- consumers must treat a row as usable only when:
-  - `withdrawn_at IS NULL`
-  - `expires_at > now()`
-- a background reap step may delete expired rows after they are already
-  unusable to readers
-- operator overrides may add durable rows with
-  `advertisement_source='operator_override'`, but they still carry
-  `refresh_deadline_at` and `expires_at` so stale overrides remain visible and
-  bounded
 
 ## Required Validation
 
-- design review against the current `ATM_DAEMON_PEER_ADDR` limitation
-- proof that the contract handles:
-  - LAN + VPN simultaneous reachability
-  - LAN disappearance while VPN remains valid
-  - full disconnect/reconnect without leaving immortal stale endpoints
+- doctor output is reviewed only after AG.4 and AG.5 land
+- the loopback lane from AG.3 remains a prerequisite diagnostic input
+- requirements/architecture diff review proving doctor/output language matches
+  the actual AG.4 / AG.5 product model
+
+## Unit-Test Plan
+
+- doctor projection corner cases:
+  - no interface rows configured
+  - one enabled row bound successfully
+  - one enabled row failed to bind
+  - one stale row remains visible
+  - allowlist enforced but empty
+  - allowlist enforced with one enabled and one disabled host
+
+## Integration-Test Plan
+
+- doctor/runtime integration tests proving:
+  - SQLite interface rows project into doctor output
+  - SQLite allowlist rows project into doctor output
+  - bind failures surface through doctor
+  - empty enforced allowlist surfaces warning/error state explicitly
+
+## Smoke-Test Plan
+
+- local preflight smoke:
+  - loopback mode still works after AG.4 / AG.5
+- copied-state and real host-pair validation remain explicitly deferred to
+  later sprints
 
 ## Entry Gate
 
-- `AG.1` through `AG.5` remain historical validation input for the original
-  single-peer-address line
-- this sprint begins only as a post-`1.3.1` Phase AG extension; it must not be
-  back-framed as part of the original release-validation-only scope
+- `AG.4` and `AG.5` must already define the durable interface and allowlist
+  product surface
 
 ## Ownership
 
@@ -115,13 +128,8 @@ ON daemon_advertised_endpoints (host_name, withdrawn_at, expires_at);
 
 ## Acceptance Criteria
 
-- the schema is concrete enough for a dev sprint to implement directly
-- the plan explicitly replaces the single static peer-address assumption with
-  multi-endpoint advertisement
-- staleness handling is explicit:
-  - rows are refreshed on a defined cadence
-  - vanished interfaces are marked withdrawn instead of silently disappearing
-  - expired rows become unreadable for connection selection before any cleanup
-    delete runs
-- the sprint text states clearly that runtime enumeration and refresh logic are
-  new product work, not a quick config addition
+- `atm doctor` output is concrete enough for a dev sprint to implement directly
+- real host-pair validation is explicitly deferred to AG.7 so this sprint does
+  not silently claim both diagnostics and network closure
+- the sprint text states clearly that firewall/routing/VPN issues are later
+  integration findings, not reasons to add more transport hacks
