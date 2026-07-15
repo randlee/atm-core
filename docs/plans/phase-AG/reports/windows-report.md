@@ -123,3 +123,32 @@ Classification update:
   this PASS
 - first live Windows -> macOS channel viability: still not attempted because
   the macOS peer address was not available in this session
+
+### 2026-07-15T05:45Z — Windows daemon started with sole-member team
+
+Operator follow-up:
+
+- Windows operator confirmed this computer has no installed/running ATM and
+  approved using the computer environment directly.
+- Created host-env team `ag1-windows-operator`.
+- Created the team config at
+  `C:\Users\rand.lee\.claude\teams\ag1-windows-operator\config.json`.
+- Added `windows-operator` as the sole team member:
+  `atm teams add-member ag1-windows-operator windows-operator --home-dir <worktree> --agent-type codex-cli --model windows --json`.
+- Started `atm-daemon` from the branch-built release binary:
+  `F:\github\atm-core-worktrees\feature\pAG-s1-macos-execution\target\release\atm-daemon.exe`.
+
+Evidence:
+
+- daemon PID: `17128`
+- `atm doctor --json`: exit `0`; summary `healthy`, `warning_count=0`,
+  `error_count=0`
+- runtime status: `liveness=running`, `readiness=ready`,
+  `singleton_owner_pid=17128`, `degraded_ingest=false`
+- `atm members --team ag1-windows-operator --json`: exit `0`; exactly one
+  member:
+  - `windows-operator@ag1-windows-operator`
+  - `agent_type=codex-cli`
+  - `model=windows`
+  - `home_dir=F:\github\atm-core-worktrees\feature\pAG-s1-macos-execution`
+- daemon was intentionally left running for the next AG.1 channel setup step.
