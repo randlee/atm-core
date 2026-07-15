@@ -31,6 +31,7 @@ use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -38,6 +39,20 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 pub(crate) const TEST_TEAM: &str = "test-team";
+
+struct CwdGuard(PathBuf);
+
+impl CwdGuard {
+    fn install() -> Self {
+        Self(std::env::current_dir().expect("cwd"))
+    }
+}
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.0).expect("restore cwd");
+    }
+}
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
     TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
@@ -162,6 +177,8 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     install_retained_runtime_factory();
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
+    let _cwd_guard = CwdGuard::install();
+    std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");

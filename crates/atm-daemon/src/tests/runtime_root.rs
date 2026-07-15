@@ -7,12 +7,13 @@ use atm_core::protocol::{
     SendResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use std::io::Write;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -248,6 +249,99 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
 
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
     assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+
+    let status_cache = RuntimeStatusCache::new();
+    let peer_transport = crate::PeerTransportRuntime::new_server_for_test(
+        SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
+        crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
+    );
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test_with_peer_transport(
+        atm_home.clone(),
+        status_cache,
+        db_path.clone(),
+        peer_transport.clone(),
+    ));
+    peer_transport
+        .start(dispatcher.clone())
+        .expect("start peer listener");
+
+    let mut request = SendRequest::new(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
+        &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+        TEST_TEAM.parse().expect("team"),
+        SendMessageSource::Inline("hello loopback".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("send request");
+    request.peer_loopback_host = Some(PeerLoopbackHost::parse("localhost").expect("host"));
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .expect("dispatch loopback send");
+    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+        panic!("expected send response");
+    };
+    assert_eq!(outcome.agent.as_str(), ROLE_TEAM_LEAD);
+
+    let read = dispatcher
+        .dispatch(RequestEnvelope::Receive(
+            ReadQuery::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query"),
+        ))
+        .expect("read self inbox");
+    let ResponseEnvelope::Receive(report) = read else {
+        panic!("expected receive response");
+    };
+    assert!(
+        report
+            .message
+            .as_ref()
+            .is_some_and(|message| message.envelope.text == "hello loopback"),
+        "loopback-delivered message missing from inbox"
+    );
+
+    peer_transport.shutdown().expect("shutdown peer listener");
 }
 
 #[test]
