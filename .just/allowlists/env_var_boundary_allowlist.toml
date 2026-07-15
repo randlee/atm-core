@@ -1,0 +1,58 @@
+# Known-debt exceptions for the ATM-ENV-BOUNDARY lint (issue #548 follow-up).
+#
+# ATM_TEAM/ATM_IDENTITY must only be read at client entry points (the `atm`
+# CLI and the `atm-graft` client) and resolved into explicit parameters from
+# there on. The call sites below are pre-existing violations that predate
+# this lint; they are allowlisted here rather than fixed in place because
+# refactoring them to accept already-resolved values requires touching every
+# caller of `atm_core::config::resolve_team`,
+# `atm_core::identity::resolve_runtime_sender_identity`,
+# `atm_core::doctor::health::environment_visibility`, and the atm-daemon
+# doctor/runtime-health report assembly across both the `atm` CLI and
+# `atm-daemon` binaries. That refactor is tracked as follow-up work and is
+# out of scope for adding this lint prospectively.
+#
+# Do not add new entries here for new code; new ATM_TEAM/ATM_IDENTITY reads
+# in atm-core/atm-daemon must be refactored to accept resolved parameters.
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_identity_from_env"
+why = "canonical CLI-identity env reader; forwards the ATM_IDENTITY literal into env::var_os via read_env_raw. This is the intended single choke point today, but the whole module belongs at the atm/atm-graft client boundary, not in atm-core."
+sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-graft entry points"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_team_from_env"
+why = "canonical CLI-identity env reader; forwards the ATM_TEAM literal into env::var_os via read_env_raw. This is the intended single choke point today, but the whole module belongs at the atm/atm-graft client boundary, not in atm-core."
+sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-graft entry points"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/config/mod.rs"
+symbol = "resolve_team"
+why = "resolve_team falls back to read_cli_team_from_env() when no explicit team_override is supplied; needs a signature change (explicit resolved team parameter) so every caller passes an already-resolved value instead."
+sunset_sprint = "follow-up: require resolve_team callers to pass an already-resolved team instead of falling back to env"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/identity/mod.rs"
+symbol = "resolve_runtime_sender_identity"
+why = "obsolete caller-owned identity fallback (already dead_code-gated for Phase AD removal); still reads ATM_IDENTITY via read_cli_identity_from_env() until the retirement sprint deletes the module."
+sunset_sprint = "follow-up: delete the obsolete identity module once its remaining test coverage is retired"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/doctor/health.rs"
+symbol = "environment_visibility"
+why = "doctor diagnostic snapshot reports the currently-visible ATM_TEAM/ATM_IDENTITY values for troubleshooting; needs the caller (CLI doctor command) to resolve and pass these values explicitly instead of reading them again inside atm-core."
+sunset_sprint = "follow-up: have the atm CLI doctor command pass resolved team/identity into environment_visibility"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-daemon/src/runtime_health.rs"
+symbol = "project_doctor_report"
+why = "daemon-side doctor report assembly reports the daemon process's own ATM_TEAM/ATM_IDENTITY for diagnostic context; needs the daemon bootstrap boundary to resolve and pass these values explicitly instead of reading them again inside atm-daemon."
+sunset_sprint = "follow-up: have daemon bootstrap pass resolved team/identity into project_doctor_report"
