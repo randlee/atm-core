@@ -152,11 +152,10 @@ pub fn add_member_with_roster_store(
 /// or roster/config persistence fails.
 pub fn update_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    atm_home_dir: &Path,
+    _atm_home_dir: &Path,
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
     validate_update_member_caller(roster_store, &request)?;
-    let _ = atm_home_dir;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
     let member = existing_roster

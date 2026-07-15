@@ -466,12 +466,11 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
 fn load_member_roster(
     runtime: &impl RetainedServiceRuntime,
     team: &TeamName,
-    config: Option<&config::AtmConfig>,
+    _config: Option<&config::AtmConfig>,
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let _ = config;
     if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
         push_doctor_error(findings, DoctorSeverity::Error, error);
         return None;

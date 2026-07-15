@@ -376,12 +376,11 @@ fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Res
 
 fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    home_dir: &std::path::Path,
+    _home_dir: &std::path::Path,
     source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
     let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
-    let _ = home_dir;
     ensure_roster_member_exists(
         runtime,
         &reply_team,

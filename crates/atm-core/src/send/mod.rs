@@ -28,15 +28,10 @@ use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 
-#[allow(
-    dead_code,
-    reason = "Z.6 removes the production send-path config gate; alert-state helpers remain test-covered until the follow-on cleanup deletes the obsolete file-backed alert seam."
-)]
-mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[allow(
+#[expect(
     dead_code,
     reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
 )]

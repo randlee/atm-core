@@ -141,8 +141,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     let actor = query.caller_identity.clone();
     let target = resolve_target(None, &actor, &query.caller_team, config.as_ref())?;
 
-    validate_clear_target(runtime, &query.home_dir, &target)?;
-
     let cutoff = cutoff_timestamp(query.older_than)?;
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
@@ -161,17 +159,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
         metadata_rows,
         removable,
     })
-}
-
-fn validate_clear_target<R: RetainedServiceRuntime>(
-    runtime: &R,
-    home_dir: &std::path::Path,
-    target: &ResolvedTarget,
-) -> Result<(), AtmError> {
-    let _ = runtime;
-    let _ = home_dir;
-    let _ = target;
-    Ok(())
 }
 
 fn persist_deleted_messages<R: RetainedMailboxRuntime>(

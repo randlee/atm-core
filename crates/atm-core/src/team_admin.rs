@@ -246,12 +246,12 @@ pub struct ClearNudgeTemplateOverrideOutcome {
     pub cleared: bool,
 }
 
-/// List teams currently discoverable under ATM home.
+/// List teams currently discoverable from canonical ATM roster state.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
-/// cannot be enumerated.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot enumerate
+/// teams or load roster snapshots for summary counts.
 pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     current_team: TeamName,
@@ -263,8 +263,8 @@ pub fn list_teams_with_roster_store(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when team resolution fails, the team directory is
-/// missing, or `config.json` cannot be loaded.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot load the
+/// target team roster or when the team is absent from canonical ATM state.
 pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
