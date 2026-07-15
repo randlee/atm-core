@@ -34,6 +34,8 @@ struct RuntimeMemberRecord {
 pub(crate) struct RuntimeStatusCacheState {
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
     degraded_ingest: bool,
+    degraded_peer_listener: bool,
+    peer_listener_detail: Option<String>,
 }
 
 impl RuntimeStatusCacheState {
@@ -66,6 +68,8 @@ impl RuntimeStatusCache {
             state: Arc::new(ArcSwap::from_pointee(RuntimeStatusCacheState {
                 members: HashMap::new(),
                 degraded_ingest: false,
+                degraded_peer_listener: false,
+                peer_listener_detail: None,
             })),
             observability,
         }
@@ -173,6 +177,20 @@ impl RuntimeStatusCache {
     ) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
         build_runtime_snapshot_scoped(&cache, members)
+    }
+
+    pub(crate) fn record_peer_listener_degraded(&self, detail: impl Into<String>) {
+        let mut cache = self.clone_state();
+        cache.degraded_peer_listener = true;
+        cache.peer_listener_detail = Some(detail.into());
+        self.publish_state(cache);
+    }
+
+    pub(crate) fn clear_peer_listener_degraded(&self) {
+        let mut cache = self.clone_state();
+        cache.degraded_peer_listener = false;
+        cache.peer_listener_detail = None;
+        self.publish_state(cache);
     }
 }
 
@@ -284,7 +302,7 @@ fn finish_runtime_snapshot(
         && counts.offline_members > 0;
     let readiness = if all_tracked_members_offline {
         RuntimeReadinessState::Unavailable
-    } else if cache.degraded_ingest || conflict_count > 0 {
+    } else if cache.degraded_ingest || cache.degraded_peer_listener || conflict_count > 0 {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
@@ -292,6 +310,9 @@ fn finish_runtime_snapshot(
     let mut details = Vec::new();
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
+    }
+    if let Some(detail) = &cache.peer_listener_detail {
+        details.push(detail.clone());
     }
     if conflict_count > 0 {
         details.push(format!(
@@ -308,6 +329,7 @@ fn finish_runtime_snapshot(
         detail,
         singleton_owner_pid: Some(std::process::id()),
         degraded_ingest: cache.degraded_ingest,
+        degraded_peer_listener: cache.degraded_peer_listener,
         member_counts: counts,
     }
 }
@@ -338,6 +360,8 @@ fn build_empty_runtime_status_cache_state(
     RuntimeStatusCacheState {
         members: HashMap::new(),
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
+        degraded_peer_listener: current_state.is_some_and(|state| state.degraded_peer_listener),
+        peer_listener_detail: current_state.and_then(|state| state.peer_listener_detail.clone()),
     }
 }
 
@@ -380,11 +404,12 @@ fn hydrate_runtime_status_cache_team(
 
 pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
     let summary = format!(
-        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
+        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; degraded_ingest={}; degraded_peer_listener={}; active={}, idle={}, offline={}, unknown={}",
         snapshot.liveness,
         snapshot.readiness,
         snapshot.singleton_owner_pid,
         snapshot.degraded_ingest,
+        snapshot.degraded_peer_listener,
         snapshot.member_counts.active_members,
         snapshot.member_counts.idle_members,
         snapshot.member_counts.offline_members,
@@ -515,6 +540,7 @@ mod tests {
         let snapshot = status_cache.snapshot();
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
         assert!(!snapshot.degraded_ingest);
+        assert!(!snapshot.degraded_peer_listener);
         assert_eq!(snapshot.member_counts.active_members, 1);
         assert_eq!(snapshot.member_counts.idle_members, 0);
         assert_eq!(snapshot.member_counts.offline_members, 0);
@@ -584,5 +610,28 @@ mod tests {
             snapshot.detail.as_deref(),
             Some("all tracked daemon members are offline")
         );
+    }
+
+    #[test]
+    fn runtime_status_cache_surfaces_degraded_peer_listener_until_cleared() {
+        let status_cache = RuntimeStatusCache::new();
+        status_cache.record_peer_listener_degraded(
+            "daemon peer listener at 127.0.0.1:43101 is degraded: bind failed",
+        );
+
+        let degraded = status_cache.snapshot();
+        assert_eq!(degraded.readiness, RuntimeReadinessState::Degraded);
+        assert!(degraded.degraded_peer_listener);
+        assert!(
+            degraded
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("peer listener"))
+        );
+
+        status_cache.clear_peer_listener_degraded();
+        let recovered = status_cache.snapshot();
+        assert_eq!(recovered.readiness, RuntimeReadinessState::Ready);
+        assert!(!recovered.degraded_peer_listener);
     }
 }

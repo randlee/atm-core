@@ -118,15 +118,35 @@ fn parse_daemon_config(
     daemon: &RawDaemonSection,
     path: &Path,
 ) -> Result<types::DaemonConfig, AtmError> {
-    let config = daemon
+    let mut config = daemon
         .remote_retry_budget
         .as_deref()
         .map(|value| parse_duration_literal(value, path, "daemon.remote_retry_budget"))
         .transpose()?
         .map(|remote_retry_budget| types::DaemonConfig {
             remote_retry_budget,
+            ..types::DaemonConfig::default()
         })
         .unwrap_or_default();
+    config.peer_listen_addr = daemon
+        .peer_listen_addr
+        .as_deref()
+        .map(|value| {
+            value.parse().map_err(|error| {
+                AtmError::new(
+                    AtmErrorKind::Config,
+                    format!(
+                        "invalid daemon peer listen address in {}: daemon.peer_listen_addr='{}' ({error})",
+                        path.display(),
+                        value
+                    ),
+                )
+                .with_recovery(
+                    "Use a literal IP:port socket address for [daemon].peer_listen_addr, for example 0.0.0.0:43101.",
+                )
+            })
+        })
+        .transpose()?;
     Ok(config)
 }
 
@@ -233,6 +253,8 @@ struct RawAtmSection {
 struct RawDaemonSection {
     #[serde(default)]
     remote_retry_budget: Option<String>,
+    #[serde(default)]
+    peer_listen_addr: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -629,6 +651,7 @@ command = ["bash", "-lc", "echo hi"]
 
 [daemon]
 remote_retry_budget = "45s"
+peer_listen_addr = "0.0.0.0:43101"
 
 [atm.aliases]
 tl = "{ROLE_TEAM_LEAD}"
@@ -682,6 +705,10 @@ blank = ""
             config.daemon.remote_retry_budget,
             std::time::Duration::from_secs(45)
         );
+        assert_eq!(
+            config.daemon.peer_listen_addr,
+            Some("0.0.0.0:43101".parse().expect("peer listen addr"))
+        );
     }
 
     #[test]
@@ -697,6 +724,21 @@ blank = ""
 
         assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
         assert!(error.message.contains("daemon.remote_retry_budget"));
+    }
+
+    #[test]
+    fn load_config_rejects_invalid_peer_listen_addr() {
+        let root = unique_temp_dir("atm-config-invalid-peer-listen-addr");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[daemon]\npeer_listen_addr = \"windows-host\"\n",
+        )
+        .expect("config");
+
+        let error = load_config(root.path()).expect_err("invalid peer listen addr");
+
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
+        assert!(error.message.contains("daemon.peer_listen_addr"));
     }
 
     #[test]

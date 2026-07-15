@@ -90,6 +90,18 @@ Phase AG later needs product-code changes, that follow-up work must declare its
 own branch/integration path explicitly rather than silently inheriting this
 docs/evidence-only exception.
 
+Bounded exception already exercised in this phase:
+
+- `AG-FIND-004` was discovered during AG.1's live viability attempt as a real
+  product defect in daemon-to-daemon bring-up, not a docs ambiguity
+- per Phase AG's own "fix real bugs in code" policy, that finding was fixed
+  in-sprint on `feature/pAG-s1-macos-execution` and carried by PR #551
+  instead of being deferred to a separate branch after the defect was already
+  isolated and understood
+- this exception is named, one-off, and limited to the `AG-FIND-004`
+  peer-listener viability fix; it does not authorize unrelated product-code
+  work to accumulate silently on AG planning branches
+
 Release claim this phase must validate:
 
 - cross-host interfaces are present in the product and behave correctly on

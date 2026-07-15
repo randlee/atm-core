@@ -888,6 +888,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));
             assert!(finding.message.contains("degraded_ingest=false"));
+            assert!(finding.message.contains("degraded_peer_listener=false"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

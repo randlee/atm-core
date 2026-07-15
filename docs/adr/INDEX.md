@@ -36,6 +36,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-025 — Installed User Documentation Surface](./ADR-025-installed-user-documentation-surface.md)
 - [ADR-026 — Host Singleton And Durable State Root](./ADR-026-host-singleton-and-durable-state-root.md)
 - [ADR-027 — Client/Daemon Version Compatibility](./ADR-027-client-daemon-version-compatibility.md)
+- [ADR-028 — Peer Server Transport Boundary](./ADR-028-peer-server-transport-boundary.md)
 
 ## Extracted Crate-Local ADRs
 

@@ -1,0 +1,50 @@
+boundary_id = "BOUNDARY-ServerTransport-Peer"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "PeerServerTransportAdapter"
+
+[public]
+trait = "ServerTransport"
+
+[implementation]
+type = "PeerServerTransport"
+module = "atm_daemon::peer_transport"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_daemon::composition::RuntimeComposition::start_background_lanes"]
+
+[ownership]
+io_owns = ["inbound_remote_protocol_requests", "peer_listener_bind", "peer_listener_accept", "peer_connection_deadlines", "peer_dispatch_tracking", "peer_reload_rebind"]
+io_forbidden = ["sqlite", "process_spawn_from_request_path"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["PeerServerTransport"]
+
+[contracts]
+request_types = ["AtmProtocol requests"]
+response_types = ["AtmProtocol responses"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-PEER-EDGES", "LINT-BOUNDARY-SERVER-TRANSPORT-PEER-REFERENCES"]
+review_gates = ["no_public_impl", "no_public_constructor", "bounded_shutdown_required", "panic_isolation_required"]
+
+[status]
+state = "active"
+notes = [
+  "inbound cross-host peer serving stays runtime-private and is assembled only through daemon composition",
+  "the listener reuses shared AtmProtocol framing rather than defining a second protocol family",
+  "connection concurrency, deadlines, and shutdown drain remain bounded by the daemon runtime contract",
+]

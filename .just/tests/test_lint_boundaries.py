@@ -212,6 +212,7 @@ class LintBoundariesTests(unittest.TestCase):
         self.write_scb_workspace_support(repo_root)
         self.write_scb_singleton_support(repo_root)
         self.write_scb_observability_support(repo_root)
+        self.write_scb_boundary_visibility_support(repo_root)
 
     def write_manifests(
         self,
@@ -458,6 +459,13 @@ symbol = "__module__"
 why = "sanctioned daemon adapter module"
 sunset_sprint = "AD.26"
 """,
+            encoding="utf-8",
+        )
+
+    def write_scb_boundary_visibility_support(self, repo_root: Path) -> None:
+        (repo_root / ".just/allowlists").mkdir(parents=True, exist_ok=True)
+        (repo_root / ".just/allowlists/scb_boundary_visibility_allowlist.toml").write_text(
+            "# no boundary-visibility allowlist survivors expected in generic test repos\n",
             encoding="utf-8",
         )
         (repo_root / ".just/fixtures/scb_observability_known_bad.rs").write_text(
@@ -982,6 +990,50 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             self.assertTrue(any("requires private implementation.type" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public re-export" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
+
+    def test_collect_boundary_violations_accepts_allowlisted_boundary_visibility_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root, atm_storage_rusqlite_dependencies="")
+            active_toml = BASE_BOUNDARY_TOML.replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-storage-rusqlite"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=active_toml.replace('state = "planned"', 'state = "active"'))
+            (repo_root / ".just/allowlists/scb_boundary_visibility_allowlist.toml").write_text(
+                """\
+[[allow]]
+rule = "SCB-BOUNDARY-VISIBILITY-001"
+path = "crates/atm-storage-rusqlite/src/lib.rs"
+symbol = "SqliteMailStore"
+why = "sanctioned test-only boundary exception"
+sunset_sprint = "T.1"
+
+[[allow]]
+rule = "SCB-BOUNDARY-VISIBILITY-003"
+path = "crates/atm-storage-rusqlite/src/lib.rs"
+symbol = "open"
+why = "sanctioned test-only boundary exception"
+sunset_sprint = "T.1"
+""",
+                encoding="utf-8",
+            )
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                textwrap.dedent(
+                    """\
+                    pub(super) struct SqliteMailStore;
+
+                    impl SqliteMailStore {
+                        pub(super) fn open() -> Self {
+                            Self
+                        }
+                    }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any("requires private implementation.type" in item for item in rendered), rendered)
+            self.assertFalse(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
 
 
 if __name__ == "__main__":

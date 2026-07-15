@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -36,12 +37,14 @@ impl ByteCount {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DaemonConfig {
     pub remote_retry_budget: Duration,
+    pub peer_listen_addr: Option<SocketAddr>,
 }
 
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
             remote_retry_budget: Duration::from_secs(30),
+            peer_listen_addr: None,
         }
     }
 }
