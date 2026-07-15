@@ -2,10 +2,15 @@
 
 use std::path::Path;
 
+#[cfg(test)]
 use crate::config;
+#[cfg(test)]
 use crate::error::AtmError;
+#[cfg(test)]
 use crate::mailbox::atomic;
+#[cfg(test)]
 use crate::schema::InboxMessage;
+#[cfg(test)]
 use crate::schema::inbox_message::SharedAppendPolicy;
 
 #[cfg_attr(
@@ -29,6 +34,7 @@ pub(crate) enum InboxFileFormat {
 /// down to low-level atomic replacement directly.
 ///
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
+#[cfg(test)]
 pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
     messages: &[InboxMessage],
@@ -38,6 +44,7 @@ pub(crate) fn write_compat_mailbox_projection(
 }
 
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
+#[cfg(test)]
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[InboxMessage],
@@ -46,6 +53,7 @@ fn write_compat_mailbox_projection_with_policy(
     atomic::write_messages(path, messages, export_policy)
 }
 
+#[cfg(test)]
 pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedAppendPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?

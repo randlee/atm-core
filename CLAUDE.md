@@ -27,7 +27,7 @@
 ## Project Overview
 
 **atm-core** (`atm`) is a Rust CLI and daemon for mail-like messaging with Claude agent teams:
-- Thin CLI over `~/.claude/teams/` file-based API (send, read, broadcast, inbox)
+- Thin CLI over the SQLite-backed ATM runtime; `~/.claude/teams/` is no longer runtime truth
 - Three-crate workspace: `atm-core` (library), `atm` (CLI), `atm-daemon` (plugin host)
 - Atomic file I/O with conflict detection and guaranteed delivery
 - Trait-based plugin system in daemon for extensibility (Issues, CI Monitor, Bridge, Chat, Beads, MCP)

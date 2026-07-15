@@ -1,13 +1,13 @@
 ---
 id: AG.3
-title: Degraded Path And Retry-Visible Recovery
-status: planned
+title: Daemon Loopback Self-Test Surface
+status: accepted
 branch: feature/cross-host-communication
 worktree: ../atm-core-worktrees/feature/cross-host-communication
 target: develop
 ---
 
-# Sprint AG.3 — Degraded Path And Retry-Visible Recovery
+# Sprint AG.3 — Daemon Loopback Self-Test Surface
 
 ```yaml
 plan_type: sprint_plan
@@ -15,45 +15,52 @@ phase: AG
 sprint: AG.3
 worktree: ../atm-core-worktrees/feature/cross-host-communication
 branch: feature/cross-host-communication
-status: planned
+status: accepted
 estimated_scope: medium
 ```
 
 ## Goal
 
-Validate the non-happy-path cross-host rows without misclassifying durable
-delivery outcomes.
+Capture the daemon loopback self-test surface that was added during early AG
+execution:
+
+- `atm send loopback@localhost ...`
+- `atm send loopback@127.0.0.1 ...`
+
+This sprint is not proof of remote host-to-host communication. It is a local
+diagnostic mode that exercises the same daemon peer listener/send path and is
+useful for:
+
+- proving that daemon peer binding works locally
+- proving that actual ATM payload delivery through the peer listener works
+- giving Windows/macOS operators a lower-friction diagnostic lane before
+  involving firewall, VPN, routing, or second-host coordination
+
+This legitimate local self-test surface is distinct from the separately tracked
+client-trusted `peer_loopback_delivery` wire-field bypass design issue
+(`RBP-F002`) folded into `AG-FIND-004`; keeping loopback mode does not excuse
+trusting remote peers to assert loopback provenance.
 
 ## Deliverables
 
-- checklist rows `AG-VAL-008` and `AG-VAL-009`
-- degraded-notification row after durable send
-- retry-visible interruption/recovery row
-- failure-classification evidence for both cases
+- documented loopback mode as a retained product feature
+- loopback smoke coverage and operator evidence shape
+- explicit plan authority for keeping loopback mode rather than treating it as
+  an ad hoc workaround
 
 ## Required Validation
 
-- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
-  - `AG-VAL-008`
-  - `AG-VAL-009`
-
-## Entry Gate
-
-- `AG.2` must already have:
-  - resolved `AG-VAL-003` through `AG-VAL-007`
-  - recorded each AG.2 core interface row as either:
-    - a passing validation row that allows AG.3 to proceed, or
-    - a named blocking finding recorded in
-      `cross-host-findings-ledger.md`
+- local loopback validation rows and loopback operator smoke evidence
 
 ## Ownership
 
 - execution owner: `arch-ctm`
-- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria
 
-- notification degradation is not treated as durable-delivery failure after
-  persistence succeeded
-- interruption/recovery evidence is explicit and bounded
+- loopback mode is explicitly authorized as part of the product contract
+- loopback is documented as a local self-test surface, not misrepresented as
+  proof of remote cross-host closure
+- the sprint closes the plan/documentation gap around the already-written
+  loopback code

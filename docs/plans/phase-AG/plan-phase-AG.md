@@ -1,31 +1,38 @@
 ---
 title: Phase AG Plan
 status: planned
-branch: feature/cross-host-communication
-worktree: ../atm-core-worktrees/feature/cross-host-communication
+branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
 ---
 
 # Phase AG Plan
 
 ## Goal
 
-Prove that ATM's existing Windows/macOS cross-host interfaces are working and
-release-usable on `1.3.1` real binaries, with no code changes unless the
-validation matrix exposes a real product defect.
+Complete the missing Windows/macOS cross-host product surface and then validate
+it on real binaries with retained evidence.
 
-Phase `AG` is not a transport redesign phase. It is a validation and
-release-readiness phase that should, in the ideal case, close with:
+Early AG execution proved the original assumption was wrong: ATM did not yet
+have a complete operator-manageable cross-host control plane. The missing
+pieces are not optional hardening; they are prerequisite product work:
 
-- no product code changes
-- one working macOS daemon
-- one working Windows daemon
-- a live daemon-to-daemon channel between hosts
-- passing cross-host send/read/ack coverage
-- retained evidence that release binaries behave as claimed
+- CLI-managed interface/bind configuration for the daemon
+- CLI-managed inbound allowed-host configuration
+- SQLite tables storing both
+- `atm doctor` support surfacing both
+- loopback self-test retained as a supported local diagnostic mode
 
-Because at least one oversight or bug is expected, the phase is structured to
-turn failures into named findings with exact reproduction and narrowly scoped
-fix follow-ups rather than speculative up-front implementation.
+Phase `AG` therefore becomes:
+
+- historical early validation sprints (`AG.1` / `AG.2`)
+- accepted loopback diagnostic work (`AG.3`)
+- prerequisite control-plane product work (`AG.4` / `AG.5`)
+- doctor-surface closure on the new product controls (`AG.6`)
+- renewed live cross-host validation once the product is actually operable
+  (`AG.7`)
+- late transport-security planning/reconciliation (`AG.8`)
+- secured transport implementation (`AG.10`)
+- copied-state revalidation and final release verdict (`AG.9`)
 
 ## Historical Input And Namespace Rule
 
@@ -46,9 +53,10 @@ cross-host path was previously validated.
 `Phase AG` changes the framing:
 
 - active namespace is `AG`, not `AB`
-- phase goal is broader than smoke-only proof; it is interface validation and
-  release readiness
-- closure expectation is "no code unless testing proves a bug"
+- phase goal is broader than smoke-only proof; it is missing-surface
+  completion plus interface validation and release readiness
+- closure expectation is no longer "no code unless testing proves a bug";
+  prerequisite product work is now part of the phase by design
 - setup/runbook detail must be operational enough that macOS and Windows agents
   can execute without guessing how to bring the channel live
 
@@ -72,23 +80,21 @@ Entry-gate prerequisites:
 - Windows same-host release-binary command health is already validated on that
   exact merged baseline before AG.1 starts
 
-## Branch Policy Exception
+## Branch Framing
 
-Phase `AG` is a single-branch docs/evidence-only validation phase. It does not
-own a separate implementation integration line because:
+Phase `AG` now has two distinct lines:
 
-- the current phase goal is to validate existing released interfaces first,
-  not stage speculative code work
-- the current branch content is planning, runbook, checklist, findings, and
-  readiness material only
-- any future product-code fix opened by a concrete AG finding can still route
-  through its own normal implementation branch/integration sequence
+- historical early execution on `feature/cross-host-communication`
+- corrective replanning on `plan/phase-ag-multihost-advertise-allowlist`
 
-Accordingly, this planning package is intentionally authored on
-`feature/cross-host-communication` and PR #542 targets `develop` directly. If
-Phase AG later needs product-code changes, that follow-up work must declare its
-own branch/integration path explicitly rather than silently inheriting this
-docs/evidence-only exception.
+The historical line remains important evidence, but it no longer defines the
+forward phase sequence by itself. The current branch is the corrective source
+of truth because it reconciles what was actually learned:
+
+- the original validation-only framing was insufficient
+- environment-variable-driven peer selection is not the desired product model
+- interface selection, allowlist enforcement, and doctor visibility must become
+  first-class product surfaces before real cross-host closure can be trusted
 
 Bounded exception already exercised in this phase:
 
@@ -104,12 +110,13 @@ Bounded exception already exercised in this phase:
 
 Release claim this phase must validate:
 
-- cross-host interfaces are present in the product and behave correctly on
-  release binaries across Windows and macOS
+- cross-host communication is functionally operable through real product
+  surfaces on release binaries across Windows and macOS
 
 Release claim this phase must not make without evidence:
 
 - that the product is cross-host ready just because same-host smoke passed
+- that ad hoc env-variable wiring is an acceptable final operator surface
 - that cross-host transport is secure or TLS-backed on `1.3.1`
 
 ## Scope
@@ -118,6 +125,8 @@ Phase `AG` may:
 
 - add or refine planning docs, operator runbooks, checklists, and findings
   records
+- add prerequisite product-planning work for the missing cross-host control
+  plane
 - execute release-binary validation on macOS and Windows
 - use disposable clean-room state first
 - use copied-state validation only after the clean-room lane is green
@@ -128,8 +137,7 @@ Phase `AG` may:
 
 Phase `AG` must not:
 
-- redesign the peer transport contract
-- begin with speculative code changes before a real failing row exists
+- treat missing interface/allowlist product surfaces as mere test setup
 - use live host state as the first validation lane
 - conflate notification degradation with durable cross-host delivery failure
 - hide setup ambiguity behind hand-wavy references to existing docs
@@ -163,14 +171,14 @@ The findings ledger `owner` field must use one of these exact values:
 
 The phase proceeds under these assumptions:
 
-- in the ideal case, existing code is sufficient and no product changes are
-  needed
-- in the likely case, at least one oversight/bug will be exposed by validation
+- AG.1 / AG.2 already proved the original product surface was insufficient
+- the remaining blocker is not another proof-of-concept transport hack; it is
+  completion of the durable control-plane surface
 - setup ambiguity is itself a real phase finding if it blocks reproducible
   execution
-- the highest-value early objective is to get the daemon-to-daemon channel live
-  between one Windows host and one macOS host; once that works, the rest of the
-  matrix should move quickly
+- the highest-value next objective is to land interface/allowlist/doctor
+  surfaces so the daemon-to-daemon channel can be exercised through real
+  product controls rather than env hacks
 
 ## Validation Lanes
 
@@ -186,8 +194,8 @@ Required shape:
 - one disposable `ATM_HOME` per host
 - one disposable `ATM_CONFIG_HOME` per host
 - one disposable `ATM_LOG_DIR` per host
-- explicit `ATM_DAEMON_PEER_ADDR` configuration per host using a literal
-  `IP:port`
+- durable daemon-owned interface configuration instead of env-driven peer/port
+  control as the target product surface
 - one release `atm-daemon` process per host
 - one release CLI surface per host
 - no reads or writes against live `~/.atm` or `~/.claude`
@@ -226,7 +234,7 @@ That contract includes:
 - exact environment variables to export/set on each host
 - exact daemon start command on each host
 - exact health commands on each host
-- exact peer address value each host should point at
+- exact CLI-managed interface/allowlist state each host should use
 - exact message addressing form to use in cross-host rows
 - exact evidence to save for pass/fail classification
 - exact first-line recovery steps when a row fails
@@ -299,9 +307,7 @@ The phase should avoid ambiguous "sort of worked" closure language.
 
 Examples:
 
-- invalid/missing peer address guidance in the runbook is a `SETUP-GAP`
-- peer address supplied as a hostname rather than a literal `IP:port` is a
-  `SETUP-GAP` if the docs allowed it, otherwise an `ENV-MISTAKE`
+- invalid transitional env wiring in the legacy runbook is a `SETUP-GAP`
 - daemon cannot establish peer transport with correct operator input is a
   `PRODUCT-BUG`
 - host firewall prompt not handled/documented is an `EXTERNAL-BLOCKER` until
@@ -319,7 +325,7 @@ Primary objective:
 Outputs:
 
 - frozen clean-room setup runbook
-- exact env/daemon/peer-address contract for both hosts
+- exact setup contract for both hosts as early-phase historical evidence
 - same-host release-binary health proof on both hosts via `AG-VAL-001` and
   `AG-VAL-002`
 - transport-security requirement disposition via `AG-VAL-011`
@@ -340,14 +346,14 @@ Verification owner:
 
 Primary objective:
 
-- validate the main cross-host interface set on clean-room state
+- preserve the initial live cross-host validation attempts and the evidence
+  proving the original product surface was incomplete
 
 Outputs:
 
-- formal ownership of checklist rows `AG-VAL-003` through `AG-VAL-007`
-- send/read coverage in both directions
-- `--requires-ack` ack round-trip coverage
-- precise findings for any interface failures
+- initial ownership/evidence for checklist rows `AG-VAL-003` through
+  `AG-VAL-007`
+- named finding handoff into `AG-FIND-004`
 
 Entry gate:
 
@@ -367,19 +373,19 @@ Verification owner:
 
 - `quality-mgr`
 
-### AG.3 Degraded Path And Retry-Visible Recovery
+### AG.3 Loopback Self-Test Surface
 
 Primary objective:
 
-- prove non-happy-path behavior remains visible and correctly classified
+- preserve and authorize the loopback self-test surface as a supported local
+  diagnostic feature
 
 Outputs:
 
-- checklist rows `AG-VAL-008` and `AG-VAL-009`
-- degraded-notification proof after durable send
-- interruption/restart/recovery proof
-- evidence that failures are not misclassified as delivery failure when the
-  durable write already succeeded
+- loopback addressing and self-dial behavior are explicitly planned and
+  documented
+- local diagnostic value is preserved without pretending it closes real
+  host-pair validation
 
 Entry gate:
 
@@ -400,40 +406,158 @@ Verification owner:
 
 - `quality-mgr`
 
-### AG.4 Copied-State Revalidation
+### AG.4 Durable Interface Configuration
 
 Primary objective:
 
-- rerun the approved subset on disposable copied state once Lane A is already
-  green
+- add the durable SQLite-backed interface-selection/bind surface needed for
+  real cross-host operation
 
 Outputs:
 
-- copied-state revalidation evidence
-- exact operator repair/setup notes for realistic-state execution
+- schema for daemon-managed cross-host interface rows
+- CLI commands to create, inspect, enable/disable, and delete interface rows
+- explicit staleness/refresh model for roaming hosts
+- removal of env-variable-driven peer/port control as the target operator
+  model
 
 Execution owner:
 
-- `arch-ctm` with Windows/macOS operators capturing host-side evidence
-- `windows-operator` and `macos-operator` execute the concrete host-local
-  commands and produce the retained artifacts consumed by AG.4
+- `arch-ctm`
+- `windows-operator` and `macos-operator` support AG.4 only with
+  config-visibility smoke on their hosts when needed:
+  - confirm configured interface rows are visible
+  - confirm bound/non-bound state is observable
+  - they do not own real host-pair send/read/ack rows in this sprint
 
 Verification owner:
 
 - `quality-mgr`
 
-### AG.5 Findings Closeout And Release Verdict
+### AG.5 Durable Host Allowlist Enforcement
 
 Primary objective:
 
-- close remaining planning-time findings and record the release verdict
+- add the durable SQLite-backed deny-by-default host authorization surface
 
 Outputs:
 
+- schema for exact-host allowlist rows
+- CLI commands to add, disable, remove, and inspect allowed hosts
+- daemon-side enforcement before mailbox mutation
+- explicit reconciliation with `AG-FIND-004` and the loopback-bypass design
+  finding
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.6 Doctor Visibility For The Cross-Host Control Plane
+
+Primary objective:
+
+- project the new control-plane state through `atm doctor`
+
+Outputs:
+
+- `atm doctor` interface/allowlist output contract
+- requirements/architecture wording aligned to that doctor-visible state
+
+Entry gate:
+
+- `AG.4` and `AG.5` are complete enough that real host-pair execution is using
+  the intended product surfaces rather than env hacks
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.7 Live Cross-Host Revalidation
+
+Primary objective:
+
+- rerun the real host-pair matrix on the now-complete product surface
+
+Outputs:
+
+- renewed ownership of real host-pair validation rows
+- explicit ownership of unauthorized-host rejection row `AG-VAL-003A`
+- explicit LAN-first execution preference where available (including Mac Studio)
+- integration findings separated cleanly from control-plane product findings
+
+Entry gate:
+
+- AG.4 and AG.5 are complete
+- AG.6 doctor visibility is complete
+
+### AG.8 Transport Security And Encryption Hardening
+
+Primary objective:
+
+- reconcile and plan the late transport-security gap after functional
+  cross-host behavior is real
+
+Outputs:
+
+- requirements/architecture reconciliation for transport security
+- implementation plan for encryption / peer-auth hardening
+- explicit release-language boundaries while this remains open
+
+Entry gate:
+
+- functional host-pair validation is already credible on the AG.4 / AG.5
+  surfaces
+
+### AG.10 Secured Cross-Host Transport Implementation
+
+Primary objective:
+
+- implement the actual secured daemon-to-daemon transport defined by AG.8
+
+Outputs:
+
+- secured transport implementation
+- secure loopback validation support
+- secure LAN/routed validation support
+
+Entry gate:
+
+- AG.8 planning/reconciliation work is complete
+
+### AG.9 Copied-State Revalidation And Release Verdict
+
+Primary objective:
+
+- rerun the approved subset on disposable copied state and then record the
+  actual release verdict
+
+Outputs:
+
+- copied-state revalidation evidence
 - final findings ledger
 - readiness record
-- explicit statement of whether the `1.3.1` cross-host claim is authorized,
-  blocked, or partially blocked
+- explicit statement of whether cross-host is:
+  - functionally release-usable
+  - blocked
+  - functionally usable but not transport-secure
+
+Entry gate:
+
+- AG.7 live host-pair validation is complete enough to justify copied-state
+  rerun
+- AG.8 planning/reconciliation work is complete
+- AG.10 status is known before the final release verdict is issued:
+  - if `AG.10` is `PASS`, the verdict may include transport-security closure
+  - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
+    cross-host is functionally usable but not transport-secure
 
 Execution owner:
 
@@ -447,11 +571,17 @@ Verification owner:
 
 Phase `AG` is complete only when all of the following are true:
 
-- the clean-room cross-host lane is fully executed with evidence
+- the accepted historical AG.1 / AG.2 / AG.3 work is reconciled into the final
+  phase sequence
+- the AG.4 / AG.5 control-plane product work is complete
+- the AG.6 doctor surface is complete
+- the clean-room cross-host lane is fully executed with evidence on that real
+  product surface
+- if secure transport is part of the release claim, AG.10 is complete
 - the copied-state lane is either green or explicitly blocked by a named
   product defect outside operator/setup ambiguity
 - every failed row has a named finding and required next action
 - the readiness record states whether `1.3.1` cross-host communication is
   release-usable
-- if code changes were needed, they came from concrete findings rather than
-  speculative pre-work
+- any functional release-usable statement is explicit about whether it excludes
+  transport security

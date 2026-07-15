@@ -916,7 +916,7 @@ mod tests {
         reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
     )]
     use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-    use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage, TeamConfig};
+    use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage};
     use crate::send::ResolvedRecipient;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
@@ -935,17 +935,6 @@ mod tests {
             Ok((current_dir == self.config_lookup_root)
                 .then_some(self.config.clone())
                 .flatten())
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, AtmError> {
-            unreachable!("config lookup test does not read team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            unreachable!("config lookup test does not resolve team dirs")
         }
 
         fn inbox_path(
@@ -974,15 +963,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("config lookup test does not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -1031,17 +1011,6 @@ mod tests {
             Ok(self.override_row.clone())
         }
 
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, AtmError> {
-            unreachable!("hook emission test does not read team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            unreachable!("hook emission test does not resolve team dirs")
-        }
-
         fn inbox_path(
             &self,
             _home_dir: &Path,
@@ -1066,15 +1035,6 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
         ) -> Result<(), AtmError> {
             Ok(())
         }

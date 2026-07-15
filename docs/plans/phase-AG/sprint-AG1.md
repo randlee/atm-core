@@ -1,9 +1,9 @@
 ---
 id: AG.1
 title: Cross-Host Setup Contract And Channel Bring-Up
-status: in_progress
-branch: feature/pAG-s1-macos-execution
-worktree: ../atm-core-worktrees/feature/pAG-s1-macos-execution
+status: accepted
+branch: feature/cross-host-communication
+worktree: ../atm-core-worktrees/feature/cross-host-communication
 target: develop
 ---
 
@@ -13,9 +13,9 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.1
-worktree: ../atm-core-worktrees/feature/pAG-s1-macos-execution
-branch: feature/pAG-s1-macos-execution
-status: in_progress
+worktree: ../atm-core-worktrees/feature/cross-host-communication
+branch: feature/cross-host-communication
+status: accepted
 estimated_scope: medium
 ```
 
@@ -23,6 +23,13 @@ estimated_scope: medium
 
 Document an operational Windows/macOS clean-room setup contract and use it to
 attempt the first live cross-host daemon-to-daemon channel.
+
+This sprint is historical/accepted. It did the right early work:
+
+- froze the setup/runbook contract
+- produced the first live-channel attempts
+- captured the initial evidence proving cross-host execution could not close on
+  the original assumed product surface alone
 
 ## Deliverables
 
@@ -62,39 +69,5 @@ attempt the first live cross-host daemon-to-daemon channel.
 - the runbook is concrete enough that both hosts can execute without guessing
 - the first live channel attempt has a defined pass/fail evidence contract
 - setup ambiguity is classified as a finding instead of being hand-waved away
-- the peer-listener fix is production-ready only if the inbound listener
-  starts, reload/rebind degradation is queryable in doctor/runtime status, and
-  the bounded peer transport tests above pass on the sprint branch
-
-## PeerServerTransport contract
-
-```rust
-pub(super) struct PeerServerTransport {
-    listen_addr: Mutex<Option<SocketAddr>>,
-    observability: SubsystemObservability,
-    state: Mutex<Option<PeerServerHandle>>,
-    status_cache: RuntimeStatusCache,
-}
-
-impl PeerServerTransport {
-    pub(super) fn new(
-        listen_addr: Option<SocketAddr>,
-        observability: SubsystemObservability,
-        status_cache: RuntimeStatusCache,
-    ) -> Self;
-    pub(super) fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>)
-        -> Result<(), AtmError>;
-    pub(super) fn shutdown(&self) -> Result<(), AtmError>;
-    pub(super) fn reload(
-        &self,
-        listen_addr: Option<SocketAddr>,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError>;
-}
-```
-
-Notes:
-
-- `listen_addr` comes from `daemon.peer_listen_addr`
-- `reload(...)` must preserve one bounded runtime view: if rebind fails, doctor
-  surfaces degraded listener state until a later successful rebind clears it
+- the sprint record is preserved as the point where AG stopped being a
+  validation-only phase and started exposing real missing product controls

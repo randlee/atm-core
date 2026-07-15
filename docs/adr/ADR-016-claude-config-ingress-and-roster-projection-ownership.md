@@ -67,8 +67,9 @@ ATM roster state in SQLite is the only canonical team roster truth.
   `config.json` reads
 
 3. `config.json` read surfaces
-- `doctor` may parse `config.json` only to compare it against canonical ATM
-  roster truth and report drift
+- `doctor` may report canonical ATM roster truth without requiring
+  `config.json`; any surviving config-file comparison is diagnostic-only and
+  must remain outside normal runtime correctness
 - explicit CLI/admin repair or import paths may parse `config.json` when they
   are the documented owner of that action
 - no background watch/reconcile lane is required by the accepted runtime
@@ -103,11 +104,11 @@ ATM roster state in SQLite is the only canonical team roster truth.
   state for audit and emergency inspection
 - restore must not replay backup `config.json` as roster truth
 - operator recreates the team shell through Claude Code `TeamCreate`
-- `atm teams restore` then projects canonical ATM roster state back into the
-  recreated team's `config.json`
-- restore preserves the current team-lead entry and current `leadSessionId`
-  from the recreated team shell while restoring non-lead membership and
-  approved durable state
+- `atm teams restore` restores compatibility inbox/task artifacts without
+  rewriting canonical roster truth from `config.json`
+- restore may preserve the recreated shell's existing `config.json` and
+  compatibility metadata when those files already exist, but they are not
+  rebuilt from canonical roster state on the normal restore path
 
 ## Consequences
 
@@ -116,7 +117,8 @@ Positive:
 - one canonical roster truth for all runtime membership decisions
 - before `ADR-019`, watcher / reconcile was the planned external config-ingest
   reader; that behavior is now historical only
-- doctor remains the explicit drift-report surface
+- doctor remains the explicit roster/diagnostic surface without making
+  config-file comparison part of runtime correctness
 - team restore becomes deterministic and ATM-owned rather than a manual
   file-replay procedure
 - per-member Claude metadata survives ATM-owned add / ingest / restore flows

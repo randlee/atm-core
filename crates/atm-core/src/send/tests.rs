@@ -7,7 +7,7 @@ use tempfile::tempdir;
 
 use super::{
     DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    alert_state, build_send_delivery_plan, persist_message, prepare_threaded_message,
+    build_send_delivery_plan, persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
@@ -182,17 +182,6 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(None)
     }
 
-    fn load_team_config_for_doctor_compare(
-        &self,
-        _team_dir: &Path,
-    ) -> Result<crate::schema::TeamConfig, AtmError> {
-        Ok(crate::schema::TeamConfig::default())
-    }
-
-    fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-        Ok(home_dir.to_path_buf())
-    }
-
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -217,15 +206,6 @@ impl RetainedServiceRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
         _timestamp: IsoTimestamp,
-    ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn rebuild_compat_inbox_projection(
-        &self,
-        _inbox_path: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
     ) -> Result<(), AtmError> {
         Ok(())
     }
@@ -290,31 +270,6 @@ impl RetainedServiceRuntime for TestRuntime {
             recipient_pane_id: None,
             metadata_json: Map::new(),
         }])
-    }
-
-    fn load_claude_code_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
-        let records = self
-            .claude_roster_members
-            .iter()
-            .cloned()
-            .map(|agent_name| RosterEntry {
-                team_name: team.clone(),
-                agent_name,
-                member_kind: RosterMemberKind::Permanent,
-                harness: RosterHarness::ClaudeCode,
-                agent_type: crate::schema::AgentType::default(),
-                model: crate::types::ModelName::default(),
-                recipient_pane_id: None,
-                metadata_json: Map::new(),
-            })
-            .collect::<Vec<_>>();
-        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
-            team.clone(),
-            &records,
-        ))
     }
 }
 
@@ -782,12 +737,7 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
             .len(),
         1
     );
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(
-        outcome.warnings[0]
-            .message
-            .contains("'recipient' is not on claude code roster")
-    );
+    assert!(outcome.warnings.is_empty(), "{outcome:#?}");
 }
 
 #[test]
@@ -937,41 +887,8 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
 }
 
 #[test]
-fn save_send_alert_state_round_trips() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = alert_state::state_path(tempdir.path());
-    let mut state = alert_state::SendAlertState::default();
-    state
-        .missing_team_config_keys
-        .insert(format!("teams/{TEST_TEAM}/config.json"));
-
-    alert_state::save(&path, &state).expect("save");
-    let loaded = alert_state::load(&path).expect("load");
-    assert_eq!(
-        loaded.missing_team_config_keys,
-        state.missing_team_config_keys
-    );
-}
-
-#[test]
 fn process_is_alive_reports_current_process() {
     assert!(process_is_alive(std::process::id()));
-}
-
-#[test]
-fn acquire_send_alert_lock_evicts_stale_pid_lock() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = alert_state::lock_path(tempdir.path());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("lock dir");
-    }
-    fs::write(&path, u32::MAX.to_string()).expect("stale lock");
-
-    let guard = alert_state::acquire_lock(&path).expect("acquire lock");
-    let pid = fs::read_to_string(&path).expect("lock contents");
-    assert_eq!(pid.trim(), std::process::id().to_string());
-    drop(guard);
-    assert!(!path.exists());
 }
 
 #[test]

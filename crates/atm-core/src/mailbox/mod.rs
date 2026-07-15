@@ -184,14 +184,6 @@ pub(crate) fn load_compat_mailbox_messages_strict(
     parse_mailbox_contents_strict(&raw, path)
 }
 
-pub(crate) fn export_compat_mailbox_projection(
-    path: &Path,
-    messages: &[InboxMessage],
-) -> Result<(), AtmError> {
-    // Repair/rebuild-only rewrite seam after Yb Y.10.
-    store::write_compat_mailbox_projection(path, messages)
-}
-
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
