@@ -2685,6 +2685,13 @@ There are three distinct paths:
    - routing expands from `agent@team` to `agent@team.host`
    - sender-side daemons do not write remote host mailbox JSON directly
    - successful remote delivery requires remote daemon acceptance
+   - Phase AG adds a durable cross-host control plane in front of this path:
+     - SQLite-backed interface/bind configuration
+     - SQLite-backed exact-host allowlist enforcement
+     - CLI management for both
+     - doctor-visible state for both
+   - loopback self-test remains a local diagnostic variant of the daemon
+     listener/send path and is not equivalent to remote host-pair proof
 
 ### 21.3.1 New-Message Failure Contract
 
@@ -2761,6 +2768,9 @@ Test-transport rule:
 
 Remote-delivery semantics:
 - bounded transient retry is acceptable for short intermittent failures
+- transport-security closure is sequenced after functional control-plane
+  closure under ADR-030; functional cross-host readiness must not implicitly
+  claim TLS/security closure before that ADR's phase work lands
 - there is no durable long-lived remote outbox
 - if the remote host remains unreachable after the bounded retry window, send
   fails rather than leaving stale pending delivery behind

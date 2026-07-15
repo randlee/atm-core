@@ -3565,6 +3565,40 @@ mail correctness.
   - remote routing uses an address form equivalent to `agent@team.host`
   - sender-side daemons must not write remote host inbox JSONL directly
 
+- `REQ-CORE-TRANSPORT-002A` Cross-host listener configuration must use a
+  durable daemon-owned interface control plane rather than environment
+  variables as the intended operator surface.
+
+  Required behavior:
+  - the daemon reads configured cross-host bind/advertise interfaces from
+    durable state
+  - CLI commands are the primary operator surface for adding, updating,
+    enabling, disabling, removing, and listing those interface rows
+  - if no enabled interface rows exist, no cross-host listener binds
+  - environment variables may remain as historical/transitional compatibility
+    inputs but must not remain the intended steady-state configuration model
+
+- `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use a durable
+  deny-by-default exact-host allowlist before any mailbox mutation occurs.
+
+  Required behavior:
+  - inbound daemon peers are rejected unless one enabled exact hostname row
+    authorizes them
+  - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
+  - rejection happens before mailbox, ack/reply, or roster mutation
+  - doctor output must surface allowlist enforcement state and configured host
+    rows
+
+- `REQ-CORE-TRANSPORT-002C` Loopback self-test is an allowed local diagnostic
+  addressing mode and must not be misrepresented as proof of remote host-pair
+  closure.
+
+  Required behavior:
+  - loopback send paths remain local diagnostic/test surfaces
+  - loopback support must continue to use the daemon peer listener/send path
+  - successful loopback rows do not by themselves authorize remote cross-host
+    release claims
+
 - `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
   pending messages behind when a host is unreachable.
 

@@ -14,6 +14,16 @@ It is intentionally concrete enough that:
 
 This runbook is for validation, not for live user-state migration.
 
+Important scope note:
+
+- this document records the historical early AG setup contract
+- it intentionally preserves the env-driven bring-up that was used before the
+  missing durable control-plane surface was fully understood
+- after AG.4 / AG.5 land, this runbook must be revised to use the SQLite +
+  CLI-managed interface and allowlist surfaces as the primary operator path
+- `ATM_DAEMON_PEER_ADDR` is therefore transitional/historical in this document,
+  not the desired final product surface
+
 ## Clean-Room Directory Contract
 
 Each host creates three disposable directories:
@@ -51,7 +61,7 @@ Each operator must record:
 
 ## Required Environment Contract
 
-Each host must export/set at least:
+Each host must export/set at least for the historical early-AG lane:
 
 - `ATM_HOME=<clean-room path>`
 - `ATM_CONFIG_HOME=<clean-room path>`
@@ -60,13 +70,15 @@ Each host must export/set at least:
 
 Notes:
 
-- `ATM_DAEMON_PEER_ADDR` is the current discovered peer-transport entry point
+- `ATM_DAEMON_PEER_ADDR` was the early discovered peer-transport entry point
   used by `atm-daemon` for remote delivery attempts
 - current product behavior parses `ATM_DAEMON_PEER_ADDR` as a literal
   `SocketAddr`, so operators must provide a literal `IP:port`, not a hostname
 - both hosts must know the peer address value they are expected to dial
 - if a host cannot determine the right peer address/port from product docs or
   observable config, that is a setup-contract finding
+- AG.4 / AG.5 exist precisely because this env-driven contract is not an
+  acceptable steady-state operator surface
 
 ## Transport-Security Contract
 
