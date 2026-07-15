@@ -596,7 +596,7 @@ mod tests {
     use crate::schema::ThreadMode;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
+    use crate::{boundary::RosterEntry, config::AtmConfig};
     use std::path::{Path, PathBuf};
 
     struct MissingRosterRuntime;
@@ -606,17 +606,6 @@ mod tests {
     impl RetainedServiceRuntime for MissingRosterRuntime {
         fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, AtmError> {
-            Ok(TeamConfig::default())
-        }
-
-        fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(home_dir.to_path_buf())
         }
 
         fn inbox_path(
@@ -643,15 +632,6 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
         ) -> Result<(), AtmError> {
             Ok(())
         }

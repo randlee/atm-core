@@ -2,9 +2,11 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
+#[cfg(test)]
 use serde_json::Value;
 
 use crate::error::{AtmError, AtmErrorKind};
+#[cfg(test)]
 use crate::persistence;
 use crate::schema::InboxMessage;
 use crate::schema::inbox_message::{SharedAppendPolicy, to_shared_inbox_value_with_policy};
@@ -29,6 +31,7 @@ use crate::schema::inbox_message::{SharedAppendPolicy, to_shared_inbox_value_wit
 /// parent-directory durability step cannot be completed.
 ///
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
+#[cfg(test)]
 pub fn write_messages(
     path: &Path,
     messages: &[InboxMessage],
@@ -37,6 +40,7 @@ pub fn write_messages(
     write_message_iter(path, messages.iter(), export_policy)
 }
 
+#[cfg(test)]
 pub fn write_message_iter<'a, I>(
     path: &Path,
     messages: I,

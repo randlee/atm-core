@@ -1142,8 +1142,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn loopback_transport_missing_config_notice_retains_at_most_one_team_lead_message_under_concurrency()
-     {
+    fn loopback_transport_no_longer_emits_missing_config_notice_under_concurrency() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
         fixture.write_inbox_values(TEST_RECIPIENT, &[]);
@@ -1183,10 +1182,10 @@ mod tests {
             }
         }
         let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
-        assert!(
-            notices.len() <= 1,
-            "loopback missing-config fallback should retain at most one notice; got {}",
-            notices.len()
+        assert_eq!(
+            notices.len(),
+            0,
+            "missing config is no longer a runtime send fallback, so no team-lead repair notice should be emitted"
         );
     }
 

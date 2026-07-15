@@ -40,7 +40,7 @@
 
 **Root cause**: `AgentAddress::from_str(...)` in `crates/atm-core/src/address.rs` only rejects empty segments and multiple `@` separators. `team_dir_from_home(...)` and `inbox_path_from_home(...)` in `crates/atm-core/src/home.rs` then join the raw `team` and `agent` strings directly into filesystem paths. There is no downstream sanitization or canonical-root enforcement.
 
-**Risk in practice**: High for correctness and medium for security. ATM is a local CLI, so the attacker model is narrower than a network service, but this still allows crafted input like `../other-team` to escape the intended `.claude/teams` subtree.
+**Risk in practice**: High for correctness and medium for security. ATM is a local CLI, so the attacker model is narrower than a network service, but this still allows crafted input like `../other-team` to escape the intended ATM-owned team namespace.
 
 **Recommended action**: Add validated newtypes or a shared validator for team/member path segments. Reject path separators, `..`, empty segments, and platform-specific path escapes before any path construction.
 
