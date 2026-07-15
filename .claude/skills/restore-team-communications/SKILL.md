@@ -2,9 +2,9 @@
 name: restore-team-communications
 version: 0.2.0
 description: >
-  Repair Claude teammate routing after same-session compaction or resume when
-  atm-dev still exists on disk and the saved leadSessionId still matches the
-  current SESSION_ID, but SendMessage or teammate reachability is broken.
+  Repair ATM teammate coordination after same-session compaction or resume
+  when atm-dev still exists on disk and the saved leadSessionId still matches
+  the current SESSION_ID, but named-teammate ATM reachability is broken.
 ---
 
 # Restore Team Communications
@@ -14,7 +14,7 @@ Use this skill only when all of these are true:
 - `SESSION_ID` still matches `leadSessionId` in
   `~/.claude/teams/atm-dev/config.json`
 - the team directory still exists on disk
-- Claude teammate communication is broken or suspect after compaction or resume
+- teammate ATM communication is broken or suspect after compaction or resume
 
 Do not use this skill for fresh startup or after `clear`. If the current
 `SESSION_ID` does not match `leadSessionId`, use `/team-lead` and follow the
@@ -22,10 +22,11 @@ full restore procedure instead.
 
 ## Step 0 — Prove Whether Repair Is Needed
 
-First, try normal Claude-to-Claude communication before changing anything:
+First, try native ATM communication with a named teammate before changing
+anything:
 
-```text
-SendMessage(to="<claude-teammate>", message="ping: verify atm-dev communications path")
+```bash
+atm send <teammate> "ping: verify atm-dev communications path" --team atm-dev --requires-ack
 ```
 
 If the message is delivered and acknowledged, stop. No repair is needed.
@@ -74,12 +75,14 @@ atm teams restore atm-dev --from "$BACKUP_PATH"
 
 If required members are missing after restore, add them before verification.
 
-## Step 4 — Verify Both Communication Layers
+## Step 4 — Verify Native ATM Communication
 
 Repair is not complete until all checks pass:
 
-1. `SendMessage` to another Claude teammate.
-2. `atm send` to a non-Claude model.
+1. `atm send --requires-ack` to another named teammate and receive its native
+   ATM acknowledgement.
+2. `atm send` to `quality-mgr` when that teammate is active, and verify ATM
+   mailbox routing.
 3. `atm send` to Codex and verify the nudge fires.
 
 For Codex-directed ATM sends, the nudge must include a clear call to action, not

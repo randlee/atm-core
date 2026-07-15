@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import re
 import subprocess
 import sys
 import tomllib
@@ -13,6 +15,28 @@ from pathlib import Path
 
 PREFLIGHT_FULL = "full"
 PREFLIGHT_LOCKED = "locked"
+INSTALLED_DOC_REVIEW_FIELD = "reviewed_for_release"
+
+
+def require_relpath(obj: dict, key: str, label: str) -> Path:
+    value = Path(require_str(obj, key, label))
+    if value.is_absolute():
+        raise SystemExit(f"{label}.{key} must be a relative path")
+    return value
+
+
+def manifest_repo_root(manifest_path: Path) -> Path:
+    return manifest_path.resolve().parent.parent
+
+
+def installed_docs_source_root(manifest_path: Path) -> Path:
+    manifest = load_manifest(manifest_path)
+    return manifest_repo_root(manifest_path) / manifest["installed_docs"]["source_root"]
+HOMEBREW_PLATFORM_TRIPLES = {
+    ("on_macos", "on_arm"): "aarch64-apple-darwin",
+    ("on_macos", "on_intel"): "x86_64-apple-darwin",
+    ("on_linux", "on_intel"): "x86_64-unknown-linux-gnu",
+}
 
 
 def load_manifest(path: Path) -> dict:
@@ -68,8 +92,27 @@ def load_manifest(path: Path) -> dict:
             raise SystemExit(f"duplicate release binary {name}")
         seen_bins.add(name)
 
+    installed_docs = data.get("installed_docs")
+    if not isinstance(installed_docs, dict):
+        raise SystemExit("manifest must define [installed_docs]")
+    source_root = require_relpath(installed_docs, "source_root", "installed_docs")
+    install_root = require_relpath(installed_docs, "install_root", "installed_docs")
+    entrypoint = require_relpath(installed_docs, "entrypoint", "installed_docs")
+    try:
+        entrypoint.relative_to(install_root)
+    except ValueError as exc:
+        raise SystemExit("installed_docs.entrypoint must live under installed_docs.install_root") from exc
+
     crates.sort(key=lambda item: (item["publish_order"], item["artifact"]))
-    return {"crates": crates, "release_binaries": binaries}
+    return {
+        "crates": crates,
+        "release_binaries": binaries,
+        "installed_docs": {
+            "source_root": source_root,
+            "install_root": install_root,
+            "entrypoint": entrypoint,
+        },
+    }
 
 
 def require_str(obj: dict, key: str, label: str) -> str:
@@ -156,6 +199,46 @@ def list_publish_plan(args: argparse.Namespace) -> int:
 def list_release_binaries(args: argparse.Namespace) -> int:
     for entry in load_manifest(Path(args.manifest))["release_binaries"]:
         print(entry["name"])
+    return 0
+
+
+def installed_doc_source_files(manifest_path: Path) -> list[Path]:
+    source_root = installed_docs_source_root(manifest_path)
+    if not source_root.is_dir():
+        raise SystemExit(f"installed docs source root does not exist: {source_root}")
+    return sorted(path for path in source_root.rglob("*") if path.is_file())
+
+
+def installed_doc_members(manifest_path: Path) -> list[Path]:
+    manifest = load_manifest(manifest_path)
+    source_root = installed_docs_source_root(manifest_path)
+    install_root = manifest["installed_docs"]["install_root"]
+    members: list[Path] = []
+    for path in installed_doc_source_files(manifest_path):
+        members.append(install_root / path.relative_to(source_root))
+    return members
+
+
+def list_installed_doc_members(args: argparse.Namespace) -> int:
+    for member in installed_doc_members(Path(args.manifest)):
+        print(member.as_posix())
+    return 0
+
+
+def stage_install_docs(args: argparse.Namespace) -> int:
+    manifest_path = Path(args.manifest)
+    manifest = load_manifest(manifest_path)
+    repo_root = manifest_repo_root(manifest_path)
+    source_root = repo_root / manifest["installed_docs"]["source_root"]
+    install_root = Path(args.output_root) / manifest["installed_docs"]["install_root"]
+    if install_root.exists():
+        shutil.rmtree(install_root)
+    install_root.mkdir(parents=True, exist_ok=True)
+    for source_path in installed_doc_source_files(manifest_path):
+        destination = install_root / source_path.relative_to(source_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
+    print(install_root)
     return 0
 
 
@@ -423,6 +506,194 @@ def validate_publish_order(args: argparse.Namespace) -> int:
     return 0
 
 
+def homebrew_archive_name(version: str, triple: str) -> str:
+    return f"atm_{version}_{triple}.tar.gz"
+
+
+def github_release_asset_url(tag: str, archive_name: str) -> str:
+    return f"https://github.com/randlee/atm-core/releases/download/{tag}/{archive_name}"
+
+
+def load_release_checksums(release_dir: Path) -> dict[str, str]:
+    checksums_path = release_dir / "checksums.txt"
+    if not checksums_path.exists():
+        raise SystemExit(f"missing checksums file: {checksums_path}")
+    checksums: dict[str, str] = {}
+    for line_no, raw_line in enumerate(checksums_path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            raise SystemExit(f"invalid checksums.txt line {line_no}: {raw_line!r}")
+        sha256, filename = parts
+        checksums[Path(filename).name] = sha256
+    return checksums
+
+
+def expected_homebrew_assets(version: str, tag: str, checksums: dict[str, str]) -> dict[tuple[str, str], tuple[str, str]]:
+    assets: dict[tuple[str, str], tuple[str, str]] = {}
+    for platform_key, triple in HOMEBREW_PLATFORM_TRIPLES.items():
+        archive_name = homebrew_archive_name(version, triple)
+        sha256 = checksums.get(archive_name)
+        if sha256 is None:
+            raise SystemExit(f"missing checksum for release archive {archive_name}")
+        assets[platform_key] = (github_release_asset_url(tag, archive_name), sha256)
+    return assets
+
+
+def homebrew_context_key(block_stack: list[str]) -> tuple[str, str] | None:
+    top_level = next((entry for entry in reversed(block_stack) if entry in {"on_macos", "on_linux"}), None)
+    arch = next((entry for entry in reversed(block_stack) if entry in {"on_arm", "on_intel"}), None)
+    if top_level is None or arch is None:
+        return None
+    candidate = (top_level, arch)
+    if candidate in HOMEBREW_PLATFORM_TRIPLES:
+        return candidate
+    return None
+
+
+def formula_block_push(stripped: str) -> str | None:
+    if stripped.endswith(" do"):
+        return stripped[:-3]
+    if stripped.startswith("if "):
+        return stripped
+    if stripped.startswith("def "):
+        return stripped
+    return None
+
+
+def rewrite_homebrew_formula(text: str, *, version: str, tag: str, checksums: dict[str, str]) -> str:
+    assets = expected_homebrew_assets(version, tag, checksums)
+    output: list[str] = []
+    block_stack: list[str] = []
+    for raw_line in text.splitlines(keepends=True):
+        stripped = raw_line.strip()
+        if stripped == "end":
+            if block_stack:
+                block_stack.pop()
+            output.append(raw_line)
+            continue
+
+        push_value = formula_block_push(stripped)
+        context_key = homebrew_context_key(block_stack)
+        indent = raw_line[: len(raw_line) - len(raw_line.lstrip())]
+
+        if stripped.startswith('version "'):
+            raw_line = f'{indent}version "{version}"\n'
+        elif context_key is not None and stripped.startswith('url "'):
+            expected_url, _ = assets[context_key]
+            raw_line = f'{indent}url "{expected_url}"\n'
+        elif context_key is not None and stripped.startswith('sha256 "'):
+            _, expected_sha = assets[context_key]
+            raw_line = f'{indent}sha256 "{expected_sha}"\n'
+
+        output.append(raw_line)
+        if push_value is not None:
+            block_stack.append(push_value)
+    return "".join(output)
+
+
+def validate_homebrew_formula_content(
+    text: str,
+    *,
+    version: str,
+    tag: str,
+    checksums: dict[str, str],
+    formula_label: str,
+) -> list[str]:
+    assets = expected_homebrew_assets(version, tag, checksums)
+    errors: list[str] = []
+    seen: dict[tuple[str, str], dict[str, int]] = {
+        key: {"url": 0, "sha256": 0} for key in HOMEBREW_PLATFORM_TRIPLES
+    }
+    version_match = re.search(r'^\s*version "([^"]+)"', text, re.MULTILINE)
+    if version_match is None:
+        errors.append(f"{formula_label}: missing version declaration")
+    elif version_match.group(1) != version:
+        errors.append(
+            f"{formula_label}: version mismatch: expected {version}, found {version_match.group(1)}"
+        )
+
+    block_stack: list[str] = []
+    for line_no, raw_line in enumerate(text.splitlines(), start=1):
+        stripped = raw_line.strip()
+        if stripped == "end":
+            if block_stack:
+                block_stack.pop()
+            continue
+
+        context_key = homebrew_context_key(block_stack)
+        if context_key is not None:
+            expected_url, expected_sha = assets[context_key]
+            if stripped.startswith('url "'):
+                seen[context_key]["url"] += 1
+                actual_url = stripped[len('url "') : -1]
+                if actual_url != expected_url:
+                    errors.append(
+                        f"{formula_label}:{line_no}: {context_key[0]}/{context_key[1]} url mismatch: "
+                        f"expected {expected_url}, found {actual_url}"
+                    )
+            elif stripped.startswith('sha256 "'):
+                seen[context_key]["sha256"] += 1
+                actual_sha = stripped[len('sha256 "') : -1]
+                if actual_sha != expected_sha:
+                    errors.append(
+                        f"{formula_label}:{line_no}: {context_key[0]}/{context_key[1]} sha256 mismatch: "
+                        f"expected {expected_sha}, found {actual_sha}"
+                    )
+
+        push_value = formula_block_push(stripped)
+        if push_value is not None:
+            block_stack.append(push_value)
+
+    for context_key, counters in seen.items():
+        for field, count in counters.items():
+            if count != 1:
+                errors.append(
+                    f"{formula_label}: expected exactly one {field} in {context_key[0]}/{context_key[1]}, found {count}"
+                )
+    return errors
+
+
+def update_homebrew_formulas(args: argparse.Namespace) -> int:
+    checksums = load_release_checksums(Path(args.release_dir))
+    updated = 0
+    for formula_path_str in args.formula:
+        formula_path = Path(formula_path_str)
+        text = formula_path.read_text(encoding="utf-8")
+        formula_path.write_text(
+            rewrite_homebrew_formula(text, version=args.version, tag=args.tag, checksums=checksums),
+            encoding="utf-8",
+        )
+        updated += 1
+    print(f"ok: updated {updated} Homebrew formula(s)")
+    return 0
+
+
+def validate_homebrew_formulas(args: argparse.Namespace) -> int:
+    checksums = load_release_checksums(Path(args.release_dir))
+    errors: list[str] = []
+    for formula_path_str in args.formula:
+        formula_path = Path(formula_path_str)
+        errors.extend(
+            validate_homebrew_formula_content(
+                formula_path.read_text(encoding="utf-8"),
+                version=args.version,
+                tag=args.tag,
+                checksums=checksums,
+                formula_label=str(formula_path),
+            )
+        )
+    if errors:
+        print("homebrew formula validation failed:")
+        for error in errors:
+            print(f"  - {error}")
+        return 1
+    print("ok: Homebrew formulas match expected platform assets and checksums")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Release artifact manifest utilities")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -459,6 +730,15 @@ def build_parser() -> argparse.ArgumentParser:
     list_bins.add_argument("--manifest", required=True)
     list_bins.set_defaults(func=list_release_binaries)
 
+    list_docs = subparsers.add_parser("list-installed-doc-members")
+    list_docs.add_argument("--manifest", required=True)
+    list_docs.set_defaults(func=list_installed_doc_members)
+
+    stage_docs = subparsers.add_parser("stage-install-docs")
+    stage_docs.add_argument("--manifest", required=True)
+    stage_docs.add_argument("--output-root", required=True)
+    stage_docs.set_defaults(func=stage_install_docs)
+
     validate_bins = subparsers.add_parser("validate-release-binaries")
     validate_bins.add_argument("--manifest", required=True)
     validate_bins.add_argument("--required", action="append", default=[])
@@ -475,18 +755,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate_m = subparsers.add_parser("validate-manifest")
     validate_m.add_argument("--manifest", required=True)
-    validate_m.add_argument("--workspace-toml", required=True)
+    validate_m.add_argument("--workspace-toml", default="Cargo.toml")
     validate_m.set_defaults(func=validate_manifest)
 
     validate_p = subparsers.add_parser("validate-preflight-checks")
     validate_p.add_argument("--manifest", required=True)
-    validate_p.add_argument("--workspace-toml", required=True)
+    validate_p.add_argument("--workspace-toml", default="Cargo.toml")
     validate_p.set_defaults(func=validate_preflight_checks)
 
     validate_o = subparsers.add_parser("validate-publish-order")
     validate_o.add_argument("--manifest", required=True)
-    validate_o.add_argument("--workspace-toml", required=True)
+    validate_o.add_argument("--workspace-toml", default="Cargo.toml")
     validate_o.set_defaults(func=validate_publish_order)
+
+    update_homebrew = subparsers.add_parser("update-homebrew-formulas")
+    update_homebrew.add_argument("--release-dir", required=True)
+    update_homebrew.add_argument("--version", required=True)
+    update_homebrew.add_argument("--tag", required=True)
+    update_homebrew.add_argument("--formula", action="append", default=[])
+    update_homebrew.set_defaults(func=update_homebrew_formulas)
+
+    validate_homebrew = subparsers.add_parser("validate-homebrew-formulas")
+    validate_homebrew.add_argument("--release-dir", required=True)
+    validate_homebrew.add_argument("--version", required=True)
+    validate_homebrew.add_argument("--tag", required=True)
+    validate_homebrew.add_argument("--formula", action="append", default=[])
+    validate_homebrew.set_defaults(func=validate_homebrew_formulas)
 
     return parser
 

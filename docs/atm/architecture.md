@@ -107,6 +107,9 @@ Follow-up work:
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns mapping of CLI commands to the daemon/service request boundary in
   production.
+- `atm` owns `--stdin` materialization before daemon bootstrap; the daemon RPC
+  surface must never receive a deferred `stdin` marker or any instruction to
+  read process stdin on behalf of the caller.
 - `atm` owns the explicit mailbox-surface split where `peek` and `list` are
   inspection-only, while `send`, `read`, `ack`, and `clear` are owner-only
   mutating commands.
@@ -122,6 +125,16 @@ Follow-up work:
 - `atm help` is CLI-owned conceptual help layered over clap command help and
   must delegate command flag truth to clap output instead of maintaining a
   parallel flag-documentation source.
+- `atm help` must surface installed-doc pointers for long-form operator
+  guidance; the CLI owns the pointer/rendering seam, but not the long-form
+  document corpus itself.
+- installed-doc lookup for `atm help` is executable-relative from the resolved
+  installed `atm` binary location and must not be derived from `ATM_HOME`.
+- the installed-user-documentation-surface follows ADR-025:
+  - the repo-owned source corpus is `docs/user-documents/`
+  - packaging installs that corpus under `<install-root>/share/doc/atm/`
+  - long-form help lookup resolves from the installed binary using the
+    executable-relative path `../share/doc/atm/`
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.

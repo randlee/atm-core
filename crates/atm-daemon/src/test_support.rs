@@ -38,6 +38,9 @@ impl Drop for LifecycleFlagResetGuard {
         self.lifecycle.set_reload_for_test(false);
         if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
             tracing::warn!(
+                subsystem = "test_support",
+                action = "reset_shared_state_for_test",
+                outcome = "drain_failed",
                 %error,
                 "failed to drain shared lifecycle worker during test reset"
             );
@@ -72,6 +75,8 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     atm_identity: None,
                     team_override: None,
                 },
+                client_context: atm_core::doctor::DoctorExecutionContext::default(),
+                daemon_context: None,
                 member_roster: None,
                 observability: AtmObservabilityHealth {
                     active_log_path: None,
@@ -81,6 +86,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     diagnostic: None,
                     detail: None,
                 },
+                post_send: atm_core::doctor::PostSendDoctorReport::default(),
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),

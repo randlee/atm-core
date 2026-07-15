@@ -594,12 +594,10 @@ mod tests {
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::workflow::WorkflowStateFile;
     use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
     use std::path::{Path, PathBuf};
-    use std::time::Duration;
 
     struct MissingRosterRuntime;
 
@@ -649,12 +647,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_secs(1),
-            }
-        }
-
         fn rebuild_compat_inbox_projection(
             &self,
             _inbox_path: &Path,
@@ -682,23 +674,6 @@ mod tests {
 
         fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            body(&mut workflow).map(|(value, _dirty)| value)
         }
     }
 

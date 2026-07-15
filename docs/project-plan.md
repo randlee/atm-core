@@ -99,6 +99,39 @@ Phase-AD planning note:
   the mailbox peek surface, owner-only mutation reset, durable ack intent,
   self-address/self-ack closure, and final messaging regression closeout
 
+Phase-AE planning note:
+- `Phase AE` is the active installed user-documentation planning line on top of
+  the accepted `Phase AD` baseline
+- the authoritative planning document is
+  [`docs/plans/phase-AE/plan-phase-AE.md`](./plans/phase-AE/plan-phase-AE.md)
+- the planning branch is `plan/phase-AE`
+- the execution integration branch is `integrate/phase-AE`
+- `Phase AE` owns the repo-authored `docs/user-documents/` corpus, installed
+  delivery under `share/doc/atm/`, concise `atm help` surfacing, fenced
+  example and relative-link verification, release freshness gating, and the
+  phase-close installed-doc proof artifact
+
+Phase-AF planning note:
+- `Phase AF` is the 1.3.1 reliability recovery line following 1.3.0 dogfood
+  findings; it does not supersede the retained Phase AE installed-documentation
+  scope.
+- the authoritative phase plan is [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md)
+  with hardened sprint documents for AF-1 host-wide singleton, AF-2
+  observability/release gates, and AF-3 native send-input integrity.
+- the accepted implementation branch is `integrate/phase-AF`; AF-1, AF-2, and
+  AF-3 are merged there at `52c5c338`, with docs-only readiness corrections at
+  `d5420b0f`.
+- PR #539 (`integrate/phase-AF` -> `develop`) is the active phase-end review
+  candidate.
+- AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
+  proceed until its process-level singleton proof is green.
+- `smoke-test/1.3.1-cross-host` is the repo-published cross-host RC evidence
+  sprint on top of the accepted AF implementation line. Its authoritative plan
+  is
+  [`docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md`](./plans/phase-af/smoke-1.3.1-cross-host-plan.md),
+  and its Windows handoff checklist is
+  [`docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`](./plans/phase-af/smoke-1.3.1-windows-checklist.md).
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -141,6 +174,11 @@ Status:
 - Phase AD is the active planning line for release-blocking caller-identity,
   post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
   baseline.
+- Phase AE is the active planning line for installed end-user documentation as
+  a shipped release surface.
+- Phase AF is the active 1.3.1 reliability recovery line under phase-end
+  review on `integrate/phase-AF`; AF-1, AF-2, and AF-3 are merged and the
+  remaining closeout work is release-evidence and QA-gate completion.
 - the current merged workspace contains:
   - `crates/atm-architecture`
   - `crates/atm-core`
@@ -211,6 +249,43 @@ Phase R sequencing rule:
   - feature behavior
 
 ## 4. Work Sequence
+
+### Phase AF: 1.3.1 Reliability Recovery [PHASE-END REVIEW]
+
+Status summary:
+- Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
+- AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
+  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+- Accepted implementation branch: `integrate/phase-AF`.
+- Integration target: `develop`.
+- The authoritative plan is
+  [`docs/plans/phase-af/README.md`](./plans/phase-af/README.md).
+- The authoritative closure checklist is
+  [`docs/plans/phase-af/readiness.md`](./plans/phase-af/readiness.md).
+
+Goal:
+- restore the literal one-daemon/one-durable-state-root invariant for an OS
+  user on one host
+- make post-send configuration, daemon health, errors, capacity, and release
+  cutover observable and safe
+- preserve native inline, stdin, and file message bytes across the CLI-to-
+  daemon boundary
+
+Deliverables:
+- AF-1 host-runtime singleton admission, lifecycle, and process-proof design
+- AF-2 doctor, connection-worker, capacity/deadline, and compatibility-gate
+  design
+- AF-3 client-side stdin materialization and release-binary byte-readback
+  design
+
+Sprint line:
+- `AF-1` `feature/atm-daemon-singleton-hardening`
+- `AF-2` `feature/pAF-s2-observability-release-gates`
+- `AF-3` `feature/pAF-s3-native-send-input-integrity`
+
+Acceptance:
+- Phase AF exit criteria are satisfied only through
+  `docs/plans/phase-af/readiness.md` and its linked plan validations.
 
 ### Phase AA: Remove SQLite From Daemon [PLANNED]
 
@@ -449,7 +524,7 @@ Acceptance:
 
 ### Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]
 
-- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, introduced the ATM-owned workflow sidecar, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
+- **Phase P: File-I/O Ownership And Single-Write-Path Hardening [COMPLETE]** — Applied one explicit file-I/O ownership model (read_only / read_possible_write / read_modify_write) across every live file family, eliminated ad hoc write paths, completed lock-sentinel gap closure (P.9/P.10), and reconciled requirements/architecture docs with the landed implementation. The temporary workflow sidecar introduced during this phase has since been retired; SQLite is the exclusive mailbox-state authority. (Sprints P.1–P.5, P.6–P.10, M.F1; PRs #111–#115, #120; integrated to `develop`)
 
 ## 5. Hard Rules
 
@@ -802,8 +877,16 @@ Implementation Branches:
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
 | `PI.1` | `complete` | `feature/pPI-s1-validation-infra` | `Justfile`, `.just/print_help.py`, `scripts/validate_release.py`, `scripts/verify_release_archive.py`, `scripts/release_artifacts.py`, `release/publish-artifacts.toml`, `release/RELEASE-NOTES-TEMPLATE.md`, `.github/workflows/release-preflight.yml`, `.github/workflows/release.yml` |
-| `PI.2` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
-| `PI.3` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
+| `PI.2` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/release-preflight-checklist.md` |
+| `PI.3` | `complete` | `integrate/publish-release-readiness` | `.claude/agents/publisher.md`, `docs/release-preflight-checklist.md`, `.claude/commands/preflight.md` |
 
 Authoritative sprint plan:
-- `docs/publishing-improvements/plan.md`
+- `docs/plans/preflight-documentation/sprint-preflight.md`
+
+## Release Preflight Documentation
+
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `PREFLIGHT` | `complete` | `docs/preflight-documentation` | `docs/plans/preflight-documentation/sprint-preflight.md`, `docs/release-preflight-checklist.md`, `.claude/commands/preflight.md`, `.claude/agents/publisher.md` |

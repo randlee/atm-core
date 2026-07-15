@@ -199,13 +199,10 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
     let Some(record) =
         runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
     else {
-        return Err(AtmError::validation(format!(
-            "sqlite mailbox metadata row {} could not be reloaded for read output",
-            metadata_row.message_key
-        ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox row before retrying `atm read`.",
-        ));
+        // A concurrent clear can delete the row after selection but before the
+        // durable body reload. Preserve command completion with the selected
+        // snapshot; actual reload errors still propagate above.
+        return Ok(selected_message.clone());
     };
     let envelope = if exact_message_id == record.envelope.message_id {
         record.envelope

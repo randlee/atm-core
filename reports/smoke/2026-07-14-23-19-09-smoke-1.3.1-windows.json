@@ -1,0 +1,88 @@
+{
+  "level": "smoke-1.3.1-windows",
+  "platform": "Windows",
+  "branch": "smoke-test/1.3.1-cross-host",
+  "candidate_version": "1.3.1",
+  "binary_sha": "85249bbc38dd58e5d6735560611ff7ad5f443be1",
+  "status": "passed",
+  "timestamp": "2026-07-14T23:19:09Z",
+  "rows": [
+    {
+      "id": "AF31-WIN-001",
+      "verdict": "PASS",
+      "command": "git rev-parse --short HEAD; rg -n '^version = \"1.3.1\"' Cargo.toml",
+      "notes": "HEAD 85249bbc; workspace version 1.3.1"
+    },
+    {
+      "id": "AF31-WIN-002",
+      "verdict": "PASS",
+      "command": "python scripts/smoke/run.py fast --write-artifacts",
+      "artifact": "reports/smoke/2026-07-14-23-17-22-smoke-fast.md",
+      "notes": "status passed; pass=8 fail=0 skip=0"
+    },
+    {
+      "id": "AF31-WIN-003",
+      "verdict": "PASS",
+      "command": "python scripts/smoke/run.py normal --write-artifacts",
+      "artifact": "reports/smoke/2026-07-14-23-17-37-smoke.md",
+      "notes": "status passed; pass=28 fail=0 skip=0"
+    },
+    {
+      "id": "AF31-WIN-004",
+      "verdict": "PASS",
+      "command": "python scripts/smoke/run.py thorough --write-artifacts",
+      "artifact": "reports/smoke/2026-07-14-23-18-12-smoke-thorough.md",
+      "notes": "status passed; pass=32 fail=0 skip=0; GRAFT-001 PASS"
+    },
+    {
+      "id": "AF31-WIN-005",
+      "verdict": "PASS",
+      "command": "python scripts/smoke/run_thorough_shared_host.py",
+      "notes": "shared-host lane passed; daemon_pids_before=[]; daemon_pids_during=[53384]"
+    },
+    {
+      "id": "AF31-WIN-006",
+      "verdict": "PASS",
+      "notes": "one shared daemon during shared-host lane; no ambient daemon before lane"
+    },
+    {
+      "id": "AF31-WIN-007",
+      "verdict": "PASS",
+      "notes": "normal and thorough artifacts green; doctor, retained logs, release-gate rows stayed green"
+    },
+    {
+      "id": "AF31-WIN-008",
+      "verdict": "PASS",
+      "notes": "inline, stdin, and file send-input integrity preserved; invalid stdin failed locally without daemon PID mutation"
+    },
+    {
+      "id": "AF31-WIN-009",
+      "verdict": "PASS",
+      "command": "python scripts/smoke/run_graft_same_host.py",
+      "notes": "real same-host atm-graft host lane succeeded; nudge_count=1; read/ack/send completed; daemon_pids_before=[]; daemon_pids_during=[54072]"
+    }
+  ],
+  "verification": [
+    {
+      "command": "cargo fmt --check",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test -p atm-daemon-client -p atm-graft",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test -p agent-team-mail-core --test mailbox_locking -- --nocapture",
+      "status": "passed"
+    },
+    {
+      "command": "python .just/run_lint.py all",
+      "status": "passed",
+      "notes": "21 checks succeeded"
+    },
+    {
+      "command": "just test",
+      "status": "passed"
+    }
+  ]
+}

@@ -82,22 +82,27 @@ fn daemon_host_runtime_lock_path_follows_the_explicit_home_root() {
 }
 
 #[test]
-fn singleton_guard_is_host_wide_across_different_socket_paths() {
+fn singleton_guard_is_host_wide_across_distinct_atm_home_roots() {
     let tempdir = TempDir::new().expect("tempdir");
-    let first_socket = tempdir.path().join("one.sock");
-    let second_socket = tempdir.path().join("other").join("two.sock");
-    let first = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    ))
-    .expect("first singleton");
-    let _ = first_socket;
-    let _ = second_socket;
-    let error = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    ))
-    .expect_err("second singleton");
+    let home_a = tempdir.path().join("workspace-a").join("atm-home");
+    let home_b = tempdir.path().join("workspace-b").join("atm-home");
+    std::fs::create_dir_all(&home_a).expect("home a");
+    std::fs::create_dir_all(&home_b).expect("home b");
+    assert_ne!(
+        home_a, home_b,
+        "fixture requires genuinely distinct ATM_HOME roots"
+    );
+
+    // Production scope is OS-account based, never caller-home based.  The
+    // isolated test host therefore maps both distinct workspaces to one owner
+    // path without touching the developer's real singleton lock.
+    let host_owner_lock = tempdir
+        .path()
+        .join("os-user-runtime")
+        .join(HOST_RUNTIME_OWNER_LOCK_FILE);
+    let first = HostOwnershipAdapter::acquire_at(host_owner_lock.clone()).expect("first singleton");
+    let error = HostOwnershipAdapter::acquire_at(host_owner_lock)
+        .expect_err("second singleton across a distinct ATM_HOME");
 
     assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
     drop(first);

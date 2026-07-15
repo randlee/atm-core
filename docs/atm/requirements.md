@@ -64,7 +64,7 @@ Initial crate requirement IDs:
   commands. Satisfies the output-shaping and rendering aspects of:
   `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
   `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
-  `REQ-P-MEMBERS-001`, `REQ-P-HELP-001`.
+  `REQ-P-MEMBERS-001`, `REQ-P-HELP-001`, `REQ-P-USER-DOCS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`, `REQ-P-OBS-002`,
@@ -115,6 +115,12 @@ Initial crate requirement IDs:
   built-in behavior plus the retained `atm internal-nudge` helper and the
   external override semantics, while `atm-core` owns the underlying matching
   and migration behavior
+- keeping `atm help` topic rendering aligned with the installed end-user
+  corpus so the CLI points to `<install-root>/share/doc/atm/` for long-form
+  operator docs
+- resolving installed-doc pointers for `atm help` from the installed binary
+  location using the executable-relative path `../share/doc/atm/README.md`
+  rather than from `ATM_HOME`
 
 ## 3.1 Built-In Nudge Surface
 
@@ -170,6 +176,23 @@ Required rules:
 - the built-in path must not access SQLite directly; the first concrete
   host-scoped override storage remains `atm-storage-rusqlite` implementation
   detail behind the accepted `atm-core` contract
+
+## 3.2 Native Send Input Materialization
+
+Requirement ID:
+- `REQ-ATM-CMD-003`
+
+Required rules:
+- `atm` owns `--stdin` as a CLI-only input source and must consume it before
+  daemon bootstrap and before request dispatch over the same-host RPC surface
+- a daemon-bound send request may encode only durable inline bytes or the
+  retained `--file` reference contract; it must never encode a `stdin`
+  instruction for the daemon to resolve later
+- invalid `--stdin` input (empty, whitespace-only, oversized, unreadable, or
+  non-UTF-8) must fail at the CLI boundary with the typed ATM error returned by
+  `atm-core`
+- invalid `--stdin` input must not start a daemon and must not dispatch any
+  request over `AtmProtocol` or `ClientTransport`
 
 ## 4. Command Ownership
 
@@ -247,6 +270,8 @@ Required Phase R rules:
 - `atm help` remains an additive CLI-owned conceptual-help surface layered on
   top of the retained command set; it must not become a general structured
   JSON-input expansion point inside `Phase Y`
+- `atm help` topic output must stay concise and point to installed end-user
+  docs rather than trying to inline the full operator corpus
 - `atm` owns legacy queue-flag deprecation warnings and the exact
   `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
   body stubs

@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn concrete_adapter_uses_host_scoped_default_log_path() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([
@@ -284,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn concrete_adapter_emits_queries_follows_and_reports_health() {
         let tempdir = TempDir::new().expect("tempdir");
         let log_dir = tempdir.path().join(".atm").join("logs");
@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn concrete_adapter_fails_closed_when_atm_log_dir_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([

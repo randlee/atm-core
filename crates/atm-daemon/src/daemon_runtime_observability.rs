@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::observability::ObservabilityPort;
+use atm_core::observability::{
+    DaemonConnectionFailureFields, LogFieldMap, LogFieldValue, ObservabilityPort,
+};
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
 
@@ -57,6 +59,9 @@ pub struct DaemonEvent {
     pub message_id: Option<AtmMessageId>,
     pub task_id: Option<TaskId>,
     pub detail: Cow<'static, str>,
+    pub connection_failure: Option<DaemonConnectionFailureFields>,
+    pub transport_context: Option<Cow<'static, str>>,
+    pub extra_fields: LogFieldMap,
 }
 
 impl DaemonEvent {
@@ -77,6 +82,9 @@ impl DaemonEvent {
             message_id: None,
             task_id: None,
             detail: detail.into(),
+            connection_failure: None,
+            transport_context: None,
+            extra_fields: LogFieldMap::default(),
         }
     }
 
@@ -87,6 +95,27 @@ impl DaemonEvent {
 
     pub(crate) fn with_agent(mut self, agent: AgentName) -> Self {
         self.agent = Some(agent);
+        self
+    }
+
+    pub(crate) fn with_connection_failure(mut self, fields: DaemonConnectionFailureFields) -> Self {
+        self.connection_failure = Some(fields);
+        self
+    }
+
+    pub(crate) fn with_transport_context(mut self, context: impl Into<Cow<'static, str>>) -> Self {
+        self.transport_context = Some(context.into());
+        self
+    }
+
+    pub(crate) fn with_extra_string_field(
+        mut self,
+        key: &'static str,
+        value: impl Into<String>,
+    ) -> Self {
+        self.extra_fields = self
+            .extra_fields
+            .with_entry(key, LogFieldValue::string(value.into()));
         self
     }
 }

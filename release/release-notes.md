@@ -47,6 +47,10 @@ No user-facing CLI behavior change is introduced.
 - GitHub Releases: `atm` + `atm-daemon` archives for
   `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, and
   `x86_64-pc-windows-msvc`, with checksums.
+- Installed user documentation ships inside every install/archive at
+  `share/doc/atm/`, with the primary entrypoint at `share/doc/atm/README.md`.
+  The installed binary/doc relationship is fixed as `<install-root>/bin/atm`
+  plus `<install-root>/share/doc/atm/README.md`.
 - Homebrew: tap `randlee/homebrew-tap`, formulas `agent-team-mail.rb` and
   `atm.rb` updated to 1.3.0.
 - winget: package `randlee.agent-team-mail` at 1.3.0. Microsoft review normally

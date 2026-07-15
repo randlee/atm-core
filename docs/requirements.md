@@ -220,9 +220,9 @@ Satisfied by:
   - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
     `REQ-P-RUNTIME-003`
 
-- `REQ-P-RUNTIME-004` The supported same-host topology is one HOME-scoped
-  daemon, one host-scoped SQLite database, and one host-scoped retained log
-  root serving multiple ATM workspaces with different `ATM_HOME` values.
+- `REQ-P-RUNTIME-004` The supported same-host topology is one OS-user-scoped
+  daemon, one OS-user-scoped SQLite database, and one OS-user-scoped retained
+  log root serving multiple ATM workspaces with different `ATM_HOME` values.
 
   Required behavior:
   - distinct workspaces on the same host may carry different `ATM_HOME`
@@ -404,8 +404,10 @@ Required behavior:
 - the first `winget` release requires a one-time manual manifest submission to
   `microsoft/winget-pkgs`; after that initial submission, later releases may
   be automated from this repo
-- `winget` release automation must not require a repo-specific secret beyond
-  the default GitHub workflow token
+- automated `winget` release wiring requires a dedicated
+  `WINGET_GITHUB_TOKEN` repo secret
+- `WINGET_GITHUB_TOKEN` must be a PAT with permission to create branches / PRs
+  against the `randlee/winget-pkgs` fork used by the release workflow
 - release readiness proof for `winget` must validate successful submission or
   manifest update dispatch; it cannot require same-day installability because
   Microsoft review introduces a normal 1-2 day publication lag
@@ -428,30 +430,36 @@ Satisfied by:
 
 ### 3.1 Home And Path Resolution
 
-Path resolution order:
+Workspace/config resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
 Runtime-root rule:
-- the invocation directory is not a selector for the retained ATM runtime root;
-  socket, lock, database, and retained-log paths derive from the accepted
-  `ATM_HOME` root, not from the shell working directory
-- after `ATM_HOME` resolves the canonical host runtime root, the invocation
-  directory is used only for workspace config discovery
+- under planned ADR-026, neither the invocation directory nor `ATM_HOME` is a
+  selector for daemon socket, lock, or SQLite durable-state paths; those derive
+  from one OS-user `HostRuntimeScope`
+- retained logs follow their host-scoped root under ADR-011 (or explicit
+  `ATM_LOG_DIR`), independently of workspace `ATM_HOME`
+- the invocation directory and `ATM_HOME` remain workspace/config discovery
+  inputs only
 
-Required canonical paths:
+Required workspace/config paths:
 - `{ATM_HOME}/.claude`
 - `{ATM_HOME}/.claude/teams`
 - `{ATM_HOME}/.claude/teams/{team}`
 - `{ATM_HOME}/.claude/teams/{team}/config.json`
 - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
-- `{ATM_HOME}/.atm/daemon/launch.lock`
-- `{ATM_HOME}/.atm/db/mail.db`
-- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
 - `{ATM_HOME}/.config/atm/config.toml`
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`
+
+Required host-runtime paths:
+- the canonical endpoint, `launch.lock`, and `owner.lock` derive only from
+  `HostRuntimeScope.runtime_root`
+- the one SQLite durable database derives only from
+  `HostRuntimeScope.durable_state_root`
+- the retained log file derives only from the ADR-011 host log root unless
+  `ATM_LOG_DIR` explicitly overrides it
 
 ### 3.1.1 Security And Durability Boundaries
 
@@ -601,8 +609,8 @@ Source-of-truth guardrails:
 
 - ATM must not rely on full-file rewrite of Claude-owned files as the long-term
   source of truth for ATM-local workflow state
-- if ATM-local semantics need durability independent of Claude’s native writes,
-  that state must move to ATM-owned sidecars or an equivalent ATM-owned store
+- if ATM-local semantics need durability independent of compatibility exports,
+  that state must live in the ATM-owned SQLite store
 - when a legacy compatibility path still rewrites a non-ATM-owned shared file,
   the requirements and architecture docs must call out the limitation
 
@@ -2127,6 +2135,8 @@ syntax help without duplicating the flag/argument contract already exposed by
   documentation
 - keep concept topics in one typed topic registry rather than scattered prose
   fragments
+- keep topic output concise and point to installed long-form docs when the
+  topic has an authoritative user-doc file
 - keep this Phase `Y` slice narrowly on conceptual help plus wording cleanup
   rather than broadening into general structured JSON-input work
 
@@ -2144,6 +2154,8 @@ Tier-2 concept topics for the first delivery:
 Human output must:
 - clearly distinguish concept topics from command syntax help
 - preserve clap output verbatim when the target is a subcommand
+- include the installed-doc pointer when the concept topic has authoritative
+  long-form user docs
 
 JSON output must:
 - expose the requested topic or command target
@@ -2153,6 +2165,59 @@ JSON output must:
   - `concept_topic`
   - `command_help`
 - include the rendered help body in a structured field suitable for agent use
+- include the installed-doc pointer when the concept topic has authoritative
+  long-form user docs
+
+### 14.4 Installed User Documentation
+
+Product requirement ID:
+- `REQ-P-USER-DOCS-001` ATM must ship a versioned installed end-user document
+  corpus that complements `atm help`.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this spans repo-owned
+  documentation, release packaging, help rendering, and publisher preflight
+
+Required behavior:
+- the authoritative repo-owned source tree for installed end-user docs is
+  `docs/user-documents/`
+- the installed destination is `<install-root>/share/doc/atm/`
+- the installed primary entrypoint is `<install-root>/share/doc/atm/README.md`
+- the default local-install root remains `~/.local/atm/<version>/`
+- installed-doc lookup at runtime is derived from the installed `atm` binary
+  location using the executable-relative path `../share/doc/atm/`
+- runtime state under `~/.atm/` must remain distinct from the installed
+  document tree
+- `ATM_HOME` is the runtime/data root only and must not be used to locate the
+  installed end-user document tree
+- `atm help` may stay concise, but it must point users to the installed corpus
+  for long-form operator guidance
+- end-user docs must remain operator-facing only:
+  - no direct SQLite queries
+  - no direct database edits
+  - no repo-internal development workflow instructions
+- hook and built-in nudge-template docs must enumerate the exact supported
+  operator surface and variables
+- all user-doc links must be relative so the copied installed tree remains
+  navigable after packaging
+
+- `REQ-P-USER-DOCS-002` Installed end-user docs are a release-gated artifact.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this spans repo-owned
+  validation and release/publisher automation
+
+Required behavior:
+- every file in `docs/user-documents/` must carry the accepted metadata header
+  with `reviewed_for_release`
+- the release/publisher gate must fail closed when a required user-doc file is
+  missing, stale for the target release version, or structurally invalid
+- fenced `json`, `xml`, `toml`, and `bash` examples in the user-doc corpus
+  must be mechanically validated
+- the same canonical verifier must validate both the repo-owned source tree and
+  the staged/installed copied tree
+- phase-close evidence must prove the installed/archive output contains the
+  expected copied corpus
 
 ## 15. Message And Workflow Model
 
@@ -2963,13 +3028,8 @@ closed before the 1.0 release.
   - a stale-snapshot rename after late lock acquisition is forbidden even if
     the rename itself is atomic
 
-  Open hardening gap — `P.6` send-side workflow freshness:
-  - mailbox read/ack/clear paths satisfy this through
-    `mailbox::store::with_locked_source_files(...)`
-  - workflow-sidecar writes performed during `send` and the missing-config
-    team-lead notice path are already atomic and owner-routed, but they do not
-    yet provide a dedicated freshness proof across concurrent same-recipient
-    sends; P.6 is the tracked hardening item for that gap
+  Mailbox state is durable SQLite state; send, read, ack, clear, and
+  missing-config notices persist it through the retained mailbox runtime.
 
 - `REQ-CORE-PERSIST-ATOMIC-001B` Every shared mutable file family must have one
   documented write path and one owning helper boundary.
@@ -2989,10 +3049,9 @@ closed before the 1.0 release.
       `mailbox::store::with_locked_source_files(...)` for shared read/ack/clear
       lock+reload orchestration, and `mailbox::store::commit_mailbox_state(...)`
       / `mailbox::store::commit_source_files(...)` as the persistence leaf
-    - workflow-state sidecar:
-      `workflow::{load_workflow_state(...), save_workflow_state(...),
-      project_envelope(...), remember_initial_state(...),
-      apply_projected_state(...), remove_message_state(...)}`
+    - mailbox state:
+      the retained SQLite mailbox runtime (`persist_message_record(...)` and
+      `persist_message_state(...)`); no filesystem workflow sidecar exists
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
     - send-alert state:
@@ -3007,9 +3066,8 @@ closed before the 1.0 release.
       `team_admin::restore::clear_restore_marker(...)`,
       `team_admin::restore::prepare_restore_workspace(...)`, and
       `team_admin::restore::cleanup_restore_workspace(...)`
-  - send-side workflow seeding must not continue indefinitely as an open-coded
-    `load -> mutate -> save` sequence in command-layer logic; P.6 exists to
-    converge that path onto a dedicated owner-layer freshness boundary
+  - command-layer code must not add a filesystem workflow-state mirror; SQLite
+    remains the sole mailbox-state authority.
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.

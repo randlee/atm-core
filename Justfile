@@ -131,7 +131,7 @@ build:
 
 # Run the full workspace test suite or explicit coverage reporting.
 test mode='default':
-    {{python_cmd}} scripts/coverage/invoke_test_mode.py {{mode}}
+    {{python_cmd}} .just/run_tests.py {{mode}}
 
 # Remove workspace build artifacts.
 clean:
