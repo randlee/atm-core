@@ -54,10 +54,23 @@ impl DoctorCommand {
                 })
             })
             .transpose()?;
+        // Capture the invoking CLI process's identity here, where the process
+        // environment is genuinely the caller's. When the doctor request is
+        // serviced over IPC by the long-lived daemon, the daemon cannot read
+        // these values from its own frozen launch-time environment, so they
+        // must ride along in the request payload.
+        let caller_team = atm_core::caller_context::read_cli_team_from_env()
+            .ok()
+            .flatten();
+        let caller_identity = atm_core::caller_context::read_cli_identity_from_env()
+            .ok()
+            .flatten();
         Ok(DoctorQuery {
             home_dir,
             current_dir,
             team_override,
+            caller_team,
+            caller_identity,
         })
     }
 

@@ -26,11 +26,26 @@ pub use report::{
     RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Inputs for a doctor run, including the caller's resolved identity.
+///
+/// When the doctor request is serviced over IPC by the long-lived daemon
+/// singleton, the daemon process cannot observe the requesting shell's
+/// `ATM_TEAM`/`ATM_IDENTITY`; its own process environment is frozen at launch
+/// time. The `caller_team` and `caller_identity` fields carry the invoking
+/// CLI process's resolved values across the IPC boundary so the resulting
+/// report's `client_context` reflects the real caller rather than whatever
+/// environment happens to be visible where the report is evaluated.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+    /// Caller's `ATM_TEAM`, captured in the invoking CLI process.
+    #[serde(default)]
+    pub caller_team: Option<TeamName>,
+    /// Caller's `ATM_IDENTITY`, captured in the invoking CLI process.
+    #[serde(default)]
+    pub caller_identity: Option<AgentName>,
 }
 
 #[derive(Clone)]
@@ -73,7 +88,12 @@ pub fn run_doctor_with_runtime(
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let environment = health::environment_visibility(
+        query.home_dir,
+        query.team_override,
+        query.caller_team,
+        query.caller_identity,
+    );
     let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
     if config
@@ -119,7 +139,13 @@ pub fn run_doctor_with_runtime(
         recommendations,
         environment: environment.clone(),
         client_context: report::DoctorExecutionContext {
-            team: environment.atm_team.clone(),
+            // A `--team` override reflects the team the caller explicitly asked
+            // the doctor to inspect, so it takes precedence over the ambient
+            // `ATM_TEAM` in the reported client context.
+            team: environment
+                .team_override
+                .clone()
+                .or_else(|| environment.atm_team.clone()),
             identity: environment.atm_identity.clone(),
             version: Some(crate::protocol::ReleaseVersion::current()),
         },
@@ -148,7 +174,12 @@ pub fn run_doctor_with_runtime_ports(
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let environment = health::environment_visibility(
+        query.home_dir,
+        query.team_override,
+        query.caller_team,
+        query.caller_identity,
+    );
     let (observability_health, observability_finding) = doctor_observability_status(observability);
     let mut general_findings = Vec::new();
     let mut drift_findings = Vec::new();
@@ -192,7 +223,13 @@ pub fn run_doctor_with_runtime_ports(
         recommendations,
         environment: environment.clone(),
         client_context: report::DoctorExecutionContext {
-            team: environment.atm_team.clone(),
+            // A `--team` override reflects the team the caller explicitly asked
+            // the doctor to inspect, so it takes precedence over the ambient
+            // `ATM_TEAM` in the reported client context.
+            team: environment
+                .team_override
+                .clone()
+                .or_else(|| environment.atm_team.clone()),
             identity: environment.atm_identity.clone(),
             version: Some(crate::protocol::ReleaseVersion::current()),
         },
@@ -1140,6 +1177,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: Some(TEST_TEAM.parse().expect("team")),
+            ..DoctorQuery::default()
         }
     }
 
@@ -1177,6 +1215,7 @@ mod tests {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
                 team_override: Some(crate::types::TeamName::from_validated("../evil")),
+                ..DoctorQuery::default()
             },
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -1571,6 +1610,84 @@ mod tests {
                     && finding.message.contains(&stale_lock.display().to_string())
             }),
             "{report:#?}"
+        );
+    }
+
+    fn healthy_observability(paths: &TestPaths) -> StubObservability {
+        StubObservability {
+            health: StubHealth::Ok(AtmObservabilityHealth {
+                active_log_path: Some(paths.active_log_path.clone()),
+                logging_state: AtmObservabilityHealthState::Healthy,
+                query_state: Some(AtmObservabilityHealthState::Healthy),
+                maintenance: None,
+                diagnostic: None,
+                detail: None,
+            }),
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn client_context_reflects_caller_not_ambient_environment() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        // Ambient process env stands in for the long-lived daemon's frozen
+        // launch-time identity; the caller's threaded values must win.
+        let _env = crate::test_support::EnvGuard::set_many([
+            ("ATM_TEAM", Some("daemon-launch-team")),
+            ("ATM_IDENTITY", Some("daemon-launch-identity")),
+        ]);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            team_override: None,
+            caller_team: Some(TEST_TEAM.parse().expect("team")),
+            caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+        };
+
+        let report =
+            run_doctor(&paths, query, &healthy_observability(&paths)).expect("doctor report");
+
+        assert_eq!(
+            report.client_context.team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+        assert_eq!(
+            report
+                .client_context
+                .identity
+                .as_ref()
+                .map(AgentName::as_str),
+            Some(TEST_SENDER)
+        );
+        assert_eq!(
+            report.environment.atm_team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn team_override_is_reflected_in_client_context() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let _env =
+            crate::test_support::EnvGuard::set_many([("ATM_TEAM", None), ("ATM_IDENTITY", None)]);
+        let override_team = format!("{TEST_TEAM}-override");
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            team_override: Some(override_team.parse().expect("team override")),
+            caller_team: Some(TEST_TEAM.parse().expect("team")),
+            caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+        };
+
+        let report =
+            run_doctor(&paths, query, &healthy_observability(&paths)).expect("doctor report");
+
+        assert_eq!(
+            report.client_context.team.as_ref().map(TeamName::as_str),
+            Some(override_team.as_str())
         );
     }
 }

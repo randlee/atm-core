@@ -821,6 +821,14 @@ impl DaemonRequestDispatcher {
             error_count,
         };
         report.runtime_status = Some(runtime_status);
+        // `daemon_context` reports the daemon process's own launch-time
+        // environment, which is frozen when the singleton starts and does NOT
+        // track the requesting shell. It is deliberately distinct from
+        // `client_context` (threaded through the request payload in
+        // `DoctorQuery::caller_*`), which reflects the invoking CLI process.
+        // Surfacing the daemon's launch-time identity is diagnostically useful:
+        // it explains why an earlier release appeared to report a stale team or
+        // identity for every caller (see issue #548).
         report.daemon_context = Some(DoctorExecutionContext {
             team: atm_core::caller_context::read_cli_team_from_env()
                 .ok()
