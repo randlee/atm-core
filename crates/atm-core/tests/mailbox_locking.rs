@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 
 use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
