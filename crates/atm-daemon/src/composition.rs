@@ -224,6 +224,7 @@ impl RuntimeComposition {
             runtime_assembly.remote_replay_store.clone(),
             peer_transport_config,
             observability,
+            status_cache.clone(),
         );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
@@ -521,11 +522,13 @@ fn build_peer_transport_runtime(
     replay_store: Arc<dyn RemoteReplayStore>,
     peer_transport_config: PeerTransportConfig,
     observability: Arc<dyn DaemonRuntimeObservability>,
+    status_cache: RuntimeStatusCache,
 ) -> PeerTransportRuntime {
     PeerTransportRuntime::new_with_observability(
         Some(replay_store),
         peer_transport_config,
         SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
+        status_cache,
     )
 }
 

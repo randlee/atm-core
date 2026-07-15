@@ -108,6 +108,83 @@ Notes:
 - if a host cannot determine the right peer address/port from product docs or
   observable config, that is a setup-contract finding
 
+## Patched-Daemon Demo Contract For `AG-FIND-004`
+
+Use this section when validating the patched daemon from PR #551 / commit
+`69395061` rather than the released `1.3.1` binaries.
+
+The patched cross-host lane now requires two distinct settings per host:
+
+- outbound peer target:
+  - `ATM_DAEMON_PEER_ADDR=<remote-host-ip:port>`
+- inbound peer listener bind:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "<local-host-ip:port>"
+    ```
+
+Rules:
+
+- `ATM_DAEMON_PEER_ADDR` tells the local daemon where to dial
+- `daemon.peer_listen_addr` tells the local daemon what local TCP address to
+  bind and accept on
+- both values must be literal `IP:port`
+- the two hosts must use opposite values:
+  - Windows `.atm.toml` listener address = address macOS uses in
+    `ATM_DAEMON_PEER_ADDR`
+  - macOS `.atm.toml` listener address = address Windows uses in
+    `ATM_DAEMON_PEER_ADDR`
+
+### Minimal macOS / Windows demo pair
+
+Example pair:
+
+- macOS listener: `192.168.1.20:43101`
+- Windows listener: `192.168.1.21:43101`
+
+Then configure:
+
+- on macOS:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "192.168.1.20:43101"
+    ```
+  - env:
+    - `ATM_DAEMON_PEER_ADDR=192.168.1.21:43101`
+
+- on Windows:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "192.168.1.21:43101"
+    ```
+  - env:
+    - `ATM_DAEMON_PEER_ADDR=192.168.1.20:43101`
+
+### First live demo command order
+
+1. update both hosts to commit `69395061`
+2. write `.atm.toml` with the host-local `daemon.peer_listen_addr`
+3. start macOS patched daemon
+4. start Windows patched daemon
+5. capture `atm doctor --json` on both hosts
+6. from Windows, run the first durable send to the macOS recipient
+7. on macOS, run `atm read --all --json`
+8. if send succeeds, immediately retain:
+   - sender JSON result
+   - receiver read JSON result
+   - retained logs from both hosts
+
+Runbook discipline note:
+
+- do not apply exploratory code patches during AG execution just to "see what
+  happens"
+- a named finding fix is different: once a concrete ledger-linked defect exists
+  (for example `AG-FIND-004`) the deliberate implementation patch belongs in
+  normal branch/PR history with the finding id called out in the evidence trail
+
 ## Transport-Security Contract
 
 The documented architecture/requirements line says cross-host daemon transport
