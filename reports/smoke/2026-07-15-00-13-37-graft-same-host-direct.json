@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "binary_sha": "b610431fbba7728933d039cca4d1922668efa7cb",
+  "command": "python3 scripts/smoke/run_graft_same_host.py",
+  "note": "same-host atm-graft host registered, consumed advisory nudge, completed read/ack/send over the shared daemon contract, and the operator read the graft follow-up successfully",
+  "initial_message_id": "01KXHHWVWNVZR2N29YA2AMA39P",
+  "follow_up_message_id": "01KXHHWVXNN07PVJXM5GCWCH9G",
+  "daemon_pids_during": [
+    64802
+  ]
+}

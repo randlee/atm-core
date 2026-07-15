@@ -23,10 +23,10 @@ available same-host surfaces on macOS and Windows.
 - branch: `smoke-test/1.3.1-cross-host`
 - workspace version: `1.3.1`
 - runtime-hardening baseline: `8a371683` (`fix: harden graft smoke runtime readiness`)
-- current validated smoke head: `fcf4cd25`
+- current validated smoke head: `b610431f`
 
 `8a371683` is the commit that introduced the graft receiver readiness hardening
-that unblocked the same-host graft lane. The current head `fcf4cd25` closes the
+that unblocked the same-host graft lane. The current head `b610431f` closes the
 QA follow-up findings against that baseline by tightening runtime behavior,
 correcting smoke-script validation, and updating the evidence set.
 
@@ -39,8 +39,8 @@ correcting smoke-script validation, and updating the evidence set.
 - `reports/smoke/smoke-fast.md`
 - `reports/smoke/smoke.md`
 - `reports/smoke/smoke-thorough.md`
-- `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
-- `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md`
+- `reports/smoke/2026-07-15-00-13-36-shared-host-direct.md`
+- `reports/smoke/2026-07-15-00-13-37-graft-same-host-direct.md`
 - `reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md`
 
 ## QA1 fix-round content
@@ -79,16 +79,16 @@ Windows rerun already published to the branch with a real commit SHA in
 
 ### Result
 
-All required macOS same-host checks passed at branch head `fcf4cd25`.
+All required macOS same-host checks passed at branch head `b610431f`.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Fast smoke | `PASS` | `reports/smoke/smoke-fast.md` |
 | Normal smoke | `PASS` | `reports/smoke/smoke.md` |
 | Thorough smoke | `PASS` | `reports/smoke/smoke-thorough.md` |
-| Direct shared-host lane | `PASS` | `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md` |
-| Direct graft same-host lane | `PASS` | `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md` |
-| Full repo validation | `PASS` | local `just test` run at `fcf4cd25` |
+| Direct shared-host lane | `PASS` | `reports/smoke/2026-07-15-00-13-36-shared-host-direct.md` |
+| Direct graft same-host lane | `PASS` | `reports/smoke/2026-07-15-00-13-37-graft-same-host-direct.md` |
+| Full repo validation | `PASS` | local `just test` run at `b610431f` |
 
 ### Direct shared-host rerun evidence
 
@@ -98,7 +98,7 @@ separately instead of being inferred from the embedded AD18 row:
 - command: `python3 scripts/smoke/run_thorough_shared_host.py`
 - result: `PASS`
 - durable report:
-  `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
+  `reports/smoke/2026-07-15-00-13-36-shared-host-direct.md`
 
 This closes the earlier evidentiary gap where only the embedded suite row had
 been published.
@@ -136,8 +136,8 @@ exercised.
   - `reports/smoke/smoke.md`
   - `reports/smoke/smoke-thorough.md`
 - direct macOS lane reports:
-  - `reports/smoke/2026-07-14-23-55-40-shared-host-direct.md`
-  - `reports/smoke/2026-07-14-23-55-41-graft-same-host-direct.md`
+  - `reports/smoke/2026-07-15-00-13-36-shared-host-direct.md`
+  - `reports/smoke/2026-07-15-00-13-37-graft-same-host-direct.md`
 - Windows rerun report:
   - `reports/smoke/2026-07-14-23-44-37-smoke-1.3.1-windows-rerun.md`
 
