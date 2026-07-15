@@ -160,10 +160,13 @@ fn peer_listener_reload_bind_failure_persists_degraded_status_until_successful_r
 
     let blocker = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("blocker");
     let blocked_addr = blocker.local_addr().expect("blocked addr");
-    let error = listener_transport
-        .reload_listener(Some(blocked_addr), Arc::new(DoctorOnlyDispatcher))
-        .expect_err("reload should fail when address is already bound");
-    assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+    let outcomes = listener_transport
+        .reload_listeners(vec![blocked_addr], Arc::new(DoctorOnlyDispatcher))
+        .expect("reload should preserve degraded status when one address is blocked");
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0].listen_addr, blocked_addr);
+    assert!(outcomes[0].bound_addr.is_none());
+    assert!(outcomes[0].error_message.is_some());
 
     let degraded = status_cache.snapshot();
     assert_eq!(degraded.readiness, RuntimeReadinessState::Degraded);
@@ -183,6 +186,48 @@ fn peer_listener_reload_bind_failure_persists_degraded_status_until_successful_r
     let recovered = status_cache.snapshot();
     assert_eq!(recovered.readiness, RuntimeReadinessState::Ready);
     assert!(!recovered.degraded_peer_listener);
+    listener_transport.shutdown().expect("shutdown");
+}
+
+#[test]
+fn peer_listener_reload_keeps_healthy_rows_running_when_one_row_fails_to_bind() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let status_cache = RuntimeStatusCache::new();
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_status_cache(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        status_cache.clone(),
+    );
+
+    let good_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("good listener");
+    let good_addr = good_listener.local_addr().expect("good addr");
+    drop(good_listener);
+
+    let blocker = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("blocker");
+    let blocked_addr = blocker.local_addr().expect("blocked addr");
+
+    let outcomes = listener_transport
+        .reload_listeners(
+            vec![good_addr, blocked_addr],
+            Arc::new(DoctorOnlyDispatcher),
+        )
+        .expect("reload listeners");
+    assert_eq!(outcomes.len(), 2);
+    assert!(outcomes.iter().any(|outcome| {
+        outcome.listen_addr == good_addr
+            && outcome.bound_addr.is_some()
+            && outcome.error_message.is_none()
+    }));
+    assert!(outcomes.iter().any(|outcome| {
+        outcome.listen_addr == blocked_addr
+            && outcome.bound_addr.is_none()
+            && outcome.error_message.is_some()
+    }));
+
+    let degraded = status_cache.snapshot();
+    assert_eq!(degraded.readiness, RuntimeReadinessState::Degraded);
+    assert!(degraded.degraded_peer_listener);
+
     listener_transport.shutdown().expect("shutdown");
 }
 

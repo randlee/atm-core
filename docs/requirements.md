@@ -3574,6 +3574,9 @@ mail correctness.
     durable state
   - CLI commands are the primary operator surface for adding, updating,
     enabling, disabling, removing, and listing those interface rows
+  - each configured row retains bind observability state including
+    `last_bound_at`, `last_bind_error`, and stale visibility instead of
+    collapsing failure into one process-global flag
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables may remain as historical/transitional compatibility
     inputs but must not remain the intended steady-state configuration model

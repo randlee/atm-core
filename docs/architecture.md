@@ -2690,6 +2690,8 @@ There are three distinct paths:
      - SQLite-backed exact-host allowlist enforcement
      - CLI management for both
      - doctor-visible state for both
+     - per-interface bind result persistence so one bad row does not hide the
+       healthy rows
    - loopback self-test remains a local diagnostic variant of the daemon
      listener/send path and is not equivalent to remote host-pair proof
 

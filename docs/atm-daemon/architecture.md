@@ -248,6 +248,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - if the configured listener bind address is an explicit local IP that later
   disappears or changes, the runtime must enter degraded status and require
   bounded reload/rebind via the runtime reload path
+- when multiple durable interface rows are enabled, the daemon must attempt
+  them independently and persist row-local bind outcomes so one failed row
+  does not suppress the healthy listener set
 - graceful shutdown finalization must remain bounded; best-effort SQLite WAL
   checkpoint and observability flush steps must time out rather than block
   daemon exit indefinitely

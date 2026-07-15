@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
@@ -244,6 +246,192 @@ pub struct TeamNudgeTemplateOverrideRow {
     pub kind: BuiltInNudgeTemplateKind,
     pub mode: TeamNudgeTemplateOverrideMode,
     pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerInterfaceKind {
+    Lan,
+    Vpn,
+    Loopback,
+    Other,
+}
+
+impl PeerInterfaceKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Lan => "lan",
+            Self::Vpn => "vpn",
+            Self::Loopback => "loopback",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl fmt::Display for PeerInterfaceKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PeerInterfaceKind {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "lan" => Ok(Self::Lan),
+            "vpn" => Ok(Self::Vpn),
+            "loopback" => Ok(Self::Loopback),
+            "other" => Ok(Self::Other),
+            other => Err(AtmError::validation(format!(
+                "unsupported peer interface kind `{other}`"
+            ))
+            .with_recovery("Use one of lan, vpn, loopback, or other.")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceKey {
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub port: u16,
+}
+
+impl PeerInterfaceKey {
+    pub fn new(
+        interface_name: impl Into<String>,
+        bind_addr: IpAddr,
+        port: u16,
+    ) -> Result<Self, AtmError> {
+        let interface_name = require_non_blank(
+            interface_name.into(),
+            "peer interface name",
+            "Provide a non-empty daemon peer interface name before mutating interface configuration.",
+        )?;
+        Ok(Self {
+            interface_name,
+            bind_addr,
+            port,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceRow {
+    pub interface_id: i64,
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub enabled: bool,
+    pub configured_by: String,
+    pub configured_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_deadline_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bound_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bind_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AddPeerInterfaceCommand {
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub configured_by: String,
+}
+
+impl AddPeerInterfaceCommand {
+    pub fn new(
+        interface_name: impl Into<String>,
+        bind_addr: IpAddr,
+        advertise_addr: IpAddr,
+        port: u16,
+        interface_kind: PeerInterfaceKind,
+        configured_by: impl Into<String>,
+    ) -> Result<Self, AtmError> {
+        let interface_name = require_non_blank(
+            interface_name.into(),
+            "peer interface name",
+            "Provide a non-empty daemon peer interface name before adding interface configuration.",
+        )?;
+        let configured_by = require_non_blank(
+            configured_by.into(),
+            "peer interface configured_by",
+            "Populate the caller identity before recording daemon peer interface configuration.",
+        )?;
+        Ok(Self {
+            interface_name,
+            bind_addr,
+            advertise_addr,
+            port,
+            interface_kind,
+            configured_by,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdatePeerInterfaceCommand {
+    pub key: PeerInterfaceKey,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub configured_by: String,
+    pub new_bind_addr: IpAddr,
+    pub enabled: Option<bool>,
+}
+
+impl UpdatePeerInterfaceCommand {
+    pub fn new(
+        key: PeerInterfaceKey,
+        new_bind_addr: IpAddr,
+        advertise_addr: IpAddr,
+        port: u16,
+        interface_kind: PeerInterfaceKind,
+        configured_by: impl Into<String>,
+        enabled: Option<bool>,
+    ) -> Result<Self, AtmError> {
+        let configured_by = require_non_blank(
+            configured_by.into(),
+            "peer interface configured_by",
+            "Populate the caller identity before updating daemon peer interface configuration.",
+        )?;
+        Ok(Self {
+            key,
+            advertise_addr,
+            port,
+            interface_kind,
+            configured_by,
+            new_bind_addr,
+            enabled,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceBindingUpdate {
+    pub key: PeerInterfaceKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_deadline_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bound_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bind_error: Option<String>,
 }
 
 impl TeamNudgeTemplateOverrideRow {
@@ -520,6 +708,31 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
         team: &TeamName,
         kind: BuiltInNudgeTemplateKind,
     ) -> Result<bool, AtmError>;
+}
+
+pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {
+    fn add_interface(&self, command: AddPeerInterfaceCommand)
+    -> Result<PeerInterfaceRow, AtmError>;
+
+    fn update_interface(
+        &self,
+        command: UpdatePeerInterfaceCommand,
+    ) -> Result<PeerInterfaceRow, AtmError>;
+
+    fn set_interface_enabled(
+        &self,
+        key: &PeerInterfaceKey,
+        enabled: bool,
+    ) -> Result<PeerInterfaceRow, AtmError>;
+
+    fn remove_interface(&self, key: &PeerInterfaceKey) -> Result<bool, AtmError>;
+
+    fn list_interfaces(&self) -> Result<Vec<PeerInterfaceRow>, AtmError>;
+
+    fn record_binding_update(
+        &self,
+        update: &PeerInterfaceBindingUpdate,
+    ) -> Result<PeerInterfaceRow, AtmError>;
 }
 
 #[cfg(test)]

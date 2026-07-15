@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -29,11 +30,18 @@ struct PeerServerHandle {
     bound_addr: SocketAddr,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PeerListenerOutcome {
+    pub(crate) listen_addr: SocketAddr,
+    pub(crate) bound_addr: Option<SocketAddr>,
+    pub(crate) error_message: Option<String>,
+}
+
 #[derive(Debug)]
 pub(super) struct PeerServerTransport {
-    listen_addr: Mutex<Option<SocketAddr>>,
+    listen_addrs: Mutex<Vec<SocketAddr>>,
     observability: SubsystemObservability,
-    state: Mutex<Option<PeerServerHandle>>,
+    state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>,
     status_cache: RuntimeStatusCache,
 }
 
@@ -44,149 +52,157 @@ impl PeerServerTransport {
         status_cache: RuntimeStatusCache,
     ) -> Self {
         Self {
-            listen_addr: Mutex::new(listen_addr),
+            listen_addrs: Mutex::new(listen_addr.into_iter().collect()),
             observability,
-            state: Mutex::new(None),
+            state: Mutex::new(BTreeMap::new()),
             status_cache,
         }
     }
 
+    #[allow(
+        dead_code,
+        reason = "retained for transitional peer-runtime entrypoints"
+    )]
     pub(super) fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError> {
-        let Some(listen_addr) = self.configured_listen_addr()? else {
-            self.status_cache.clear_peer_listener_degraded();
-            return Ok(());
-        };
-        let mut state = self.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("peer listener state lock poisoned")
-                .with_recovery("Restart atm-daemon before retrying cross-host peer startup.")
-        })?;
-        if state.is_some() {
-            return Ok(());
-        }
-        let (bound_addr, handle) = self.bind_and_spawn_listener(listen_addr, dispatcher)?;
-        self.observability.emit_or_warn(
-            "peer_listener_start",
-            "ok",
-            format!("daemon peer listener bound at {bound_addr}"),
-        );
-        self.status_cache.clear_peer_listener_degraded();
-        *state = Some(handle);
-        Ok(())
+    ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
+        let listen_addrs = self.configured_listen_addrs()?;
+        self.reload(listen_addrs, dispatcher)
     }
 
     pub(super) fn shutdown(&self) -> Result<(), AtmError> {
-        let handle = self
+        let handles = self
             .state
             .lock()
             .map_err(|_| {
                 AtmError::daemon_unavailable("peer listener state lock poisoned")
                     .with_recovery("Restart atm-daemon before retrying cross-host peer shutdown.")
             })?
-            .take();
-        let Some(handle) = handle else {
+            .values()
+            .map(|handle| handle.bound_addr)
+            .collect::<Vec<_>>();
+        if handles.is_empty() {
             return Ok(());
-        };
-        handle.terminate.store(true, Ordering::SeqCst);
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
-        thread::Builder::new()
-            .name("peer-transport-join-helper".to_string())
-            .spawn(move || {
-                let result = match handle.join_handle.join() {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(error)) => Err(error),
-                    Err(_) => Err(AtmError::daemon_unavailable(
-                        "daemon peer listener thread panicked unexpectedly",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon before retrying cross-host peer transport.",
-                    )),
-                };
-                let _ = result_tx.send(result);
-            })
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to spawn peer listener join helper")
-                    .with_recovery(
-                        "Restart atm-daemon before retrying cross-host peer listener shutdown.",
-                    )
-                    .with_source(source)
-            })?;
-        match result_rx.recv_timeout(PEER_LISTENER_SHUTDOWN_DEADLINE) {
-            Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
-                "daemon peer listener shutdown exceeded the bounded join deadline",
-            )
-            .with_recovery(
-                "Restart atm-daemon after confirming no inbound peer connection is stalled beyond the bounded deadline.",
-            )),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
-                "daemon peer listener join helper disconnected unexpectedly",
-            )
-            .with_recovery(
-                "Restart atm-daemon before retrying cross-host peer listener shutdown.",
-            )),
         }
+        let drained = {
+            let mut state = self.state.lock().map_err(|_| {
+                AtmError::daemon_unavailable("peer listener state lock poisoned")
+                    .with_recovery("Restart atm-daemon before retrying cross-host peer shutdown.")
+            })?;
+            std::mem::take(&mut *state)
+                .into_iter()
+                .map(|(_, handle)| handle)
+                .collect::<Vec<_>>()
+        };
+        for handle in drained {
+            shutdown_listener_handle(handle)?;
+        }
+        self.status_cache.clear_peer_listener_degraded();
+        Ok(())
     }
 
     pub(super) fn reload(
         &self,
-        listen_addr: Option<SocketAddr>,
+        listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError> {
-        let state_present = self
-            .state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
-                    "Restart atm-daemon before retrying cross-host peer listener reload.",
-                )
-            })?
-            .is_some();
-        let previous = {
-            let mut configured = self.listen_addr.lock().map_err(|_| {
+    ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
+        {
+            let mut configured = self.listen_addrs.lock().map_err(|_| {
                 AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
                     "Restart atm-daemon before retrying cross-host peer listener reload.",
                 )
             })?;
-            let previous = *configured;
-            if previous == listen_addr && (listen_addr.is_none() || state_present) {
-                return Ok(());
-            }
-            *configured = listen_addr;
-            previous
-        };
+            *configured = listen_addrs.clone();
+        }
 
-        if previous.is_some() {
-            self.shutdown()?;
+        let desired = listen_addrs
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut state = self.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener reload.",
+            )
+        })?;
+
+        let stale_addrs = state
+            .keys()
+            .copied()
+            .filter(|addr| !desired.contains(addr))
+            .collect::<Vec<_>>();
+        for stale_addr in stale_addrs {
+            if let Some(handle) = state.remove(&stale_addr) {
+                shutdown_listener_handle(handle)?;
+            }
         }
-        if let Some(listen_addr) = listen_addr {
-            self.start(dispatcher).inspect_err(|error| {
-                tracing::warn!(
-                    subsystem = "peer_transport",
-                    action = "reload_listener",
-                    outcome = "degraded",
-                    %error,
-                    "daemon peer listener reload failed to rebind the configured address"
-                );
-                self.observability.emit_or_warn(
-                    "peer_listener_reload",
-                    "degraded",
-                    "daemon peer listener reload failed to rebind the configured address",
-                );
-                self.record_degraded(listen_addr, error);
-            })?;
-        } else {
+
+        let mut outcomes = Vec::new();
+        let mut failures = Vec::new();
+        for listen_addr in listen_addrs {
+            if let Some(handle) = state.get(&listen_addr) {
+                outcomes.push(PeerListenerOutcome {
+                    listen_addr,
+                    bound_addr: Some(handle.bound_addr),
+                    error_message: None,
+                });
+                continue;
+            }
+            match self.bind_and_spawn_listener(listen_addr, dispatcher.clone()) {
+                Ok((bound_addr, handle)) => {
+                    self.observability.emit_or_warn(
+                        "peer_listener_start",
+                        "ok",
+                        format!("daemon peer listener bound at {bound_addr}"),
+                    );
+                    state.insert(listen_addr, handle);
+                    outcomes.push(PeerListenerOutcome {
+                        listen_addr,
+                        bound_addr: Some(bound_addr),
+                        error_message: None,
+                    });
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "peer_transport",
+                        action = "reload_listener",
+                        outcome = "degraded",
+                        %listen_addr,
+                        %error,
+                        "daemon peer listener reload failed to rebind the configured address"
+                    );
+                    self.observability.emit_or_warn(
+                        "peer_listener_reload",
+                        "degraded",
+                        format!("daemon peer listener reload failed for {listen_addr}"),
+                    );
+                    self.record_degraded(listen_addr, &error);
+                    failures.push(format!("{listen_addr}: {}", error.message));
+                    outcomes.push(PeerListenerOutcome {
+                        listen_addr,
+                        bound_addr: None,
+                        error_message: Some(error.message.clone()),
+                    });
+                }
+            }
+        }
+
+        if failures.is_empty() {
             self.status_cache.clear_peer_listener_degraded();
+        } else {
+            self.status_cache.record_peer_listener_degraded(format!(
+                "daemon peer listener reload has degraded rows: {}",
+                failures.join("; ")
+            ));
         }
-        Ok(())
+
+        Ok(outcomes)
     }
 
     pub(super) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
         self.state
             .lock()
-            .map(|state| state.as_ref().map(|handle| handle.bound_addr))
+            .map(|state| state.values().next().map(|handle| handle.bound_addr))
             .map_err(|_| {
                 AtmError::daemon_unavailable("peer listener state lock poisoned")
                     .with_recovery("Restart atm-daemon before retrying cross-host peer inspection.")
@@ -198,7 +214,7 @@ impl PeerServerTransport {
         self.state
             .lock()
             .ok()
-            .and_then(|state| state.as_ref().map(|handle| handle.bound_addr))
+            .and_then(|state| state.values().next().map(|handle| handle.bound_addr))
     }
 
     fn record_degraded(&self, listen_addr: SocketAddr, error: &AtmError) {
@@ -208,11 +224,18 @@ impl PeerServerTransport {
         ));
     }
 
-    fn configured_listen_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
-        self.listen_addr.lock().map(|addr| *addr).map_err(|_| {
-            AtmError::daemon_unavailable("peer listener config lock poisoned")
-                .with_recovery("Restart atm-daemon before retrying cross-host peer startup.")
-        })
+    #[allow(
+        dead_code,
+        reason = "used by the retained single-entry listener start path"
+    )]
+    fn configured_listen_addrs(&self) -> Result<Vec<SocketAddr>, AtmError> {
+        self.listen_addrs
+            .lock()
+            .map(|addr| addr.clone())
+            .map_err(|_| {
+                AtmError::daemon_unavailable("peer listener config lock poisoned")
+                    .with_recovery("Restart atm-daemon before retrying cross-host peer startup.")
+            })
     }
 
     fn bind_and_spawn_listener(
@@ -232,7 +255,7 @@ impl PeerServerTransport {
                 "failed to bind daemon peer listener at {listen_addr}"
             ))
             .with_recovery(
-                "Choose an available literal IP:port for daemon.peer_listen_addr and restart atm-daemon.",
+                "Choose an available literal IP:port for `atm daemon interfaces add ...` or update the existing daemon interface row before restarting atm-daemon.",
             )
             .with_source(source);
             self.record_degraded(listen_addr, &error);
@@ -261,7 +284,7 @@ impl PeerServerTransport {
                 "failed to resolve daemon peer listener bound address",
             )
             .with_recovery(
-                "Restart atm-daemon after confirming the configured daemon.peer_listen_addr is valid on this host.",
+                "Restart atm-daemon after confirming the configured daemon interface row is valid on this host.",
             )
             .with_source(source);
             self.record_degraded(listen_addr, &error);
@@ -311,6 +334,44 @@ impl PeerServerTransport {
             join_handle,
             bound_addr,
         })
+    }
+}
+
+fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {
+    handle.terminate.store(true, Ordering::SeqCst);
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("peer-transport-join-helper".to_string())
+        .spawn(move || {
+            let result = match handle.join_handle.join() {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(error)) => Err(error),
+                Err(_) => Err(AtmError::daemon_unavailable(
+                    "daemon peer listener thread panicked unexpectedly",
+                )
+                .with_recovery("Restart atm-daemon before retrying cross-host peer transport.")),
+            };
+            let _ = result_tx.send(result);
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn peer listener join helper")
+                .with_recovery(
+                    "Restart atm-daemon before retrying cross-host peer listener shutdown.",
+                )
+                .with_source(source)
+        })?;
+    match result_rx.recv_timeout(PEER_LISTENER_SHUTDOWN_DEADLINE) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+            "daemon peer listener shutdown exceeded the bounded join deadline",
+        )
+        .with_recovery(
+            "Restart atm-daemon after confirming no inbound peer connection is stalled beyond the bounded deadline.",
+        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
+            "daemon peer listener join helper disconnected unexpectedly",
+        )
+        .with_recovery("Restart atm-daemon before retrying cross-host peer listener shutdown.")),
     }
 }
 

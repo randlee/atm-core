@@ -10,6 +10,7 @@
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
+mod peer_interface_store;
 mod roster_store;
 mod shared_db;
 mod writer;
@@ -19,7 +20,9 @@ pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
-use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
+use atm_storage::contract::{
+    Message, MessageKey, MessageQuery, MessageStore, PeerInterfaceConfigStore, RosterStore,
+};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AtmError, IsoTimestamp};
@@ -182,6 +185,11 @@ struct SqliteRosterStore {
 
 #[derive(Debug)]
 struct SqliteNudgeTemplateOverrideStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqlitePeerInterfaceConfigStore {
     db: Arc<SharedDb>,
 }
 
@@ -443,6 +451,7 @@ pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
+    peer_interface_config_store: Arc<SqlitePeerInterfaceConfigStore>,
 }
 
 impl SqliteStorageBackend {
@@ -458,7 +467,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(db)),
         })
     }
 
@@ -468,7 +480,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(db)),
         })
     }
 
@@ -514,6 +529,10 @@ impl SqliteStorageBackend {
         &self,
     ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
+    }
+
+    pub fn peer_interface_config_store(&self) -> Arc<dyn PeerInterfaceConfigStore + Send + Sync> {
+        self.peer_interface_config_store.clone()
     }
 
     #[cfg(test)]
@@ -1046,6 +1065,54 @@ mod tests {
         let loaded = store.load_roster(&team).expect("load roster");
         assert_eq!(loaded.members.len(), 1);
         assert_eq!(store.list_teams().expect("list teams"), vec![team]);
+    }
+
+    #[test]
+    fn sqlite_backend_saves_updates_disables_and_lists_peer_interfaces() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.peer_interface_config_store();
+        let row = store
+            .add_interface(
+                atm_storage::AddPeerInterfaceCommand::new(
+                    "vpn0",
+                    "10.0.0.5".parse().expect("bind addr"),
+                    "10.0.0.5".parse().expect("advertise addr"),
+                    43101,
+                    atm_storage::PeerInterfaceKind::Vpn,
+                    "arch-ctm@atm-dev",
+                )
+                .expect("add command"),
+            )
+            .expect("add interface");
+        assert_eq!(row.interface_name, "vpn0");
+        assert!(row.enabled);
+
+        let updated = store
+            .update_interface(
+                atm_storage::UpdatePeerInterfaceCommand::new(
+                    atm_storage::PeerInterfaceKey::new(
+                        "vpn0",
+                        "10.0.0.5".parse().expect("bind addr"),
+                        43101,
+                    )
+                    .expect("key"),
+                    "10.0.0.6".parse().expect("new bind"),
+                    "10.0.0.6".parse().expect("advertise"),
+                    43101,
+                    atm_storage::PeerInterfaceKind::Vpn,
+                    "arch-ctm@atm-dev",
+                    Some(false),
+                )
+                .expect("update command"),
+            )
+            .expect("update interface");
+        assert_eq!(updated.bind_addr.to_string(), "10.0.0.6");
+        assert!(!updated.enabled);
+
+        let listed = store.list_interfaces().expect("list interfaces");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].bind_addr.to_string(), "10.0.0.6");
+        assert!(!listed[0].enabled);
     }
 
     #[test]

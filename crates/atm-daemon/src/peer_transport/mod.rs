@@ -912,23 +912,38 @@ impl PeerTransportRuntime {
         self.client.send_with_outcome_persistence(endpoint, request)
     }
 
+    #[allow(
+        dead_code,
+        reason = "retained for tests and transitional peer-runtime entrypoints"
+    )]
     pub(crate) fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
-        self.server.start(dispatcher)
+        self.server.start(dispatcher).map(|_| ())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.server.shutdown()
     }
 
+    #[allow(dead_code, reason = "retained for existing peer-transport tests")]
     pub(crate) fn reload_listener(
         &self,
         listen_addr: Option<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
-        self.server.reload(listen_addr, dispatcher)
+        self.server
+            .reload(listen_addr.into_iter().collect::<Vec<_>>(), dispatcher)?;
+        Ok(())
+    }
+
+    pub(crate) fn reload_listeners(
+        &self,
+        listen_addrs: Vec<SocketAddr>,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<Vec<server::PeerListenerOutcome>, AtmError> {
+        self.server.reload(listen_addrs, dispatcher)
     }
 
     pub(crate) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {

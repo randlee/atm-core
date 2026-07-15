@@ -156,6 +156,11 @@ Initial crate requirement IDs:
   durable cross-host interface configuration rows that determine which
   listeners may bind and advertise. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
+  Required daemon behavior:
+  - apply every enabled interface row independently
+  - persist per-row bind success/failure state
+  - keep degraded/stale rows queryable through the CLI instead of deleting
+    them during reload
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` owns loading and enforcing the
   durable deny-by-default exact-host allowlist before any mailbox, ack, or
   roster mutation occurs. Satisfies:

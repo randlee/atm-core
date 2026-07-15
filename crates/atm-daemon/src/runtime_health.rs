@@ -668,7 +668,7 @@ impl DaemonRequestDispatcher {
                     "loopback peer delivery is unavailable because the daemon peer listener is not running",
                 )
                 .with_recovery(
-                    "Set [daemon].peer_listen_addr, restart atm-daemon, and retry the loopback send after the peer listener is bound.",
+                    "Add and enable a loopback daemon interface row with `atm daemon interfaces ...`, restart atm-daemon, and retry the loopback send after the peer listener is bound.",
                 )
             })?;
         let host_addr = if host.as_str().eq_ignore_ascii_case("localhost") {
