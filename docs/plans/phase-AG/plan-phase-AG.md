@@ -59,9 +59,11 @@ release-readiness line.
 
 Current release baseline on entry:
 
-- `integrate/phase-AF` is the accepted implementation branch for the `1.3.1`
-  reliability-recovery line
-- PR #539 is merged to `develop` at `98a4e66c`
+- Phase AF's accepted same-host reliability-recovery line is merged to
+  `develop` at `98a4e66c`
+- the authoritative Phase AF dependency artifacts in this branch must also
+  report that merged/closed state before AG may rely on them as already
+  validated input
 
 Entry-gate prerequisites:
 
@@ -178,6 +180,8 @@ Required shape:
 - no reads or writes against live `~/.atm` or `~/.claude`
 - pre-send configuration validation so peer-transport misconfiguration fails
   fast rather than appearing as a later write-path mystery
+- transport-security disposition is captured explicitly against the documented
+  TCP/TLS requirement before AG can claim cross-host release-usability
 
 ### Lane B — Disposable Copied-State Revalidation
 
@@ -232,6 +236,10 @@ These details are recorded in:
 - degraded notification after durable cross-host delivery
 - retry-visible interruption and recovery
 - copied-state rerun of the approved subset only after clean-room success
+- transport-security requirement disposition against
+  `REQ-CORE-TRANSPORT-001/003/005`; if the implementation remains plain TCP,
+  AG must open and carry a named `PRODUCT-BUG` or requirement-drift finding and
+  must not declare cross-host communication release-usable
 
 ## Evidence Contract
 
@@ -255,15 +263,15 @@ Every validation row must capture:
 
 ## Failure Classification
 
-The authoritative findings-ledger `classification` enum is:
+The sole authoritative `classification` enum for Phase AG findings is:
 
 - `SETUP-GAP`
 - `ENV-MISTAKE`
 - `PRODUCT-BUG`
 - `EXTERNAL-BLOCKER`
 
-`cross-host-setup-runbook.md` uses these same four machine tokens and must not
-introduce alternate spellings.
+All other Phase AG docs must reference this enum and must not claim separate or
+joint authority over it.
 
 Rows may end in one of two useful states:
 
@@ -300,12 +308,15 @@ Outputs:
 - exact env/daemon/peer-address contract for both hosts
 - same-host release-binary health proof on both hosts via `AG-VAL-001` and
   `AG-VAL-002`
+- transport-security requirement disposition via `AG-VAL-011`
 - one first-live-channel viability attempt whose outcome can open a finding,
   but which does not formally close checklist rows owned by `AG.2`
 
 Execution owner:
 
 - `arch-ctm` with Windows/macOS operators capturing host-side evidence
+- `windows-operator` and `macos-operator` execute the concrete host-local
+  commands and produce the retained artifacts consumed by AG.1
 
 Verification owner:
 
@@ -335,6 +346,8 @@ Entry gate:
 Execution owner:
 
 - `arch-ctm` with Windows/macOS operators capturing host-side evidence
+- `windows-operator` and `macos-operator` execute the concrete host-local
+  commands and produce the retained artifacts consumed by AG.2
 
 Verification owner:
 
@@ -354,9 +367,15 @@ Outputs:
 - evidence that failures are not misclassified as delivery failure when the
   durable write already succeeded
 
+Entry gate:
+
+- `AG.2` core interface rows are no longer unresolved
+
 Execution owner:
 
 - `arch-ctm` with Windows/macOS operators capturing host-side evidence
+- `windows-operator` and `macos-operator` execute the concrete host-local
+  commands and produce the retained artifacts consumed by AG.3
 
 Verification owner:
 
@@ -377,6 +396,8 @@ Outputs:
 Execution owner:
 
 - `arch-ctm` with Windows/macOS operators capturing host-side evidence
+- `windows-operator` and `macos-operator` execute the concrete host-local
+  commands and produce the retained artifacts consumed by AG.4
 
 Verification owner:
 

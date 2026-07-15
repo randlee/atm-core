@@ -13,6 +13,9 @@ release line.
 - the copied-state lane is executed only after clean-room success
 - `AG.2` does not begin until `AG.1` resolves the first live-channel outcome
   to either a working channel or a named blocking finding
+- transport-security disposition is recorded against the documented TCP/TLS
+  requirement, and any plain-TCP mismatch remains a named blocker instead of an
+  implicit waiver
 
 ## Per-Sprint Closure Results
 
@@ -39,11 +42,15 @@ Allowed closure-result values:
 - the clean-room lane is executed first and passes or fails with named findings
 - the first live cross-host channel attempt is no longer ambiguous
 - `AG.2` remains blocked until `AG.1` records that first live-channel outcome
+- `AG.3` remains blocked until `AG.2` core interface rows are no longer
+  unresolved
 - `AG.4` does not begin until the required clean-room rows are green
 - every failed row is linked to a finding in
   `cross-host-findings-ledger.md`
 - the final verdict states whether `1.3.1` cross-host communication is
   release-usable
+- no final release-usable verdict is allowed while the transport-security
+  requirement remains open as a `PRODUCT-BUG` or unresolved requirement drift
 
 ## Initial Verdict
 

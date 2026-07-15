@@ -37,6 +37,7 @@ lane is already green.
 ## Ownership
 
 - execution owner: `arch-ctm`
+- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria

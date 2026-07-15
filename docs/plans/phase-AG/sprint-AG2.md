@@ -51,11 +51,12 @@ Validate the main cross-host interface set on clean-room state:
 ## Ownership
 
 - execution owner: `arch-ctm`
+- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria
 
 - every core interface row ends in `PASS` or a named finding
 - no speculative code work begins without one failing row and artifacts
-- no AG.2 execution begins while AG.1's first live-channel outcome is still
-  unresolved
+- AG.1's first live-channel outcome is no longer unresolved, per the Entry
+  Gate section above

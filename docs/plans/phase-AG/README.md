@@ -9,6 +9,8 @@ This is a validation-first phase:
 - prove they work on real binaries before authorizing any code change
 - treat every failure as a concrete product finding with exact reproduction
 - keep code changes out of scope unless the validation matrix exposes a real bug
+- do not certify cross-host release-usability while the transport-security
+  requirement remains unverified or knowingly violated
 
 Planning source of truth:
 

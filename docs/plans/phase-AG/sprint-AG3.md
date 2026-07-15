@@ -37,9 +37,14 @@ delivery outcomes.
   - `AG-VAL-008`
   - `AG-VAL-009`
 
+## Entry Gate
+
+- `AG.2` core interface rows are no longer unresolved
+
 ## Ownership
 
 - execution owner: `arch-ctm`
+- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria

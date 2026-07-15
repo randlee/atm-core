@@ -40,6 +40,7 @@ communication on `1.3.1`.
 ## Ownership
 
 - execution owner: `arch-ctm`
+- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria

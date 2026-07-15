@@ -47,6 +47,7 @@ Each operator must record:
 - exact `atm --version`
 - exact resolved `atm` path
 - exact resolved `atm-daemon` path
+- whether the observed cross-host transport path is plain TCP or TLS-backed
 
 ## Required Environment Contract
 
@@ -66,6 +67,18 @@ Notes:
 - both hosts must know the peer address value they are expected to dial
 - if a host cannot determine the right peer address/port from product docs or
   observable config, that is a setup-contract finding
+
+## Transport-Security Contract
+
+The documented architecture/requirements line says cross-host daemon transport
+is TCP/TLS, not plain unauthenticated TCP. Phase AG must therefore capture one
+explicit transport-security disposition before any release-usable verdict:
+
+- if the release implementation presents real TLS evidence, retain it as part
+  of the validation artifacts
+- if the release implementation remains plain TCP, open or maintain a named
+  `PRODUCT-BUG` / requirement-drift finding against the transport requirement
+  and keep the final AG verdict blocked
 
 ## macOS Bring-Up Checklist
 
@@ -161,8 +174,8 @@ Classify the first failure before moving on:
 - `EXTERNAL-BLOCKER`
   - network/firewall/certificate/host-policy issue prevented validation
 
-These tokens are the authoritative `classification` enum for
-`cross-host-findings-ledger.md` and must match that ledger exactly.
+Use the `classification` enum defined in `plan-phase-AG.md`. This runbook is a
+consumer of that enum, not a second authority.
 
 ## Immediate Recovery Rules
 

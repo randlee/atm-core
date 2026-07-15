@@ -29,6 +29,7 @@ attempt the first live cross-host daemon-to-daemon channel.
 - `cross-host-setup-runbook.md`
 - frozen clean-room env contract for both hosts
 - checklist rows `AG-VAL-001` and `AG-VAL-002`
+- transport-security requirement disposition row `AG-VAL-011`
 - exact first-live-channel validation order
 - exact evidence contract for setup and bring-up failures
 - one AG.1-only first-live-channel viability attempt that can open a finding
@@ -39,12 +40,14 @@ attempt the first live cross-host daemon-to-daemon channel.
 - `docs/plans/phase-AG/cross-host-smoke-checklist.md`
   - `AG-VAL-001`
   - `AG-VAL-002`
+  - `AG-VAL-011`
   - AG.1 viability may exercise `AG-VAL-003` or `AG-VAL-005`, but does not
     formally close them
 
 ## Ownership
 
 - execution owner: `arch-ctm`
+- host operators: `windows-operator`, `macos-operator`
 - verification owner: `quality-mgr`
 
 ## Acceptance Criteria

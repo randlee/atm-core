@@ -30,7 +30,8 @@ Use exactly one of:
 - `EXTERNAL-BLOCKER`
 
 These tokens are defined in `plan-phase-AG.md` and
-`cross-host-setup-runbook.md` and must not be restated with alternate prose.
+must not be restated with alternate prose. `plan-phase-AG.md` is the sole
+authority; this ledger only consumes the enum.
 
 ## Owner Enum
 
