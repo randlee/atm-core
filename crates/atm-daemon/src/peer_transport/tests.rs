@@ -228,6 +228,55 @@ fn peer_listener_dispatch_observes_one_shared_connection_deadline() {
 }
 
 #[test]
+fn peer_listener_delivers_response_computed_within_shared_connection_deadline() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let listener_transport = PeerTransportRuntime::new_server_for_test(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+    );
+    listener_transport
+        .start(Arc::new(SleepingDispatcher {
+            sleep_for: PEER_REQUEST_DEADLINE - Duration::from_millis(500),
+        }))
+        .expect("start listener");
+    let endpoint = listener_transport.bound_addr_for_test().expect("endpoint");
+
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig {
+            remote_retry_budget: Duration::from_secs(4),
+            peer_listen_addr: None,
+        },
+        tempdir.path().join("replay.db"),
+    );
+
+    let response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: atm_core::test_support::TEST_TEAM.parse().expect("team"),
+            member: atm_core::test_support::TEST_SENDER.parse().expect("member"),
+            pid: 9,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        }))
+        .expect("response should be written before the shared deadline expires");
+
+    match response {
+        ResponseEnvelope::Heartbeat(response) => {
+            assert_eq!(response.team, test_team_name());
+            assert_eq!(response.member, test_sender_name());
+            assert_eq!(response.pid, 7);
+            assert!(!response.pid_changed);
+            assert_eq!(response.state, RuntimeMemberState::Idle);
+            assert!(response.last_active_at.is_some());
+        }
+        other => panic!("unexpected response: {other:?}"),
+    }
+    listener_transport.shutdown().expect("shutdown");
+}
+
+#[test]
 fn jittered_backoff_stays_within_twenty_percent_window() {
     let base = Duration::from_millis(250);
     let low = jittered_backoff(base, 0);

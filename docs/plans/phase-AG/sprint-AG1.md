@@ -69,7 +69,7 @@ attempt the first live cross-host daemon-to-daemon channel.
 ## PeerServerTransport contract
 
 ```rust
-pub(crate) struct PeerServerTransport {
+pub(super) struct PeerServerTransport {
     listen_addr: Mutex<Option<SocketAddr>>,
     observability: SubsystemObservability,
     state: Mutex<Option<PeerServerHandle>>,
@@ -77,6 +77,11 @@ pub(crate) struct PeerServerTransport {
 }
 
 impl PeerServerTransport {
+    pub(super) fn new(
+        listen_addr: Option<SocketAddr>,
+        observability: SubsystemObservability,
+        status_cache: RuntimeStatusCache,
+    ) -> Self;
     fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>)
         -> Result<(), AtmError>;
     fn shutdown(&self) -> Result<(), AtmError>;
