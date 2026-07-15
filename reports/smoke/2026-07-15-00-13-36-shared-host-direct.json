@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "binary_sha": "b610431fbba7728933d039cca4d1922668efa7cb",
+  "command": "python3 scripts/smoke/run_thorough_shared_host.py",
+  "note": "two workspaces with one shared ATM_HOME daemon/database/log root handled raw CLI send/read/ack traffic without cross-workspace leakage; invalid stdin failed locally without changing daemon PID set",
+  "daemon_pids_before": [],
+  "daemon_pids_during": [
+    64519
+  ]
+}

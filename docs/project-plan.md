@@ -125,6 +125,12 @@ Phase-AF planning note:
   candidate.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
   proceed until its process-level singleton proof is green.
+- `smoke-test/1.3.1-cross-host` is the repo-published cross-host RC evidence
+  sprint on top of the accepted AF implementation line. Its authoritative plan
+  is
+  [`docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md`](./plans/phase-af/smoke-1.3.1-cross-host-plan.md),
+  and its Windows handoff checklist is
+  [`docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`](./plans/phase-af/smoke-1.3.1-windows-checklist.md).
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton

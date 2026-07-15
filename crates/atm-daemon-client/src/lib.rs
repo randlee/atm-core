@@ -850,7 +850,7 @@ impl DaemonSupervisor {
         command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::null());
         command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",
