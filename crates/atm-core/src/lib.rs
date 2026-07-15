@@ -86,8 +86,6 @@ pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
 
-pub use config::load_claude_team_config_document;
-
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{

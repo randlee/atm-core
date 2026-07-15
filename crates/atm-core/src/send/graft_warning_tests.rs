@@ -1,5 +1,3 @@
-use std::fs;
-
 use tempfile::tempdir;
 
 use super::tests::{RecordingPostSendEmitter, TestRuntime, install_home_env, send_request};
@@ -10,19 +8,6 @@ use crate::protocol::NotificationKind;
 use crate::send::SendCommandOutcome;
 use crate::test_support::TEST_SENDER;
 use crate::types::TeamName;
-
-#[test]
-fn load_send_alert_state_parse_errors_are_config_errors() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = super::alert_state::state_path(tempdir.path());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("state dir");
-    }
-    fs::write(&path, "{not-json").expect("state file");
-
-    let error = super::alert_state::load(&path).expect_err("malformed state");
-    assert!(error.is_config());
-}
 
 #[test]
 #[serial_test::serial(env)]

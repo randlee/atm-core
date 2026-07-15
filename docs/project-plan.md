@@ -76,13 +76,25 @@ Phase-AG planning note:
   completed same-host release-readiness work in `Phase Z`
 - the authoritative planning document is
   [`docs/plans/phase-AG/plan-phase-AG.md`](./plans/phase-AG/plan-phase-AG.md)
-- `Phase AG` owns Windows/macOS real-binary cross-host interface validation on
-  disposable clean-room state first, then disposable copied-state revalidation
-- `Phase AG` is validation-first: no code unless the matrix exposes a real bug
-- the planning branch is `feature/cross-host-communication`
-- this planning package is a documented single-branch docs/evidence-only
-  exception to the usual integrate-branch policy; PR #542 targets `develop`
-  directly while the phase remains validation-only
+- `Phase AG` now has two historical sections:
+  - the completed early validation attempts on
+    `feature/cross-host-communication`
+  - the replan/corrective line on
+    `plan/phase-ag-multihost-advertise-allowlist`
+- early AG execution proved that validation alone could not close the phase:
+  the product was missing durable cross-host control-plane surfaces
+- the current AG prerequisite product work is:
+  - SQLite-backed interface selection/bind configuration
+  - SQLite-backed deny-by-default exact-host allowlist enforcement
+  - CLI commands to manage both
+  - `atm doctor` visibility for both
+  - retained loopback self-test support as a supported diagnostic mode
+- only after that product work lands does AG return to live Windows/macOS
+  host-pair validation and copied-state release proof
+- transport security / encryption remains a later AG sprint concern and must
+  not be implied by earlier functional cross-host closure
+- the active AG planning branch for this rework is
+  `plan/phase-ag-multihost-advertise-allowlist`
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -664,35 +676,52 @@ Status summary:
   line on `develop`.
 - Windows same-host build/test and release-binary daemon parity have been
   restored on the post-`Z` baseline.
-- cross-host messaging between Windows and macOS has not yet been validated in
-  one authoritative release-directed validation phase.
-- `Phase AG` is the active planning line.
+- early AG validation attempts were executed and produced real findings, but
+  they also proved the original validation-only framing was insufficient.
+- the missing AG product surfaces are now explicit:
+  - durable daemon interface/bind configuration
+  - durable inbound exact-host allowlist enforcement
+  - CLI management for both
+  - `atm doctor` visibility for both
+  - retained loopback self-test support
+- `Phase AG` remains the active planning line, but now as a product-completion
+  plus validation phase rather than a validation-only phase.
 - `Phase AB` remains historical source material only.
 
 Planning branch:
-- `feature/cross-host-communication`
+- historical early execution: `feature/cross-host-communication`
+- corrective replan: `plan/phase-ag-multihost-advertise-allowlist`
 
 Branch-routing note:
-- PR #542 (`feature/cross-host-communication` -> `develop`) is the current
-  docs/evidence-only planning branch for Phase AG
+- PR #542 (`feature/cross-host-communication` -> `develop`) is retained as the
+  historical early-AG planning/execution record
+- PR #555 (`plan/phase-ag-multihost-advertise-allowlist` -> `develop`) is the
+  current corrective AG replanning line
 - if AG later opens product-code fixes from concrete findings, those follow-up
   branches must declare their own normal integration path explicitly
 
 Goal:
-- validate Windows <-> macOS cross-host ATM interfaces on real binaries
-- get the cross-host daemon-to-daemon channel live first
-- keep clean-room disposable state as the first validation lane
-- prove durable send/read/ack, degraded notification visibility, and
-  retry-visible recovery across hosts
+- preserve what AG.1 / AG.2 / AG.3 already established
+- finish the missing product control plane before claiming real closure
+- validate Windows <-> macOS cross-host ATM interfaces on real binaries after
+  that product surface exists
+- prefer the simplest real network path first (plain LAN is acceptable and
+  preferable when available, including Mac Studio)
 - revalidate on copied state only after the disposable lane passes
-- avoid code changes unless testing proves a real product defect
+- sequence transport security / encryption after functional cross-host
+  operability is real
 
 Execution shape:
 - `AG.1` cross-host setup contract and channel bring-up
 - `AG.2` core cross-host interface validation
-- `AG.3` degraded path and retry-visible recovery
-- `AG.4` copied-state revalidation
-- `AG.5` findings closeout and release verdict
+- `AG.3` daemon loopback self-test surface
+- `AG.4` durable interface configuration and binding
+- `AG.5` durable host allowlist enforcement
+- `AG.6` doctor visibility for the cross-host control plane
+- `AG.7` live cross-host revalidation
+- `AG.8` transport security and encryption hardening
+- `AG.10` secured cross-host transport implementation
+- `AG.9` copied-state revalidation and release verdict
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
@@ -705,6 +734,11 @@ Immediate planning outputs:
 - `docs/plans/phase-AG/sprint-AG3.md`
 - `docs/plans/phase-AG/sprint-AG4.md`
 - `docs/plans/phase-AG/sprint-AG5.md`
+- `docs/plans/phase-AG/sprint-AG6.md`
+- `docs/plans/phase-AG/sprint-AG7.md`
+- `docs/plans/phase-AG/sprint-AG8.md`
+- `docs/plans/phase-AG/sprint-AG9.md`
+- `docs/plans/phase-AG/sprint-AG10.md`
 
 Acceptance / Phase Entry Gate:
 - `Phase Z` must remain closed on `develop`

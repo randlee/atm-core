@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 
 use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
@@ -414,7 +415,7 @@ fn concurrent_same_recipient_sends_preserve_sqlite_state() {
 
 #[test]
 #[serial_test::serial(env)]
-fn missing_config_notice_seeds_team_lead_sqlite_state() {
+fn missing_team_config_no_longer_seeds_team_lead_notice_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
@@ -431,20 +432,17 @@ fn missing_config_notice_seeds_team_lead_sqlite_state() {
     )
     .expect("missing-config send");
 
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    assert_eq!(notice.from, "atm-identity-missing");
-    let state = fixture.wait_for_mailbox_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        state["messages"][message_workflow_key(&notice)]
-            .as_object()
-            .is_some(),
-        "missing-config SQLite state missing: {state:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice"
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
+fn concurrent_normal_send_and_sqlite_only_delivery_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
@@ -496,11 +494,11 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    let state = fixture.wait_for_mailbox_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        state["messages"][message_workflow_key(&notice)]["pendingAckAt"].is_null(),
-        "missing-config notice SQLite state missing after concurrent send: {state:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice during concurrent send"
     );
 }
 
@@ -1321,55 +1319,6 @@ impl Fixture {
             })
             .collect::<serde_json::Map<_, _>>();
         serde_json::json!({ "messages": states })
-    }
-
-    fn wait_for_missing_config_notice(&self, team: &str) -> InboxMessage {
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        loop {
-            if let Some(notice) = self
-                .inbox_contents_for_team(team, TEAM_LEAD)
-                .into_iter()
-                .find(|message| {
-                    message.from.as_str() == "atm-identity-missing"
-                        && message.text.contains(&format!("{TEST_RECIPIENT}@{team}"))
-                })
-            {
-                return notice;
-            }
-            if Instant::now() >= deadline {
-                let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
-                panic!(
-                    "missing-config notice not observed before timeout after {attempts} attempts: {notices:?}"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    fn wait_for_mailbox_state_for_message(
-        &self,
-        team: &str,
-        agent: &str,
-        message: &InboxMessage,
-    ) -> serde_json::Value {
-        let message_key = message_workflow_key(message);
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        loop {
-            let state = self.mailbox_state_contents_for_team(team, agent);
-            if state["messages"][&message_key].as_object().is_some() {
-                return state;
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "SQLite state for missing-config notice not observed before timeout after {attempts} attempts"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[InboxMessage]) {

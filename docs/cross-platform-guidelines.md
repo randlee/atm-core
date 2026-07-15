@@ -123,14 +123,16 @@ Observed result on the first Windows machine for this branch:
    $SmokeRoot = Join-Path $env:TEMP "atm-win-smoke"
    Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
    New-Item -ItemType Directory -Force -Path $SmokeRoot | Out-Null
-   New-Item -ItemType Directory -Force -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\inboxes") | Out-Null
-   Set-Content -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\config.json") -Value '{"members":[{"name":"smoke-user"}]}'
    Set-Content -Path (Join-Path (Get-Location) ".atm.toml") -Value "[atm]`ndefault_team = `"smoke-team`"`n"
    $env:ATM_HOME = $SmokeRoot
    $env:ATM_CONFIG_HOME = $SmokeRoot
    $env:ATM_TEAM = "smoke-team"
    $env:ATM_IDENTITY = "smoke-user"
    $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
+   ```
+   Then initialize the roster with ATM itself:
+   ```powershell
+   .\target\debug\atm.exe teams add-member smoke-team smoke-user worker gpt-5 --home-dir $SmokeRoot
    ```
 
 3. Build the workspace
