@@ -28,6 +28,18 @@ Required rule:
 
 - do not point any of these at live `~/.atm`, live `~/.claude`, or any other
   retained user state during Lane A
+- on `1.3.1`, treat this as team/config isolation only unless the active host
+  daemon has been intentionally replaced for the validation lane
+
+Current `1.3.1` constraint observed during AG.1:
+
+- `ATM_HOME` and `ATM_CONFIG_HOME` isolate team/config discovery surfaces
+- they do not relocate the host daemon singleton, owner lock, durable SQLite
+  store, or default retained log sink
+- Lane A therefore cannot honestly claim daemon-runtime isolation on one host
+  unless the active host daemon is itself the only daemon under test
+- AG.1 records this as a setup-contract finding rather than pretending a
+  second clean-room daemon is supported
 
 Important implementation constraint discovered during AG.1 Windows setup:
 
@@ -74,6 +86,8 @@ Each operator must record:
 - exact resolved `atm` path
 - exact resolved `atm-daemon` path
 - whether the observed cross-host transport path is plain TCP or TLS-backed
+- whether the validation is using the one active host daemon or an explicitly
+  replaced host daemon instance
 
 ## Required Environment Contract
 

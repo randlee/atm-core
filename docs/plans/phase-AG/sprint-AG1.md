@@ -1,10 +1,10 @@
 ---
 id: AG.1
 title: Cross-Host Setup Contract And Channel Bring-Up
-status: planned
-branch: feature/cross-host-communication
-worktree: ../atm-core-worktrees/feature/cross-host-communication
-target: develop
+status: in_progress
+branch: feature/pAG-s1-macos-execution
+worktree: ../atm-core-worktrees/feature/pAG-s1-macos-execution
+target: integrate/phase-AG
 ---
 
 # Sprint AG.1 — Cross-Host Setup Contract And Channel Bring-Up
@@ -13,9 +13,9 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.1
-worktree: ../atm-core-worktrees/feature/cross-host-communication
-branch: feature/cross-host-communication
-status: planned
+worktree: ../atm-core-worktrees/feature/pAG-s1-macos-execution
+branch: feature/pAG-s1-macos-execution
+status: in_progress
 estimated_scope: medium
 ```
 
