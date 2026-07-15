@@ -21,8 +21,8 @@ release line.
 
 | Sprint | Closure Result | Candidate Commit | Notes |
 | --- | --- | --- | --- |
-| `AG.1` | `PENDING` | `TBD` | setup contract and first live channel bring-up not yet executed |
-| `AG.2` | `PENDING` | `TBD` | core cross-host interface validation not yet executed |
+| `AG.1` | `BLOCKED` | `0f62b915` | patched peer listener is live on macOS, but AG-FIND-004 remains open until the first real cross-host rerun passes on both hosts |
+| `AG.2` | `BLOCKED` | `0f62b915` | first live macOS->Windows send exposed AG-FIND-005: send path still reports success after local-only sink delivery, with no peer-transport handoff |
 | `AG.3` | `PENDING` | `TBD` | degraded-path and retry-visible validation not yet executed |
 | `AG.4` | `PENDING` | `TBD` | copied-state revalidation not yet executed |
 | `AG.5` | `PENDING` | `TBD` | findings closeout and release verdict not yet executed |
@@ -58,5 +58,4 @@ Allowed closure-result values:
 - readiness status: `NOT READY`
 - final accepted candidate line: `TBD`
 - gate status: `BLOCKED`
-- notes: `Planning complete. Validation not yet executed. Expect at least one
-  setup gap or product defect to be surfaced during the first clean-room lane.`
+- notes: `Planning complete. Live execution has started. AG-FIND-003 remains open on the host-singleton clean-room contract, AG-FIND-004 remains open until the patched listener rerun passes cross-host, and AG-FIND-005 is a new blocking product bug on the live send path: cross-host sends still short-circuit into the local daemon sink instead of invoking peer transport.`
