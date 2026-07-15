@@ -67,3 +67,25 @@
 - disposition:
   - `AG-VAL-011` remains linked to open `PRODUCT-BUG` `AG-FIND-001`
   - no AG release-usable statement may claim TLS / transport-security coverage
+
+### AG-VAL-003 viability blocker — no production inbound peer-listener lane
+
+- code evidence:
+  - `crates/atm-daemon/src/peer_transport.rs`
+    - `daemon_peer_endpoint_from_env()` reads `ATM_DAEMON_PEER_ADDR`
+    - `parse_peer_endpoint(...)` accepts only `SocketAddr`
+    - `connect_peer_stream(...)` uses `TcpStream::connect_timeout(...)`
+    - `PeerTransportRuntime` wraps a `PeerClientTransport` only
+  - `crates/atm-daemon/src/composition.rs`
+    - `start_background_lanes()` returns `Ok(())`
+    - there is no production peer-listener startup path
+  - `rg` over `crates/atm-daemon` shows `TcpListener::bind(...)` under
+    `peer_transport.rs` only inside tests
+- conclusion:
+  - `1.3.1` ships outbound cross-host dial logic without a production inbound
+    TCP peer-listener lane
+  - the first live daemon-to-daemon cross-host attempt cannot succeed on the
+    released build because there is nothing in production code for the remote
+    daemon to bind and accept
+- linked finding:
+  - `AG-FIND-004`
