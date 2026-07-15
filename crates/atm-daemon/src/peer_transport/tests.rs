@@ -127,6 +127,7 @@ fn peer_listener_round_trips_one_doctor_request() {
             home_dir: tempdir.path().to_path_buf(),
             current_dir: tempdir.path().to_path_buf(),
             team_override: None,
+            ..atm_core::doctor::DoctorQuery::default()
         }))
         .expect("peer listener doctor response");
     match response {
@@ -779,6 +780,7 @@ fn unsupported_request_family_keeps_shared_outcome_unknown_recovery() {
         home_dir: tempdir.path().to_path_buf(),
         current_dir: tempdir.path().to_path_buf(),
         team_override: None,
+        ..DoctorQuery::default()
     });
 
     thread::spawn(move || {
