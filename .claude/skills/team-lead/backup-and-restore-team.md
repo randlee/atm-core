@@ -86,8 +86,11 @@ resolve to real panes.
 
 ## Step 5 — Minimal Functional Check
 
+ATM rejects self-addressed sends (`team-lead@$ATM_TEAM` may not send to
+itself), so the round-trip must target another roster member:
+
 ```bash
-atm send team-lead@"$ATM_TEAM" "restart check ($SESSION_ID)"
+atm send arch-ctm "restart check ($SESSION_ID)" --team "$ATM_TEAM" --requires-ack
 atm read --team "$ATM_TEAM"
 ```
 
