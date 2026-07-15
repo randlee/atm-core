@@ -288,6 +288,7 @@ mod tests {
                     home_dir: client_tempdir.join("home"),
                     current_dir: client_tempdir.join("cwd"),
                     team_override: None,
+                    ..DoctorQuery::default()
                 }),
             )
             .expect("request frame");

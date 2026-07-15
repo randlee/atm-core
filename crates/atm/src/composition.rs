@@ -1027,6 +1027,7 @@ mod tests {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
                 team_override: Some(TEST_TEAM.parse().expect("team")),
+                ..DoctorQuery::default()
             }
         }
 
@@ -1078,6 +1079,7 @@ mod tests {
                 home_dir: tempdir.path().join("home"),
                 current_dir: tempdir.path().join("cwd"),
                 team_override: None,
+                ..atm_core::doctor::DoctorQuery::default()
             }))
             .expect_err("protocol error");
 

@@ -1488,6 +1488,7 @@ mod tests {
             home_dir: tempdir.path().to_path_buf(),
             current_dir: tempdir.path().to_path_buf(),
             team_override: None,
+            ..DoctorQuery::default()
         });
 
         thread::spawn(move || {
