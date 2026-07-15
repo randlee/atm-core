@@ -85,82 +85,41 @@ pub fn run_doctor_with_runtime(
     runtime: &LocalServiceRuntime,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let home_dir = query.home_dir.clone();
-    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(
-        query.home_dir,
-        query.team_override,
-        query.caller_team,
-        query.caller_identity,
-    );
+    let doctor_context = doctor_run_context(&query, config.as_ref());
     let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
-    if config
-        .as_ref()
-        .is_some_and(|config| config.obsolete_identity.is_some())
-    {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
-            remediation: Some(
-                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
-                    .to_string(),
-            ),
-        });
-    }
-    let member_roster = resolved_team.as_ref().and_then(|team| {
+    push_obsolete_identity_warning(config.as_ref(), &mut findings);
+    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
         load_member_roster(
             runtime,
-            &home_dir,
+            &doctor_context.home_dir,
             team,
             config.as_ref(),
-            environment.atm_identity.as_ref(),
+            doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut findings,
         )
     });
     push_stale_mailbox_lock_findings(
-        &initial_lock_snapshot,
-        &snapshot_mailbox_lock_paths(&home_dir),
+        &doctor_context.initial_lock_snapshot,
+        &snapshot_mailbox_lock_paths(&doctor_context.home_dir),
         &mut findings,
     );
     findings.push(finding);
-    let summary = summarize_doctor_findings(&findings);
-    let recommendations = findings
-        .iter()
-        .filter_map(|finding| finding.remediation.clone())
-        .collect::<Vec<_>>();
-
-    Ok(DoctorReport {
-        summary,
+    Ok(build_doctor_report(
         findings,
-        recommendations,
-        environment: environment.clone(),
-        client_context: report::DoctorExecutionContext {
-            // A `--team` override reflects the team the caller explicitly asked
-            // the doctor to inspect, so it takes precedence over the ambient
-            // `ATM_TEAM` in the reported client context.
-            team: environment
-                .team_override
-                .clone()
-                .or_else(|| environment.atm_team.clone()),
-            identity: environment.atm_identity.clone(),
-            version: Some(crate::protocol::ReleaseVersion::current()),
-        },
-        daemon_context: None,
+        doctor_context.environment,
         member_roster,
-        observability: observability_health,
-        post_send: PostSendDoctorReport::default(),
-        config: crate::boundary::ConfigDoctorReport::default(),
-        mail_store: crate::boundary::MailStoreDoctorReport::default(),
-        roster_store: crate::boundary::RosterStoreDoctorReport::default(),
-        daemon_runtime: None,
-        drift_findings: Vec::new(),
-        runtime_status: None,
-        bootstrap_trace: None,
-    })
+        PostSendDoctorReport::default(),
+        crate::boundary::ConfigDoctorReport::default(),
+        crate::boundary::MailStoreDoctorReport::default(),
+        crate::boundary::RosterStoreDoctorReport::default(),
+        None,
+        Vec::new(),
+        observability_health,
+        None,
+        None,
+    ))
 }
 
 pub fn run_doctor_with_runtime_ports(
@@ -171,34 +130,26 @@ pub fn run_doctor_with_runtime_ports(
     daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let home_dir = query.home_dir.clone();
-    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(
-        query.home_dir,
-        query.team_override,
-        query.caller_team,
-        query.caller_identity,
-    );
+    let doctor_context = doctor_run_context(&query, config.as_ref());
     let (observability_health, observability_finding) = doctor_observability_status(observability);
     let mut general_findings = Vec::new();
     let mut drift_findings = Vec::new();
     let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
     push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
-    let member_roster = resolved_team.as_ref().and_then(|team| {
+    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
         load_member_roster(
             runtime,
-            &home_dir,
+            &doctor_context.home_dir,
             team,
             config.as_ref(),
-            environment.atm_identity.as_ref(),
+            doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut drift_findings,
         )
     });
     push_stale_mailbox_lock_findings(
-        &initial_lock_snapshot,
-        &snapshot_mailbox_lock_paths(&home_dir),
+        &doctor_context.initial_lock_snapshot,
+        &snapshot_mailbox_lock_paths(&doctor_context.home_dir),
         &mut drift_findings,
     );
     let findings = collect_doctor_findings(
@@ -208,43 +159,120 @@ pub fn run_doctor_with_runtime_ports(
         observability_finding,
         daemon_runtime.as_ref(),
     );
-    let summary = summarize_doctor_findings(&findings);
-    let recommendations = collect_recommendations(&findings);
     let post_send = post_send_doctor_report(
         config.as_ref(),
         member_roster.as_ref(),
         runtime,
-        resolved_team.as_ref(),
+        doctor_context.resolved_team.as_ref(),
     );
 
-    Ok(DoctorReport {
+    Ok(build_doctor_report(
+        findings,
+        doctor_context.environment,
+        member_roster,
+        post_send,
+        reports.config,
+        reports.mail_store,
+        reports.roster_store,
+        daemon_runtime,
+        drift_findings,
+        observability_health,
+        None,
+        None,
+    ))
+}
+
+struct DoctorRunContext {
+    home_dir: PathBuf,
+    initial_lock_snapshot: BTreeSet<PathBuf>,
+    resolved_team: Option<TeamName>,
+    environment: DoctorEnvironmentVisibility,
+}
+
+fn doctor_run_context(
+    query: &DoctorQuery,
+    config: Option<&crate::config::AtmConfig>,
+) -> DoctorRunContext {
+    let home_dir = query.home_dir.clone();
+    DoctorRunContext {
+        initial_lock_snapshot: snapshot_mailbox_lock_paths(&home_dir),
+        resolved_team: resolved_doctor_team(query, config),
+        environment: health::environment_visibility(
+            query.home_dir.clone(),
+            query.team_override.clone(),
+            query.caller_team.clone(),
+            query.caller_identity.clone(),
+        ),
+        home_dir,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_doctor_report(
+    findings: Vec<DoctorFinding>,
+    environment: DoctorEnvironmentVisibility,
+    member_roster: Option<MembersList>,
+    post_send: PostSendDoctorReport,
+    config: crate::boundary::ConfigDoctorReport,
+    mail_store: crate::boundary::MailStoreDoctorReport,
+    roster_store: crate::boundary::RosterStoreDoctorReport,
+    daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
+    drift_findings: Vec<DoctorFinding>,
+    observability_health: crate::observability::AtmObservabilityHealth,
+    runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
+    bootstrap_trace: Option<BootstrapTraceReport>,
+) -> DoctorReport {
+    let summary = summarize_doctor_findings(&findings);
+    let recommendations = collect_recommendations(&findings);
+    DoctorReport {
         summary,
         findings,
         recommendations,
         environment: environment.clone(),
-        client_context: report::DoctorExecutionContext {
-            // A `--team` override reflects the team the caller explicitly asked
-            // the doctor to inspect, so it takes precedence over the ambient
-            // `ATM_TEAM` in the reported client context.
-            team: environment
-                .team_override
-                .clone()
-                .or_else(|| environment.atm_team.clone()),
-            identity: environment.atm_identity.clone(),
-            version: Some(crate::protocol::ReleaseVersion::current()),
-        },
+        client_context: doctor_client_context(&environment),
         daemon_context: None,
         member_roster,
         observability: observability_health,
         post_send,
-        config: reports.config,
-        mail_store: reports.mail_store,
-        roster_store: reports.roster_store,
+        config,
+        mail_store,
+        roster_store,
         daemon_runtime,
         drift_findings,
-        runtime_status: None,
-        bootstrap_trace: None,
-    })
+        runtime_status,
+        bootstrap_trace,
+    }
+}
+
+fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExecutionContext {
+    DoctorExecutionContext {
+        // A `--team` override reflects the team the caller explicitly asked
+        // the doctor to inspect, so it takes precedence over the ambient
+        // `ATM_TEAM` in the reported client context.
+        team: environment
+            .team_override
+            .clone()
+            .or_else(|| environment.atm_team.clone()),
+        identity: environment.atm_identity.clone(),
+        version: Some(crate::protocol::ReleaseVersion::current()),
+    }
+}
+
+fn push_obsolete_identity_warning(
+    config: Option<&crate::config::AtmConfig>,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    if config.is_some_and(|config| config.obsolete_identity.is_some()) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningIdentityDrift,
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
+            remediation: Some(
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
+                    .to_string(),
+            ),
+        });
+    }
 }
 
 fn post_send_doctor_report(
