@@ -31,6 +31,7 @@ PYTHON_LINT_ORDER = (
     "legacy-mailbox-paths",
     "capability-degradation",
     "identities",
+    "env-var-boundary",
     "fixed-sleep",
     "ttl-triage",
     "lines",
@@ -91,6 +92,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "version": LintTask("version", [*python_command, str(repo_root / ".just/check_version_sync.py")]),
         "identities": LintTask(
             "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]
+        ),
+        "env-var-boundary": LintTask(
+            "env-var-boundary", [*python_command, str(repo_root / ".just/check_env_var_boundary.py")]
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),

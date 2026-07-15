@@ -49,6 +49,7 @@ SECTIONS = (
             ("lint capability-degradation", "Run the replay capability no-degradation regression gate."),
             ("lint version", "Run only the version alignment checks."),
             ("lint identities", "Run the identity literal guard."),
+            ("lint env-var-boundary", "Run the ATM_TEAM/ATM_IDENTITY client-boundary guard."),
             ("lint fixed-sleep", "Run the fixed thread::sleep test-hygiene gate."),
             ("lint ttl-triage", "Run the triage Turtle consistency gate."),
             ("lint lines", "Run only the RULE-003 line-count guard."),
