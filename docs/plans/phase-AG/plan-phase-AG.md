@@ -371,7 +371,12 @@ Outputs:
 
 Entry gate:
 
-- `AG.2` core interface rows are no longer unresolved
+- `AG.2` must already have:
+  - resolved `AG-VAL-003` through `AG-VAL-007`
+  - recorded each AG.2 core interface row as either:
+    - a passing validation row that allows AG.3 to proceed, or
+    - a named blocking finding recorded in
+      `cross-host-findings-ledger.md`
 
 Execution owner:
 
