@@ -41,9 +41,9 @@ Compare against the expected roster for `atm-dev`:
 
 | Member | Agent type | Model | Home dir |
 |--------|-----------|-------|----------|
-| team-lead | team-lead | claude-sonnet-4-6 (or current session model) | `/Users/randlee/Documents/github/atm-core` |
+| team-lead | team-lead | sonnet (or current session model) | `/Users/randlee/Documents/github/atm-core` |
 | arch-ctm | codex | high | `/Users/randlee/Documents/github/atm-core` |
-| quality-mgr | quality-mgr | claude-sonnet-4-6 | `/Users/randlee/Documents/github/atm-core` |
+| quality-mgr | quality-mgr | sonnet | `/Users/randlee/Documents/github/atm-core` |
 
 If a member's `tmuxPaneId` is stale (pane no longer exists or now hosts a
 different agent), discover the correct pane before touching membership:
@@ -58,8 +58,8 @@ Add any member missing from the roster:
 
 ```bash
 atm teams add-member "$ATM_TEAM" team-lead --agent-type team-lead --model claude-sonnet-4-6 --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
-atm teams add-member "$ATM_TEAM" arch-ctm --agent-type codex --model high --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
-atm teams add-member "$ATM_TEAM" quality-mgr --agent-type quality-mgr --model claude-sonnet-4-6 --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
+atm teams add-member "$ATM_TEAM" {{TEAM_MEMBER}} --agent-type rust-arch --model codex-high --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
+atm teams add-member "$ATM_TEAM" quality-mgr --agent-type quality-mgr --model claude-sonnet --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
 ```
 
 Note the flag is `--agent-type`, not `--type`.
