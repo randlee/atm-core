@@ -52,7 +52,7 @@ class PhaseXGuardrailTests(unittest.TestCase):
     def test_capability_guardrail_allows_known_test_fixture(self) -> None:
         self.assertTrue(
             CAPABILITY_MODULE.is_allowed_test_match(
-                "crates/atm-daemon/src/peer_transport.rs",
+                "crates/atm-daemon/src/peer_transport/tests.rs",
                 "            replay_store: None,",
             )
         )

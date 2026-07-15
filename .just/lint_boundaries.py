@@ -59,9 +59,12 @@ IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FORBIDDEN_EDGE_RE = re.compile(
     r"^(?P<left>[a-z0-9]+(?:[.-][a-z0-9]+)*)\s*->\s*(?P<right>[a-z0-9]+(?:[.-][a-z0-9]+)*)$"
 )
-PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
-PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
-PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+PUBLIC_VISIBILITY_PREFIX = r"pub(?:\s*\(\s*crate\s*\))?"
+PUBLIC_TYPE_TEMPLATE = rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+(?:struct|enum|type)\s+{{name}}\b"
+PUBLIC_REEXPORT_TEMPLATE = rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+use\b.*\b{{name}}\b"
+PUBLIC_FUNCTION_RE = re.compile(
+    rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b"
+)
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
 SCB_RETAINED_ALLOWLIST_PATH = Path(".just/allowlists/scb_retained_allowlist.toml")

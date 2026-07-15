@@ -9,8 +9,8 @@ trait = "ServerTransport"
 [implementation]
 type = "PeerServerTransport"
 module = "atm_daemon::peer_transport"
-visibility = "pub(crate)"
-constructor = "pub(crate)"
+visibility = "private"
+constructor = "private"
 
 [composition]
 roots = ["atm_daemon::composition::RuntimeComposition::start_background_lanes"]

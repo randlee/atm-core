@@ -30,7 +30,7 @@ struct PeerServerHandle {
 }
 
 #[derive(Debug)]
-pub(crate) struct PeerServerTransport {
+pub(super) struct PeerServerTransport {
     listen_addr: Mutex<Option<SocketAddr>>,
     observability: SubsystemObservability,
     state: Mutex<Option<PeerServerHandle>>,
@@ -38,7 +38,7 @@ pub(crate) struct PeerServerTransport {
 }
 
 impl PeerServerTransport {
-    pub(crate) fn new(
+    pub(super) fn new(
         listen_addr: Option<SocketAddr>,
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
@@ -51,7 +51,7 @@ impl PeerServerTransport {
         }
     }
 
-    pub(crate) fn start(
+    pub(super) fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
@@ -77,7 +77,7 @@ impl PeerServerTransport {
         Ok(())
     }
 
-    pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
+    pub(super) fn shutdown(&self) -> Result<(), AtmError> {
         let handle = self
             .state
             .lock()
@@ -130,7 +130,7 @@ impl PeerServerTransport {
         }
     }
 
-    pub(crate) fn reload(
+    pub(super) fn reload(
         &self,
         listen_addr: Option<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -184,7 +184,7 @@ impl PeerServerTransport {
     }
 
     #[cfg(test)]
-    pub(crate) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
+    pub(super) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
         self.state
             .lock()
             .ok()
