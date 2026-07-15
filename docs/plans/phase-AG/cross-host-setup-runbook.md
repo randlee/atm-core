@@ -37,9 +37,14 @@ Important implementation constraint discovered during AG.1 Windows setup:
 - under a normal operator account, release binaries therefore still use the
   host-scoped `.atm/db/mail.db` even when `ATM_HOME`, `ATM_CONFIG_HOME`, and
   `ATM_LOG_DIR` point at disposable directories
-- do not claim a Lane A clean-room PASS from a normal account until the team
-  has either provided an approved disposable OS-account/container/VM isolation
-  procedure or added an approved release-binary durable-state override
+- do not claim a strict no-live-OS-account-state clean-room PASS from a normal
+  account until the team has either provided an approved disposable
+  OS-account/container/VM isolation procedure or added an approved
+  release-binary durable-state override
+- for AG.1 Windows setup only, team-lead/windows-operator accepted using this
+  computer's host account environment because no installed/running ATM service
+  exists on the computer; reports using this exception must call it
+  `host-env` evidence, not strict clean-room evidence
 
 Minimal team bootstrap required before same-host commands:
 

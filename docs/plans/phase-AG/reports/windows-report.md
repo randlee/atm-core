@@ -76,3 +76,50 @@ Transport-security evidence for `AG-VAL-011`:
 - `crates/atm-daemon/src/peer_transport.rs` imports and uses `std::net::TcpStream`
 - `rg` found no `native-tls`, `rustls`, `tokio-rustls`, or `openssl` dependency in `Cargo.toml` / `Cargo.lock`
 - existing `AG-FIND-001` remains the correct linked finding
+
+### 2026-07-15T05:39Z — Windows AG.1 host-env rerun
+
+Operator clarification:
+
+- Windows host has no installed `atm` or `atm-daemon` on `PATH`
+- no `atm-daemon` process was running before the rerun
+- Windows operator/team-lead approved using the computer account environment
+  for AG.1 instead of requiring a strict disposable OS-account clean-room
+
+Host-env inputs:
+
+- branch: `feature/pAG-s1-macos-execution`
+- release binary: `F:\github\atm-core-worktrees\feature\pAG-s1-macos-execution\target\release\atm.exe`
+- daemon binary: `F:\github\atm-core-worktrees\feature\pAG-s1-macos-execution\target\release\atm-daemon.exe`
+- `atm --version`: `atm 1.3.1`
+- `ATM_HOME`: unset
+- `ATM_CONFIG_HOME`: unset
+- `ATM_LOG_DIR`: unset
+- `ATM_TEAM=ag-clean-room`
+- `ATM_IDENTITY=windows-operator`
+- `ATM_DAEMON_PEER_ADDR=127.0.0.1:9` for same-host setup only
+- host team directory: `C:\Users\rand.lee\.claude\teams\ag-clean-room`
+- host DB: `C:\Users\rand.lee\.atm\db\mail.db`
+
+Command results:
+
+- `atm teams add-member ag-clean-room windows-operator --home-dir <worktree> --agent-type codex-cli --model windows --json`: exit `0`
+- `atm teams add-member ag-clean-room windows-peer --home-dir <worktree> --agent-type general-purpose --model windows --json`: exit `0`
+- `atm teams --json`: exit `0`
+- `atm members --team ag-clean-room --json`: exit `0`
+- `atm doctor --json`: exit `0`; summary `healthy`, `warning_count=0`, `error_count=0`, runtime `liveness=running`, `readiness=ready`, daemon PID `28596`
+- `atm list --json`: exit `0`
+- `atm clear --json`: exit `0`
+- `atm send windows-peer "AG.1 Windows host-env same-host probe" --json`: exit `0`, message ID `01KXJ4JG9K2RD62ERDA3CNYDVZ`
+- `ATM_IDENTITY=windows-peer atm read --all --json`: exit `0`, selected message ID `01KXJ4JG9K2RD62ERDA3CNYDVZ`
+- post-run `atm-daemon` process check: none remaining
+
+Classification update:
+
+- `AG-VAL-001`: `PASS` for Windows host-env AG.1 setup evidence
+- `AG-FIND-002`: closed for immediate AG.1 execution by explicit operator
+  approval to use this computer environment
+- strict no-live-OS-account-state clean-room evidence remains excluded from
+  this PASS
+- first live Windows -> macOS channel viability: still not attempted because
+  the macOS peer address was not available in this session
