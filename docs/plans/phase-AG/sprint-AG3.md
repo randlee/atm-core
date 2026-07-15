@@ -31,6 +31,17 @@ delivery outcomes.
 - retry-visible interruption/recovery row
 - failure-classification evidence for both cases
 
+## Required Validation
+
+- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
+  - `AG-VAL-008`
+  - `AG-VAL-009`
+
+## Ownership
+
+- execution owner: `arch-ctm`
+- verification owner: `quality-mgr`
+
 ## Acceptance Criteria
 
 - notification degradation is not treated as durable-delivery failure after

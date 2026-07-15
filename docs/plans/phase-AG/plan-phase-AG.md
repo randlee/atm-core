@@ -38,6 +38,11 @@ the active namespace for current work.
 - the disposable clean-room lane before copied-state revalidation
 - the basic smoke matrix for send/read/ack, degraded notification, and retry
 
+`Phase AB` is historical planning input only, not execution evidence. Its own
+readiness record remains `NOT READY` with all sprint closure rows `PENDING`, so
+AG may reuse AB's planning structure but must not rely on AB as proof that any
+cross-host path was previously validated.
+
 `Phase AG` changes the framing:
 
 - active namespace is `AG`, not `AB`
@@ -56,19 +61,32 @@ Current release baseline on entry:
 
 - `integrate/phase-AF` is the accepted implementation branch for the `1.3.1`
   reliability-recovery line
-- PR #539 (`integrate/phase-AF` -> `develop`) is under phase-end review
+- PR #539 is merged to `develop` at `98a4e66c`
 
 Entry-gate prerequisites:
 
-- same-host daemon behavior is already validated on the exact branch used for
-  cross-host execution
+- same-host daemon behavior is already validated on the exact merged baseline
+  used for cross-host execution
 - Windows same-host release-binary command health is already validated on that
-  exact branch before AG.1 starts
-- if AG executes against `integrate/phase-AF` before PR #539 lands, the final
-  readiness verdict must record that branch basis explicitly
-- if PR #539 lands during AG execution, any release verdict for `develop` must
-  be backed by evidence from the merged candidate line rather than assumed by
-  ancestry
+  exact merged baseline before AG.1 starts
+
+## Branch Policy Exception
+
+Phase `AG` is a single-branch docs/evidence-only validation phase. It does not
+own a separate implementation integration line because:
+
+- the current phase goal is to validate existing released interfaces first,
+  not stage speculative code work
+- the current branch content is planning, runbook, checklist, findings, and
+  readiness material only
+- any future product-code fix opened by a concrete AG finding can still route
+  through its own normal implementation branch/integration sequence
+
+Accordingly, this planning package is intentionally authored on
+`feature/cross-host-communication` and PR #542 targets `develop` directly. If
+Phase AG later needs product-code changes, that follow-up work must declare its
+own branch/integration path explicitly rather than silently inheriting this
+docs/evidence-only exception.
 
 Release claim this phase must validate:
 
@@ -100,6 +118,31 @@ Phase `AG` must not:
 - use live host state as the first validation lane
 - conflate notification degradation with durable cross-host delivery failure
 - hide setup ambiguity behind hand-wavy references to existing docs
+
+## Ownership Model
+
+Phase `AG` separates execution from verification explicitly:
+
+- `team-lead`
+  - owns dispatch, sequencing, branch routing, and final merge authorization
+- `arch-ctm`
+  - owns plan/package edits, execution-side document updates, and first-pass
+    finding triage
+- `quality-mgr`
+  - owns independent review and PASS/FAIL/BLOCKED verdicts
+- `windows-operator`
+  - owns Windows-side command execution and evidence capture
+- `macos-operator`
+  - owns macOS-side command execution and evidence capture
+
+The findings ledger `owner` field must use one of these exact values:
+
+- `team-lead`
+- `arch-ctm`
+- `quality-mgr`
+- `windows-operator`
+- `macos-operator`
+- `shared`
 
 ## Working Assumptions
 
@@ -212,6 +255,16 @@ Every validation row must capture:
 
 ## Failure Classification
 
+The authoritative findings-ledger `classification` enum is:
+
+- `SETUP-GAP`
+- `ENV-MISTAKE`
+- `PRODUCT-BUG`
+- `EXTERNAL-BLOCKER`
+
+`cross-host-setup-runbook.md` uses these same four machine tokens and must not
+introduce alternate spellings.
+
 Rows may end in one of two useful states:
 
 - `PASS`
@@ -224,14 +277,12 @@ The phase should avoid ambiguous "sort of worked" closure language.
 
 Examples:
 
-- invalid/missing peer address guidance in the runbook is a setup-contract
-  finding
-- peer address supplied as a hostname rather than a literal `IP:port` is an
-  operator/setup-contract failure unless the product surface explicitly grows
-  hostname resolution support
+- invalid/missing peer address guidance in the runbook is a `SETUP-GAP`
+- peer address supplied as a hostname rather than a literal `IP:port` is a
+  `SETUP-GAP` if the docs allowed it, otherwise an `ENV-MISTAKE`
 - daemon cannot establish peer transport with correct operator input is a
-  product defect
-- host firewall prompt not handled/documented is an operator/setup gap until
+  `PRODUCT-BUG`
+- host firewall prompt not handled/documented is an `EXTERNAL-BLOCKER` until
   shown otherwise
 
 ## Sprint Sequence
@@ -252,6 +303,14 @@ Outputs:
 - one first-live-channel viability attempt whose outcome can open a finding,
   but which does not formally close checklist rows owned by `AG.2`
 
+Execution owner:
+
+- `arch-ctm` with Windows/macOS operators capturing host-side evidence
+
+Verification owner:
+
+- `quality-mgr`
+
 ### AG.2 Core Cross-Host Interface Validation
 
 Primary objective:
@@ -264,6 +323,22 @@ Outputs:
 - send/read coverage in both directions
 - `--requires-ack` ack round-trip coverage
 - precise findings for any interface failures
+
+Entry gate:
+
+- `AG.1` must already have:
+  - recorded `AG-VAL-001` and `AG-VAL-002`
+  - resolved the first live-channel viability attempt to either:
+    - a working channel that allows AG.2 to proceed, or
+    - a named blocking finding recorded in `cross-host-findings-ledger.md`
+
+Execution owner:
+
+- `arch-ctm` with Windows/macOS operators capturing host-side evidence
+
+Verification owner:
+
+- `quality-mgr`
 
 ### AG.3 Degraded Path And Retry-Visible Recovery
 
@@ -279,6 +354,14 @@ Outputs:
 - evidence that failures are not misclassified as delivery failure when the
   durable write already succeeded
 
+Execution owner:
+
+- `arch-ctm` with Windows/macOS operators capturing host-side evidence
+
+Verification owner:
+
+- `quality-mgr`
+
 ### AG.4 Copied-State Revalidation
 
 Primary objective:
@@ -290,6 +373,14 @@ Outputs:
 
 - copied-state revalidation evidence
 - exact operator repair/setup notes for realistic-state execution
+
+Execution owner:
+
+- `arch-ctm` with Windows/macOS operators capturing host-side evidence
+
+Verification owner:
+
+- `quality-mgr`
 
 ### AG.5 Findings Closeout And Release Verdict
 
@@ -303,6 +394,14 @@ Outputs:
 - readiness record
 - explicit statement of whether the `1.3.1` cross-host claim is authorized,
   blocked, or partially blocked
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
 
 ## Exit Criteria
 

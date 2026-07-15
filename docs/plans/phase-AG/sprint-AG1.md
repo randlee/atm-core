@@ -34,6 +34,19 @@ attempt the first live cross-host daemon-to-daemon channel.
 - one AG.1-only first-live-channel viability attempt that can open a finding
   but does not formally close `AG-VAL-003` or later rows
 
+## Required Validation
+
+- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
+  - `AG-VAL-001`
+  - `AG-VAL-002`
+  - AG.1 viability may exercise `AG-VAL-003` or `AG-VAL-005`, but does not
+    formally close them
+
+## Ownership
+
+- execution owner: `arch-ctm`
+- verification owner: `quality-mgr`
+
 ## Acceptance Criteria
 
 - the runbook is concrete enough that both hosts can execute without guessing

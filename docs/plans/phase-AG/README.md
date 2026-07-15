@@ -31,6 +31,7 @@ Historical input:
 
 - `docs/plans/phase-AB/`
 
-`Phase AB` remains the earlier cross-host smoke planning line. `Phase AG`
-reuses the valid structure from `AB` but is the active namespace for the
-current release-directed validation effort.
+`Phase AB` remains the earlier cross-host smoke planning line, but it never
+reached executed readiness evidence and is retained only as historical planning
+input. `Phase AG` reuses the useful structure from `AB`, supersedes it as the
+active namespace, and is the only current release-directed validation package.

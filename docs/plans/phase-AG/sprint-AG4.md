@@ -29,6 +29,16 @@ lane is already green.
 - copied-state validation row `AG-VAL-010`
 - operator repair/setup notes for realistic-state execution
 
+## Required Validation
+
+- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
+  - `AG-VAL-010`
+
+## Ownership
+
+- execution owner: `arch-ctm`
+- verification owner: `quality-mgr`
+
 ## Acceptance Criteria
 
 - copied-state does not begin before clean-room success

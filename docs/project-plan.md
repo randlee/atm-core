@@ -80,7 +80,9 @@ Phase-AG planning note:
   disposable clean-room state first, then disposable copied-state revalidation
 - `Phase AG` is validation-first: no code unless the matrix exposes a real bug
 - the planning branch is `feature/cross-host-communication`
-- the next execution integration branch is `integrate/phase-AG`
+- this planning package is a documented single-branch docs/evidence-only
+  exception to the usual integrate-branch policy; PR #542 targets `develop`
+  directly while the phase remains validation-only
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -122,8 +124,7 @@ Phase-AF planning note:
 - the accepted implementation branch is `integrate/phase-AF`; AF-1, AF-2, and
   AF-3 are merged there at `52c5c338`, with docs-only readiness corrections at
   `d5420b0f`.
-- PR #539 (`integrate/phase-AF` -> `develop`) is the active phase-end review
-  candidate.
+- PR #539 is merged to `develop` at `98a4e66c`.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
   proceed until its process-level singleton proof is green.
 
@@ -251,7 +252,7 @@ Phase R sequencing rule:
 Status summary:
 - Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
 - AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
-  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+  is merged to `develop` at `98a4e66c`.
 - Accepted implementation branch: `integrate/phase-AF`.
 - Integration target: `develop`.
 - The authoritative plan is
@@ -665,8 +666,11 @@ Status summary:
 Planning branch:
 - `feature/cross-host-communication`
 
-Future integration branch:
-- `integrate/phase-AG`
+Branch-routing note:
+- PR #542 (`feature/cross-host-communication` -> `develop`) is the current
+  docs/evidence-only planning branch for Phase AG
+- if AG later opens product-code fixes from concrete findings, those follow-up
+  branches must declare their own normal integration path explicitly
 
 Goal:
 - validate Windows <-> macOS cross-host ATM interfaces on real binaries

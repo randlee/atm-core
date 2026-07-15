@@ -152,7 +152,6 @@ Classify the first failure before moving on:
 
 - `SETUP-GAP`
   - the docs/runbook did not provide enough information to execute
-- `SETUP-GAP`
   - also use this classification when the documented peer-address contract
     allowed a hostname where the actual product only accepts literal `IP:port`
 - `ENV-MISTAKE`
@@ -161,6 +160,9 @@ Classify the first failure before moving on:
   - operator input was correct and the product failed
 - `EXTERNAL-BLOCKER`
   - network/firewall/certificate/host-policy issue prevented validation
+
+These tokens are the authoritative `classification` enum for
+`cross-host-findings-ledger.md` and must match that ledger exactly.
 
 ## Immediate Recovery Rules
 

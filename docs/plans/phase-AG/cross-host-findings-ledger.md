@@ -20,6 +20,29 @@ Each finding entry must record:
 - `revalidation_result`
 - `notes`
 
+## Classification Enum
+
+Use exactly one of:
+
+- `SETUP-GAP`
+- `ENV-MISTAKE`
+- `PRODUCT-BUG`
+- `EXTERNAL-BLOCKER`
+
+These tokens are defined in `plan-phase-AG.md` and
+`cross-host-setup-runbook.md` and must not be restated with alternate prose.
+
+## Owner Enum
+
+Use exactly one of:
+
+- `team-lead`
+- `arch-ctm`
+- `quality-mgr`
+- `windows-operator`
+- `macos-operator`
+- `shared`
+
 ## Findings
 
 | Finding ID | Discovered In | Linked Row ID | Summary | Severity | Classification | Owner | Status | Required Fix Scope | Revalidation Result | Notes |
