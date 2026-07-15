@@ -71,15 +71,18 @@ Phase-AA simplification note:
   concrete SQLite construction to a dedicated `atm-runtime` crate and
   restoring a direct local doctor/store-health path
 
-Phase-AB planning note:
-- `Phase AB` is the active cross-host smoke planning line that follows the
+Phase-AG planning note:
+- `Phase AG` is the active cross-host validation line that follows the
   completed same-host release-readiness work in `Phase Z`
 - the authoritative planning document is
-  [`docs/plans/phase-AB/plan-phase-AB.md`](./plans/phase-AB/plan-phase-AB.md)
-- `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
+  [`docs/plans/phase-AG/plan-phase-AG.md`](./plans/phase-AG/plan-phase-AG.md)
+- `Phase AG` owns Windows/macOS real-binary cross-host interface validation on
   disposable clean-room state first, then disposable copied-state revalidation
-- the planning branch is `plan/phase-AB`
-- the execution integration branch is `integrate/phase-AB`
+- `Phase AG` is validation-first: no code unless the matrix exposes a real bug
+- the planning branch is `feature/cross-host-communication`
+- this planning package is a documented single-branch docs/evidence-only
+  exception to the usual integrate-branch policy; PR #542 targets `develop`
+  directly while the phase remains validation-only
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -121,10 +124,15 @@ Phase-AF planning note:
 - the accepted implementation branch is `integrate/phase-AF`; AF-1, AF-2, and
   AF-3 are merged there at `52c5c338`, with docs-only readiness corrections at
   `d5420b0f`.
-- PR #539 (`integrate/phase-AF` -> `develop`) is the active phase-end review
-  candidate.
+- PR #539 is merged to `develop` at `98a4e66c`.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
   proceed until its process-level singleton proof is green.
+- `smoke-test/1.3.1-cross-host` is the repo-published cross-host RC evidence
+  sprint on top of the accepted AF implementation line. Its authoritative plan
+  is
+  [`docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md`](./plans/phase-af/smoke-1.3.1-cross-host-plan.md),
+  and its Windows handoff checklist is
+  [`docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`](./plans/phase-af/smoke-1.3.1-windows-checklist.md).
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -163,8 +171,9 @@ Status:
 - Phase AA is the architectural simplification planning line for removing
   SQLite references from `atm-daemon` and moving concrete runtime assembly out
   to `atm-runtime`.
-- Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
-  execution after the accepted Phase Z baseline.
+- Phase AG is the active planning line for Windows/macOS cross-host ATM
+  validation after the accepted Phase Z baseline; Phase AB is historical input
+  only.
 - Phase AD is the active planning line for release-blocking caller-identity,
   post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
   baseline.
@@ -249,7 +258,7 @@ Phase R sequencing rule:
 Status summary:
 - Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
 - AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
-  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+  is merged to `develop` at `98a4e66c`.
 - Accepted implementation branch: `integrate/phase-AF`.
 - Integration target: `develop`.
 - The authoritative plan is
@@ -648,7 +657,7 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 - **Phase Z: Smoke, Dogfood, And Release Sign-Off [COMPLETE]** — Validated the first daemon + SQLite mail-SSOT release with real-binary smoke, roster truth cutover, watcher-owned Claude config ingest, boundary lint gates, `atm-dev` canary and dogfood, and final release sign-off; verdict `READY` on `feature/pZ-smoke-atm-graft @ 84935774` authorized in `docs/phase-Z/readiness.md` (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`). (Sprints Z.1–Z.24 and Z.3–Z.4; integration branch: `integrate/phase-Z`)
 
-## 37. Phase AB Windows/macOS Cross-Host Smoke
+## 37. Phase AG Windows/macOS Cross-Host Validation
 
 Status summary:
 - `Phase Z` is complete and remains the accepted same-host release-readiness
@@ -656,51 +665,54 @@ Status summary:
 - Windows same-host build/test and release-binary daemon parity have been
   restored on the post-`Z` baseline.
 - cross-host messaging between Windows and macOS has not yet been validated in
-  one authoritative executable smoke phase.
-- `Phase AB` is the next planning line and is not yet started.
+  one authoritative release-directed validation phase.
+- `Phase AG` is the active planning line.
+- `Phase AB` remains historical source material only.
 
 Planning branch:
-- `plan/phase-AB`
+- `feature/cross-host-communication`
 
-Future integration branch:
-- `integrate/phase-AB`
+Branch-routing note:
+- PR #542 (`feature/cross-host-communication` -> `develop`) is the current
+  docs/evidence-only planning branch for Phase AG
+- if AG later opens product-code fixes from concrete findings, those follow-up
+  branches must declare their own normal integration path explicitly
 
 Goal:
-- validate Windows <-> macOS cross-host ATM messaging on real binaries
+- validate Windows <-> macOS cross-host ATM interfaces on real binaries
+- get the cross-host daemon-to-daemon channel live first
 - keep clean-room disposable state as the first validation lane
 - prove durable send/read/ack, degraded notification visibility, and
   retry-visible recovery across hosts
 - revalidate on copied state only after the disposable lane passes
+- avoid code changes unless testing proves a real product defect
 
 Execution shape:
-- `AB.1` cross-host harness and clean-room baseline
-  - branch: `feature/pAB-s1-cross-host-harness-and-clean-room-baseline`
-- `AB.2` one-way cross-host delivery
-  - branch: `feature/pAB-s2-one-way-cross-host-delivery`
-- `AB.3` cross-host ack round-trip
-  - branch: `feature/pAB-s3-cross-host-ack-round-trip`
-- `AB.4` degraded notification and retry-visible recovery
-  - branch: `feature/pAB-s4-degraded-notification-and-retry-visible-recovery`
-- `AB.5` copied-state revalidation and readiness closeout
-  - branch: `feature/pAB-s5-copied-state-revalidation-and-readiness-closeout`
+- `AG.1` cross-host setup contract and channel bring-up
+- `AG.2` core cross-host interface validation
+- `AG.3` degraded path and retry-visible recovery
+- `AG.4` copied-state revalidation
+- `AG.5` findings closeout and release verdict
 
 Immediate planning outputs:
-- `docs/plans/phase-AB/plan-phase-AB.md`
-- `docs/plans/phase-AB/cross-host-smoke-checklist.md`
-- `docs/plans/phase-AB/cross-host-findings-ledger.md`
-- `docs/plans/phase-AB/readiness.md`
-- `docs/plans/phase-AB/sprint-AB1.md`
-- `docs/plans/phase-AB/sprint-AB2.md`
-- `docs/plans/phase-AB/sprint-AB3.md`
-- `docs/plans/phase-AB/sprint-AB4.md`
-- `docs/plans/phase-AB/sprint-AB5.md`
+- `docs/plans/phase-AG/plan-phase-AG.md`
+- `docs/plans/phase-AG/cross-host-setup-runbook.md`
+- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
+- `docs/plans/phase-AG/cross-host-findings-ledger.md`
+- `docs/plans/phase-AG/readiness.md`
+- `docs/plans/phase-AG/sprint-AG1.md`
+- `docs/plans/phase-AG/sprint-AG2.md`
+- `docs/plans/phase-AG/sprint-AG3.md`
+- `docs/plans/phase-AG/sprint-AG4.md`
+- `docs/plans/phase-AG/sprint-AG5.md`
 
 Acceptance / Phase Entry Gate:
 - `Phase Z` must remain closed on `develop`
+- no speculative code work begins before the first failed validation row exists
 - the clean-room disposable host-pair lane must pass before copied-state
   validation begins
 - the phase does not close until both disposable and copied-state cross-host
-  smoke lanes pass with retained evidence
+  validation lanes pass with retained evidence or are blocked by named findings
 
 ## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [COMPLETE]
 
