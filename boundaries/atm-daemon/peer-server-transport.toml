@@ -4,13 +4,13 @@ owner_crate_path = "atm_daemon"
 name = "PeerServerTransportAdapter"
 
 [public]
-trait = "runtime-private inbound peer listener"
+trait = "ServerTransport"
 
 [implementation]
 type = "PeerServerTransport"
 module = "atm_daemon::peer_transport"
-visibility = "private"
-constructor = "private"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_daemon::composition::RuntimeComposition::start_background_lanes"]

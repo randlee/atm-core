@@ -25,6 +25,10 @@ ALLOWED_TEST_MATCHES = (
         "crates/atm-daemon/src/peer_transport.rs",
         re.compile(r"\breplay_store\s*:\s*None,\s*$"),
     ),
+    (
+        "crates/atm-daemon/src/peer_transport/tests.rs",
+        re.compile(r"\breplay_store\s*:\s*None,\s*$"),
+    ),
 )
 
 
