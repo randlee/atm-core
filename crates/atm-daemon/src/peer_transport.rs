@@ -1,16 +1,17 @@
 use std::io::{self, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 #[cfg(test)]
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::AtmConfig;
 use atm_core::boundary::{
     self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStateRecord, RemoteReplayStore,
+    RequestDispatcher,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
@@ -33,16 +34,20 @@ const MAX_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
+const PEER_LISTENER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const PEER_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
     pub(crate) remote_retry_budget: Duration,
+    pub(crate) peer_listen_addr: Option<SocketAddr>,
 }
 
 impl Default for PeerTransportConfig {
     fn default() -> Self {
         Self {
             remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+            peer_listen_addr: None,
         }
     }
 }
@@ -80,6 +85,7 @@ impl PeerTransportConfig {
         }
         Ok(Self {
             remote_retry_budget,
+            peer_listen_addr: config.and_then(|config| config.daemon.peer_listen_addr),
         })
     }
 }
@@ -126,6 +132,124 @@ fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
             );
             None
         }
+    }
+}
+
+#[derive(Debug)]
+struct PeerServerHandle {
+    terminate: Arc<AtomicBool>,
+    join_handle: std::thread::JoinHandle<Result<(), AtmError>>,
+    #[cfg_attr(not(test), allow(dead_code))]
+    bound_addr: SocketAddr,
+}
+
+#[derive(Debug)]
+struct PeerServerTransport {
+    listen_addr: Option<SocketAddr>,
+    observability: SubsystemObservability,
+    state: Mutex<Option<PeerServerHandle>>,
+}
+
+impl PeerServerTransport {
+    fn new(listen_addr: Option<SocketAddr>, observability: SubsystemObservability) -> Self {
+        Self {
+            listen_addr,
+            observability,
+            state: Mutex::new(None),
+        }
+    }
+
+    fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        let Some(listen_addr) = self.listen_addr else {
+            return Ok(());
+        };
+        let mut state = self.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener state lock poisoned")
+                .with_recovery("Restart atm-daemon before retrying cross-host peer startup.")
+        })?;
+        if state.is_some() {
+            return Ok(());
+        }
+        let listener = TcpListener::bind(listen_addr).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind daemon peer listener at {listen_addr}"
+            ))
+            .with_recovery(
+                "Choose an available literal IP:port for daemon.peer_listen_addr and restart atm-daemon.",
+            )
+            .with_source(source)
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon peer listener as nonblocking")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host allows nonblocking TCP listeners for cross-host peer transport.",
+                )
+                .with_source(source)
+        })?;
+        let bound_addr = listener.local_addr().map_err(|source| {
+            AtmError::daemon_unavailable("failed to resolve daemon peer listener bound address")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the configured daemon.peer_listen_addr is valid on this host.",
+                )
+                .with_source(source)
+        })?;
+        let terminate = Arc::new(AtomicBool::new(false));
+        let terminate_for_thread = Arc::clone(&terminate);
+        let observability = self.observability.clone();
+        let join_handle = thread::Builder::new()
+            .name("peer-transport-listener".to_string())
+            .spawn(move || {
+                serve_peer_listener(listener, dispatcher, terminate_for_thread, observability)
+            })
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to spawn daemon peer listener thread")
+                    .with_recovery(
+                        "Restart atm-daemon after confirming the host can create the cross-host peer listener worker.",
+                    )
+                    .with_source(source)
+            })?;
+        self.observability.emit_or_warn(
+            "peer_listener_start",
+            "ok",
+            format!("daemon peer listener bound at {bound_addr}"),
+        );
+        *state = Some(PeerServerHandle {
+            terminate,
+            join_handle,
+            bound_addr,
+        });
+        Ok(())
+    }
+
+    fn shutdown(&self) -> Result<(), AtmError> {
+        let handle = self
+            .state
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("peer listener state lock poisoned")
+                    .with_recovery("Restart atm-daemon before retrying cross-host peer shutdown.")
+            })?
+            .take();
+        let Some(handle) = handle else {
+            return Ok(());
+        };
+        handle.terminate.store(true, Ordering::SeqCst);
+        match handle.join_handle.join() {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(error),
+            Err(_) => Err(AtmError::daemon_unavailable(
+                "daemon peer listener thread panicked unexpectedly",
+            )
+            .with_recovery("Restart atm-daemon before retrying cross-host peer transport.")),
+        }
+    }
+
+    #[cfg(test)]
+    fn bound_addr_for_test(&self) -> Option<SocketAddr> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.as_ref().map(|handle| handle.bound_addr))
     }
 }
 
@@ -749,6 +873,7 @@ impl ClientTransport for PeerClientTransport {
 #[derive(Debug, Clone)]
 pub(crate) struct PeerTransportRuntime {
     client: PeerClientTransport,
+    server: Arc<PeerServerTransport>,
 }
 
 impl Default for PeerTransportRuntime {
@@ -772,6 +897,10 @@ impl PeerTransportRuntime {
         observability: SubsystemObservability,
     ) -> Self {
         Self {
+            server: Arc::new(PeerServerTransport::new(
+                config.peer_listen_addr,
+                observability.clone(),
+            )),
             client: PeerClientTransport::new_with_observability(
                 replay_store,
                 config,
@@ -789,6 +918,17 @@ impl PeerTransportRuntime {
         self.client.resume_pending_replay()
     }
 
+    pub(crate) fn start(
+        &self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<(), AtmError> {
+        self.server.start(dispatcher)
+    }
+
+    pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
+        self.server.shutdown()
+    }
+
     #[cfg(test)]
     pub(crate) fn new_for_test(
         endpoint: SocketAddr,
@@ -796,8 +936,35 @@ impl PeerTransportRuntime {
         replay_db_path: PathBuf,
     ) -> Self {
         Self {
+            server: Arc::new(PeerServerTransport::new(
+                None,
+                SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+            )),
             client: PeerClientTransport::new_for_test(endpoint, config, replay_db_path),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_server_for_test(
+        listen_addr: SocketAddr,
+        observability: SubsystemObservability,
+    ) -> Self {
+        let config = PeerTransportConfig {
+            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+            peer_listen_addr: Some(listen_addr),
+        };
+        Self {
+            server: Arc::new(PeerServerTransport::new(
+                Some(listen_addr),
+                observability.clone(),
+            )),
+            client: PeerClientTransport::new_with_observability(None, config, observability),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
+        self.server.bound_addr_for_test()
     }
 
     #[cfg(test)]
@@ -821,6 +988,168 @@ impl PeerTransportRuntime {
             None => Ok(Vec::new()),
         }
     }
+}
+
+fn serve_peer_listener(
+    listener: TcpListener,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    terminate: Arc<AtomicBool>,
+    observability: SubsystemObservability,
+) -> Result<(), AtmError> {
+    let codec = JsonAtmProtocolCodec;
+    while !terminate.load(Ordering::SeqCst) {
+        match listener.accept() {
+            Ok((mut stream, _peer_addr)) => {
+                if let Err(error) =
+                    handle_peer_connection(&mut stream, Arc::clone(&dispatcher), &codec)
+                {
+                    emit_peer_connection_failure_event(
+                        &observability,
+                        &error,
+                        None,
+                        "peer_connection",
+                    );
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                thread::sleep(PEER_LISTENER_ACCEPT_POLL_INTERVAL);
+            }
+            Err(error) => {
+                return Err(
+                    AtmError::daemon_unavailable(
+                        "daemon peer listener stopped accepting TCP connections",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon after confirming the configured daemon peer listen address is still available.",
+                    )
+                    .with_source(error),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn handle_peer_connection(
+    stream: &mut TcpStream,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    codec: &JsonAtmProtocolCodec,
+) -> Result<(), AtmError> {
+    configure_peer_request_deadlines(stream)?;
+    let Some(header_bytes) =
+        atm_core::protocol::read_frame_header(stream, "failed to read remote peer request frame")?
+    else {
+        return Ok(());
+    };
+    let header = atm_core::protocol::decode_frame_header(
+        header_bytes,
+        "remote peer request frame exceeded the maximum supported size",
+    )?;
+    let frame = atm_core::protocol::read_frame_payload(
+        stream,
+        header,
+        "failed to read remote peer request frame",
+    )?;
+    let request_id = frame.request_id;
+    let (_, request) = codec.request_from_frame(frame)?;
+    let response = dispatch_peer_request(request, dispatcher)?;
+    let response_frame = codec.response_to_frame(request_id, response)?;
+    atm_core::protocol::write_frame(
+        stream,
+        &response_frame,
+        "failed to write remote peer response frame",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush remote peer response frame")
+            .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+            .with_source(source)
+    })?;
+    Ok(())
+}
+
+fn configure_peer_request_deadlines(stream: &TcpStream) -> Result<(), AtmError> {
+    stream
+        .set_read_timeout(Some(PEER_REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply remote peer read deadline")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host permits bounded TCP read deadlines for peer transport.",
+                )
+                .with_source(source)
+        })?;
+    stream
+        .set_write_timeout(Some(PEER_REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply remote peer write deadline")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host permits bounded TCP write deadlines for peer transport.",
+                )
+                .with_source(source)
+        })?;
+    Ok(())
+}
+
+fn dispatch_peer_request(
+    request: RequestEnvelope,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+) -> Result<ResponseEnvelope, AtmError> {
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("peer-transport-dispatch".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(dispatcher.dispatch(request));
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon peer dispatch worker")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host can create cross-host peer dispatch workers.",
+                )
+                .with_source(source)
+        })?;
+    match result_rx.recv_timeout(PEER_REQUEST_DEADLINE) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+            "remote peer request dispatch exceeded the bounded daemon deadline",
+        )
+        .with_recovery(
+            "Retry the cross-host peer operation after confirming the destination daemon is healthy and not stalled on request dispatch.",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
+            AtmError::daemon_unavailable("daemon peer dispatch worker disconnected unexpectedly")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the destination daemon can complete peer request dispatches.",
+                ),
+        ),
+    }
+}
+
+fn emit_peer_connection_failure_event(
+    observability: &SubsystemObservability,
+    error: &AtmError,
+    request_id: Option<atm_core::protocol::RequestId>,
+    transport_context: &'static str,
+) {
+    let classification = if error.is_validation() {
+        atm_core::observability::ConnectionFailureClassification::MalformedRequest
+    } else if error.is_daemon_unavailable() || error.is_timeout() {
+        atm_core::observability::ConnectionFailureClassification::TransportFailure
+    } else {
+        atm_core::observability::ConnectionFailureClassification::RequestFailure
+    };
+    observability.emit_event_or_warn(
+        observability
+            .event(
+                "peer_connection_worker",
+                classification.as_str(),
+                error.message.clone(),
+            )
+            .with_connection_failure(atm_core::observability::DaemonConnectionFailureFields {
+                code: error.code,
+                request_id,
+                classification,
+            })
+            .with_transport_context(transport_context),
+    );
 }
 
 fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
@@ -920,6 +1249,7 @@ mod tests {
         remote_replay_persistence_failed_error, remote_replay_store_not_configured_error,
     };
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    use crate::test_support::DoctorOnlyDispatcher;
     use crate::test_support::LifecycleFlagResetGuard;
     use crate::{DaemonSubsystem, SubsystemObservability};
     use atm_core::boundary::{AtmProtocol, ClientTransport, MessageKey};
@@ -932,6 +1262,7 @@ mod tests {
     use atm_core::types::{AgentName, IsoTimestamp, TeamName};
     use std::io::{self, Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+    use std::sync::Arc;
     use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
@@ -972,6 +1303,49 @@ mod tests {
     fn install_shared_lifecycle_reset_guard() -> LifecycleFlagResetGuard {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         LifecycleFlagResetGuard::install(lifecycle)
+    }
+
+    #[test]
+    fn peer_listener_round_trips_one_doctor_request() {
+        let _guard = install_shared_lifecycle_reset_guard();
+        let listener_transport = PeerTransportRuntime::new_server_for_test(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        );
+        listener_transport
+            .start(Arc::new(DoctorOnlyDispatcher))
+            .expect("start peer listener");
+        let endpoint = listener_transport
+            .bound_addr_for_test()
+            .expect("bound peer listener addr");
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let client_transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("replay.db"),
+        );
+        let response = client_transport
+            .client_transport()
+            .send(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                team_override: None,
+            }))
+            .expect("peer listener doctor response");
+        match response {
+            ResponseEnvelope::Doctor(report) => {
+                assert_eq!(
+                    report.summary.status,
+                    atm_core::doctor::DoctorStatus::Healthy
+                );
+            }
+            other => panic!("unexpected response from peer listener: {other:?}"),
+        }
+
+        listener_transport
+            .shutdown()
+            .expect("shutdown peer listener");
     }
 
     #[test]
@@ -1085,6 +1459,7 @@ mod tests {
             endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7002))),
             config: PeerTransportConfig {
                 remote_retry_budget: Duration::MAX,
+                peer_listen_addr: None,
             },
             replay_store: Some(replay_store),
             codec: super::JsonAtmProtocolCodec,
@@ -1220,6 +1595,7 @@ mod tests {
             endpoint,
             PeerTransportConfig {
                 remote_retry_budget: Duration::from_secs(1),
+                peer_listen_addr: None,
             },
             tempdir.path().join("replay.db"),
         );
@@ -1272,6 +1648,7 @@ mod tests {
             endpoint,
             PeerTransportConfig {
                 remote_retry_budget: Duration::from_millis(600),
+                peer_listen_addr: None,
             },
             tempdir.path().join("mail.db"),
         );

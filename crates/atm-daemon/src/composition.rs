@@ -481,11 +481,12 @@ impl RuntimeComposition {
     }
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
+        self.peer_transport_runtime
+            .start(self.request_dispatcher.clone())
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
+        self.peer_transport_runtime.shutdown()
     }
 }
 
