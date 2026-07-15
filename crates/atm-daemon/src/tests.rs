@@ -800,6 +800,8 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
+    let _cwd_guard = CwdGuard::install();
+    std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");

@@ -507,10 +507,6 @@ fn prepare_send_context<
     if !request.peer_loopback_delivery {
         validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     }
-    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&recipient.team));
-    }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =
