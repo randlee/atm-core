@@ -82,10 +82,10 @@ impl PeerServerTransport {
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
     ) -> Self;
-    fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>)
+    pub(super) fn start(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>)
         -> Result<(), AtmError>;
-    fn shutdown(&self) -> Result<(), AtmError>;
-    fn reload(
+    pub(super) fn shutdown(&self) -> Result<(), AtmError>;
+    pub(super) fn reload(
         &self,
         listen_addr: Option<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
