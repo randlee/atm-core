@@ -29,6 +29,27 @@ Required rule:
 - do not point any of these at live `~/.atm`, live `~/.claude`, or any other
   retained user state during Lane A
 
+Important implementation constraint discovered during AG.1 Windows setup:
+
+- the `1.3.1` runtime derives daemon singleton and durable SQLite state from
+  the OS-account home via `current_host_runtime_scope()`, not from `ATM_HOME`,
+  `ATM_CONFIG_HOME`, `HOME`, or `USERPROFILE`
+- under a normal operator account, release binaries therefore still use the
+  host-scoped `.atm/db/mail.db` even when `ATM_HOME`, `ATM_CONFIG_HOME`, and
+  `ATM_LOG_DIR` point at disposable directories
+- do not claim a Lane A clean-room PASS from a normal account until the team
+  has either provided an approved disposable OS-account/container/VM isolation
+  procedure or added an approved release-binary durable-state override
+
+Minimal team bootstrap required before same-host commands:
+
+1. create `.claude/teams/<team>/config.json` under the disposable `ATM_HOME`
+   with at least `{"members":[]}`
+2. run `atm teams add-member <team> <member> ... --json` for each clean-room
+   member needed by the row
+3. only then run `atm doctor --json`, `atm list --json`, `atm clear --json`,
+   `atm send ... --json`, or `atm read ... --json`
+
 ## Binary Contract
 
 Each host must use the release-target binaries for `1.3.1`:
