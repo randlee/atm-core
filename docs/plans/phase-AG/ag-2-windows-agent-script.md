@@ -36,6 +36,8 @@ Required setup correction:
 
 - `ATM_DAEMON_PEER_ADDR` is outbound-only
 - inbound listener bind comes from `.atm.toml` `[daemon].peer_listen_addr`
+- the daemon resolves `.atm.toml` from the current repo/worktree directory it
+  is started in, not from the location of the built binary artifact
 - this branch now carries the repo-local listener config:
 
 ```toml
@@ -71,11 +73,21 @@ Windows-agent exact next steps:
 
 macOS paired operator action:
 
-1. Start/restart the AG.2 daemon from this same branch/worktree.
-2. Use:
+1. Start/restart the AG.2 daemon from this same branch/worktree directory.
+2. If the built daemon artifact lives under another worktree
+   (for example `integrate/phase-AG/target/debug/atm-daemon`), that is fine,
+   but the process must still be launched with
+   `feature/cross-host-communication` as the current working directory so it
+   reads this branch's `.atm.toml`.
+3. Use:
    - `ATM_DAEMON_PEER_ADDR=10.10.100.98:43101`
-3. Verify listener presence with:
+4. Verify listener presence with:
    - `lsof -nP -iTCP:43101 -sTCP:LISTEN`
+   - expected result for the VPN lane: `*:43101` or `0.0.0.0:43101`, not a
+     single LAN-only bind such as `192.168.128.82:43101`
+5. If macOS is bound only to a LAN address, stop and fix the start location
+   before asking Windows to retry connectivity. That is a local startup/config
+   mistake, not a Windows routing failure.
 
 ## Repo Root Convention
 

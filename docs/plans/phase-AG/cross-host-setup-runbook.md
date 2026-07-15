@@ -129,6 +129,9 @@ Rules:
 - `ATM_DAEMON_PEER_ADDR` tells the local daemon where to dial
 - `daemon.peer_listen_addr` tells the local daemon what local TCP address to
   bind and accept on
+- the daemon loads `.atm.toml` from the repo/worktree directory it is launched
+  in; if the operator runs a binary built in another worktree, the process must
+  still start with the intended repo root as its current working directory
 - for AG.2 operator setup, prefer wildcard listener bind
   `0.0.0.0:43101` unless a host policy requires a narrower literal interface
   bind
@@ -174,6 +177,24 @@ Useful verification commands:
 - Windows:
   - `route print <mac-ip>`
   - `Test-NetConnection <mac-ip> -Port 43101`
+
+2026-07-15 operator finding:
+
+- macOS produced a false cross-host blocker when the daemon binary from
+  `integrate/phase-AG/target/debug/atm-daemon` was started with
+  `integrate/phase-AG` as the working directory instead of
+  `feature/cross-host-communication`
+- result:
+  - outbound env was correct
+  - inbound listener config from the AG worktree `.atm.toml` was not used
+  - the daemon bound only to `192.168.128.82:43101`
+  - Windows correctly failed `Test-NetConnection 10.212.36.11 -Port 43101`
+- fix:
+  - start the daemon with `feature/cross-host-communication` as the current
+    working directory
+  - it is acceptable to execute a binary artifact located under another
+    worktree as long as the working directory is the AG worktree containing the
+    intended `.atm.toml`
 
 ### Minimal macOS / Windows demo pair
 
