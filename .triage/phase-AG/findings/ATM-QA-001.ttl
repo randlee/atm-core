@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "AG.9 cross-host-findings-ledger.md cites wrong line range for runtime_health.rs Send dispatch arm" ;
+  triage:description "AG.9 QA-1 Important finding (req-qa ATM-QA-001, verified from source): docs/plans/phase-AG/cross-host-findings-ledger.md:54 cites crates/atm-daemon/src/runtime_health.rs:589-596 as the dispatch handling for RequestEnvelope::Send(...), but that range is actually inside an unrelated poison-recovery closure (with_shutdown_finalizer_registry, action = shutdown_registry_lock). The real RequestEnvelope::Send(...) match arm is at lines 608-620 (on feature/pAG-s9-release-verdict @ 462b3ee3). Fix: correct the ledger citation to runtime_health.rs:608-620." ;
+  triage:category "documentation" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T19:46:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s9-release-verdict/1> ;
+  triage:openOn <urn:atm:triage:worktree/s9-release-verdict/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s9-release-verdict/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "crates/atm-daemon/src/runtime_health.rs:589-596 dispatches RequestEnvelope::Send(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:worktree/s9-release-verdict/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/cross-host-communication/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s4-durable-interface-config/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s5-host-allowlist/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s6-doctor-visibility/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s7-live-revalidation/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s8-transport-security-planning/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .

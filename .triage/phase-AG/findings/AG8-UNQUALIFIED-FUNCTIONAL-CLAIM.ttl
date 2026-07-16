@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM>
+  a triage:Finding ;
+  triage:findingId "AG8-UNQUALIFIED-FUNCTIONAL-CLAIM" ;
+  triage:title "AG.8 docs contain an unqualified claim that 'functional cross-host code paths exist' without noting AG-FIND-005's blocking status" ;
+  triage:description "AG.8 QA-1 Important finding: AG.8's transport-security-planning docs state that functional cross-host code paths exist without qualifying that ordinary send dispatch is actually blocked per AG-FIND-005, potentially misleading a reader into thinking cross-host send works." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:pattern "functional cross-host|cross-host code paths" ;
+  triage:fileFilter "docs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG9/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG8/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/AG10/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/AG9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG8/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 26 ;
+  triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/AG8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 26 ;
+  triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/AG10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 26 ;
+  triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/AG9/462b3ee3> .
+
+<urn:atm:triage:worktree/AG8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AG10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/AG9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

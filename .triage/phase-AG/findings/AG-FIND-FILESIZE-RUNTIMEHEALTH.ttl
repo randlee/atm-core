@@ -1,0 +1,211 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG-FIND-FILESIZE-RUNTIMEHEALTH>
+  a triage:Finding ;
+  triage:findingId "AG-FIND-FILESIZE-RUNTIMEHEALTH" ;
+  triage:title "runtime_health.rs exceeds file-size ceiling, growing across multiple sprints" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs has grown past the repo's file-size ceiling (1000-line maximum for non-test production code) across successive AG sprints. Initial triage pass verifies all current AG branches exceed the ceiling." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/s3/8841e870> ;
+  triage:openOn <urn:atm:triage:worktree/s4/fdfc20c5> ;
+  triage:openOn <urn:atm:triage:worktree/s5/90dac63e> ;
+  triage:openOn <urn:atm:triage:worktree/s6/48c85b8d> ;
+  triage:openOn <urn:atm:triage:worktree/s7/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/s8/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/s9/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/s10/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s10/462b3ee3> .
+
+# Occurrence: s3 (cross-host-communication)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1215 ;
+  triage:productionLines 1043 ;
+  triage:ceiling 1000 ;
+  triage:overage 43 ;
+  triage:snippet "File exceeds 1000-line production code ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/8841e870> .
+
+# Occurrence: s4 (durable-interface-config)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1215 ;
+  triage:productionLines 1043 ;
+  triage:ceiling 1000 ;
+  triage:overage 43 ;
+  triage:snippet "File exceeds 1000-line production code ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/fdfc20c5> .
+
+# Occurrence: s5 (host-allowlist)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1215 ;
+  triage:productionLines 1043 ;
+  triage:ceiling 1000 ;
+  triage:overage 43 ;
+  triage:snippet "File exceeds 1000-line production code ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/90dac63e> .
+
+# Occurrence: s6 (doctor-visibility)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1355 ;
+  triage:productionLines 1183 ;
+  triage:ceiling 1000 ;
+  triage:overage 183 ;
+  triage:snippet "File exceeds 1000-line production code ceiling; includes project_cross_host_report (~lines 830-1033)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+# Occurrence: s7 (live-revalidation)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1355 ;
+  triage:productionLines 1183 ;
+  triage:ceiling 1000 ;
+  triage:overage 183 ;
+  triage:snippet "File exceeds 1000-line production code ceiling; includes project_cross_host_report (~lines 830-1033)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+# Occurrence: s8 (transport-security-planning)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1355 ;
+  triage:productionLines 1183 ;
+  triage:ceiling 1000 ;
+  triage:overage 183 ;
+  triage:snippet "File exceeds 1000-line production code ceiling; includes project_cross_host_report (~lines 830-1033)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+# Occurrence: s9 (secured-transport)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1381 ;
+  triage:productionLines 1209 ;
+  triage:ceiling 1000 ;
+  triage:overage 209 ;
+  triage:snippet "File exceeds 1000-line production code ceiling; overage increased in this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/16c5ba03> .
+
+# Occurrence: s10 (release-verdict)
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:totalLines 1381 ;
+  triage:productionLines 1209 ;
+  triage:ceiling 1000 ;
+  triage:overage 209 ;
+  triage:snippet "File exceeds 1000-line production code ceiling; overage increased in this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/462b3ee3> .
+
+# Worktree Snapshots
+<urn:atm:triage:worktree/s3/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s9/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s10/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

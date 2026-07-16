@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD>
+  a triage:Finding ;
+  triage:findingId "AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD" ;
+  triage:title "AG.6 requirements/architecture/doctor docs not updated for the new cross_host field" ;
+  triage:description "AG.6 QA-1 Blocking finding: AG.6 added a cross_host field/flag to doctor output or peer interface records, but requirements.md, architecture.md, and doctor-related docs were not updated to describe it." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/s6/48c85b8d> ;
+  triage:openOn <urn:atm:triage:worktree/s7/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/s8/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/s10/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/s9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s6/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "cross_host field documentation missing in requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "cross_host field documentation missing in requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "cross_host field documentation missing in requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "cross_host field documentation missing in requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCS-NOT-UPDATED-CROSSHOST-FIELD/s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "cross_host field documentation missing in requirements.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:worktree/s6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

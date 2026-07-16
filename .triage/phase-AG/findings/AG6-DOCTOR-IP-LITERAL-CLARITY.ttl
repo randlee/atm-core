@@ -1,0 +1,482 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG6-DOCTOR-IP-LITERAL-CLARITY>
+  a triage:Finding ;
+  triage:findingId "AG6-DOCTOR-IP-LITERAL-CLARITY" ;
+  triage:title "AG.6 doctor output shows raw IP literals without clarifying whether they are bind or advertise addresses" ;
+  triage:description "AG.6 QA-1 Minor finding: doctor's cross-host visibility output prints IP address literals for peer interfaces without labeling whether each is a bind address or an advertise address, causing operator confusion. Sweep for the doctor projection output formatting code across worktrees from AG.6 onward." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "usability" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/34> ;
+  triage:openOn <urn:atm:triage:worktree/s4/fdfc20c5> ;
+  triage:openOn <urn:atm:triage:worktree/s5/90dac63e> ;
+  triage:openOn <urn:atm:triage:worktree/s6/48c85b8d> ;
+  triage:openOn <urn:atm:triage:worktree/s7/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/s8/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/s10/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/s9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 542 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 545 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 544 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 547 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 544 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 547 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 924 ;
+  triage:snippet "row.bind_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 925 ;
+  triage:snippet "row.advertise_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 940 ;
+  triage:snippet "{}\", row.bind_addr, row.port))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s6/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 997 ;
+  triage:snippet "" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 544 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 547 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 924 ;
+  triage:snippet "row.bind_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 925 ;
+  triage:snippet "row.advertise_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 940 ;
+  triage:snippet "{}\", row.bind_addr, row.port))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s7/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 997 ;
+  triage:snippet "" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 544 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 547 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/19>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 924 ;
+  triage:snippet "row.bind_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/20>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 925 ;
+  triage:snippet "row.advertise_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/21>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 940 ;
+  triage:snippet "{}\", row.bind_addr, row.port))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s8/22>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 997 ;
+  triage:snippet "" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/23>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 545 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 548 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/25>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 931 ;
+  triage:snippet "row.bind_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 932 ;
+  triage:snippet "row.advertise_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/27>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 947 ;
+  triage:snippet "{}\", row.bind_addr, row.port))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s10/28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1021 ;
+  triage:snippet "" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/29>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 545 ;
+  triage:snippet ":new(row.interface_name.clone(), row.bind_addr, row.port)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 548 ;
+  triage:snippet "std::net::SocketAddr::new(row.bind_addr, row.port)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 931 ;
+  triage:snippet "row.bind_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 932 ;
+  triage:snippet "row.advertise_addr.to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 947 ;
+  triage:snippet "{}\", row.bind_addr, row.port))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG6-DOCTOR-IP-LITERAL-CLARITY/s9/34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1021 ;
+  triage:snippet "" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:worktree/s4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

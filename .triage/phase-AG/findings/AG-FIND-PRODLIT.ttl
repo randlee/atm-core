@@ -1,0 +1,685 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG-FIND-PRODLIT>
+  a triage:Finding ;
+  triage:findingId "AG-FIND-PRODLIT" ;
+  triage:title "Hardcoded production identity/team literal arch-ctm@atm-dev in test fixtures" ;
+  triage:description "Recurring across AG.5 (5x), AG.6 (5x), AG.7 (2x new + 1 carried from AG.5), AG.8 (0 new, docs-only sprint), AG.10 (0 new, streak broken in new code but old occurrences remain). Test code hardcodes the real production identity/team string instead of a test-only constant." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T02:25:41.793965Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/36> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/37> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/38> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/39> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/40> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/42> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/44> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/45> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/46> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/47> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/48> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/49> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/50> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/51> ;
+  triage:openOn <urn:atm:triage:worktree/4/fdfc20c5> ;
+  triage:openOn <urn:atm:triage:worktree/5/90dac63e> ;
+  triage:openOn <urn:atm:triage:worktree/6/48c85b8d> ;
+  triage:openOn <urn:atm:triage:worktree/7/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/8/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/9/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/10/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1082 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/4/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1103 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/4/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1100 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1121 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1144 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1165 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.98\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/5/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 222 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:occursIn <urn:atm:triage:worktree/5/90dac63e> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1100 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1121 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1144 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1165 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.98\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 222 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 943 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 967 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 975 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.99\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1109 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/6/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1131 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"192.168.1.21\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:occursIn <urn:atm:triage:worktree/6/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1100 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/19>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1121 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/20>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1144 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/21>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1165 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.98\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/22>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 292 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/23>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 366 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 547 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/25>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 943 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 967 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/27>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 975 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.99\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1109 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/7/29>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1131 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"192.168.1.21\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:occursIn <urn:atm:triage:worktree/7/34846433> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 292 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 366 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 547 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 943 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 967 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/35>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 975 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.99\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/36>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1109 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/37>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1131 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"192.168.1.21\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/38>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1100 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/39>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1121 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/40>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1144 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/8/41>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1165 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.98\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:occursIn <urn:atm:triage:worktree/8/283bd53b> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/42>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 943 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/9/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/43>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 967 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/9/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/44>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 975 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.99\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/9/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/45>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1109 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/9/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/9/46>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1131 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"192.168.1.21\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/9/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/47>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 943 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/48>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 967 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/49>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 975 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"10.10.100.99\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/50>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1109 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-PRODLIT/10/51>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1131 ;
+  triage:snippet "atm_storage::AllowHostCommand::new(\"192.168.1.21\", \"arch-ctm@atm-dev\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/10/462b3ee3> .
+
+<urn:atm:triage:worktree/3/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/5/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/9/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/10/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

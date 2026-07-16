@@ -1,0 +1,290 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG10-VAL013-015-PENDING>
+  a triage:Finding ;
+  triage:findingId "AG10-VAL013-015-PENDING" ;
+  triage:title "AG.10 secured-transport sprint has real-hardware validation rows AG-VAL-013/AG-VAL-015 still pending, blocking release" ;
+  triage:description "AG.10 QA-1 Blocking finding: the secured-transport implementation's validation checklist rows AG-VAL-013 and AG-VAL-015 (real Windows/Mac Studio hardware validation) remain PENDING and cannot be marked complete without actual cross-host hardware execution. This is a status/tracking finding, not a code fix." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo" ;
+  triage:category "validation-status" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/cross-host-communication/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/cross-host-communication/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s4-durable-interface-config/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s4-durable-interface-config/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s5-host-allowlist/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s5-host-allowlist/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s6-doctor-visibility/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s6-doctor-visibility/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s7-live-revalidation/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s7-live-revalidation/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s8-transport-security-planning/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s8-transport-security-planning/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s10-secured-transport/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s10-secured-transport/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s9-release-verdict/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s9-release-verdict/43> ;
+  triage:openOn <urn:atm:triage:worktree/cross-host-communication/8841e870> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/fdfc20c5> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5-host-allowlist/90dac63e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/48c85b8d> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7-live-revalidation/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s8-transport-security-planning/283bd53b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/cross-host-communication/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/cross-host-communication/8841e870> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/cross-host-communication/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/cross-host-communication/8841e870> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s4-durable-interface-config/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s4-durable-interface-config/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s5-host-allowlist/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/90dac63e> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s5-host-allowlist/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/90dac63e> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s6-doctor-visibility/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s6-doctor-visibility/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/48c85b8d> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s7-live-revalidation/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/34846433> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s7-live-revalidation/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/34846433> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s8-transport-security-planning/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s8-transport-security-planning/283bd53b> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s8-transport-security-planning/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s8-transport-security-planning/283bd53b> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s10-secured-transport/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s10-secured-transport/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s9-release-verdict/41>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 41 ;
+  triage:snippet "AG-VAL-013 | Lane A | Windows | macOS | secure LAN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:pattern "AG-VAL-013" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG10-VAL013-015-PENDING/pAG-s9-release-verdict/43>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 43 ;
+  triage:snippet "AG-VAL-015 | Lane A | Windows | macOS | secure routed/VPN host-pair rerun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:pattern "AG-VAL-015" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:worktree/cross-host-communication/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s4-durable-interface-config/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s5-host-allowlist/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s6-doctor-visibility/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s7-live-revalidation/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s8-transport-security-planning/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

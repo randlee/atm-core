@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "AG.9 cross-host-findings-ledger.md disclaimer wrongly states peer_loopback_host does not exist" ;
+  triage:description "AG.9 QA-1 Important finding: docs/plans/phase-AG/cross-host-findings-ledger.md contains a disclaimer stating that QA reports referencing a peer_loopback_host field 'were not source-accurate and were not used here.' This disclaimer is factually wrong: peer_loopback_host IS a real field at crates/atm-core/src/send/mod.rs:111 (pub peer_loopback_host: Option<PeerLoopbackHost>), defaulted None for ordinary sends, populated via loopback@<host> CLI syntax, and the daemon dispatcher hard-branches on it. Prior AG.7/AG.8/AG.10 QA-1 reports describing this mechanism were correct. Fix: correct the ledger note to state that peer_loopback_host is real, scoped to the AG.3 loopback self-test surface only, was never claimed by prior QA to cover genuine remote routing, and that the substantive AG-FIND-005 conclusion (ordinary send never reaches peer_transport_runtime) remains independently correct." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T19:46:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pAG-s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pAG-s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "QA reports that referenced a `peer_loopback_host` field were not source-accurate and were not used here." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+
+<urn:atm:triage:worktree/cross-host/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s5/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAG-s10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAG-s9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

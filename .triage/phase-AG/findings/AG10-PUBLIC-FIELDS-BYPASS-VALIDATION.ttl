@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION>
+  a triage:Finding ;
+  triage:findingId "AG10-PUBLIC-FIELDS-BYPASS-VALIDATION" ;
+  triage:title "AG.10 PeerCredentialStore/secure-transport struct has public fields allowing construction that bypasses validated constructors" ;
+  triage:description "A struct related to PeerCredentialStore or secure-transport config exposes public fields directly, allowing callers to construct instances that bypass the validated new()/builder constructor and its invariant checks. Sweep for struct definitions with pub fields plus a validated constructor pattern in the secure-transport code across worktrees from AG.10 onward." ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 590 ;
+  triage:snippet "pub struct LocalPeerIdentityRow { pub certificate_der: Vec<u8>, pub private_key_der: Vec<u8>, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 599 ;
+  triage:snippet "pub struct TrustedPeerRow { pub host_name: AllowedHostName, pub fingerprint_sha256: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s10/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 610 ;
+  triage:snippet "pub struct UpsertTrustedPeerCommand { pub host_name: AllowedHostName, ... } with impl new() validating host_name, fingerprint_sha256, approved_by" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 590 ;
+  triage:snippet "pub struct LocalPeerIdentityRow { pub certificate_der: Vec<u8>, pub private_key_der: Vec<u8>, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 599 ;
+  triage:snippet "pub struct TrustedPeerRow { pub host_name: AllowedHostName, pub fingerprint_sha256: String, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG10-PUBLIC-FIELDS-BYPASS-VALIDATION/s9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 610 ;
+  triage:snippet "pub struct UpsertTrustedPeerCommand { pub host_name: AllowedHostName, ... } with impl new() validating host_name, fingerprint_sha256, approved_by" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3> .
+
+<urn:atm:triage:worktree/pAG-s10-secured-transport/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAG-s9-release-verdict/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

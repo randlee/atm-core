@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG-FIND-FILESIZE-CONTRACT>
+  a triage:Finding ;
+  triage:findingId "AG-FIND-FILESIZE-CONTRACT" ;
+  triage:title "atm-storage/src/contract.rs exceeds file-size ceiling" ;
+  triage:description "crates/atm-storage/src/contract.rs exceeds the repo's 1000-line file-size ceiling per AG.10 QA-1 Blocking#4. Non-test lines threshold violated on pAG-s10 and pAG-s9 branches." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-CONTRACT/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-CONTRACT/pAG-s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-CONTRACT/pAG-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1 ;
+  triage:snippet "File size violation: 1053 non-test lines (ceiling: 1000)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:totalLines 1324 ;
+  triage:nonTestLines 1053 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-CONTRACT/pAG-s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1 ;
+  triage:snippet "File size violation: 1053 non-test lines (ceiling: 1000)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:totalLines 1324 ;
+  triage:nonTestLines 1053 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+
+<urn:atm:triage:worktree/pAG-s10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAG-s9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .

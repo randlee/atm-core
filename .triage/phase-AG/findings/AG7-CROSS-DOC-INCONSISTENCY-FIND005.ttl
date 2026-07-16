@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-CROSS-DOC-INCONSISTENCY-FIND005>
+  a triage:Finding ;
+  triage:findingId "AG7-CROSS-DOC-INCONSISTENCY-FIND005" ;
+  triage:title "AG.7 sprint docs are inconsistent about AG-FIND-005 blocker severity" ;
+  triage:description "Cross-host send product bug AG-FIND-005 is marked differently across phase AG documentation: some docs (cross-host-findings-ledger.md, readiness.md AG.9 sections) treat it as a hard FAIL/blocking gate on release viability, while others (plan-phase-AG.md, sprint-AG9.md) use conditional language treating it as merely a noted caveat. This cross-document inconsistency creates ambiguity about whether phase AG can proceed to release." ;
+  triage:category "documentation" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/crosshost/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/crosshost/8841e870> ;
+  triage:openOn <urn:atm:triage:worktree/s4/fdfc20c5> ;
+  triage:openOn <urn:atm:triage:worktree/s7/34846433> ;
+  triage:openOn <urn:atm:triage:worktree/s10/16c5ba03> ;
+  triage:openOn <urn:atm:triage:worktree/s9/462b3ee3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/crosshost/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:occursIn <urn:atm:triage:worktree/crosshost/8841e870> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/fdfc20c5> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:inconsistencyNotes "Severity marked as blocking in ledger, but smoke-checklist line 32 status changed from FAIL to PENDING on this branch" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "Ordinary cross-host send is functionally blocked: ... blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:inconsistencyNotes "Description expanded and changed from prior branches; plan-phase-AG.md:568 and sprint-AG9.md use conditional language (if AG-FIND-005 remains open) treating it as caveat rather than hard blocker; readiness.md simultaneously states AG.9 is PASS but blocked by AG-FIND-005" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/plan-phase-AG.md" ;
+  triage:line 568 ;
+  triage:snippet "if AG-FIND-005 remains open, the verdict must instead state cross-host is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:inconsistencyNotes "Conditional phrasing treats AG-FIND-005 as contingent caveat rather than hard blocker; conflicts with findings-ledger marking it as blocking; readiness.md also shows AG.9 is PASS despite being blocked by this finding" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+
+<urn:atm:triage:worktree/crosshost/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 .
