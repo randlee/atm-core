@@ -51,6 +51,7 @@ contract instead of a local-mailbox fallthrough.
   - final delivery/failure receipt lands in sender inbox
 - requirements / architecture / ADR updates that describe this dispatch rule
 - findings-ledger linkage to `AG-FIND-005`
+- one dedicated ADR for the remote-target contract and dispatch boundary
 
 ## Boundary And Type Contract
 
@@ -98,6 +99,8 @@ daemon/runtime surfaces.
 - local sends remain on the existing local mailbox path
 - same-host remote-target values do not require a dedicated loopback-only field
   or dispatch branch
+- production composition installs a real non-test-double `CrossHostDelivery`
+  implementation on the live send dispatch path
 - the sprint closes only when the remote-target dispatch branch is observable in
   automated validation
 
@@ -109,6 +112,12 @@ daemon/runtime surfaces.
   mailbox path
 - integration tests proving deferred-delivery results and sender-inbox receipts
   follow the bounded retry policy
+- composition-root validation proving AG.11 wires the real
+  `CrossHostDelivery` implementation into the production send path
+- AG.11-enforced tests stay narrow:
+  parser and dispatch-routing tests are gated at AG.11 close, while the
+  broader same-host functional matrix remains deferred to AG.12 and AG.13 and
+  the Tier-3 end-to-end integration backstop is deferred to AG.14
 - requirements / architecture / ADR review proving the CLI contract and runtime
   branch are described consistently
 
@@ -135,6 +144,8 @@ daemon/runtime surfaces.
   trait path as any other non-empty remote host
 - unhealthy remote-target sends return a deferred result without blocking for
   the full retry window
+- production-factory coverage proves the live dispatch path constructs and uses
+  the real `CrossHostDelivery` implementation rather than a unit-test double
 
 ## Smoke-Test Plan
 

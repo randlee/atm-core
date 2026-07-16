@@ -23,8 +23,8 @@ Current phase framing:
 - corrective downstream sprints after the reviewed AG.6-AG.10 line then close
   the still-missing remote-target dispatch gap and revalidate the full feature
   ladder in this order:
-  - localhost remote-target loopback
-  - public-interface remote-target loopback
+  - localhost same-host remote-target proof
+  - self-IP same-host remote-target proof
   - automated integration coverage
   - other-Mac smoke
   - Windows/macOS smoke

@@ -727,8 +727,8 @@ Execution shape:
 - `AG.10` secured cross-host transport implementation
 - `AG.9` historical reviewed copied-state verdict for the pre-corrective line
 - `AG.11` exact remote-target contract and dispatch routing
-- `AG.12` localhost full-function remote-target loopback
-- `AG.13` public-interface full-function remote-target loopback
+- `AG.12` localhost full-function same-host remote-target proof
+- `AG.13` self-IP full-function same-host remote-target proof
 - `AG.14` automated integration coverage for the corrective path
 - `AG.15` other-Mac cross-host smoke for the corrective path
 - `AG.16` Windows/macOS cross-host smoke for the corrective path

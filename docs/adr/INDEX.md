@@ -39,6 +39,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-028 — Cross-Host Interface Control Plane](./ADR-028-cross-host-interface-control-plane.md)
 - [ADR-029 — Cross-Host Host Authorization](./ADR-029-cross-host-host-authorization.md)
 - [ADR-030 — Cross-Host Transport Security Sequencing](./ADR-030-cross-host-transport-security-phase.md)
+- [ADR-031 — Remote-Target Contract And Cross-Host Dispatch Boundary](./ADR-031-remote-target-contract-and-cross-host-dispatch.md)
 
 ## Extracted Crate-Local ADRs
 

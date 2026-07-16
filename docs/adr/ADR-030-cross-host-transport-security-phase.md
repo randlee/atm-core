@@ -33,23 +33,6 @@ Functional closure must not:
 - any earlier release verdict must explicitly state whether it excludes
   transport-security guarantees
 
-## Follow-on Remote-Send Routing Constraint
-
-If ordinary cross-host `atm send` routing is updated after this ADR's security
-work, the routing contract must stay narrow and explicit:
-
-- agent/member names and team names must not contain `.`
-- the supported remote-send CLI forms are exactly:
-  - `atm send <agent>@<team>.<host> ...`
-  - `atm send <agent>@<team> --host <host> ...`
-- the inline form splits on the final `.` after `@`
-- those two forms normalize into one typed remote-host field on the request
-- mixed inline-host plus `--host` input is rejected instead of silently
-  preferring one source
-- send makes one routing decision at the boundary:
-  - empty remote-host field -> local mailbox path
-  - non-empty remote-host field -> cross-host queue / remote-delivery boundary
-- same-host values such as `localhost` and the sender host's own IP address are
-  ordinary non-empty remote-host values on that same remote-delivery boundary
-- host-routing logic must not leak through general daemon/runtime code after
-  that classification point
+The remote-target contract and dispatch-boundary decision is tracked
+independently in ADR-031 so transport-security sequencing does not become the
+accidental home for send-routing policy.

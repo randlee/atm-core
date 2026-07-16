@@ -299,9 +299,9 @@ These details are recorded in:
 - localhost and self-IP same-host proof both cover send/read/ack,
     nudge/notification classification, and retry-visible recovery
 - other-Mac host-pair smoke covering unauthorized rejection plus the same
-  full-function matrix used on same-host loopback
+  full-function matrix used on localhost/self-IP same-host proof
 - Windows/macOS host-pair smoke covering unauthorized rejection plus the same
-  full-function matrix used on same-host loopback
+  full-function matrix used on localhost/self-IP same-host proof
 - Windows -> macOS durable send
 - macOS -> Windows durable send
 - receiver-side read on both directions
@@ -656,6 +656,13 @@ Outputs:
 - one dispatch rule:
   - empty `remote_host` => local mailbox path
   - non-empty `remote_host` => cross-host delivery trait boundary
+- explicit rejection/error path when a remote-target send cannot use the
+  cross-host delivery path
+- one delivery-result policy:
+  - healthy path => wait up to `10s` for remote acceptance
+  - unhealthy path => return immediate deferred-delivery result
+  - daemon continues bounded retry for `60s..120s`
+  - final delivery/failure receipt lands in sender inbox
 - requirements / architecture / ADR updates aligned to that dispatch rule
 - finding handoff to `AG-FIND-005`
 
@@ -687,6 +694,7 @@ Outputs:
 - localhost transport-security disposition (`AG-VAL-018`)
 - retained proof that real ATM payloads traverse the peer-transport path
   instead of the local mailbox path
+- exact localhost runbook additions for the corrective path
 
 Entry gate:
 
@@ -714,6 +722,7 @@ Outputs:
 - self-IP same-host full-function success evidence (`AG-VAL-020`)
 - retained proof that bind/advertise configuration and allowlist enforcement
   both survive ordinary same-host IP addressing
+- exact self-IP same-host setup instructions for the corrective path
 
 Entry gate:
 
@@ -743,6 +752,8 @@ Outputs:
 - localhost/self-IP same-host integration coverage for send/read/ack,
   unauthorized rejection, nudge/notification classification, and
   retry-visible recovery
+- at least one ADR-003 Tier-3 real-socket or real-daemon-spawn integration
+  test that exercises the production `CrossHostDelivery` path end to end
 
 Entry gate:
 
