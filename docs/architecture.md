@@ -2693,6 +2693,10 @@ There are three distinct paths:
      - doctor-visible state for both
      - per-interface bind result persistence so one bad row does not hide the
        healthy rows
+     - the currently shipped AG transition still permits legacy listener
+       fallback when no enabled durable interface rows exist; doctor must
+       surface that fallback explicitly rather than pretending durable rows are
+       already the sole source of truth
    - loopback self-test remains a local diagnostic variant of the daemon
      listener/send path and is not equivalent to remote host-pair proof
 

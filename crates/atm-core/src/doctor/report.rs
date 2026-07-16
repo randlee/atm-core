@@ -7,7 +7,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -104,6 +104,48 @@ pub struct DaemonRuntimeDoctorReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostInterfaceDoctorRow {
+    pub interface_name: String,
+    pub bind_addr: String,
+    pub advertise_addr: String,
+    pub port: u16,
+    pub enabled: bool,
+    pub listener_bound: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bound_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bind_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostAllowedHostDoctorRow {
+    pub host_name: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disabled_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostAllowlistDoctorReport {
+    pub enforced: bool,
+    pub empty: bool,
+    pub hosts: Vec<CrossHostAllowedHostDoctorRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostDoctorReport {
+    pub legacy_fallback_active: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bound_endpoints: Vec<String>,
+    pub interfaces: Vec<CrossHostInterfaceDoctorRow>,
+    pub allowlist: CrossHostAllowlistDoctorReport,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PostSendHookRuleReport {
     pub recipient_matcher: String,
     pub executable: PathBuf,
@@ -157,6 +199,8 @@ pub struct DoctorReport {
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cross_host: Option<CrossHostDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_runtime: Option<DaemonRuntimeDoctorReport>,
     #[serde(default)]

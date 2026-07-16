@@ -21,10 +21,11 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
-    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    RecipientDeliveryPath, RecipientDeliveryPathReport,
+    BootstrapTraceReport, CrossHostAllowedHostDoctorRow, CrossHostAllowlistDoctorReport,
+    CrossHostDoctorReport, CrossHostInterfaceDoctorRow, DaemonRuntimeDoctorReport,
+    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -219,6 +220,7 @@ fn build_doctor_report(
         config,
         mail_store,
         roster_store,
+        cross_host: None,
         daemon_runtime,
         drift_findings,
         runtime_status,

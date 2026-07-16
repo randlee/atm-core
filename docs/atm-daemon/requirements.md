@@ -161,6 +161,10 @@ Initial crate requirement IDs:
   - persist per-row bind success/failure state
   - keep degraded/stale rows queryable through the CLI instead of deleting
     them during reload
+  - during the current AG transition, when no enabled durable rows exist the
+    daemon may still bind via legacy listener fallback; doctor/runtime output
+    must label that state explicitly so operators know they are not yet on the
+    durable steady-state path
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` owns loading and enforcing the
   durable deny-by-default exact-host allowlist before any mailbox, ack, or
   roster mutation occurs. Satisfies:

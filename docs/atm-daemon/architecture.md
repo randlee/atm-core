@@ -221,6 +221,10 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
+- durable interface rows are the intended listener control plane, but the
+  currently shipped AG transition still permits legacy listener fallback when
+  no enabled durable rows exist; doctor/runtime projection must surface that
+  state explicitly so operators can distinguish migrated vs fallback binds.
 - inbound peer authorization is a fail-closed gate in the peer listener path:
   the daemon normalizes the remote socket host token once to lowercase,
   compares it exactly against durable allowed-host rows, and rejects before

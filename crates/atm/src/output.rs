@@ -276,6 +276,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
+    print_doctor_cross_host(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
@@ -404,6 +405,13 @@ fn print_doctor_environment(report: &DoctorReport) {
             println!("    version={version}");
         }
     }
+}
+
+fn print_doctor_cross_host(report: &DoctorReport) {
+    let Some(cross_host) = &report.cross_host else {
+        return;
+    };
+    print!("{}", render_cross_host_section(cross_host));
 }
 
 fn print_doctor_findings(report: &DoctorReport) {
@@ -800,16 +808,84 @@ fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
     output
 }
 
+fn render_cross_host_section(cross_host: &atm_core::doctor::CrossHostDoctorReport) -> String {
+    let mut output = String::from("\nCross-host control plane:\n");
+    output.push_str(&format!(
+        "  Legacy fallback active: {}\n",
+        render_bool(cross_host.legacy_fallback_active)
+    ));
+    if cross_host.bound_endpoints.is_empty() {
+        output.push_str("  Bound endpoints: none\n");
+    } else {
+        output.push_str(&format!(
+            "  Bound endpoints: {}\n",
+            cross_host.bound_endpoints.join(", ")
+        ));
+    }
+
+    if cross_host.interfaces.is_empty() {
+        output.push_str("  Durable interfaces: none\n");
+    } else {
+        output.push_str("  Durable interfaces:\n");
+        for row in &cross_host.interfaces {
+            output.push_str(&format!(
+                "    {} bind={}:{} advertise={}:{} enabled={} bound={} stale_at={} last_bound_at={} last_bind_error={}\n",
+                row.interface_name,
+                row.bind_addr,
+                row.port,
+                row.advertise_addr,
+                row.port,
+                row.enabled,
+                row.listener_bound,
+                row.stale_at
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "-".to_string()),
+                row.last_bound_at
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "-".to_string()),
+                row.last_bind_error.as_deref().unwrap_or("-")
+            ));
+        }
+    }
+
+    output.push_str(&format!(
+        "  Allowlist: enforced={} empty={}\n",
+        cross_host.allowlist.enforced, cross_host.allowlist.empty
+    ));
+    if cross_host.allowlist.hosts.is_empty() {
+        output.push_str("    hosts: none\n");
+    } else {
+        for row in &cross_host.allowlist.hosts {
+            output.push_str(&format!(
+                "    {} enabled={} disabled_at={} note={}\n",
+                row.host_name,
+                row.enabled,
+                row.disabled_at
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "-".to_string()),
+                row.note.as_deref().unwrap_or("-")
+            ));
+        }
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport,
+        BootstrapTraceReport, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
+        CrossHostInterfaceDoctorRow,
     };
     use serde_json::json;
 
-    use super::{render_ack_result_line, render_bootstrap_trace_section};
+    use super::{
+        render_ack_result_line, render_bootstrap_trace_section, render_cross_host_section,
+    };
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -879,5 +955,34 @@ mod tests {
             rendered["reply_disposition"]["reply_message_id"],
             "01KX5TEST00000000000000003"
         );
+    }
+
+    #[test]
+    fn cross_host_section_renders_interface_and_allowlist_state() {
+        let rendered = render_cross_host_section(&CrossHostDoctorReport {
+            legacy_fallback_active: false,
+            bound_endpoints: vec!["10.10.0.15:43101".to_string()],
+            interfaces: vec![CrossHostInterfaceDoctorRow {
+                interface_name: "en0".to_string(),
+                bind_addr: "10.10.0.15".to_string(),
+                advertise_addr: "10.10.0.15".to_string(),
+                port: 43101,
+                enabled: true,
+                listener_bound: true,
+                last_bound_at: None,
+                last_bind_error: None,
+                stale_at: None,
+            }],
+            allowlist: CrossHostAllowlistDoctorReport {
+                enforced: true,
+                empty: false,
+                hosts: Vec::new(),
+            },
+        });
+
+        assert!(rendered.contains("Cross-host control plane:"));
+        assert!(rendered.contains("Bound endpoints: 10.10.0.15:43101"));
+        assert!(rendered.contains("en0 bind=10.10.0.15:43101"));
+        assert!(rendered.contains("Allowlist: enforced=true empty=false"));
     }
 }

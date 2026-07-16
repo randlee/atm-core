@@ -148,6 +148,10 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::PostSendTmuxSendFailed
         | AtmErrorCode::PostSendGraftUnavailable
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed
+        | AtmErrorCode::WarningCrossHostListenerUnconfigured
+        | AtmErrorCode::WarningCrossHostListenerDegraded
+        | AtmErrorCode::WarningCrossHostAllowlistEmpty
+        | AtmErrorCode::WarningCrossHostLegacyFallbackActive
         | AtmErrorCode::InternalError => 1,
     }
 }
