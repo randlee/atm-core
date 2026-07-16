@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest, input};
+use atm_core::send::{SendMessageSource, SendRequest, input, parse_send_target};
 use atm_core::types::TaskId;
 use clap::Args;
 
@@ -26,6 +26,9 @@ pub struct SendCommand {
 
     #[arg(long)]
     team: Option<String>,
+
+    #[arg(long)]
+    host: Option<String>,
 
     #[arg(long)]
     file: Option<PathBuf>,
@@ -78,22 +81,13 @@ impl SendCommand {
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
         let caller_context =
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
-        let loopback_host = PeerLoopbackHost::parse_cli_target(&self.to).transpose()?;
-        let target = loopback_host
-            .as_ref()
-            .map(|_| {
-                format!(
-                    "{}@{}",
-                    caller_context.caller_identity, caller_context.caller_team
-                )
-            })
-            .unwrap_or_else(|| self.to.clone());
+        let parsed_target = parse_send_target(&self.to, self.host.as_deref())?;
         let message_source = self.build_message_source()?;
         let mut request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            &target,
+            &parsed_target.to.to_string(),
             caller_context.caller_team,
             message_source,
             self.summary,
@@ -102,7 +96,7 @@ impl SendCommand {
             self.dry_run,
         )
         .map_err(anyhow::Error::from)?;
-        request.peer_loopback_host = loopback_host;
+        request.remote_host = parsed_target.remote_host;
         Ok(request)
     }
 
@@ -149,7 +143,7 @@ mod tests {
 
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::{PeerLoopbackHost, SendMessageSource};
+    use atm_core::send::{RemoteTargetHost, SendMessageSource};
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -164,6 +158,7 @@ mod tests {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             file: None,
             stdin: false,
             summary: None,
@@ -186,6 +181,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            host: None,
             file: Some(PathBuf::from("message.md")),
             stdin: true,
             summary: None,
@@ -198,6 +194,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             file: None,
             stdin: true,
             summary: None,
@@ -224,6 +221,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            host: None,
             file: None,
             stdin: false,
             summary: None,
@@ -249,6 +247,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello from send".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             file: None,
             stdin: false,
             summary: Some("summary".to_string()),
@@ -290,6 +289,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             file: None,
             stdin: false,
             summary: None,
@@ -318,6 +318,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             file: None,
             stdin: false,
             summary: None,
@@ -337,15 +338,16 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn build_request_rewrites_loopback_target_to_self_and_records_host() {
+    fn build_request_parses_inline_remote_target_and_records_host() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let command = SendCommand {
-            to: "loopback@localhost".to_string(),
+            to: "recipient-a@test-team.localhost".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             file: None,
             stdin: false,
             summary: None,
@@ -359,13 +361,42 @@ mod tests {
             .build_request(".".into(), ".".into())
             .expect("request");
 
-        assert_eq!(request.to.to_string(), format!("env-sender@{TEST_TEAM}"));
+        assert_eq!(request.to.to_string(), "recipient-a@test-team");
         assert_eq!(
-            request
-                .peer_loopback_host
-                .as_ref()
-                .map(PeerLoopbackHost::as_str),
+            request.remote_host.as_ref().map(RemoteTargetHost::as_str),
             Some("localhost")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_rejects_mixed_inline_and_explicit_host() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team.localhost".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            host: Some("127.0.0.1".to_string()),
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("mixed host forms must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("cannot combine inline remote host syntax")
         );
     }
 
@@ -377,6 +408,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
             summary: None,
