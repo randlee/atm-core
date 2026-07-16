@@ -73,115 +73,112 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
 }
 
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
-    if is_config_exit_code(error.code) {
-        2
-    } else if is_validation_exit_code(error.code) {
-        3
-    } else if is_daemon_exit_code(error.code) {
-        4
-    } else if is_mailbox_exit_code(error.code) {
-        5
-    } else if is_file_policy_exit_code(error.code) {
-        6
-    } else if is_observability_exit_code(error.code) {
-        7
-    } else if matches!(error.code, AtmErrorCode::SerializationFailed) {
-        8
-    } else if matches!(error.code, AtmErrorCode::WaitTimeout) {
-        9
-    } else {
-        1
+    config_exit_code(error.code)
+        .or_else(|| identity_exit_code(error.code))
+        .or_else(|| daemon_exit_code(error.code))
+        .or_else(|| mailbox_exit_code(error.code))
+        .or_else(|| file_policy_exit_code(error.code))
+        .or_else(|| observability_exit_code(error.code))
+        .or_else(|| misc_exit_code(error.code))
+        .unwrap_or(1)
+}
+
+fn config_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
+        AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::AtmHomeUnresolved
+        | AtmErrorCode::ConfigParseFailed
+        | AtmErrorCode::ConfigRetiredHookMembersKey
+        | AtmErrorCode::ConfigRetiredLegacyHookKeys
+        | AtmErrorCode::ConfigTeamParseFailed
+        | AtmErrorCode::ConfigTeamMissing => Some(2),
+        _ => None,
     }
 }
 
-fn is_config_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
-        AtmErrorCode::ConfigHomeUnavailable
-            | AtmErrorCode::AtmHomeUnresolved
-            | AtmErrorCode::ConfigParseFailed
-            | AtmErrorCode::ConfigRetiredHookMembersKey
-            | AtmErrorCode::ConfigRetiredLegacyHookKeys
-            | AtmErrorCode::ConfigTeamParseFailed
-            | AtmErrorCode::ConfigTeamMissing
-    )
-}
-
-fn is_validation_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
+fn identity_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::IdentityUnavailable
-            | AtmErrorCode::IdentityInvalid
-            | AtmErrorCode::IdentityConflict
-            | AtmErrorCode::MemberAlreadyExists
-            | AtmErrorCode::MemberNotFound
-            | AtmErrorCode::AddressParseFailed
-            | AtmErrorCode::TeamUnavailable
-            | AtmErrorCode::TeamInvalid
-            | AtmErrorCode::TeamNotFound
-            | AtmErrorCode::AgentNotFound
-            | AtmErrorCode::MessageValidationFailed
-            | AtmErrorCode::SelfAddressedSendInvalid
-            | AtmErrorCode::EmptyNudgeTemplateBody
-            | AtmErrorCode::CallerContextRequestInvalid
-            | AtmErrorCode::AckInvalidState
-            | AtmErrorCode::ClearInvalidState
-            | AtmErrorCode::HelpTopicNotFound
-            | AtmErrorCode::TestFakeTransportInjectionFailed
-    )
+        | AtmErrorCode::IdentityInvalid
+        | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::MemberAlreadyExists
+        | AtmErrorCode::MemberNotFound
+        | AtmErrorCode::AddressParseFailed
+        | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamInvalid
+        | AtmErrorCode::TeamNotFound
+        | AtmErrorCode::AgentNotFound
+        | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::SelfAddressedSendInvalid
+        | AtmErrorCode::EmptyNudgeTemplateBody
+        | AtmErrorCode::CallerContextRequestInvalid
+        | AtmErrorCode::AckInvalidState
+        | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::HelpTopicNotFound
+        | AtmErrorCode::TestFakeTransportInjectionFailed => Some(3),
+        _ => None,
+    }
 }
 
-fn is_daemon_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
+fn daemon_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::DaemonUnavailable
-            | AtmErrorCode::RuntimeRootInvalid
-            | AtmErrorCode::RuntimeBootstrapRefused
-            | AtmErrorCode::SocketOverrideForbidden
-            | AtmErrorCode::DaemonMayHaveExecuted
-            | AtmErrorCode::DaemonLifecycleWedge
-            | AtmErrorCode::DaemonLaunchGateRejected
-            | AtmErrorCode::DaemonServingStateRejected
-            | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
-            | AtmErrorCode::DaemonAutoStartFailed
-            | AtmErrorCode::DaemonConnectionSaturated
-            | AtmErrorCode::ClientDaemonVersionIncompatible
-            | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
-            | AtmErrorCode::DaemonAdvisorySessionNotRegistered
-            | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-            | AtmErrorCode::RemoteDeliveryOutcomeUnknown
-            | AtmErrorCode::WarningSqliteHealthDegraded
-    )
+        | AtmErrorCode::RuntimeRootInvalid
+        | AtmErrorCode::RuntimeBootstrapRefused
+        | AtmErrorCode::SocketOverrideForbidden
+        | AtmErrorCode::DaemonMayHaveExecuted
+        | AtmErrorCode::DaemonLifecycleWedge
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::ClientDaemonVersionIncompatible
+        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
+        | AtmErrorCode::WarningSqliteHealthDegraded => Some(4),
+        _ => None,
+    }
 }
 
-fn is_mailbox_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
+fn mailbox_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::MailboxReadFailed
-            | AtmErrorCode::MailboxWriteFailed
-            | AtmErrorCode::MailboxLockFailed
-            | AtmErrorCode::MailboxLockReadOnlyFilesystem
-            | AtmErrorCode::MailboxLockTimeout
-    )
+        | AtmErrorCode::MailboxWriteFailed
+        | AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout => Some(5),
+        _ => None,
+    }
 }
 
-fn is_file_policy_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed
-    )
+fn file_policy_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => Some(6),
+        _ => None,
+    }
 }
 
-fn is_observability_exit_code(code: AtmErrorCode) -> bool {
-    matches!(
-        code,
+fn observability_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::ObservabilityEmitFailed
-            | AtmErrorCode::ObservabilityQueryFailed
-            | AtmErrorCode::ObservabilityFollowFailed
-            | AtmErrorCode::ObservabilityHealthFailed
-            | AtmErrorCode::ObservabilityBootstrapFailed
-            | AtmErrorCode::ObservabilityHealthOk
-    )
+        | AtmErrorCode::ObservabilityQueryFailed
+        | AtmErrorCode::ObservabilityFollowFailed
+        | AtmErrorCode::ObservabilityHealthFailed
+        | AtmErrorCode::ObservabilityBootstrapFailed
+        | AtmErrorCode::ObservabilityHealthOk => Some(7),
+        _ => None,
+    }
+}
+
+fn misc_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
+        AtmErrorCode::SerializationFailed => Some(8),
+        AtmErrorCode::WaitTimeout => Some(9),
+        _ => None,
+    }
 }
 
 fn run() -> Result<(), AtmError> {
