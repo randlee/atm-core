@@ -69,6 +69,12 @@ pub enum SendOutcome {
     RejectedTerminal(RemoteFailureKind),
     OutcomeUnknown,
 }
+
+pub enum CrossHostDeliveryInfraError {
+    RuntimeUnavailable,
+    StorageUnavailable,
+    InternalInvariantViolation,
+}
 ```
 
 Parser and normalization rules:
@@ -88,6 +94,9 @@ Parser and normalization rules:
   - mixed inline-host plus `--host` => `MixedInlineAndExplicitHost`
   - malformed final-dot split / otherwise invalid inline form =>
     `MalformedInlineRemoteTarget`
+- `CrossHostDelivery::deliver_remote` must not use a generic outer error type;
+  the outer `Err` arm is reserved for unclassified infrastructure failures and
+  uses one dedicated typed error surface (`CrossHostDeliveryInfraError`)
 
 Dispatch rules:
 
@@ -132,6 +141,8 @@ Delivery-result rules:
 - deferred background work is bounded to `256` concurrent remote deliveries per
   host; additional deferred candidates fail fast with a typed overload result
   rather than creating unbounded in-memory growth
+- `RemoteFailureKind` is the concrete type-level encoding of the phase plan's
+  authoritative `Transient` / `Terminal` runtime retry-decision taxonomy
 
 Boundary rule:
 

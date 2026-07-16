@@ -92,8 +92,14 @@ pub enum RemoteDeliveryDecision {
 pub enum SendOutcome {
     Delivered,
     Deferred { receipt_message_id: MessageId },
-    RejectedTerminal(RemoteTerminalFailure),
+    RejectedTerminal(RemoteFailureKind),
     OutcomeUnknown,
+}
+
+pub enum CrossHostDeliveryInfraError {
+    RuntimeUnavailable,
+    StorageUnavailable,
+    InternalInvariantViolation,
 }
 
 pub trait CrossHostDelivery {
@@ -101,7 +107,7 @@ pub trait CrossHostDelivery {
         &self,
         request: &SendRequest,
         remote_host: &RemoteTargetHost,
-    ) -> Result<SendOutcome, AtmError>;
+    ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
 }
 ```
 
