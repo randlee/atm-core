@@ -51,7 +51,8 @@ contract instead of a local-mailbox fallthrough.
   - final delivery/failure receipt lands in sender inbox
 - requirements / architecture / ADR updates that describe this dispatch rule
 - findings-ledger linkage to `AG-FIND-005`
-- one dedicated ADR for the remote-target contract and dispatch boundary
+- one dedicated ADR (`ADR-031`) for the remote-target contract and dispatch
+  boundary
 
 ## Boundary And Type Contract
 

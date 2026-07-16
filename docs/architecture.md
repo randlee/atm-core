@@ -2780,15 +2780,13 @@ Test-transport rule:
   boundary in process
 
 Remote-delivery semantics:
-- bounded transient retry is acceptable for short intermittent failures
-- transport-security closure is sequenced after functional control-plane
-  closure under ADR-030; functional cross-host readiness must not implicitly
-  claim TLS/security closure before that ADR's phase work lands
-- there is no durable long-lived remote outbox
-- if the remote host remains unreachable after the bounded retry window, send
-  fails rather than leaving stale pending delivery behind
-- sender-side daemons do not treat a remote send as delivered until the remote
-  daemon accepts it
+- this section is only the high-level summary
+- the authoritative remote-target contract is ADR-031
+- the authoritative remote delivery state machine and timeout/retry/receipt
+  rules are defined in §21.6 and REQ-CORE-TRANSPORT-004/005
+- transport-security closure is still sequenced separately under ADR-030;
+  functional cross-host readiness must not implicitly claim TLS/security
+  closure before that phase work lands
 
 ### 21.5 Singleton Daemon
 
