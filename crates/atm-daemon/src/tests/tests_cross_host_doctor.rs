@@ -133,7 +133,7 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
 
 #[test]
 #[serial_test::serial(env)]
-fn doctor_warns_when_cross_host_listener_is_unconfigured_and_allowlist_is_empty() {
+fn doctor_stays_healthy_when_cross_host_is_unconfigured_and_unused() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -165,19 +165,17 @@ fn doctor_warns_when_cross_host_listener_is_unconfigured_and_allowlist_is_empty(
             assert!(cross_host.interfaces.is_empty());
             assert!(cross_host.bound_endpoints.is_empty());
             assert!(cross_host.allowlist.empty);
-            assert!(report.findings.iter().any(|finding| {
+            assert_eq!(
+                report.summary.status,
+                atm_core::doctor::DoctorStatus::Healthy
+            );
+            assert!(!report.findings.iter().any(|finding| {
                 finding.code == AtmErrorCode::WarningCrossHostListenerUnconfigured
             }));
             assert!(
-                report.findings.iter().any(|finding| {
+                !report.findings.iter().any(|finding| {
                     finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
                 })
-            );
-            assert!(
-                report
-                    .recommendations
-                    .iter()
-                    .any(|recommendation| recommendation.contains("atm daemon interfaces add"))
             );
         }
         other => panic!("expected doctor response, got {other:?}"),

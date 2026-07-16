@@ -86,8 +86,6 @@ pub(super) fn build_cross_host_findings(
         findings.push(legacy_cross_host_fallback_finding(
             live_bound_addr.expect("legacy fallback requires a live bound address"),
         ));
-    } else if !has_enabled_interface_rows {
-        findings.push(unconfigured_cross_host_listener_finding());
     }
     findings.extend(
         interfaces
@@ -95,7 +93,7 @@ pub(super) fn build_cross_host_findings(
             .filter(|row| row.enabled && row.last_bind_error.is_some())
             .map(degraded_cross_host_listener_finding),
     );
-    if enabled_allowlist_count == 0 {
+    if has_enabled_interface_rows && enabled_allowlist_count == 0 {
         findings.push(empty_cross_host_allowlist_finding());
     }
     findings
@@ -110,19 +108,6 @@ fn legacy_cross_host_fallback_finding(bound_addr: SocketAddr) -> DoctorFinding {
         ),
         remediation: Some(
             "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor` so the durable interface rows become authoritative."
-                .to_string(),
-        ),
-    }
-}
-
-fn unconfigured_cross_host_listener_finding() -> DoctorFinding {
-    DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::WarningCrossHostListenerUnconfigured,
-        message: "no enabled daemon interface rows are configured for cross-host listener binding"
-            .to_string(),
-        remediation: Some(
-            "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor`."
                 .to_string(),
         ),
     }
