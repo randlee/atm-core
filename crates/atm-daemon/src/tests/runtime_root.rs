@@ -7,7 +7,7 @@ use atm_core::protocol::{
     SendResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest};
+use atm_core::send::{RemoteTargetHost, SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
@@ -310,6 +310,7 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
 
     let status_cache = RuntimeStatusCache::new();
     let peer_transport = crate::PeerTransportRuntime::new_server_for_test(
@@ -330,7 +331,7 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
         atm_home.clone(),
         workspace_dir.clone(),
         ROLE_TEAM_LEAD.parse().expect("caller"),
-        &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+        "qa-a@test-team",
         TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("hello loopback".to_string()),
         None,
@@ -339,7 +340,7 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
         false,
     )
     .expect("send request");
-    request.peer_loopback_host = Some(PeerLoopbackHost::parse("localhost").expect("host"));
+    request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
@@ -347,14 +348,14 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
     };
-    assert_eq!(outcome.agent.as_str(), ROLE_TEAM_LEAD);
+    assert_eq!(outcome.agent.as_str(), "qa-a");
 
     let read = dispatcher
         .dispatch(RequestEnvelope::Receive(
             ReadQuery::new(
                 atm_home,
                 workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a".parse().expect("caller"),
                 None,
                 TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,
@@ -378,7 +379,7 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
             .message
             .as_ref()
             .is_some_and(|message| message.envelope.text == "hello loopback"),
-        "loopback-delivered message missing from inbox"
+        "localhost remote-target message missing from inbox"
     );
 
     peer_transport.shutdown().expect("shutdown peer listener");
@@ -403,6 +404,7 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
     configure_secure_loopback(&db_path, "127.0.0.1");
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
 
@@ -432,7 +434,7 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
         atm_home.clone(),
         workspace_dir.clone(),
         ROLE_TEAM_LEAD.parse().expect("caller"),
-        &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+        "qa-a@test-team",
         TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("hello secure loopback".to_string()),
         None,
@@ -441,7 +443,7 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
         false,
     )
     .expect("send request");
-    request.peer_loopback_host = Some(PeerLoopbackHost::parse("localhost").expect("host"));
+    request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
@@ -449,14 +451,14 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
     };
-    assert_eq!(outcome.agent.as_str(), ROLE_TEAM_LEAD);
+    assert_eq!(outcome.agent.as_str(), "qa-a");
 
     let read = dispatcher
         .dispatch(RequestEnvelope::Receive(
             ReadQuery::new(
                 atm_home,
                 workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a".parse().expect("caller"),
                 None,
                 TEST_TEAM.parse().expect("team"),
                 ReadSelection::All,

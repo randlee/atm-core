@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
 use std::io::Write as _;
 use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -30,7 +32,7 @@ use atm_core::{
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::{PeerLoopbackHost, send_mail_with_runtime_and_post_send_emitter},
+    send::{RemoteTargetHost, SendRequest, send_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -600,6 +602,120 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
+trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
+    fn deliver_remote(
+        &self,
+        request: SendRequest,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<ResponseEnvelope, AtmError>;
+}
+
+#[derive(Clone)]
+struct DaemonCrossHostDelivery {
+    peer_transport_runtime: PeerTransportRuntime,
+    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
+}
+
+impl DaemonCrossHostDelivery {
+    fn new(
+        peer_transport_runtime: PeerTransportRuntime,
+        peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
+    ) -> Self {
+        Self {
+            peer_transport_runtime,
+            peer_interface_config_store,
+        }
+    }
+
+    fn resolve_remote_port(&self) -> Result<u16, AtmError> {
+        let enabled_ports = self
+            .peer_interface_config_store
+            .list_interfaces()?
+            .into_iter()
+            .filter(|row| row.enabled)
+            .map(|row| row.port)
+            .collect::<BTreeSet<_>>();
+        match enabled_ports.len() {
+            1 => Ok(*enabled_ports.iter().next().expect("one enabled port")),
+            0 => self
+                .peer_transport_runtime
+                .bound_addr()?
+                .map(|addr| addr.port())
+                .ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "remote delivery is unavailable because no enabled cross-host interface port is configured",
+                    )
+                    .with_recovery(
+                        "Add and enable one daemon interface row with `atm daemon interfaces add ...`, restart atm-daemon if required, and retry the remote send.",
+                    )
+                }),
+            _ => Err(AtmError::validation(
+                "remote delivery is ambiguous because multiple enabled cross-host ports are configured".to_string(),
+            )
+            .with_recovery(
+                "Reduce the enabled daemon interface set to one shared port before retrying remote sends that specify only `<host>`.",
+            )),
+        }
+    }
+
+    fn resolve_remote_endpoint(
+        &self,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<SocketAddr, AtmError> {
+        if remote_host.as_str() == "localhost" {
+            return self.peer_transport_runtime.bound_addr()?.ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "remote delivery to localhost is unavailable because the daemon peer listener is not running",
+                )
+                .with_recovery(
+                    "Add and enable a daemon interface row with `atm daemon interfaces add ...`, restart atm-daemon if required, and retry the localhost remote send.",
+                )
+            });
+        }
+        let port = self.resolve_remote_port()?;
+        (remote_host.as_str(), port)
+            .to_socket_addrs()
+            .map_err(|source| {
+                AtmError::address_parse(format!(
+                    "failed to resolve remote host `{}` on port {}",
+                    remote_host.as_str(),
+                    port
+                ))
+                .with_recovery(
+                    "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
+                )
+                .with_source(source)
+            })?
+            .next()
+            .ok_or_else(|| {
+                AtmError::address_parse(format!(
+                    "remote host `{}` did not resolve to any socket addresses",
+                    remote_host.as_str()
+                ))
+                .with_recovery(
+                    "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
+                )
+            })
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonCrossHostDelivery {}
+
+impl CrossHostDelivery for DaemonCrossHostDelivery {
+    fn deliver_remote(
+        &self,
+        mut request: SendRequest,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let endpoint = self.resolve_remote_endpoint(remote_host)?;
+        request.remote_host = None;
+        self.peer_transport_runtime.send_to_endpoint(
+            endpoint,
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+        )
+    }
+}
+
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
@@ -607,8 +723,8 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                if request.peer_loopback_host.is_some() {
-                    return self.dispatch_loopback_send(request);
+                if request.remote_host.is_some() {
+                    return self.dispatch_remote_send(request);
                 }
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
                     request,
@@ -657,48 +773,19 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
-    fn dispatch_loopback_send(
+    fn dispatch_remote_send(
         &self,
-        mut request: atm_core::send::SendRequest,
+        request: atm_core::send::SendRequest,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let host = request
-            .peer_loopback_host
-            .take()
-            .ok_or_else(|| AtmError::daemon_unavailable("loopback peer host is missing"))?;
-        let endpoint = self.resolve_loopback_endpoint(&host)?;
-        request.peer_loopback_delivery = true;
-        self.peer_transport_runtime.send_to_endpoint(
-            endpoint,
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
-        )
-    }
-
-    fn resolve_loopback_endpoint(&self, host: &PeerLoopbackHost) -> Result<SocketAddr, AtmError> {
-        let bound_addr = self
-            .peer_transport_runtime
-            .bound_addr()?
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "loopback peer delivery is unavailable because the daemon peer listener is not running",
-                )
-                .with_recovery(
-                    "Add and enable a loopback daemon interface row with `atm daemon interfaces ...`, restart atm-daemon, and retry the loopback send after the peer listener is bound.",
-                )
-            })?;
-        let host_addr = if host.as_str().eq_ignore_ascii_case("localhost") {
-            "127.0.0.1".parse().expect("loopback localhost parses")
-        } else {
-            host.as_str().parse().map_err(|error| {
-                AtmError::address_parse(format!(
-                    "invalid loopback host `{}`: {error}",
-                    host.as_str()
-                ))
-                .with_recovery(
-                    "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
-                )
-            })?
-        };
-        Ok(SocketAddr::new(host_addr, bound_addr.port()))
+        let remote_host = request
+            .remote_host
+            .clone()
+            .ok_or_else(|| AtmError::daemon_unavailable("remote host is missing"))?;
+        let delivery = DaemonCrossHostDelivery::new(
+            self.peer_transport_runtime.clone(),
+            Arc::clone(&self.peer_interface_config_store),
+        );
+        delivery.deliver_remote(request, &remote_host)
     }
 
     fn compatibility_verdict(
