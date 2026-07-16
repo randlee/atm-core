@@ -212,7 +212,36 @@ Remote-delivery result rules:
   for remote acceptance
 - if the cross-host path is currently unhealthy, the CLI returns immediately
   with a deferred-delivery result
-- the daemon may continue bounded background retry for `60s..120s`
+- "healthy" means the daemon has a currently usable enabled interface row, a
+  resolvable outbound target, and no cached terminal-failure state for that
+  host
+- the daemon may continue bounded background retry for `60s..120s` only for
+  transient runtime failure kinds:
+  - connect timeout
+  - connection refused
+  - connection reset
+  - host/network unreachable
+- terminal runtime failure kinds never spend the retry budget:
+  - allowlist rejection
+  - authentication / certificate rejection
+  - protocol rejection
+  - malformed target
+- deferred retry cadence is fixed:
+  - initial retry interval `5s`
+  - exponential backoff `2x`
+  - per-attempt interval cap `30s`
+  - bounded jitter `±20%`
+  - hard attempt cap `6`
+- concurrent deferred background deliveries are bounded to `256` per host
+- the daemon must emit structured tracing events for:
+  - immediate unhealthy-path classification
+  - each deferred retry attempt
+  - retry success after a deferred result
+  - retry exhaustion
+  - terminal rejection without retry
+  - final sender-inbox receipt emission
+- a daemon restart during the deferred window must resume the pending retry and
+  receipt obligation from durable state until the bounded window expires
 - the daemon concludes deferred work by appending a final delivery/failure
   receipt into the sender inbox
 
@@ -363,6 +392,26 @@ The sole authoritative `classification` enum for Phase AG findings is:
 
 All other Phase AG docs must reference this enum only and must not claim
 separate or joint authority over it.
+
+This finding-classification enum is evidence/QA-only; it does not control
+runtime retry behavior.
+
+The authoritative runtime retry-decision enum for the corrective line is:
+
+- `Transient`
+  - connect timeout
+  - connection refused
+  - connection reset
+  - host/network unreachable
+- `Terminal`
+  - allowlist rejection
+  - authentication / certificate rejection
+  - protocol rejection
+  - malformed target
+
+Only `Transient` runtime failures may spend the bounded deferred retry budget.
+`Terminal` runtime failures must emit an immediate terminal result/receipt with
+no retry spending.
 
 Rows may end in one of two useful states:
 

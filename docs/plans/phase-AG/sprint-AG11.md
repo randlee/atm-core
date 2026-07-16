@@ -59,7 +59,7 @@ contract instead of a local-mailbox fallthrough.
 Illustrative implementation signatures:
 
 ```rust
-pub struct RemoteTargetHost(pub String);
+pub struct RemoteTargetHost(String);
 
 pub struct ParsedSendTarget {
     pub agent: AgentName,
@@ -67,12 +67,33 @@ pub struct ParsedSendTarget {
     pub remote_host: Option<RemoteTargetHost>,
 }
 
+pub enum SendTargetParseError {
+    MissingTeam,
+    MissingHost,
+    InvalidAgentNameDot,
+    InvalidTeamNameDot,
+    MixedInlineAndExplicitHost,
+    MalformedInlineRemoteTarget,
+}
+
 pub trait SendTargetParser {
     fn parse_target(
         &self,
         raw_target: &str,
         explicit_host: Option<&str>,
-    ) -> Result<ParsedSendTarget, AtmError>;
+    ) -> Result<ParsedSendTarget, SendTargetParseError>;
+}
+
+pub enum RemoteDeliveryDecision {
+    HealthyImmediateWait,
+    DeferredRetry,
+}
+
+pub enum SendOutcome {
+    Delivered,
+    Deferred { receipt_message_id: MessageId },
+    RejectedTerminal(RemoteTerminalFailure),
+    OutcomeUnknown,
 }
 
 pub trait CrossHostDelivery {
@@ -86,7 +107,15 @@ pub trait CrossHostDelivery {
 
 These names are illustrative, but the sprint requires equivalent explicit
 ownership so remote-target parsing and dispatch do not leak across unrelated
-daemon/runtime surfaces.
+daemon/runtime surfaces. `RemoteTargetHost` must be constructible only through
+the parser normalization path, not from arbitrary caller strings.
+
+Trait-surface rule:
+
+- `SendTargetParser` and `CrossHostDelivery` are repository-owned sealed
+  traits, not external extension points
+- the sprint requires one fixed production implementor set chosen by the
+  composition root
 
 ## Acceptance Criteria
 
@@ -102,6 +131,9 @@ daemon/runtime surfaces.
   or dispatch branch
 - production composition installs a real non-test-double `CrossHostDelivery`
   implementation on the live send dispatch path
+- "healthy" means the daemon has a currently usable enabled interface row, a
+  resolvable outbound target, and no cached terminal-failure state for the
+  target host; otherwise the send takes the deferred branch immediately
 - the sprint closes only when the remote-target dispatch branch is observable in
   automated validation
 
@@ -119,6 +151,8 @@ daemon/runtime surfaces.
   parser and dispatch-routing tests are gated at AG.11 close, while the
   broader same-host functional matrix remains deferred to AG.12 and AG.13 and
   the Tier-3 end-to-end integration backstop is deferred to AG.14
+- one timeout-enforcement test proves the `10s` healthy-wait ceiling is a hard
+  upper bound rather than best-effort behavior
 - requirements / architecture / ADR review proving the CLI contract and runtime
   branch are described consistently
 
@@ -132,6 +166,7 @@ daemon/runtime surfaces.
 - mixed inline-host plus `--host` input fails predictably
 - missing team or malformed host fails predictably
 - local-only target keeps `remote_host == None`
+- `RemoteTargetHost` cannot be constructed outside the parser normalization path
 
 ## Integration-Test Plan
 
@@ -147,6 +182,8 @@ daemon/runtime surfaces.
   the full retry window
 - production-factory coverage proves the live dispatch path constructs and uses
   the real `CrossHostDelivery` implementation rather than a unit-test double
+- healthy-path coverage proves the immediate-wait branch stops at the hard
+  `10s` ceiling when remote acceptance does not arrive
 
 ## Smoke-Test Plan
 

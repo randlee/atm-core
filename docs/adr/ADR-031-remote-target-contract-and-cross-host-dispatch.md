@@ -33,6 +33,44 @@ ATM will support exactly two operator-facing remote-send forms:
 
 Those two forms normalize into one typed remote-host field on the send request.
 
+Illustrative contract types:
+
+```rust
+pub struct RemoteTargetHost(String);
+
+pub enum SendTargetParseError {
+    MissingTeam,
+    MissingHost,
+    InvalidAgentNameDot,
+    InvalidTeamNameDot,
+    MixedInlineAndExplicitHost,
+    MalformedInlineRemoteTarget,
+}
+
+pub enum RemoteDeliveryDecision {
+    HealthyImmediateWait,
+    DeferredRetry,
+}
+
+pub enum RemoteFailureKind {
+    TransientConnectTimeout,
+    TransientConnectionRefused,
+    TransientConnectionReset,
+    TransientHostUnreachable,
+    TerminalAllowlistRejected,
+    TerminalAuthenticationRejected,
+    TerminalProtocolRejected,
+    TerminalMalformedTarget,
+}
+
+pub enum SendOutcome {
+    Delivered,
+    Deferred { receipt_message_id: MessageId },
+    RejectedTerminal(RemoteFailureKind),
+    OutcomeUnknown,
+}
+```
+
 Parser and normalization rules:
 
 - agent/member names must not contain `.`
@@ -42,6 +80,14 @@ Parser and normalization rules:
 - the prefix before that final `.` is the team name
 - mixed inline-host plus `--host` input is rejected instead of silently
   preferring one source
+- each parser rejection maps to one stable error code / variant:
+  - missing team => `MissingTeam`
+  - missing host => `MissingHost`
+  - dot in agent/member name => `InvalidAgentNameDot`
+  - dot in team name => `InvalidTeamNameDot`
+  - mixed inline-host plus `--host` => `MixedInlineAndExplicitHost`
+  - malformed final-dot split / otherwise invalid inline form =>
+    `MalformedInlineRemoteTarget`
 
 Dispatch rules:
 
@@ -58,8 +104,34 @@ Delivery-result rules:
   daemon acceptance
 - if the cross-host path is unhealthy, the CLI returns immediately with a
   deferred-delivery result
-- the daemon may continue bounded background retry for `60s..120s`
-- the daemon appends the final delivery/failure receipt into the sender inbox
+- healthy means the daemon has a currently usable enabled interface row, a
+  resolvable outbound target, and no cached terminal-failure state for that
+  host
+- deferred retry is allowed only for transient failure kinds:
+  - connect timeout
+  - connection refused
+  - connection reset
+  - host/network unreachable
+- terminal failure kinds never spend the retry budget:
+  - allowlist rejection
+  - authentication / certificate rejection
+  - protocol rejection
+  - malformed target
+- the daemon may continue bounded background retry for `60s..120s` using:
+  - initial retry interval: `5s`
+  - exponential backoff factor: `2x`
+  - maximum interval cap: `30s`
+  - bounded jitter: `±20%`
+  - hard attempt cap: `6` attempts per deferred delivery
+- the daemon emits one final delivery/failure receipt into the sender inbox at
+  retry completion or terminal failure
+- deferred-delivery state is durable for the bounded retry window: if the
+  daemon restarts mid-window, the pending retry/receipt obligation is resumed
+  from durable state until the window expires, then one final receipt is still
+  emitted
+- deferred background work is bounded to `256` concurrent remote deliveries per
+  host; additional deferred candidates fail fast with a typed overload result
+  rather than creating unbounded in-memory growth
 
 Boundary rule:
 
