@@ -1,3 +1,4 @@
+use crate::SqlitePeerSecurityStore;
 use atm_storage::contract::{
     AllowedHostName, LocalPeerIdentityRow, PeerSecurityMode, PeerSecuritySettingsRow,
     PeerSecurityStore, SetPeerSecurityModeCommand, TrustedPeerRow, UpsertTrustedPeerCommand,
@@ -5,9 +6,6 @@ use atm_storage::contract::{
 use atm_storage::{AtmError, IsoTimestamp};
 use rcgen::generate_simple_self_signed;
 use rusqlite::{OptionalExtension, params};
-use sha2::{Digest, Sha256};
-
-use crate::SqlitePeerSecurityStore;
 
 impl SqlitePeerSecurityStore {
     pub(crate) fn new(db: std::sync::Arc<crate::shared_db::SharedDb>) -> Self {
@@ -132,7 +130,7 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
                 })?;
         let certificate_der = certified_key.cert.der().to_vec();
         let private_key_der = certified_key.signing_key.serialize_der();
-        let fingerprint_sha256 = sha256_hex(&certificate_der);
+        let fingerprint_sha256 = atm_storage::sha256_hex(&certificate_der);
         let row = LocalPeerIdentityRow {
             certificate_der,
             private_key_der,
@@ -218,7 +216,10 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
         })
     }
 
-    fn load_trusted_peer(&self, host: &AllowedHostName) -> Result<Option<TrustedPeerRow>, AtmError> {
+    fn load_trusted_peer(
+        &self,
+        host: &AllowedHostName,
+    ) -> Result<Option<TrustedPeerRow>, AtmError> {
         self.db
             .with_connection(|connection| load_trusted_peer_row(connection, &self.db, host))
     }
@@ -370,15 +371,22 @@ fn load_trusted_peer_row(
         .transpose()
 }
 
-fn decode_security_settings_row(raw: StoredPeerSecuritySettingsRow) -> Result<PeerSecuritySettingsRow, AtmError> {
+fn decode_security_settings_row(
+    raw: StoredPeerSecuritySettingsRow,
+) -> Result<PeerSecuritySettingsRow, AtmError> {
     Ok(PeerSecuritySettingsRow {
         mode: raw.mode.parse()?,
         updated_by: Some(raw.updated_by),
-        updated_at: Some(parse_timestamp(raw.updated_at, "daemon_peer_security_settings.updated_at")?),
+        updated_at: Some(parse_timestamp(
+            raw.updated_at,
+            "daemon_peer_security_settings.updated_at",
+        )?),
     })
 }
 
-fn decode_local_peer_identity_row(raw: StoredLocalPeerIdentityRow) -> Result<LocalPeerIdentityRow, AtmError> {
+fn decode_local_peer_identity_row(
+    raw: StoredLocalPeerIdentityRow,
+) -> Result<LocalPeerIdentityRow, AtmError> {
     Ok(LocalPeerIdentityRow {
         certificate_der: raw.certificate_der,
         private_key_der: raw.private_key_der,
@@ -409,9 +417,9 @@ fn decode_trusted_peer_row(raw: StoredTrustedPeerRow) -> Result<TrustedPeerRow, 
 
 fn parse_timestamp(raw: String, field: &str) -> Result<IsoTimestamp, AtmError> {
     raw.parse::<IsoTimestamp>().map_err(|error| {
-        AtmError::validation(format!("failed to parse {field}: {error}")).with_recovery(
-            format!("Repair the malformed {field} row before retrying the daemon security query."),
-        )
+        AtmError::validation(format!("failed to parse {field}: {error}")).with_recovery(format!(
+            "Repair the malformed {field} row before retrying the daemon security query."
+        ))
     })
 }
 
@@ -427,14 +435,4 @@ fn normalize_fingerprint(raw: String) -> Result<String, AtmError> {
         ));
     }
     Ok(normalized)
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut output = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
 }

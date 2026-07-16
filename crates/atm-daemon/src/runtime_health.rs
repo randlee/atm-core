@@ -11,9 +11,9 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, CrossHostAllowedHostDoctorRow, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
-        CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
-        CrossHostTrustedPeerDoctorRow, DaemonRuntimeDoctorReport, DoctorExecutionContext,
-        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport, CrossHostTrustedPeerDoctorRow,
+        DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorKind},
     error_codes::AtmErrorCode,

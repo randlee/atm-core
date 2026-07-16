@@ -147,6 +147,10 @@ Initial crate requirement IDs:
     transport path
   - no release wording may imply the daemon already satisfies the TLS portion
     of this requirement before AG.10 passes
+  - the AG.10 secure transport trust model is self-signed peer identity plus
+    explicit SHA-256 fingerprint pinning, not PKI chain validation
+  - the TLS handshake must never silently downgrade to insecure transport on
+    verification failure; insecure transport remains an explicit operator mode
   - one cross-platform local IPC contract for same-host
     - Unix implementation: Unix domain socket
     - Windows implementation: named-pipe-backed local IPC
@@ -165,6 +169,8 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-002A`.
   Required daemon behavior:
   - apply every enabled interface row independently
+  - newly inserted durable interface rows must start disabled until the
+    operator enables them explicitly
   - persist per-row bind success/failure state
   - keep degraded/stale rows queryable through the CLI instead of deleting
     them during reload
@@ -181,6 +187,17 @@ Initial crate requirement IDs:
   - compare against the remote peer socket host token exactly
   - reject unauthorized peers before dispatch enters mailbox, ack, roster, or
     loopback-bypass-sensitive handlers
+- `REQ-DAEMON-TRANSPORT-002E` `atm-daemon` owns projecting the retained
+  cross-host control-plane state into the doctor-visible `cross_host` report.
+  Satisfies:
+  `REQ-CORE-TRANSPORT-002E`.
+  Required daemon behavior:
+  - compute `legacy_fallback_active` from the actual runtime bind state rather
+    than configuration intent alone
+  - include durable interface rows, bound endpoint visibility, and allowlist
+    rows in one typed projection
+  - surface empty-enforced-allowlist and degraded-bind states both as
+    structured findings and in the `cross_host` payload
 - `REQ-DAEMON-TRANSPORT-002C` `atm-daemon` owns the loopback self-test path as
   a local diagnostic surface only and must not let loopback success imply
   remote host-pair authorization. Satisfies:

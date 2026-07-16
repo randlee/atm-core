@@ -2,12 +2,17 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use atm_storage::{AllowedHostName, LocalPeerIdentityRow, PeerSecurityMode, PeerSecurityStore};
+use atm_storage::{
+    AllowedHostName, LocalPeerIdentityRow, PeerSecurityMode, PeerSecurityStore, sha256_hex,
+};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::{WebPkiSupportedAlgorithms, verify_tls12_signature, verify_tls13_signature};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime};
 use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
-use rustls::{ClientConfig, ClientConnection, DigitallySignedStruct, ServerConfig, ServerConnection, SignatureScheme, StreamOwned};
+use rustls::{
+    ClientConfig, ClientConnection, DigitallySignedStruct, ServerConfig, ServerConnection,
+    SignatureScheme, StreamOwned,
+};
 
 pub(super) type ClientTlsStream = StreamOwned<ClientConnection, TcpStream>;
 pub(super) type ServerTlsStream = StreamOwned<ServerConnection, TcpStream>;
@@ -35,14 +40,11 @@ pub(super) fn open_client_tls_stream(
         .map_err(rustls_config_error)?
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(PermissiveServerVerifier { algorithms }))
-        .with_client_auth_cert(
-            vec![certificate_der(&identity)],
-            private_key_der(&identity),
-        )
+        .with_client_auth_cert(vec![certificate_der(&identity)], private_key_der(&identity))
         .map_err(rustls_config_error)?;
     let server_name = ServerName::IpAddress(endpoint.ip().into());
-    let connection = ClientConnection::new(Arc::new(client_config), server_name)
-        .map_err(rustls_config_error)?;
+    let connection =
+        ClientConnection::new(Arc::new(client_config), server_name).map_err(rustls_config_error)?;
     let mut tls = StreamOwned::new(connection, stream);
     complete_client_tls_handshake(&mut tls).map_err(rustls_io_error)?;
     ensure_presented_peer_matches(
@@ -69,10 +71,7 @@ pub(super) fn open_server_tls_stream(
             algorithms,
             root_hints: Vec::new(),
         }))
-        .with_single_cert(
-            vec![certificate_der(&identity)],
-            private_key_der(&identity),
-        )
+        .with_single_cert(vec![certificate_der(&identity)], private_key_der(&identity))
         .map_err(rustls_config_error)?;
     let connection = ServerConnection::new(Arc::new(server_config)).map_err(rustls_config_error)?;
     let mut tls = StreamOwned::new(connection, stream);
@@ -165,17 +164,6 @@ fn rustls_io_error(error: std::io::Error) -> AtmError {
     .with_recovery(
         "Confirm the remote daemon is reachable and presenting the expected peer certificate before retrying secure cross-host delivery.",
     )
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let digest = sha2::Sha256::digest(bytes);
-    let mut output = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
 }
 
 #[derive(Debug)]

@@ -549,6 +549,19 @@ impl RuntimeComposition {
             })
             .collect::<Vec<_>>();
         let rows = if rows.is_empty() {
+            let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
+            tracing::warn!(
+                subsystem = "composition",
+                action = "peer_listener_legacy_config_fallback",
+                outcome = "deprecated",
+                "{}",
+                detail
+            );
+            self.composition_observability.emit_or_warn(
+                "peer_listener_legacy_config_fallback",
+                "deprecated",
+                detail,
+            );
             peer_transport_config
                 .peer_listen_addr
                 .into_iter()
@@ -879,6 +892,8 @@ pub(crate) fn compose_runtime(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use atm_storage::{AddPeerInterfaceCommand, PeerInterfaceKind};
+    use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -1107,6 +1122,97 @@ mod tests {
                 .expect("recovery guidance")
                 .contains("valid target or argument"),
             "{error}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn legacy_peer_listen_addr_fallback_emits_deprecation_warning() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace_dir = tempdir.path().join("workspace");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[daemon]\npeer_listen_addr = \"127.0.0.1:43121\"\n",
+        )
+        .expect("legacy config");
+        let _cwd_guard = CwdGuard::install();
+        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
+
+        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
+        runtime
+            .refresh_peer_listeners()
+            .expect("refresh peer listeners with legacy fallback");
+
+        let retained_log_path =
+            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
+        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
+        assert!(
+            retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
+            "{retained_log}"
+        );
+        assert!(
+            retained_log.contains("peer_listener_legacy_config_fallback"),
+            "{retained_log}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn durable_peer_interface_rows_do_not_emit_legacy_fallback_warning() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace_dir = tempdir.path().join("workspace");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[daemon]\npeer_listen_addr = \"127.0.0.1:43122\"\n",
+        )
+        .expect("legacy config also present");
+        let _cwd_guard = CwdGuard::install();
+        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
+
+        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
+        runtime
+            .peer_interface_config_store
+            .add_interface(
+                AddPeerInterfaceCommand::new(
+                    "lan0",
+                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    43123,
+                    PeerInterfaceKind::Lan,
+                    "test-suite",
+                )
+                .expect("valid interface command"),
+            )
+            .expect("insert durable interface row");
+        runtime
+            .peer_interface_config_store
+            .set_interface_enabled(
+                &atm_storage::PeerInterfaceKey::new("lan0", IpAddr::V4(Ipv4Addr::LOCALHOST), 43123)
+                    .expect("peer interface key"),
+                true,
+            )
+            .expect("enable durable interface row");
+
+        runtime
+            .refresh_peer_listeners()
+            .expect("refresh peer listeners with durable rows");
+
+        let retained_log_path =
+            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
+        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
+        assert!(
+            !retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
+            "{retained_log}"
+        );
+        assert!(
+            !retained_log.contains("peer_listener_legacy_config_fallback"),
+            "{retained_log}"
         );
     }
 

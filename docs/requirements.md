@@ -3561,18 +3561,25 @@ mail correctness.
 
   Current-line note:
   - the documented target transport remains TCP/TLS
-  - the AG.10 implementation line now includes a TLS-backed secure mode plus
-    an explicit insecure-allowed fallback mode, but transport-security closure
-    remains incomplete until the secure real-host reruns (`AG-VAL-013`,
-    `AG-VAL-015`) are retained
-  - any release verdict before those secure host-pair reruns complete must say
-    that explicitly rather than treating the requirement as waived
+  - the active `1.3.1` implementation line is still functionally plain TCP and
+    therefore does not satisfy transport-security closure
+  - any release verdict before `AG.10` must say that explicitly rather than
+    treating the requirement as waived
 
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
   - remote routing uses an address form equivalent to `agent@team.host`
   - sender-side daemons must not write remote host inbox JSONL directly
+  - when secure transport is enabled, the current trust model is explicit
+    self-signed peer identity plus operator-approved SHA-256 fingerprint
+    pinning
+  - the current secure transport line does not perform PKI/web-of-trust
+    certificate-chain validation; trust closure comes from the approved
+    fingerprint match after the TLS handshake
+  - `secure-required` and `insecure-allowed` are the only accepted transport
+    security modes; insecure transport requires an explicit operator choice and
+    secure handshake failure must not silently downgrade to insecure delivery
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host listener configuration must use a
   durable daemon-owned interface control plane rather than environment
@@ -3583,6 +3590,8 @@ mail correctness.
     durable state
   - CLI commands are the primary operator surface for adding, updating,
     enabling, disabling, removing, and listing those interface rows
+  - newly added interface rows are disabled by default until an explicit
+    enable action occurs
   - each configured row retains bind observability state including
     `last_bound_at`, `last_bind_error`, and stale visibility instead of
     collapsing failure into one process-global flag
@@ -3606,6 +3615,32 @@ mail correctness.
   - rejection happens before mailbox, ack/reply, or roster mutation
   - doctor output must surface allowlist enforcement state and configured host
     rows
+
+- `REQ-CORE-TRANSPORT-002E` `atm doctor` must expose the cross-host control
+  plane through a first-class `cross_host` projection rather than scattering
+  the data across unrelated findings only.
+
+  Required behavior:
+  - JSON doctor output must include a top-level `cross_host` object whenever
+    the daemon runtime is available
+  - `cross_host` must expose:
+    - `legacy_fallback_active`
+    - `bound_endpoints`
+    - `interfaces`
+    - `allowlist`
+  - each `interfaces` row must report:
+    - configured bind/advertise identity
+    - `enabled`
+    - whether the listener is currently bound
+    - `last_bound_at`
+    - `last_bind_error`
+    - `stale_at`
+  - `allowlist` must report:
+    - whether enforcement is active
+    - whether the enabled allowlist is empty
+    - every configured host row with enabled/disabled state
+  - text doctor output must render the same cross-host state in one dedicated
+    operator-visible section
 
 - `REQ-CORE-TRANSPORT-002C` Loopback self-test is an allowed local diagnostic
   addressing mode and must not be misrepresented as proof of remote host-pair

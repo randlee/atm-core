@@ -282,9 +282,9 @@ fn peer_listener_round_trips_one_doctor_request() {
 #[test]
 fn secure_peer_listener_round_trips_one_doctor_request() {
     let _guard = install_shared_lifecycle_reset_guard();
-    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-secure-roundtrip-{}.db", std::process::id())),
-    )
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(
+        format!("atm-ag10-secure-roundtrip-{}.db", std::process::id()),
+    ))
     .expect("backend");
     backend
         .allowed_host_store()
@@ -474,10 +474,12 @@ fn secure_peer_listener_rejects_untrusted_client_before_dispatch() {
 #[test]
 fn secure_client_does_not_silently_fallback_when_server_fingerprint_mismatches() {
     let _guard = install_shared_lifecycle_reset_guard();
-    let server_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-{}.db", std::process::id())),
-    )
-    .expect("server backend");
+    let server_backend =
+        atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(format!(
+            "atm-ag10-fingerprint-mismatch-{}.db",
+            std::process::id()
+        )))
+        .expect("server backend");
     server_backend
         .allowed_host_store()
         .allow_host(
@@ -511,10 +513,12 @@ fn secure_client_does_not_silently_fallback_when_server_fingerprint_mismatches()
         .bound_addr_for_test()
         .expect("bound peer listener addr");
 
-    let client_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-client-{}.db", std::process::id())),
-    )
-    .expect("client backend");
+    let client_backend =
+        atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(format!(
+            "atm-ag10-fingerprint-mismatch-client-{}.db",
+            std::process::id()
+        )))
+        .expect("client backend");
     let client_security_store = client_backend.peer_security_store();
     client_security_store
         .set_security_mode(
@@ -627,8 +631,74 @@ fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
 }
 
 #[test]
+fn peer_listener_rejects_disabled_host_before_dispatch() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let tempdir = TempDir::new().expect("tempdir");
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(tempdir.path().join("auth.db"))
+        .expect("backend");
+    let allowed_host_store = backend.allowed_host_store();
+    let allowed_host = "127.0.0.1"
+        .parse::<atm_storage::AllowedHostName>()
+        .expect("allowed host");
+    allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                "arch-ctm@atm-dev",
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    allowed_host_store
+        .deny_host(&allowed_host)
+        .expect("deny host");
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        RuntimeStatusCache::new(),
+        allowed_host_store,
+    );
+    let dispatcher = Arc::new(CountingDispatcher::default());
+    listener_transport
+        .start(dispatcher.clone())
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let error = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..DoctorQuery::default()
+        }))
+        .expect_err("disabled host should be rejected");
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert!(
+        error
+            .message
+            .contains("presented host `127.0.0.1` but that host is disabled"),
+        "unexpected error message: {}",
+        error.message
+    );
+    assert_eq!(dispatcher.count.load(Ordering::SeqCst), 0);
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
+
+#[test]
 #[serial_test::serial(env)]
-fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() {
+fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -810,7 +880,7 @@ fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() 
 
 #[test]
 #[serial_test::serial(env)]
-fn peer_listener_preserves_sent_outcome_when_post_send_degrades() {
+fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
