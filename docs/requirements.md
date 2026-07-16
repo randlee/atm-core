@@ -3570,16 +3570,28 @@ mail correctness.
   variables as the intended operator surface.
 
   Required behavior:
+  - the durable peer-interface-config surface is the persistent record of which
+    cross-host listener rows the daemon may bind and advertise
   - the daemon reads configured cross-host bind/advertise interfaces from
     durable state
   - CLI commands are the primary operator surface for adding, updating,
     enabling, disabling, removing, and listing those interface rows
+  - each configured row persists enough lifecycle state for operator diagnosis,
+    including whether the row is enabled, when it was last observed, whether it
+    has gone stale, and the last successful bind or bind failure
   - each configured row retains bind observability state including
     `last_bound_at`, `last_bind_error`, and stale visibility instead of
     collapsing failure into one process-global flag
   - if no enabled interface rows exist, no cross-host listener binds
+  - the prior in-memory-only / ephemeral listener-config path is deprecated and
+    may exist only as a historical compatibility fallback while durable rows
+    are absent; it must not remain the primary product model
   - environment variables may remain as historical/transitional compatibility
     inputs but must not remain the intended steady-state configuration model
+  - the durable peer-interface-config concept exists so cross-host listener
+    configuration survives daemon restart and can be inspected, changed, and
+    diagnosed through one persistent operator-visible surface rather than ad hoc
+    per-process startup state
 
 - `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use a durable
   deny-by-default exact-host allowlist before any mailbox mutation occurs.
