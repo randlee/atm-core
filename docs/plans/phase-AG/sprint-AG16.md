@@ -75,7 +75,7 @@ Prove the corrective path survives the real heterogeneous-host topology.
 - retain sender/receiver JSON and daemon logs from both hosts
 - run both rejection and success rows on the same candidate line
 - exercise the same remote-target syntax and feature matrix already proven on
-  localhost, public-interface loopback, and the other-Mac host pair
+  localhost, self-IP same-host proof, and the other-Mac host pair
 
 ## Out Of Scope
 

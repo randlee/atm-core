@@ -25,7 +25,7 @@ pieces are not optional hardening; they are prerequisite product work:
 Phase `AG` therefore becomes:
 
 - historical early validation sprints (`AG.1` / `AG.2`)
-- accepted loopback diagnostic work (`AG.3`)
+- historical loopback diagnostic work (`AG.3`)
 - prerequisite control-plane product work (`AG.4` / `AG.5`)
 - doctor-surface closure on the new product controls (`AG.6`)
 - renewed live cross-host validation once the product is actually operable
@@ -174,8 +174,8 @@ The phase proceeds under these assumptions:
   surfaces so the daemon-to-daemon channel can be exercised through real
   product controls rather than env hacks
 - after those surfaces exist, the lowest-risk proof order is:
-  - localhost remote-target loopback
-  - public-interface remote-target loopback
+  - localhost same-host remote-target proof
+  - self-IP same-host remote-target proof
   - automated integration coverage
   - other-Mac smoke
   - Windows/macOS smoke
@@ -203,6 +203,18 @@ Routing rules are equally narrow:
 - non-empty normalized `remote_host` => cross-host delivery trait boundary
 - sender-side daemons must not write a remote target directly into a local
   mailbox path
+- `localhost` and the sender host's own advertised or bound IP address are
+  ordinary non-empty remote-host values on that same remote-delivery path
+
+Remote-delivery result rules:
+
+- if the cross-host path is currently healthy, the CLI may wait up to `10s`
+  for remote acceptance
+- if the cross-host path is currently unhealthy, the CLI returns immediately
+  with a deferred-delivery result
+- the daemon may continue bounded background retry for `60s..120s`
+- the daemon concludes deferred work by appending a final delivery/failure
+  receipt into the sender inbox
 
 ## Validation Lanes
 
@@ -274,14 +286,17 @@ These details are recorded in:
 - daemon bring-up on macOS clean-room state
 - daemon bring-up on Windows clean-room state
 - peer transport channel bring-up between hosts
-- localhost remote-target unauthorized rejection before mailbox mutation
-- localhost remote-target full-function success with real ATM payloads
-- public-interface remote-target unauthorized rejection before mailbox mutation
-- public-interface remote-target full-function success with real ATM payloads
+- localhost same-host remote-target unauthorized rejection before mailbox
+  mutation
+- localhost same-host remote-target full-function success with real ATM
+  payloads
+- self-IP same-host remote-target unauthorized rejection before mailbox
+  mutation
+- self-IP same-host remote-target full-function success with real ATM payloads
 - automated integration coverage that proves:
   - both supported remote-target CLI forms normalize identically
   - remote-target sends do not fall back to the local mailbox path
-  - localhost and public-interface loopback both cover send/read/ack,
+- localhost and self-IP same-host proof both cover send/read/ack,
     nudge/notification classification, and retry-visible recovery
 - other-Mac host-pair smoke covering unauthorized rejection plus the same
   full-function matrix used on same-host loopback
@@ -658,17 +673,17 @@ Verification owner:
 
 - `quality-mgr`
 
-### AG.12 Localhost Full-Function Remote-Target Loopback
+### AG.12 Localhost Full-Function Same-Host Remote-Target Proof
 
 Primary objective:
 
-- prove 100% of the remote-target functionality on localhost before involving
-  a public interface or a second host
+- prove 100% of the remote-target functionality on `localhost` before
+  involving self-IP or a second host
 
 Outputs:
 
-- localhost unauthorized rejection evidence (`AG-VAL-016`)
-- localhost full-function success evidence (`AG-VAL-017`)
+- localhost same-host unauthorized rejection evidence (`AG-VAL-016`)
+- localhost same-host full-function success evidence (`AG-VAL-017`)
 - localhost transport-security disposition (`AG-VAL-018`)
 - retained proof that real ATM payloads traverse the peer-transport path
   instead of the local mailbox path
@@ -686,19 +701,19 @@ Verification owner:
 
 - `quality-mgr`
 
-### AG.13 Public-Interface Full-Function Loopback
+### AG.13 Self-IP Full-Function Same-Host Proof
 
 Primary objective:
 
-- rerun the full remote-target functionality on one host through its
-  non-loopback advertised address
+- rerun the full remote-target functionality on one host through its own
+  advertised or bound IP address
 
 Outputs:
 
-- public-interface unauthorized rejection evidence (`AG-VAL-019`)
-- public-interface full-function success evidence (`AG-VAL-020`)
+- self-IP same-host unauthorized rejection evidence (`AG-VAL-019`)
+- self-IP same-host full-function success evidence (`AG-VAL-020`)
 - retained proof that bind/advertise configuration and allowlist enforcement
-  both survive off-loopback addressing
+  both survive ordinary same-host IP addressing
 
 Entry gate:
 
@@ -725,7 +740,7 @@ Outputs:
   syntaxes
 - dispatch integration coverage proving remote-target sends no longer write to
   the local mailbox path
-- localhost/public-interface loopback integration coverage for send/read/ack,
+- localhost/self-IP same-host integration coverage for send/read/ack,
   unauthorized rejection, nudge/notification classification, and
   retry-visible recovery
 
@@ -766,7 +781,7 @@ Outputs:
 
 Entry gate:
 
-- AG.13 public-interface loopback is complete
+- AG.13 self-IP same-host proof is complete
 - AG.14 automated integration coverage is complete enough to make second-host
   failures actionable rather than ambiguous
 
@@ -857,8 +872,8 @@ Phase `AG` is complete only when all of the following are true:
 - the clean-room cross-host lane is fully executed with evidence on that real
   product surface
 - the AG.11 corrective remote-target routing work is complete
-- the AG.12 localhost full-function loopback lane is complete
-- the AG.13 public-interface full-function loopback lane is complete
+- the AG.12 localhost same-host proof lane is complete
+- the AG.13 self-IP same-host proof lane is complete
 - the AG.14 automated integration suite locks in the corrective path
 - the AG.15 other-Mac smoke lane is complete
 - the AG.16 Windows/macOS smoke lane is complete

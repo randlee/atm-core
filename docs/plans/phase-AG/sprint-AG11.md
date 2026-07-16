@@ -40,8 +40,15 @@ contract instead of a local-mailbox fallthrough.
 - one dispatch rule:
   - empty remote-target host => local mailbox path
   - non-empty remote-target host => cross-host delivery trait boundary
+- `localhost` and the sender host's own advertised or bound IP address remain
+  ordinary non-empty remote-target hosts on that same remote-delivery branch
 - explicit rejection/error path when a remote-target send cannot use the
   cross-host delivery path
+- one delivery-result policy:
+  - healthy path => wait up to `10s` for remote acceptance
+  - unhealthy path => return immediate deferred-delivery result
+  - daemon continues bounded retry for `60s..120s`
+  - final delivery/failure receipt lands in sender inbox
 - requirements / architecture / ADR updates that describe this dispatch rule
 - findings-ledger linkage to `AG-FIND-005`
 
@@ -89,6 +96,8 @@ daemon/runtime surfaces.
   path
 - a malformed or unsupported remote-target input fails predictably
 - local sends remain on the existing local mailbox path
+- same-host remote-target values do not require a dedicated loopback-only field
+  or dispatch branch
 - the sprint closes only when the remote-target dispatch branch is observable in
   automated validation
 
@@ -98,6 +107,8 @@ daemon/runtime surfaces.
 - integration tests for local-path vs remote-path dispatch selection
 - integration tests proving remote-target failure does not write to the local
   mailbox path
+- integration tests proving deferred-delivery results and sender-inbox receipts
+  follow the bounded retry policy
 - requirements / architecture / ADR review proving the CLI contract and runtime
   branch are described consistently
 
@@ -120,6 +131,10 @@ daemon/runtime surfaces.
   untouched
 - remote-target delivery success reaches the cross-host path with the normalized
   host value
+- same-host values (`localhost` and self-IP) use the same cross-host delivery
+  trait path as any other non-empty remote host
+- unhealthy remote-target sends return a deferred result without blocking for
+  the full retry window
 
 ## Smoke-Test Plan
 

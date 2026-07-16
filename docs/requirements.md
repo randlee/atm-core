@@ -3601,14 +3601,17 @@ mail correctness.
   - doctor output must surface allowlist enforcement state and configured host
     rows
 
-- `REQ-CORE-TRANSPORT-002C` Loopback self-test is an allowed local diagnostic
-  addressing mode and must not be misrepresented as proof of remote host-pair
-  closure.
+- `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
+  contract and must not be implemented as a special loopback-only send mode.
 
   Required behavior:
-  - loopback send paths remain local diagnostic/test surfaces
-  - loopback support must continue to use the daemon peer listener/send path
-  - successful loopback rows do not by themselves authorize remote cross-host
+  - same-host transport proof uses the same daemon peer listener/send path as
+    any other remote host proof
+  - `localhost` and the host's own advertised or bound IP address are valid
+    ordinary remote-host targets
+  - same-host proof must not require a dedicated wire field, request flag, or
+    special-case routing branch outside the normal remote-host classifier
+  - successful same-host rows do not by themselves authorize second-host
     release claims
 
 - `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
@@ -3630,21 +3633,23 @@ mail correctness.
   acceptance within the bounded retry window.
 
   Required behavior:
-  - sender-side daemons may record observability/audit information locally
-    while attempting remote delivery
+  - when the cross-host path is currently healthy, the CLI may block for up to
+    `10s` waiting for remote daemon acceptance
   - a remote send must not be reported as successfully delivered until the
     remote daemon accepts it
-  - if the connection drops after the sender finishes writing the request but
-    before remote acceptance is confirmed, the daemon must return one typed
-    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-    must not report success
-  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
-    replay/re-export path rather than by silently assuming success
-  - if the bounded retry window expires without remote acceptance, the send
-    fails and must not leave durable delivered-message state behind
-  - pending replay/re-export state must be persisted in the host-scoped SQLite
-    root keyed by mailbox identity plus `message_key`, with bounded expiry and
-    operator-visible retained-failure state
+  - when the cross-host path is currently unhealthy, the CLI must return
+    immediately with a typed deferred-delivery result instead of blocking for
+    the full retry window
+  - the daemon may continue bounded background retry for a short transient
+    window after returning the deferred result
+  - after the bounded deferred window expires, the daemon must emit a final
+    delivery receipt or failure receipt into the sender's inbox
+  - the product must distinguish:
+    - remote accepted now
+    - deferred and still trying
+    - deferred and failed
+  - the daemon must not keep a durable multi-day remote outbox or silently
+    claim remote success after only local admission
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -3653,17 +3658,15 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget default: `30s`
-  - the remote retry budget must be configurable through one daemon transport
-    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
-    unstable networks without changing code
+  - remote synchronous wait deadline: `10s`
+  - deferred background retry window: `60s..120s`
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - retry queue depth: `256`
+  - deferred outbound queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,

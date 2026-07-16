@@ -47,7 +47,7 @@ before introducing Windows-specific variables.
 ## Acceptance Criteria
 
 - another-Mac smoke confirms the corrective path behaves the same way as the
-  localhost and public-interface loopback proofs
+  localhost and self-IP same-host proofs
 - unauthorized cross-host traffic is rejected before mailbox mutation
 - authorized cross-host traffic supports the full functional matrix
 - failures are classified as setup, environment, product, or external blocker
@@ -84,7 +84,7 @@ before introducing Windows-specific variables.
 
 ## Entry Gate
 
-- AG.13 public-interface loopback is complete
+- AG.13 self-IP same-host proof is complete
 - AG.14 automated integration coverage is complete enough to make second-host
   failures actionable
 

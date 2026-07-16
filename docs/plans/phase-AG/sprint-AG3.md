@@ -38,19 +38,19 @@ useful for:
 
 This legitimate local self-test surface is distinct from the separately tracked
 client-trusted `peer_loopback_delivery` wire-field bypass design issue folded
-into `AG-FIND-004`; keeping loopback mode does not excuse trusting remote
-peers to assert loopback provenance.
+into `AG-FIND-004`; proving same-host delivery through `localhost` or self-IP
+does not excuse trusting remote peers to assert same-host provenance.
 
 ## Deliverables
 
-- documented loopback mode as a retained product feature
-- loopback smoke coverage and operator evidence shape
-- explicit plan authority for keeping loopback mode rather than treating it as
-  an ad hoc workaround
+- documented same-host remote-target proof as a retained product requirement
+- localhost/self-IP smoke coverage and operator evidence shape
+- explicit plan authority for using ordinary host routing rather than a
+  special loopback workaround
 
 ## Required Validation
 
-- local loopback validation rows and loopback operator smoke evidence
+- local same-host validation rows and operator smoke evidence
 
 ## Ownership
 
@@ -59,8 +59,9 @@ peers to assert loopback provenance.
 
 ## Acceptance Criteria
 
-- loopback mode is explicitly authorized as part of the product contract
-- loopback is documented as a local self-test surface, not misrepresented as
-  proof of remote cross-host closure
+- localhost and self-IP same-host proof are explicitly authorized as part of
+  the product contract
+- same-host proof is documented as an ordinary remote-target surface, not
+  misrepresented as proof of separate-host cross-host closure
 - the sprint closes the plan/documentation gap around the already-written
-  loopback code
+  same-host proof code

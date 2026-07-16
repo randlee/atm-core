@@ -1,13 +1,13 @@
 ---
 id: AG.12
-title: Localhost Full-Function Remote-Target Loopback
+title: Localhost Full-Function Same-Host Remote-Target Proof
 status: planned
 branch: docs/cross-host-remote-target-contract
 worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
 target: develop
 ---
 
-# Sprint AG.12 — Localhost Full-Function Remote-Target Loopback
+# Sprint AG.12 — Localhost Full-Function Same-Host Remote-Target Proof
 
 ```yaml
 plan_type: sprint_plan
@@ -21,16 +21,17 @@ estimated_scope: medium
 
 ## Goal
 
-Prove 100% of the remote-target functionality on localhost with real ATM
-payloads before involving a public interface or a second host.
+Prove 100% of the remote-target functionality on `localhost` with real ATM
+payloads before involving self-IP or a second host.
 
 ## Deliverables
 
 - localhost unauthorized rejection evidence (`AG-VAL-016`)
 - localhost full-function success evidence (`AG-VAL-017`)
 - localhost transport-security disposition (`AG-VAL-018`)
-- retained proof that remote-target localhost sends traverse the peer-transport
-  path instead of the local mailbox path
+- retained proof that remote-target localhost sends traverse the same
+  peer-transport path used for any other non-empty remote host instead of the
+  local mailbox path
 - exact localhost runbook additions for the corrective path
 
 ## Acceptance Criteria
@@ -45,6 +46,8 @@ payloads before involving a public interface or a second host.
   - reply-state mutation
   - nudge/notification classification
   - retry-visible recovery
+- unhealthy localhost transport returns immediate deferred status and later
+  writes final delivery/failure receipt into sender inbox
 - the sprint records whether localhost proof is secured or unsecured and links
   the result to `AG-FIND-001` when TLS is still open
 
@@ -67,6 +70,7 @@ payloads before involving a public interface or a second host.
 - localhost nudge/notification behavior remains classified as degradation, not as
   durable-send failure
 - localhost retry-visible recovery remains bounded and observable
+- localhost deferred-delivery receipt path is observable and bounded
 
 ## Smoke-Test Plan
 
@@ -78,7 +82,7 @@ payloads before involving a public interface or a second host.
 
 ## Out Of Scope
 
-- non-loopback public-interface proof
+- self-IP same-host proof
 - second-host smoke
 - copied-state release verdict
 

@@ -49,5 +49,7 @@ work, the routing contract must stay narrow and explicit:
 - send makes one routing decision at the boundary:
   - empty remote-host field -> local mailbox path
   - non-empty remote-host field -> cross-host queue / remote-delivery boundary
+- same-host values such as `localhost` and the sender host's own IP address are
+  ordinary non-empty remote-host values on that same remote-delivery boundary
 - host-routing logic must not leak through general daemon/runtime code after
   that classification point

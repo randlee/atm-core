@@ -2701,8 +2701,10 @@ There are three distinct paths:
      - SQLite-backed exact-host allowlist enforcement
      - CLI management for both
      - doctor-visible state for both
-   - loopback self-test remains a local diagnostic variant of the daemon
-     listener/send path and is not equivalent to remote host-pair proof
+   - same-host proof through `localhost` or the host's own advertised/bound IP
+     remains an ordinary use of the daemon listener/send path, not a separate
+     transport mode
+   - same-host proof is not equivalent to remote host-pair proof
 
 ### 21.3.1 New-Message Failure Contract
 
@@ -3107,8 +3109,8 @@ Phase R operational defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
+- remote synchronous wait deadline: `10s`
+- deferred background retry window: `60s..120s`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -3146,6 +3148,13 @@ Remote peer transport rules:
 - if a connection drops after the request write completes but before the remote
   daemon confirms acceptance, the send result is one typed
   `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
+- if the cross-host path is currently healthy, the CLI may wait up to `10s`
+  for remote acceptance before returning
+- if the cross-host path is currently unhealthy, the CLI returns immediately
+  with a deferred-delivery result and the daemon continues bounded retry in the
+  background
+- the deferred retry window is short-lived (`60s..120s`) and must conclude by
+  emitting a final delivery/failure receipt into the sender inbox
 - outbound peer delivery must resolve and open a fresh connection per attempt;
   ordinary local interface changes must not require daemon restart for new
   outbound attempts

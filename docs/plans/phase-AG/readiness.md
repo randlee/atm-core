@@ -35,8 +35,8 @@ release line.
 | `AG.9` | `PENDING` | `TBD` | reviewed earlier final-verdict sprint for the pre-corrective line; not the authoritative final verdict while `AG-FIND-005` remains open |
 | `AG.10` | `PENDING` | `TBD` | secured cross-host transport implementation not yet executed; any transport-security claim still depends on this sprint |
 | `AG.11` | `PENDING` | `TBD` | corrective remote-target contract and dispatch routing not yet executed |
-| `AG.12` | `PENDING` | `TBD` | localhost full-function remote-target loopback not yet executed |
-| `AG.13` | `PENDING` | `TBD` | public-interface full-function loopback not yet executed |
+| `AG.12` | `PENDING` | `TBD` | localhost full-function same-host remote-target proof not yet executed |
+| `AG.13` | `PENDING` | `TBD` | self-IP full-function same-host proof not yet executed |
 | `AG.14` | `PENDING` | `TBD` | automated integration coverage for the corrective path not yet executed |
 | `AG.15` | `PENDING` | `TBD` | other-Mac cross-host smoke not yet executed across the full corrective matrix |
 | `AG.16` | `PENDING` | `TBD` | Windows/macOS cross-host smoke not yet executed across the full corrective matrix |
@@ -93,4 +93,4 @@ Allowed closure-result values:
   durable allowlist enforcement, CLI management for both, and doctor support.
   Corrective closeout is also blocked on AG-FIND-005: ordinary atm send still
   needs a first-class remote-target contract and dispatch branch before the
-  localhost/public-interface/second-host validation ladder can close.`
+  localhost/self-IP/second-host validation ladder can close.`

@@ -112,7 +112,8 @@ Illustrative output shape:
 ## Smoke-Test Plan
 
 - local preflight smoke:
-  - loopback mode still works after AG.4 / AG.5
+  - `localhost` and self-IP same-host remote-target delivery still work after
+    AG.4 / AG.5
 - copied-state and real host-pair validation remain explicitly deferred to
   later sprints
 

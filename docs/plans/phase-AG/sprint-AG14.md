@@ -31,7 +31,7 @@ so the release does not depend only on manual smoke.
 - dispatch integration coverage proving remote-target sends never fall through
   to the local mailbox path
 - localhost full-function integration coverage mirroring AG.12
-- public-interface full-function integration coverage mirroring AG.13
+- self-IP full-function integration coverage mirroring AG.13
 - automated coverage for:
   - unauthorized rejection
   - authorized send/read/ack
@@ -42,7 +42,7 @@ so the release does not depend only on manual smoke.
 
 - the corrective path is covered by automated integration tests, not only by
   manual smoke
-- localhost and public-interface loopback both have automated success and
+- localhost and self-IP same-host proof both have automated success and
   rejection coverage
 - the integration suite fails if a remote-target send writes to the local
   mailbox path
@@ -62,8 +62,8 @@ so the release does not depend only on manual smoke.
 
 - exact CLI parsing coverage for both remote-target syntaxes
 - exact dispatch-branch coverage for local vs remote sends
-- localhost loopback matrix coverage
-- public-interface loopback matrix coverage
+- localhost same-host matrix coverage
+- self-IP same-host matrix coverage
 - no-local-fallback regression coverage
 
 ## Smoke-Test Plan
