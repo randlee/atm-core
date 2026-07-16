@@ -998,6 +998,12 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
 
     match doctor {
         ResponseEnvelope::Doctor(report) => {
+            if std::env::var_os("ATM_EMIT_DOCTOR_FIXTURE").is_some() {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serialize doctor report")
+                );
+            }
             let cross_host = report.cross_host.expect("cross host");
             assert!(!cross_host.legacy_fallback_active);
             assert_eq!(cross_host.bound_endpoints, vec!["10.10.100.10:43101"]);

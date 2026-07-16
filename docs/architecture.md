@@ -2690,7 +2690,11 @@ There are three distinct paths:
      - SQLite-backed exact-host allowlist enforcement against the remote socket
        host token (currently the peer IP literal)
      - CLI management for both
-     - doctor-visible state for both
+     - one doctor-visible `cross_host` projection carrying:
+       - `legacy_fallback_active`
+       - `bound_endpoints`
+       - `interfaces`
+       - `allowlist`
      - per-interface bind result persistence so one bad row does not hide the
        healthy rows
      - the currently shipped AG transition still permits legacy listener
