@@ -400,7 +400,7 @@ fn peer_listener_rejects_disabled_host_before_dispatch() {
 
 #[test]
 #[serial_test::serial(env)]
-fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() {
+fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -582,7 +582,7 @@ fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() 
 
 #[test]
 #[serial_test::serial(env)]
-fn peer_listener_preserves_sent_outcome_when_post_send_degrades() {
+fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");

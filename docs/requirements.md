@@ -3559,6 +3559,13 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
+  Current-line note:
+  - the documented target transport remains TCP/TLS
+  - the active `1.3.1` implementation line is still functionally plain TCP and
+    therefore does not satisfy transport-security closure
+  - any release verdict before `AG.10` must say that explicitly rather than
+    treating the requirement as waived
+
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
@@ -3598,7 +3605,7 @@ mail correctness.
   - doctor output must surface allowlist enforcement state and configured host
     rows
 
-- `REQ-CORE-TRANSPORT-002D` `atm doctor` must expose the cross-host control
+- `REQ-CORE-TRANSPORT-002E` `atm doctor` must expose the cross-host control
   plane through a first-class `cross_host` projection rather than scattering
   the data across unrelated findings only.
 

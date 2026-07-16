@@ -174,10 +174,10 @@ Initial crate requirement IDs:
   - compare against the remote peer socket host token exactly
   - reject unauthorized peers before dispatch enters mailbox, ack, roster, or
     loopback-bypass-sensitive handlers
-- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns projecting the retained
+- `REQ-DAEMON-TRANSPORT-002E` `atm-daemon` owns projecting the retained
   cross-host control-plane state into the doctor-visible `cross_host` report.
   Satisfies:
-  `REQ-CORE-TRANSPORT-002D`.
+  `REQ-CORE-TRANSPORT-002E`.
   Required daemon behavior:
   - compute `legacy_fallback_active` from the actual runtime bind state rather
     than configuration intent alone
