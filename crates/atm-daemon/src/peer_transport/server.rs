@@ -123,7 +123,6 @@ impl PeerServerTransport {
         self.publish_reload_status(&failures);
         Ok(outcomes)
     }
-
     fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
         self.state
             .lock()
