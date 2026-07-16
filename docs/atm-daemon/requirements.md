@@ -152,6 +152,18 @@ Initial crate requirement IDs:
   remote delivery and must not create a durable long-lived remote outbox.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
+- `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing the
+  durable cross-host interface configuration rows that determine which
+  listeners may bind and advertise. Satisfies:
+  `REQ-CORE-TRANSPORT-002A`.
+- `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` owns loading and enforcing the
+  durable deny-by-default exact-host allowlist before any mailbox, ack, or
+  roster mutation occurs. Satisfies:
+  `REQ-CORE-TRANSPORT-002B`.
+- `REQ-DAEMON-TRANSPORT-002C` `atm-daemon` owns the loopback self-test path as
+  a local diagnostic surface only and must not let loopback success imply
+  remote host-pair authorization. Satisfies:
+  `REQ-CORE-TRANSPORT-002C`.
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
   policy for transport, store busy timeout, ingest batch, retry, and doctor
   query operations. Satisfies:
@@ -484,8 +496,6 @@ Required runtime rules:
   - configured values may raise the documented defaults, but they must not
     drop below the daemon timeout floor of `250ms`; same-host request and
     daemon-health deadlines must not drop below `1s`
-  - `daemon.remote_retry_budget` is configurable only in the inclusive range
-    `1s..=300s`; out-of-range values are startup-fatal and reload-fatal
 - runtime queues and handles must obey one documented concrete cap policy
 - resource-cap matrix:
   - max concurrent accepted connections: `64`

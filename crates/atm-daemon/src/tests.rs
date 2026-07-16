@@ -84,7 +84,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
-        .prepare_runtime_at_socket_path(socket_path.clone())
+        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
         .expect("prepare runtime");
     let mut runtime = runtime;
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
@@ -128,6 +128,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         home_dir: tempdir.path().join("home"),
         current_dir: tempdir.path().join("cwd"),
         team_override: None,
+        ..DoctorQuery::default()
     });
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
@@ -187,7 +188,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         )
         .expect("test observability"),
     );
-    let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
+    let socket_path = tempdir.path().join("daemon.sock");
     let runtime =
         crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
     let (result_tx, result_rx) = mpsc::channel();
@@ -205,6 +206,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         home_dir: atm_home.clone(),
         current_dir: atm_home.clone(),
         team_override: None,
+        ..DoctorQuery::default()
     });
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
@@ -310,6 +312,7 @@ fn production_runtime_only_logs_notifications_after_successful_post_send_emissio
     let notification_path = atm_core::home::host_runtime_dir()
         .expect("host runtime dir")
         .join("notifications.jsonl");
+    let notifications_before = std::fs::read(&notification_path).unwrap_or_default();
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(&assembly, Arc::new(DaemonNonClaudeOutbound::new()));
 
@@ -330,8 +333,9 @@ fn production_runtime_only_logs_notifications_after_successful_post_send_emissio
 
     send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
 
-    assert!(
-        !notification_path.exists(),
+    assert_eq!(
+        std::fs::read(&notification_path).unwrap_or_default(),
+        notifications_before,
         "notification log should only be appended after a successful post-send emission"
     );
 }
@@ -389,6 +393,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
             home_dir: atm_home.clone(),
             current_dir: atm_home.clone(),
             team_override: Some(team.clone()),
+            ..atm_core::doctor::DoctorQuery::default()
         }))
         .expect("doctor response");
     match doctor {
@@ -805,6 +810,7 @@ fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
             home_dir: atm_home.clone(),
             current_dir: atm_home,
             team_override: Some(test_team().clone()),
+            ..atm_core::doctor::DoctorQuery::default()
         }))
         .expect("doctor response");
 
@@ -861,6 +867,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 home_dir: atm_home.clone(),
                 current_dir: atm_home,
                 team_override: Some(test_team().clone()),
+                ..atm_core::doctor::DoctorQuery::default()
             }))
         })
         .expect("doctor response");
@@ -881,6 +888,77 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));
             assert!(finding.message.contains("degraded_ingest=false"));
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    // The daemon process env stands in for the frozen launch-time identity of
+    // the long-lived singleton. It must not leak into the caller-facing
+    // `client_context` (issue #548).
+    let _env = EnvGuard::set_many([
+        (
+            SQLITE_RUNTIME_PATH_ENV,
+            Some(db_path.to_str().expect("utf8 sqlite db path")),
+        ),
+        ("ATM_TEAM", Some("daemon-launch-team")),
+        ("ATM_IDENTITY", Some("daemon-launch-identity")),
+    ]);
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path);
+
+    let doctor = dispatcher
+        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: atm_home.clone(),
+            current_dir: atm_home,
+            team_override: None,
+            caller_team: Some(test_team().clone()),
+            caller_identity: Some(
+                atm_core::test_support::TEST_SENDER
+                    .parse()
+                    .expect("caller identity"),
+            ),
+        }))
+        .expect("doctor response");
+
+    match doctor {
+        ResponseEnvelope::Doctor(report) => {
+            // client_context tracks the caller threaded through the request.
+            assert_eq!(
+                report.client_context.team.as_ref().map(TeamName::as_str),
+                Some(TEST_TEAM)
+            );
+            assert_eq!(
+                report
+                    .client_context
+                    .identity
+                    .as_ref()
+                    .map(AgentName::as_str),
+                Some(atm_core::test_support::TEST_SENDER)
+            );
+            // daemon_context stays distinct: it reports the daemon's own
+            // launch-time process env, not the caller.
+            let daemon_context = report.daemon_context.expect("daemon context");
+            assert_eq!(
+                daemon_context.team.as_ref().map(TeamName::as_str),
+                Some("daemon-launch-team")
+            );
+            assert_eq!(
+                daemon_context.identity.as_ref().map(AgentName::as_str),
+                Some("daemon-launch-identity")
+            );
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

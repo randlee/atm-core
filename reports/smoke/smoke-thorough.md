@@ -1,10 +1,10 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-07-09T16:16:48.802594+00:00`
-- binary SHA: `bc4192a195f5b2f99d6029cfa72c5a146ef58b0a`
-- duration secs: `9.407`
-- summary: `pass=31`, `fail=0`, `skip=0`
+- timestamp: `2026-07-15T00:13:35.388952+00:00`
+- binary SHA: `b610431fbba7728933d039cca4d1922668efa7cb`
+- duration secs: `18.895`
+- summary: `pass=32`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
   that row were executed after the failure
@@ -29,9 +29,10 @@
 | `AD11-ROSTER-REPAIR-001` | fixture evidence preserves repaired pane metadata through team-admin and doctor projections | `PASS` | fixture-backed smoke evidence proves pane repair survives the accepted team-admin and doctor projection paths |
 | `AD11-XREPO-001` | sender roster home_dir governs post-send config lookup across repos | `PASS` | post-send config discovery remains anchored to sender roster metadata rather than ambient caller cwd, preserving cross-repo local-send behavior |
 | `AD11-GRAFT-001` | graft-backed post-send uses a direct same-host receiver socket with typed warning fallback | `PASS` | the graft-backed emission seam performs one bounded same-host receiver delivery attempt and still surfaces typed sender warnings when the receiver path is unavailable |
+| `GRAFT-001` | real same-host atm-graft host registers, consumes an advisory nudge, and completes unary read/ack/send on the shared daemon contract | `PASS` | the real same-host atm-graft host lane succeeded end-to-end on the shared daemon contract |
 | `AD11-AUTH-001` | update-member auth checks and infallible add-member projection are closed | `PASS` | the promoted AD.9 auth and infallible findings are closed: update-member consumes caller context materially, and add-member projection no longer pretends to fail |
 | `AD11-READINESS-001` | phase-ad readiness and boundary artifacts fail closed | `PASS` | Phase AD readiness records, smoke artifacts, and PostSendHookEmitter boundary inventory are all present and wired into the retained validation gate |
-| `AD17-ULID-001` | retained ATM message identity stays ULID-only on the accepted line | `PASS` | ULID-only message identity remains enforced in retained schema and workflow state |
+| `AD17-ULID-001` | retained ATM message identity stays ULID-only on the accepted line | `PASS` | ULID-only message identity remains enforced in the retained SQLite mailbox state |
 | `AD17-READ-001` | read mutation and contains filtering stay self-consistent on the durable store-backed path | `PASS` | read mutation still reports the post-mutation state and contains filtering still sees the durable full-body projection |
 | `AD17-CI-001` | windows CI retains the explicit atm-daemon lane on the accepted line | `PASS` | the explicit atm-daemon CI lane remains present and the Windows skip guard is absent |
 | `AD18-RUNTIME-ROOT-001` | shared-host raw CLI bootstrap reuses a single daemon and keeps runtime state under the accepted ATM_HOME root | `PASS` | shared-host smoke proves multi-workspace raw CLI bootstrap reuses one daemon, preserves team isolation, and keeps runtime ownership under the accepted ATM_HOME root |

@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::protocol::RequestId;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -101,6 +102,33 @@ pub enum Level {
     Info,
     Warn,
     Error,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectionFailureClassification {
+    ExpectedPeerDisconnect,
+    MalformedRequest,
+    TransportFailure,
+    RequestFailure,
+}
+
+impl ConnectionFailureClassification {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ExpectedPeerDisconnect => "expected_peer_disconnect",
+            Self::MalformedRequest => "malformed_request",
+            Self::TransportFailure => "transport_failure",
+            Self::RequestFailure => "request_failure",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DaemonConnectionFailureFields {
+    pub code: AtmErrorCode,
+    pub request_id: Option<RequestId>,
+    pub classification: ConnectionFailureClassification,
 }
 
 fn validate_observability_name(
@@ -433,6 +461,14 @@ impl LogFieldMap {
             .find_map(|(entry_key, entry_value)| (entry_key.as_str() == key).then_some(entry_value))
     }
 
+    pub fn with_entry(mut self, key: impl Into<String>, value: LogFieldValue) -> Self {
+        self.entries.push((
+            LogFieldKey::new(key).expect("ATM log field keys must be non-empty"),
+            value,
+        ));
+        self
+    }
+
     /// Convert a serde_json object into the ATM-owned field-map wrapper.
     ///
     /// # Errors
@@ -508,7 +544,7 @@ pub struct AtmLogQuery {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
-    pub severity: LogLevelFilter,
+    pub level: LogLevelFilter,
     pub service: ServiceName,
     pub target: Option<String>,
     pub action: Option<String>,

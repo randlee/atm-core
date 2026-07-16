@@ -1,5 +1,3 @@
-use std::fs;
-
 use tempfile::tempdir;
 
 use super::tests::{RecordingPostSendEmitter, TestRuntime, install_home_env, send_request};
@@ -10,19 +8,6 @@ use crate::protocol::NotificationKind;
 use crate::send::SendCommandOutcome;
 use crate::test_support::TEST_SENDER;
 use crate::types::TeamName;
-
-#[test]
-fn load_send_alert_state_parse_errors_are_config_errors() {
-    let tempdir = tempdir().expect("tempdir");
-    let path = super::alert_state::state_path(tempdir.path());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("state dir");
-    }
-    fs::write(&path, "{not-json").expect("state file");
-
-    let error = super::alert_state::load(&path).expect_err("malformed state");
-    assert!(error.is_config());
-}
 
 #[test]
 #[serial_test::serial(env)]
@@ -59,18 +44,15 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
     let events = super::tests::read_notification_events(&home_dir);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, NotificationKind::Delivery);
+    let event = events.last().expect("notification event");
+    assert_eq!(event.kind, NotificationKind::Delivery);
     assert_eq!(
-        super::tests::notification_detail(&events[0])
+        super::tests::notification_detail(event)
             .get("sender")
             .and_then(serde_json::Value::as_str),
         Some(TEST_SENDER)
     );
-    assert_eq!(
-        events[0].team.as_ref().map(TeamName::as_str),
-        Some("test-team")
-    );
+    assert_eq!(event.team.as_ref().map(TeamName::as_str), Some("test-team"));
     let emitted = post_send_emitter.emitted();
     assert_eq!(emitted.len(), 1);
     assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);

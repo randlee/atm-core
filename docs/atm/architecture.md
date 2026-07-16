@@ -107,6 +107,9 @@ Follow-up work:
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns mapping of CLI commands to the daemon/service request boundary in
   production.
+- `atm` owns `--stdin` materialization before daemon bootstrap; the daemon RPC
+  surface must never receive a deferred `stdin` marker or any instruction to
+  read process stdin on behalf of the caller.
 - `atm` owns the explicit mailbox-surface split where `peek` and `list` are
   inspection-only, while `send`, `read`, `ack`, and `clear` are owner-only
   mutating commands.

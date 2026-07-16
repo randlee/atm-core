@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 
 use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
@@ -33,6 +34,11 @@ use tempfile::TempDir;
 // architecture §18.3.
 #[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
+// The operation under test has a 100 ms SQLite busy timeout. This outer
+// channel deadline only detects a wedged worker; it must retain enough
+// scheduler headroom for heavily contended macOS CI runners.
+#[cfg(unix)]
+const TEST_LOCK_COMPLETION_CEILING: Duration = Duration::from_secs(30);
 const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
@@ -261,12 +267,12 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message disappeared from compatibility export: {:?}",
         arch_inbox
     );
-    let arch_workflow = ack_fixture.workflow_state_contents(PRIMARY_AGENT);
+    let arch_state = ack_fixture.mailbox_state_contents(PRIMARY_AGENT);
     assert!(
-        arch_workflow["messages"]
+        arch_state["messages"]
             .as_object()
             .is_some_and(|messages| !messages.is_empty()),
-        "pending message was not acknowledged in workflow state: {arch_workflow:?}"
+        "pending message was not acknowledged in SQLite state: {arch_state:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents(SECONDARY_AGENT);
     assert!(
@@ -278,7 +284,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 
 #[test]
 #[serial_test::serial(env)]
-fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
+fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     let barrier = Arc::new(Barrier::new(3));
@@ -328,45 +334,32 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
-    let plain_workflow_key = message_workflow_key(plain_message);
-    let task_workflow_key = message_workflow_key(task_message);
-    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
+    let plain_state_key = message_workflow_key(plain_message);
+    let task_state_key = message_workflow_key(task_message);
+    let state = fixture.mailbox_state_contents(PRIMARY_AGENT);
     assert!(
-        workflow["messages"][plain_workflow_key.clone()]
+        state["messages"][plain_state_key.clone()]
             .as_object()
             .is_some(),
-        "plain workflow entry missing: {workflow:?}"
+        "plain SQLite state missing: {state:?}"
     );
     assert!(
-        workflow["messages"][plain_workflow_key]["pendingAckAt"].is_null(),
-        "plain workflow state should not require ack: {workflow:?}"
+        state["messages"][plain_state_key]["pendingAckAt"].is_null(),
+        "plain SQLite state should not require ack: {state:?}"
     );
     assert!(
-        workflow["messages"][task_workflow_key]["pendingAckAt"]
+        state["messages"][task_state_key]["pendingAckAt"]
             .as_str()
             .is_some(),
-        "task workflow state should preserve pending ack: {workflow:?}"
+        "task SQLite state should preserve pending ack: {state:?}"
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
+fn concurrent_same_recipient_sends_preserve_sqlite_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
-    let preseeded_workflow_key = "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S";
-    fixture.write_workflow_state(
-        PRIMARY_AGENT,
-        serde_json::json!({
-            "messages": {
-                preseeded_workflow_key: {
-                    "read": true,
-                    "pendingAckAt": null,
-                    "acknowledgedAt": null
-                }
-            }
-        }),
-    );
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
@@ -405,31 +398,24 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         .iter()
         .find(|message| message.text == "second payload")
         .expect("second inbox message");
-    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
-
+    let state = fixture.mailbox_state_contents(PRIMARY_AGENT);
     assert!(
-        workflow["messages"][preseeded_workflow_key]
+        state["messages"][message_workflow_key(first_message)]
             .as_object()
             .is_some(),
-        "preseeded workflow entry was dropped: {workflow:?}"
+        "first send SQLite state missing after concurrent update: {state:?}"
     );
     assert!(
-        workflow["messages"][message_workflow_key(first_message)]
+        state["messages"][message_workflow_key(second_message)]
             .as_object()
             .is_some(),
-        "first send workflow entry missing after concurrent update: {workflow:?}"
-    );
-    assert!(
-        workflow["messages"][message_workflow_key(second_message)]
-            .as_object()
-            .is_some(),
-        "second send workflow entry missing after concurrent update: {workflow:?}"
+        "second send SQLite state missing after concurrent update: {state:?}"
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn missing_config_notice_seeds_team_lead_workflow_state() {
+fn missing_team_config_no_longer_seeds_team_lead_notice_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
@@ -446,20 +432,17 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     )
     .expect("missing-config send");
 
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    assert_eq!(notice.from, "atm-identity-missing");
-    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(&notice)]
-            .as_object()
-            .is_some(),
-        "missing-config workflow entry missing: {workflow:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice"
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
+fn concurrent_normal_send_and_sqlite_only_delivery_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
@@ -511,11 +494,11 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(&notice)]["pendingAckAt"].is_null(),
-        "missing-config notice workflow state missing after concurrent send: {workflow:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice during concurrent send"
     );
 }
 
@@ -617,7 +600,7 @@ fn send_times_out_under_bounded_lock_contention() {
     });
 
     let error = rx
-        .recv_timeout(TEST_LOCK_BUDGET_CEILING)
+        .recv_timeout(TEST_LOCK_COMPLETION_CEILING)
         .expect("bounded send completion")
         .expect_err("timeout");
     join.join().expect("join send thread");
@@ -1095,13 +1078,11 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         "read outcome should surface the promoted read state"
     );
 
-    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
+    let state = fixture.mailbox_state_contents(PRIMARY_AGENT);
     let logical_message_key = atm_core::boundary::MessageKey::from(logical_message_id).into_inner();
     assert!(
-        workflow["messages"][logical_message_key]
-            .as_object()
-            .is_some(),
-        "workflow entry missing for ULID-authored message: {workflow:?}"
+        state["messages"][logical_message_key].as_object().is_some(),
+        "SQLite state missing for ULID-authored message: {state:?}"
     );
 }
 
@@ -1143,19 +1124,19 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[test]
 #[cfg(unix)]
 #[serial_test::serial(env)]
-fn send_reports_non_contention_lock_failures_without_timeout() {
+fn send_ignores_retired_file_lock_faults_on_sqlite_path() {
     let fixture = Fixture::new();
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let observability = NullObservability;
     let started = Instant::now();
 
-    let error = send_mail(
+    let outcome = send_mail(
         fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "lock failure"),
         &observability,
     )
-    .expect_err("non-contention lock failure");
+    .expect("SQLite send must not consult retired file locks");
 
-    assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
+    assert!(!outcome.message_id.to_string().is_empty());
     assert!(
         started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
@@ -1288,8 +1269,8 @@ impl Fixture {
         read_jsonl(self.origin_inbox_path(agent, suffix))
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
-        self.workflow_state_contents_for_team(PRIMARY_TEAM, agent)
+    fn mailbox_state_contents(&self, agent: &str) -> serde_json::Value {
+        self.mailbox_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
     #[allow(
@@ -1320,96 +1301,24 @@ impl Fixture {
             .collect()
     }
 
-    fn workflow_state_contents_for_team(&self, team: &str, agent: &str) -> serde_json::Value {
-        let raw = fs::read_to_string(self.workflow_state_path_for_team(team, agent))
-            .expect("workflow contents");
-        serde_json::from_str(&raw).expect("workflow json")
-    }
-
-    fn try_workflow_state_contents_for_team(
-        &self,
-        team: &str,
-        agent: &str,
-    ) -> Result<serde_json::Value, String> {
-        let path = self.workflow_state_path_for_team(team, agent);
-        let raw = fs::read_to_string(&path)
-            .map_err(|error| format!("read {}: {error}", path.display()))?;
-        serde_json::from_str(&raw).map_err(|error| format!("parse {}: {error}", path.display()))
-    }
-
-    fn wait_for_missing_config_notice(&self, team: &str) -> InboxMessage {
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        loop {
-            if let Some(notice) = self
-                .inbox_contents_for_team(team, TEAM_LEAD)
-                .into_iter()
-                .find(|message| {
-                    message.from.as_str() == "atm-identity-missing"
-                        && message.text.contains(&format!("{TEST_RECIPIENT}@{team}"))
+    fn mailbox_state_contents_for_team(&self, team: &str, agent: &str) -> serde_json::Value {
+        let messages = self.inbox_contents_for_team(team, agent);
+        let states = messages
+            .into_iter()
+            .filter_map(|message| {
+                message.message_id.map(|message_id| {
+                    (
+                        atm_core::boundary::MessageKey::from(message_id).into_inner(),
+                        serde_json::json!({
+                            "read": message.read,
+                            "pendingAckAt": message.pending_ack_at,
+                            "acknowledgedAt": message.acknowledged_at,
+                        }),
+                    )
                 })
-            {
-                return notice;
-            }
-            if Instant::now() >= deadline {
-                let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
-                panic!(
-                    "missing-config notice not observed before timeout after {attempts} attempts: {notices:?}"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    fn wait_for_workflow_state_for_message(
-        &self,
-        team: &str,
-        agent: &str,
-        message: &InboxMessage,
-    ) -> serde_json::Value {
-        let workflow_path = self.workflow_state_path_for_team(team, agent);
-        let message_key = message_workflow_key(message);
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        let mut last_error = None;
-        loop {
-            if workflow_path.exists() {
-                match self.try_workflow_state_contents_for_team(team, agent) {
-                    Ok(workflow) => {
-                        last_error = None;
-                        if workflow["messages"][&message_key].as_object().is_some() {
-                            return workflow;
-                        }
-                    }
-                    Err(error) => {
-                        last_error = Some(error);
-                    }
-                }
-            }
-            if Instant::now() >= deadline {
-                let workflow = if workflow_path.exists() {
-                    self.try_workflow_state_contents_for_team(team, agent)
-                        .unwrap_or_else(|error| serde_json::json!({ "workflow_error": error }))
-                } else {
-                    serde_json::json!({})
-                };
-                panic!(
-                    "workflow state for missing-config notice not observed before timeout after {attempts} attempts: {workflow:?}; last_error={last_error:?}"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    fn write_workflow_state(&self, agent: &str, value: serde_json::Value) {
-        let path = self.workflow_state_path(agent);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("workflow dir");
-        }
-        fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
-            .expect("write workflow");
+            })
+            .collect::<serde_json::Map<_, _>>();
+        serde_json::json!({ "messages": states })
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[InboxMessage]) {
@@ -1443,17 +1352,6 @@ impl Fixture {
             .join(PRIMARY_TEAM)
             .join("inboxes")
             .join(format!("{agent}.{suffix}.json"))
-    }
-
-    fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
-        self.workflow_state_path_for_team(PRIMARY_TEAM, agent)
-    }
-
-    fn workflow_state_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
-        self.team_dir_for(team)
-            .join(".atm-state")
-            .join("workflow")
-            .join(format!("{agent}.json"))
     }
 
     fn team_dir_for(&self, team: &str) -> std::path::PathBuf {

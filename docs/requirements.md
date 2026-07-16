@@ -220,9 +220,9 @@ Satisfied by:
   - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
     `REQ-P-RUNTIME-003`
 
-- `REQ-P-RUNTIME-004` The supported same-host topology is one HOME-scoped
-  daemon, one host-scoped SQLite database, and one host-scoped retained log
-  root serving multiple ATM workspaces with different `ATM_HOME` values.
+- `REQ-P-RUNTIME-004` The supported same-host topology is one OS-user-scoped
+  daemon, one OS-user-scoped SQLite database, and one OS-user-scoped retained
+  log root serving multiple ATM workspaces with different `ATM_HOME` values.
 
   Required behavior:
   - distinct workspaces on the same host may carry different `ATM_HOME`
@@ -430,30 +430,31 @@ Satisfied by:
 
 ### 3.1 Home And Path Resolution
 
-Path resolution order:
+Workspace/config resolution order:
 1. `ATM_HOME` when set and non-empty
 2. OS home directory
 
 Runtime-root rule:
-- the invocation directory is not a selector for the retained ATM runtime root;
-  socket, lock, database, and retained-log paths derive from the accepted
-  `ATM_HOME` root, not from the shell working directory
-- after `ATM_HOME` resolves the canonical host runtime root, the invocation
-  directory is used only for workspace config discovery
+- under planned ADR-026, neither the invocation directory nor `ATM_HOME` is a
+  selector for daemon socket, lock, or SQLite durable-state paths; those derive
+  from one OS-user `HostRuntimeScope`
+- retained logs follow their host-scoped root under ADR-011 (or explicit
+  `ATM_LOG_DIR`), independently of workspace `ATM_HOME`
+- the invocation directory and `ATM_HOME` remain workspace/config discovery
+  inputs only
 
-Required canonical paths:
-- `{ATM_HOME}/.claude`
-- `{ATM_HOME}/.claude/teams`
-- `{ATM_HOME}/.claude/teams/{team}`
-- `{ATM_HOME}/.claude/teams/{team}/config.json`
-- `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- `{ATM_HOME}/.atm/daemon/atm-daemon.sock`
-- `{ATM_HOME}/.atm/daemon/launch.lock`
-- `{ATM_HOME}/.atm/db/mail.db`
-- `{ATM_HOME}/.atm/logs/atm.log.jsonl` unless `ATM_LOG_DIR` overrides it
-- `{ATM_HOME}/.config/atm/config.toml`
-- `{ATM_HOME}/.config/atm/state.json`
+Required workspace/config paths:
+- `{ATM_HOME}/.atm.toml` when workspace defaults are used
 - `{ATM_HOME}/.config/atm/share/{team}/`
+- optional historical compatibility files under `{ATM_HOME}/.claude/teams/...` may exist, but ATM runtime commands must not require them
+
+Required host-runtime paths:
+- the canonical endpoint, `launch.lock`, and `owner.lock` derive only from
+  `HostRuntimeScope.runtime_root`
+- the one SQLite durable database derives only from
+  `HostRuntimeScope.durable_state_root`
+- the retained log file derives only from the ADR-011 host log root unless
+  `ATM_LOG_DIR` explicitly overrides it
 
 ### 3.1.1 Security And Durability Boundaries
 
@@ -493,11 +494,11 @@ Required behavior:
 
 ### 3.2 Team Mail Store
 
-Per-team layout:
-- `{ATM_HOME}/.claude/teams/{team}/config.json`
-- `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.json`
-- optional origin inbox files:
-  - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.{origin}.json`
+Per-team durable layout:
+- host-scoped SQLite mailbox + roster state under `~/.atm/db/mail.db`
+- team task/share state under `{ATM_HOME}/.config/atm/share/{team}/`
+- optional historical compatibility inbox files may still exist under
+  `{ATM_HOME}/.claude/teams/{team}/inboxes/...`, but they are not durable team truth
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
@@ -603,8 +604,8 @@ Source-of-truth guardrails:
 
 - ATM must not rely on full-file rewrite of Claude-owned files as the long-term
   source of truth for ATM-local workflow state
-- if ATM-local semantics need durability independent of Claude’s native writes,
-  that state must move to ATM-owned sidecars or an equivalent ATM-owned store
+- if ATM-local semantics need durability independent of compatibility exports,
+  that state must live in the ATM-owned SQLite store
 - when a legacy compatibility path still rewrites a non-ATM-owned shared file,
   the requirements and architecture docs must call out the limitation
 
@@ -656,8 +657,9 @@ Runtime caller-context rules:
 - obsolete config identity fields (`[atm].identity` and legacy top-level
   `identity`) may remain temporarily for migration, but ATM must ignore them
   for runtime identity resolution and `atm doctor` must flag them for removal
-- `.atm.toml` may define `[atm].team_members` as the baseline team roster that
-  should always be present in `config.json`
+- `.atm.toml` may define `[atm].team_members` as a preferred ordering baseline
+  for doctor/member presentation; ATM runtime truth does not require
+  corresponding `config.json` entries
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
@@ -1063,25 +1065,14 @@ Recipients use `message_id` for:
 - read-time duplicate collapse
 - acknowledgement targeting
 
-### 6.3.1 Missing Team Config Fallback
+### 6.3.1 Removed Missing Team Config Fallback
 
-When team `config.json` is missing, `atm send` may still proceed only when:
-- the resolved team directory exists
-- the target inbox path already exists
-- no team, agent, or routing identity must be guessed
+`atm send` must not depend on team `config.json` at runtime.
 
-When `atm send` uses this fallback, it must:
-- surface an actionable warning to the sender that delivery used inbox fallback
-  because team config is missing
-- keep the original delivery path best-effort and non-interactive
-- send a best-effort repair notification to `team-lead` when that recipient can
-  be resolved without guesswork
-- deduplicate repeated repair notifications for the same unresolved missing-team
-  config condition so inboxes do not accumulate hundreds of identical messages
-
-When team `config.json` is malformed rather than missing:
-- `atm send` must fail with a structured configuration error
-- malformed config must not silently degrade into missing-config fallback
+Required behavior:
+- canonical roster and mailbox routing come only from the SQLite-backed ATM runtime state
+- missing or malformed `config.json` must not alter normal send behavior
+- no synthetic missing-config repair notice is emitted to `team-lead`
 
 ### 6.4 Message Source Semantics
 
@@ -1845,7 +1836,7 @@ Phase-AA target direction:
 
 ### 11.3 Required Checks
 
-The initial doctor implementation must cover:
+The doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - caller identity/team visibility and optional diagnostic scope behavior
@@ -1855,19 +1846,11 @@ The initial doctor implementation must cover:
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when the current runtime is
   active
-- baseline `[atm].team_members` coverage against `config.json.members`
-- team directory existence
-- team config existence and parse health
-- inbox directory existence and writability
-- stale mailbox lock detection across `~/.claude/teams/*/inboxes/*.lock` using
-  start-of-run and end-of-run snapshots; a lock present in both snapshots is
-  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK` as a
-  transitional compatibility finding rather than a normal mail-correctness
-  dependency in the current SQLite/daemon architecture
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- current ATM roster visibility from SQLite truth only
 
 Caller-context behavior for `atm doctor`:
 
@@ -1883,7 +1866,7 @@ Caller-context behavior for `atm doctor`:
 Human output must provide:
 - overall status summary
 - findings grouped by severity
-- full current member roster from `config.json`, with baseline
+- full current member roster from ATM roster truth, with baseline
   `[atm].team_members` shown first and `team-lead` first among that baseline
 - concrete remediation guidance when the user can act
 
@@ -1948,15 +1931,14 @@ Bare `atm teams` must:
   count, to pick a target team for restore or repair work
 
 `atm teams add-member` must:
-- validate that the target team exists
+- create the target team implicitly when the canonical ATM roster is empty
 - reject duplicate member names
-- persist the new member entry deterministically in team config
-- persist the member's durable `home_dir` on the canonical ATM roster row and
-  project that same `home_dir` into compatibility `config.json.members`
-- create any required local inbox state atomically with the roster update
+- persist the new member entry deterministically in canonical ATM roster truth
+- persist the member's durable `home_dir` on the canonical ATM roster row
+- not require or rewrite compatibility `config.json`
 
 `atm teams update-member` must:
-- validate that the target team exists
+- validate that the target team exists in canonical ATM roster truth
 - validate that the target member already exists
 - update existing canonical roster metadata without creating a new member
 - accept point updates for the accepted mutable roster metadata:
@@ -1970,13 +1952,10 @@ Bare `atm teams` must:
 - reject operator attempts to set `cwd`, `live_cwd`, or `launch_cwd`; runtime
   working location and startup-location logging are not operator-settable
   through `update-member`
-- project the repaired metadata deterministically into compatibility
-  `config.json`
 - preserve unchanged member metadata when a field is not supplied
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
-- capture the current `config.json`
 - capture the ATM-owned `.atm-state` tree for workflow compatibility state when
   present
 - capture the selected team's durable state from the host-scoped SQLite
@@ -3022,13 +3001,8 @@ closed before the 1.0 release.
   - a stale-snapshot rename after late lock acquisition is forbidden even if
     the rename itself is atomic
 
-  Open hardening gap — `P.6` send-side workflow freshness:
-  - mailbox read/ack/clear paths satisfy this through
-    `mailbox::store::with_locked_source_files(...)`
-  - workflow-sidecar writes performed during `send` and the missing-config
-    team-lead notice path are already atomic and owner-routed, but they do not
-    yet provide a dedicated freshness proof across concurrent same-recipient
-    sends; P.6 is the tracked hardening item for that gap
+  Mailbox state is durable SQLite state; send, read, ack, clear, and
+  missing-config notices persist it through the retained mailbox runtime.
 
 - `REQ-CORE-PERSIST-ATOMIC-001B` Every shared mutable file family must have one
   documented write path and one owning helper boundary.
@@ -3048,15 +3022,11 @@ closed before the 1.0 release.
       `mailbox::store::with_locked_source_files(...)` for shared read/ack/clear
       lock+reload orchestration, and `mailbox::store::commit_mailbox_state(...)`
       / `mailbox::store::commit_source_files(...)` as the persistence leaf
-    - workflow-state sidecar:
-      `workflow::{load_workflow_state(...), save_workflow_state(...),
-      project_envelope(...), remember_initial_state(...),
-      apply_projected_state(...), remove_message_state(...)}`
+    - mailbox state:
+      the retained SQLite mailbox runtime (`persist_message_record(...)` and
+      `persist_message_state(...)`); no filesystem workflow sidecar exists
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
-    - send-alert state:
-      `send::alert_state::{register_missing_team_config_alert(...),
-      clear_missing_team_config_alert(...), save(...), acquire_lock(...)}`
     - team config:
       `team_admin::write_team_config(...)`
     - task bucket and `.highwatermark`:
@@ -3066,9 +3036,8 @@ closed before the 1.0 release.
       `team_admin::restore::clear_restore_marker(...)`,
       `team_admin::restore::prepare_restore_workspace(...)`, and
       `team_admin::restore::cleanup_restore_workspace(...)`
-  - send-side workflow seeding must not continue indefinitely as an open-coded
-    `load -> mutate -> save` sequence in command-layer logic; P.6 exists to
-    converge that path onto a dedicated owner-layer freshness boundary
+  - command-layer code must not add a filesystem workflow-state mirror; SQLite
+    remains the sole mailbox-state authority.
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.
@@ -3171,26 +3140,17 @@ The intentionally forbidden shape is:
 
 ### 21.3 Restore Transaction Atomicity
 
-- `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must write `config.json` as
-  the last mutation step, only after all other restore mutations succeed.
-
-  Rationale: ARCH-CR-002 — `team_admin.rs:372-400` copies inboxes, restores
-  tasks, recomputes highwatermark, then writes config. If the process dies
-  between inbox copy and config write, the team has partially restored inbox
-  files that do not match the config roster.
+- `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must restore inbox/task
+  compatibility artifacts atomically without rewriting team roster truth from
+  `config.json`.
 
   Required behavior:
   - restore planning and backup validation happen before the marker is written
-  - config.json is written last, after all inbox copies and task restores succeed
-  - a `.restore-in-progress` marker file is written to the team directory before
-    mutation begins and removed after config is successfully fsynced
-  - the config-last step must continue using the existing `write_team_config(...)`
-    atomic temp-file + rename pattern instead of introducing a second config
-    persistence path
+  - canonical ATM roster truth remains in SQLite; restore does not rewrite it
+  - a `.restore-in-progress` marker file is written before mutation begins and
+    removed after inbox/task restore succeeds
   - on next `atm teams restore`, if a `.restore-in-progress` marker exists, warn
     the operator and recommend re-running the restore
-  - `atm doctor` must check for stale `.restore-in-progress` markers and report
-    them as findings with recovery guidance
 
 - `REQ-CORE-RESTORE-ATOMIC-002` Restored inbox files must be staged before
   being placed in the live inbox directory.
@@ -3602,8 +3562,57 @@ mail correctness.
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - remote routing uses an address form equivalent to `agent@team.host`
+  - agent/member names and team names must not contain `.`
+  - the supported remote-send CLI forms are exactly:
+    - `atm send <agent>@<team>.<host> ...`
+    - `atm send <agent>@<team> --host <host> ...`
+  - those two forms are logically equivalent and must normalize into one typed
+    request field for the remote host
+  - the inline form splits on the final `.` after `@`
+  - mixed inline-host plus `--host` input is rejected instead of silently
+    preferring one source
+  - when the normalized remote-host field is empty, send stays on the local
+    mailbox path
+  - when the normalized remote-host field is non-empty, send must route through
+    the dedicated cross-host queue / remote-delivery boundary
   - sender-side daemons must not write remote host inbox JSONL directly
+
+- `REQ-CORE-TRANSPORT-002A` Cross-host listener configuration must use a
+  durable daemon-owned interface control plane rather than environment
+  variables as the intended operator surface.
+
+  Required behavior:
+  - the daemon reads configured cross-host bind/advertise interfaces from
+    durable state
+  - CLI commands are the primary operator surface for adding, updating,
+    enabling, disabling, removing, and listing those interface rows
+  - if no enabled interface rows exist, no cross-host listener binds
+  - environment variables may remain as historical/transitional compatibility
+    inputs but must not remain the intended steady-state configuration model
+
+- `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use a durable
+  deny-by-default exact-host allowlist before any mailbox mutation occurs.
+
+  Required behavior:
+  - inbound daemon peers are rejected unless one enabled exact hostname row
+    authorizes them
+  - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
+  - rejection happens before mailbox, ack/reply, or roster mutation
+  - doctor output must surface allowlist enforcement state and configured host
+    rows
+
+- `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
+  contract and must not be implemented as a special loopback-only send mode.
+
+  Required behavior:
+  - same-host transport proof uses the same daemon peer listener/send path as
+    any other remote host proof
+  - `localhost` and the host's own advertised or bound IP address are valid
+    ordinary remote-host targets
+  - same-host proof must not require a dedicated wire field, request flag, or
+    special-case routing branch outside the normal remote-host classifier
+  - successful same-host rows do not by themselves authorize second-host
+    release claims
 
 - `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
   pending messages behind when a host is unreachable.
@@ -3624,21 +3633,23 @@ mail correctness.
   acceptance within the bounded retry window.
 
   Required behavior:
-  - sender-side daemons may record observability/audit information locally
-    while attempting remote delivery
+  - when the cross-host path is currently healthy, the CLI may block for up to
+    `10s` waiting for remote daemon acceptance
   - a remote send must not be reported as successfully delivered until the
     remote daemon accepts it
-  - if the connection drops after the sender finishes writing the request but
-    before remote acceptance is confirmed, the daemon must return one typed
-    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-    must not report success
-  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
-    replay/re-export path rather than by silently assuming success
-  - if the bounded retry window expires without remote acceptance, the send
-    fails and must not leave durable delivered-message state behind
-  - pending replay/re-export state must be persisted in the host-scoped SQLite
-    root keyed by mailbox identity plus `message_key`, with bounded expiry and
-    operator-visible retained-failure state
+  - when the cross-host path is currently unhealthy, the CLI must return
+    immediately with a typed deferred-delivery result instead of blocking for
+    the full retry window
+  - the daemon may continue bounded background retry for a short transient
+    window after returning the deferred result
+  - after the bounded deferred window expires, the daemon must emit a final
+    delivery receipt or failure receipt into the sender's inbox
+  - the product must distinguish:
+    - remote accepted now
+    - deferred and still trying
+    - deferred and failed
+  - the daemon must not keep a durable multi-day remote outbox or silently
+    claim remote success after only local admission
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -3647,17 +3658,15 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget default: `30s`
-  - the remote retry budget must be configurable through one daemon transport
-    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
-    unstable networks without changing code
+  - remote synchronous wait deadline: `10s`
+  - deferred background retry window: `60s..120s`
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - retry queue depth: `256`
+  - deferred outbound queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,

@@ -5,7 +5,6 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
@@ -14,16 +13,17 @@ use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
-use crate::schema::{InboxMessage, TeamConfig};
+use crate::schema::InboxMessage;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
-use crate::workflow::{self, WorkflowStateFile};
-
-const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RetainedMailboxTimeoutPolicy {
-    pub(crate) workflow_lock_timeout: Duration,
+/// Invoke a closure with the installed retained local runtime.
+#[doc(hidden)]
+pub fn with_default_local_service_runtime<T>(
+    f: impl FnOnce(&LocalServiceRuntime) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let runtime = crate::service_runtime_store::default_runtime()?;
+    f(&runtime)
 }
 
 pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
@@ -35,8 +35,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(None)
     }
-    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
-    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -56,17 +54,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
-    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
-    #[allow(
-        dead_code,
-        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
-    )]
-    fn rebuild_compat_inbox_projection(
-        &self,
-        inbox_path: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
@@ -81,29 +68,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError>;
-    fn load_claude_code_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
-        let records = self.load_team_roster(team)?;
-        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
-            team.clone(),
-            &records,
-        ))
-    }
-
-    fn commit_workflow_state<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>;
 }
 
 #[derive(Clone)]
@@ -153,6 +117,11 @@ impl LocalServiceRuntime {
         self.roster_store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
+    }
+
+    #[doc(hidden)]
+    pub fn shared_roster_store_arc(&self) -> std::sync::Arc<dyn SharedRosterStore + Send + Sync> {
+        self.roster_store.clone()
     }
 }
 
@@ -305,14 +274,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .load_template_override(team, kind)
     }
 
-    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
-        config::load_claude_team_config_document(team_dir)
-    }
-
-    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
-        crate::home::team_dir_from_home(home_dir, team)
-    }
-
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -339,22 +300,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError> {
         seen_state::save_seen_watermark(home_dir, team, agent, timestamp)
-    }
-
-    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-        RetainedMailboxTimeoutPolicy {
-            workflow_lock_timeout: WORKFLOW_LOCK_TIMEOUT,
-        }
-    }
-
-    fn rebuild_compat_inbox_projection(
-        &self,
-        inbox_path: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<(), AtmError> {
-        let messages = load_store_backed_mailbox_projection(self, team, agent)?;
-        crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
     fn load_roster_member(
@@ -386,192 +331,19 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             })
             .map(|_| ())
     }
-
-    fn commit_workflow_state<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-    {
-        workflow::commit_workflow_state(home_dir, team, agent, extra_write_paths, timeout, body)
-    }
-}
-
-#[allow(
-    dead_code,
-    reason = "Called only from rebuild_compat_inbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
-)]
-fn load_store_backed_mailbox_projection(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<InboxMessage>, AtmError> {
-    let mut metadata_rows =
-        crate::service_runtime_store::RetainedMailboxRuntime::query_mailbox_metadata_rows(
-            runtime,
-            Path::new(""),
-            team,
-            agent,
-            None,
-        )?;
-    metadata_rows.sort_by(|left, right| {
-        left.message_at
-            .cmp(&right.message_at)
-            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
-    });
-
-    let mut messages = Vec::with_capacity(metadata_rows.len());
-    for row in metadata_rows {
-        // Keep the repair/rebuild projection consistent with the live send
-        // export path: a row deleted between metadata enumeration and reload is
-        // a legal concurrent-clear race, not a fatal rebuild error.
-        let Some(record) =
-            crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
-                runtime,
-                Path::new(""),
-                team,
-                agent,
-                &row.message_key,
-            )?
-        else {
-            continue;
-        };
-        messages.push(record.envelope);
-    }
-    Ok(messages)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, LocalServiceRuntime, MAX_NON_CLAUDE_PAYLOAD_BYTES,
-        RetainedServiceRuntime, append_notification_log_at_path,
+        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
-    use std::fs::File;
-    use std::io::Read;
-    use std::sync::Arc;
     use tempfile::tempdir;
-
-    #[derive(Debug)]
-    struct NoopMessageStore;
-
-    #[allow(
-        deprecated,
-        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
-    )]
-    impl atm_storage::MessageStore for NoopMessageStore {
-        fn save_message(
-            &self,
-            _message: &atm_storage::Message,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_message(
-            &self,
-            _key: &atm_storage::MessageKey,
-        ) -> Result<Option<atm_storage::Message>, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn list_messages(
-            &self,
-            _query: &atm_storage::MessageQuery,
-        ) -> Result<Vec<atm_storage::Message>, crate::error::AtmError> {
-            Ok(Vec::new())
-        }
-
-        fn delete_message(
-            &self,
-            _key: &atm_storage::MessageKey,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopRosterStore;
-
-    #[allow(
-        deprecated,
-        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
-    )]
-    impl atm_storage::RosterStore for NoopRosterStore {
-        fn load_roster(
-            &self,
-            _team: &TeamName,
-        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
-            Ok(atm_storage::RosterSnapshot {
-                team_name: _team.clone(),
-                members: Vec::new(),
-                refreshed_at: None,
-            })
-        }
-
-        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn save_roster(
-            &self,
-            _roster: &atm_storage::RosterSnapshot,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopNudgeTemplateOverrideStore;
-
-    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
-
-    impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
-        fn load_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
-        {
-            Ok(None)
-        }
-
-        fn save_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-            _template_body: &str,
-        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn disable_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<bool, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
 
     fn message() -> InboxMessage {
         InboxMessage {
@@ -600,30 +372,6 @@ mod tests {
             .lines()
             .map(|line| serde_json::from_str(line).expect("notification event"))
             .collect()
-    }
-
-    #[test]
-    fn rebuild_compat_inbox_projection_reexports_store_backed_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.jsonl");
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(NoopNudgeTemplateOverrideStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-        );
-        let team = "test-team".parse::<TeamName>().expect("team");
-        let agent = "recipient".parse::<AgentName>().expect("agent");
-
-        runtime
-            .rebuild_compat_inbox_projection(&inbox_path, &team, &agent)
-            .expect("rebuild must succeed");
-
-        let mut file = File::open(&inbox_path).expect("rebuild should create projection file");
-        let mut content = String::new();
-        file.read_to_string(&mut content)
-            .expect("read projection file");
-        assert_eq!(content, "[]\n");
     }
 
     #[test]

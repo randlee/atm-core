@@ -594,12 +594,10 @@ mod tests {
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::workflow::WorkflowStateFile;
-    use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
+    use crate::{boundary::RosterEntry, config::AtmConfig};
     use std::path::{Path, PathBuf};
-    use std::time::Duration;
 
     struct MissingRosterRuntime;
 
@@ -608,17 +606,6 @@ mod tests {
     impl RetainedServiceRuntime for MissingRosterRuntime {
         fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, AtmError> {
-            Ok(TeamConfig::default())
-        }
-
-        fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(home_dir.to_path_buf())
         }
 
         fn inbox_path(
@@ -649,21 +636,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_secs(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &DeliveryRecipientSnapshot,
@@ -682,23 +654,6 @@ mod tests {
 
         fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            body(&mut workflow).map(|(value, _dirty)| value)
         }
     }
 

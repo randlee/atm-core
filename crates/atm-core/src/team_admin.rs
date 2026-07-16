@@ -246,12 +246,12 @@ pub struct ClearNudgeTemplateOverrideOutcome {
     pub cleared: bool,
 }
 
-/// List teams currently discoverable under ATM home.
+/// List teams currently discoverable from canonical ATM roster state.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
-/// cannot be enumerated.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot enumerate
+/// teams or load roster snapshots for summary counts.
 pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     current_team: TeamName,
@@ -263,8 +263,8 @@ pub fn list_teams_with_roster_store(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when team resolution fails, the team directory is
-/// missing, or `config.json` cannot be loaded.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot load the
+/// target team roster or when the team is absent from canonical ATM state.
 pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
@@ -703,7 +703,6 @@ mod tests {
     #[serial(team_config_write_env)]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
 
         add_member_with_roster_store(
@@ -720,26 +719,20 @@ mod tests {
         )
         .expect("add member");
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let config: TeamConfig = serde_json::from_slice(
-            &std::fs::read(team_dir.join("config.json")).expect("read config"),
-        )
-        .expect("parse config");
-        let member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-
-        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
-        assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
-        assert_eq!(member.extra["isActive"], serde_json::json!(true));
-
         let roster = roster_store
             .load_roster(&TEST_TEAM.parse().expect("team"))
             .expect("load roster");
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].recipient_pane_id.as_deref(), Some("%7"));
+        assert!(
+            !tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(TEST_TEAM)
+                .join("config.json")
+                .exists()
+        );
     }
 
     #[test]
@@ -855,9 +848,8 @@ mod tests {
 
     #[test]
     #[serial(team_config_write_env)]
-    fn add_member_projects_config_from_updated_atm_roster_truth() {
+    fn add_member_bootstraps_roster_without_team_config_projection() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
         let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
         let lead_home_dir = tempdir.path().join("team-lead-home");
@@ -889,18 +881,15 @@ mod tests {
         assert_eq!(roster.len(), 2);
         assert!(roster.iter().any(|member| member.agent_name == TEST_SENDER));
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let config: TeamConfig = serde_json::from_slice(
-            &std::fs::read(team_dir.join("config.json")).expect("read config"),
-        )
-        .expect("parse config");
-        assert_eq!(config.members.len(), 2);
-        let member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-        assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
+        assert!(
+            !tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(TEST_TEAM)
+                .join("config.json")
+                .exists()
+        );
     }
 
     #[test]
@@ -919,7 +908,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -954,16 +942,7 @@ mod tests {
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
         .expect("parse config");
-        let projected_member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-        assert_eq!(projected_member.tmux_pane_id.as_deref(), Some("%22"));
-        assert_eq!(
-            projected_member.home_dir.as_path(),
-            PathBuf::from("/repo/worktree").as_path()
-        );
+        assert_eq!(config.members.len(), 0);
     }
 
     #[test]
@@ -984,7 +963,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -1001,7 +979,6 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -1035,18 +1012,7 @@ mod tests {
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
         .expect("parse config");
-        let projected_team_lead = config
-            .members
-            .iter()
-            .find(|member| member.name == ROLE_TEAM_LEAD)
-            .expect("projected lead member");
-        let projected_arch_ctm = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_ARCH_CTM)
-            .expect("projected arch fixture member");
-        assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
-        assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
+        assert_eq!(config.members.len(), 0);
     }
 
     #[test]
@@ -1058,7 +1024,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: "other-team".parse().expect("team"),
@@ -1086,7 +1051,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
@@ -1114,7 +1078,6 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
-use crate::protocol::RuntimeStatusSnapshot;
+use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 
@@ -48,6 +48,16 @@ pub struct DoctorEnvironmentVisibility {
     pub atm_team: Option<TeamName>,
     pub atm_identity: Option<AgentName>,
     pub team_override: Option<TeamName>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DoctorExecutionContext {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<AgentName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<ReleaseVersion>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,15 +103,57 @@ pub struct DaemonRuntimeDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PostSendHookRuleReport {
+    pub recipient_matcher: String,
+    pub executable: PathBuf,
+    pub argv: Vec<String>,
+    pub config_root: PathBuf,
+}
+
+/// Stable, zero-based position of an external post-send rule in the active
+/// configuration.  Keeping this distinct from arbitrary integers prevents a
+/// consumer from treating a recipient index as a hook-rule reference.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct PostSendHookRuleIndex(pub u32);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RecipientDeliveryPath {
+    BuiltIn,
+    ExternalOverride { rule: PostSendHookRuleIndex },
+    Disabled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecipientDeliveryPathReport {
+    pub recipient: AgentName,
+    pub path: RecipientDeliveryPath,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PostSendDoctorReport {
+    pub config_root: PathBuf,
+    pub external_rules: Vec<PostSendHookRuleReport>,
+    pub recipient_paths: Vec<RecipientDeliveryPathReport>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
     pub findings: Vec<DoctorFinding>,
     pub recommendations: Vec<String>,
     pub environment: DoctorEnvironmentVisibility,
+    #[serde(default)]
+    pub client_context: DoctorExecutionContext,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_context: Option<DoctorExecutionContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
+    #[serde(default)]
+    pub post_send: PostSendDoctorReport,
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,

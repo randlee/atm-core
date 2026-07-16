@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, Once, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 use atm_core::error::AtmError;
 use atm_core::test_support::{lock_env, remove_env_var, set_env_var};
@@ -12,7 +12,6 @@ use atm_runtime::{
     assemble_sqlite_runtime,
 };
 
-static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
 // are rebuilt lazily on the next access.
@@ -31,11 +30,12 @@ impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
 }
 
 pub fn install_sqlite_retained_runtime_factory() {
-    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::runtime_install_hooks::install_retained_runtime_factory_for_test_support(
-            sqlite_retained_runtime,
-        );
-    });
+    // The test runtime provider is process-global and production-style
+    // composition tests may replace it. Reinstall the sqlite factory for each
+    // fixture so retained-boundary tests cannot depend on test execution order.
+    atm_core::runtime_install_hooks::install_retained_runtime_factory_for_test_support(
+        sqlite_retained_runtime,
+    );
 }
 
 pub struct SqliteRuntimeGuard {

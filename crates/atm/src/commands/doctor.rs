@@ -54,10 +54,22 @@ impl DoctorCommand {
                 })
             })
             .transpose()?;
+        // Capture the invoking CLI process's identity here, where the process
+        // environment is genuinely the caller's. When the doctor request is
+        // serviced over IPC by the long-lived daemon, the daemon cannot read
+        // these values from its own frozen launch-time environment, so they
+        // must ride along in the request payload.
+        let caller_team =
+            atm_core::caller_context::read_cli_team_from_env_or_warn("atm::doctor::build_query");
+        let caller_identity = atm_core::caller_context::read_cli_identity_from_env_or_warn(
+            "atm::doctor::build_query",
+        );
         Ok(DoctorQuery {
             home_dir,
             current_dir,
             team_override,
+            caller_team,
+            caller_identity,
         })
     }
 
@@ -67,16 +79,8 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<atm_core::doctor::DoctorReport> {
-        let query = self.build_query(home_dir.clone(), current_dir.clone())?;
-        let runtime = assemble_default_runtime()?;
-        let local_report = doctor::run_doctor_with_runtime_ports(
-            query,
-            observability,
-            &runtime.service_runtime,
-            &runtime.doctor_ports,
-            None,
-        )
-        .map_err(anyhow::Error::from)?;
+        let local_report =
+            self.execute_direct_local(observability, home_dir.clone(), current_dir.clone())?;
         let query = self.build_query(home_dir, current_dir)?;
 
         match CliComposition::bootstrap(
@@ -89,12 +93,31 @@ impl DoctorCommand {
             Err(_) => Ok(local_report),
         }
     }
+
+    fn execute_direct_local(
+        &self,
+        observability: &CliObservability,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    ) -> Result<atm_core::doctor::DoctorReport> {
+        let query = self.build_query(home_dir, current_dir)?;
+        let runtime = assemble_default_runtime()?;
+        doctor::run_doctor_with_runtime_ports(
+            query,
+            observability,
+            &runtime.service_runtime,
+            &runtime.doctor_ports,
+            None,
+        )
+        .map_err(anyhow::Error::from)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use atm_core::error::AtmError;
     use atm_core::test_support::EnvGuard;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::DoctorCommand;
@@ -145,7 +168,8 @@ mod tests {
     }
 
     #[test]
-    fn execute_runs_direct_local_doctor_path() {
+    #[serial(env)]
+    fn execute_runs_direct_local_doctor_path_without_inherited_bootstrap_configuration() {
         let observability = CliObservability::fallback();
         let command = DoctorCommand {
             team: None,
@@ -155,12 +179,28 @@ mod tests {
         std::fs::create_dir_all(&home_dir).expect("home dir");
         std::fs::create_dir_all(&current_dir).expect("current dir");
         std::fs::create_dir_all(home_dir.join(".atm").join("db")).expect("host db dir");
-        let _env = EnvGuard::set_many([("HOME", Some(home_dir.to_str().expect("utf8 path")))]);
+        // Clear every
+        // bootstrap input that could otherwise make this unit test connect to
+        // or launch a caller-selected daemon.
+        let _env = EnvGuard::set_many([
+            ("ATM_DAEMON_BIN", None),
+            ("ATM_DAEMON_SOCKET", None),
+            ("ATM_HOME", None),
+            ("ATM_CONFIG_HOME", None),
+            ("HOME", Some(home_dir.to_str().expect("utf8 path"))),
+            ("USERPROFILE", None),
+        ]);
         let report = command
-            .execute(&observability, home_dir, current_dir)
+            .execute_direct_local(&observability, home_dir, current_dir)
             .expect("report");
 
-        assert!(report.daemon_runtime.is_none());
-        assert!(report.runtime_status.is_none());
+        assert!(
+            report.daemon_runtime.is_none(),
+            "hermetic local doctor must not report a daemon"
+        );
+        assert!(
+            report.runtime_status.is_none(),
+            "hermetic local doctor must not report live daemon runtime status"
+        );
     }
 }

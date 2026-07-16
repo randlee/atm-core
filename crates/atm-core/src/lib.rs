@@ -86,10 +86,6 @@ pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
 
-pub use config::load_claude_team_config_document;
-/// Internal ATM-owned workflow-state helpers shared across mailbox services.
-pub(crate) mod workflow;
-
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
@@ -115,4 +111,6 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::{LocalFileNonClaudeOutbound, LocalServiceRuntime};
+pub use service_runtime::{
+    LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};

@@ -28,35 +28,28 @@ use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 
-#[allow(
-    dead_code,
-    reason = "Z.6 removes the production send-path config gate; alert-state helpers remain test-covered until the follow-on cleanup deletes the obsolete file-backed alert seam."
-)]
-mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[allow(
+#[expect(
     dead_code,
     reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
 )]
 mod hook_tmux;
-pub(crate) mod input;
-mod missing_config_notice;
+pub mod input;
 #[doc(hidden)]
 pub mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
-pub(crate) use persistence::persist_message_and_seed_workflow;
+pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
-    Stdin,
     File {
         path: PathBuf,
         message: Option<String>,
@@ -318,9 +311,6 @@ fn finalize_send_outcome<
         &persistence,
     );
     if !request.dry_run {
-        if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
-            outcome.warnings.push(warning);
-        }
         let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
         hook::emit_post_send_effects(
             runtime,
@@ -356,48 +346,6 @@ fn finalize_send_outcome<
         &context.canonical_sender,
     );
     Ok(outcome)
-}
-
-fn build_claude_roster_warning<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-) -> Result<Option<WarningEntry>, AtmError> {
-    if !matches!(
-        context.delivery_snapshot.harness,
-        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode
-    ) {
-        return Ok(None);
-    }
-    let team_dir = runtime.team_dir(&request.home_dir, &context.recipient.team)?;
-    if !team_dir.join("config.json").is_file() {
-        if !context.inbox_path.exists() {
-            return Ok(None);
-        }
-        let mut warnings = Vec::new();
-        missing_config_notice::warn_missing_team_config(
-            runtime,
-            request,
-            &context.recipient,
-            &team_dir,
-            &context.inbox_path,
-            &mut warnings,
-        )?;
-        return Ok(warnings.into_iter().next());
-    }
-    let roster = runtime.load_claude_code_team_roster(&context.recipient.team)?;
-    if roster.contains_member(&context.recipient.agent) {
-        return Ok(None);
-    }
-    Ok(Some(WarningEntry::new(
-        format!(
-            "'{}' is not on claude code roster {}/config.json",
-            context.recipient.agent, context.recipient.team
-        ),
-        Some(
-            "Import the member through the approved Claude config-ingress path or project ATM roster truth back into config.json before relying on Claude compatibility delivery.",
-        ),
-    )))
 }
 
 #[expect(
@@ -514,10 +462,6 @@ fn prepare_send_context<
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
     validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
-    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&recipient.team));
-    }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =
@@ -592,7 +536,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
-    let persistence = persist_message_and_seed_workflow(
+    let persistence = persist_message(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
@@ -702,7 +646,6 @@ fn resolve_message_body(
 ) -> Result<String, AtmError> {
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
-        SendMessageSource::Stdin => input::read_message_from_stdin(),
         SendMessageSource::File { path, message } => {
             input::validate_message_text(file_policy::process_file_reference(
                 path,

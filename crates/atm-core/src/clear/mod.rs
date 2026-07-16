@@ -141,8 +141,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     let actor = query.caller_identity.clone();
     let target = resolve_target(None, &actor, &query.caller_team, config.as_ref())?;
 
-    validate_clear_target(runtime, &query.home_dir, &target)?;
-
     let cutoff = cutoff_timestamp(query.older_than)?;
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
@@ -161,21 +159,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
         metadata_rows,
         removable,
     })
-}
-
-fn validate_clear_target<R: RetainedServiceRuntime>(
-    runtime: &R,
-    home_dir: &std::path::Path,
-    target: &ResolvedTarget,
-) -> Result<(), AtmError> {
-    let team_dir = runtime.team_dir(home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm clear`.",
-        ));
-    }
-
-    Ok(())
 }
 
 fn persist_deleted_messages<R: RetainedMailboxRuntime>(
@@ -295,7 +278,6 @@ mod tests {
         panic,
         panic::AssertUnwindSafe,
         path::{Path, PathBuf},
-        time::Duration,
     };
 
     use crate::test_support::{EnvGuard, lock_env, remove_env_var, set_env_var};
@@ -307,11 +289,10 @@ mod tests {
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::schema::InboxMessage;
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
-    use crate::workflow::WorkflowStateFile;
     #[test]
     #[serial_test::serial(env)]
     fn env_guard_restores_original_value_after_panic() {
@@ -340,7 +321,6 @@ mod tests {
     }
 
     struct ClearRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
     }
 
@@ -352,17 +332,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, AtmError> {
-            unreachable!("clear roster-truth tests must not load team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -391,21 +360,6 @@ mod tests {
             _timestamp: crate::types::IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("clear roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -438,22 +392,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            unreachable!("clear roster-truth tests do not commit workflow state")
         }
     }
 
@@ -505,10 +443,7 @@ mod tests {
     #[test]
     fn clear_mail_targets_only_the_owner_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ClearRuntime {
-            team_dir,
             roster_present: true,
         };
 

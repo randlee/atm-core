@@ -10,10 +10,10 @@ crate-local ADR records that remain embedded in crate architecture documents.
 ## Repository ADRs
 
 - [ADR-001 — Sealed Trait Pattern](./ADR-001-sealed-trait-pattern.md)
-- [ADR-002 — Host-Wide ATM Daemon Singleton](./ADR-002-host-wide-daemon-singleton.md)
+- [ADR-002 — Host-Wide ATM Daemon Singleton (superseded by ADR-026)](./ADR-002-host-wide-daemon-singleton.md)
 - [ADR-003 — Test Fidelity And Daemon Isolation](./ADR-003-test-fidelity-and-daemon-isolation.md)
 - `ADR-004` — number reserved / withdrawn
-- [ADR-005 — Host-Scoped SQLite State Root](./ADR-005-host-scoped-sqlite-state-root.md)
+- [ADR-005 — Host-Scoped SQLite State Root (superseded by ADR-026)](./ADR-005-host-scoped-sqlite-state-root.md)
 - [ADR-006 — Bounded SIGHUP Reload Delivery In R.18](./ADR-006-sighup-reload-deferral.md)
 - [ADR-007 — Supported Platform Feature Parity](./ADR-007-supported-platform-parity.md)
 - [ADR-008 — No-Flaky-Test Policy And Mechanical Enforcement](./ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md)
@@ -34,6 +34,12 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-023 — Owner-Only Message Mutation](./ADR-023-owner-only-message-mutation.md)
 - [ADR-024 — NudgeTemplateOverrideStore Storage Ownership Relocation](./ADR-024-nudge-template-override-storage-ownership-relocation.md)
 - [ADR-025 — Installed User Documentation Surface](./ADR-025-installed-user-documentation-surface.md)
+- [ADR-026 — Host Singleton And Durable State Root](./ADR-026-host-singleton-and-durable-state-root.md)
+- [ADR-027 — Client/Daemon Version Compatibility](./ADR-027-client-daemon-version-compatibility.md)
+- [ADR-028 — Cross-Host Interface Control Plane](./ADR-028-cross-host-interface-control-plane.md)
+- [ADR-029 — Cross-Host Host Authorization](./ADR-029-cross-host-host-authorization.md)
+- [ADR-030 — Cross-Host Transport Security Sequencing](./ADR-030-cross-host-transport-security-phase.md)
+- [ADR-031 — Remote-Target Contract And Cross-Host Dispatch Boundary](./ADR-031-remote-target-contract-and-cross-host-dispatch.md)
 
 ## Extracted Crate-Local ADRs
 

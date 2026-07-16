@@ -774,13 +774,6 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
         ensure_owner_only_read_target(&actor, &query.caller_team, &target)?;
     }
 
-    let team_dir = runtime.team_dir(&query.mailbox.home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm read`.",
-        ));
-    }
-
     validate_target_member_in_roster(runtime, &target)?;
 
     let seen_watermark =
@@ -974,7 +967,6 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
 
     use serde_json::Map;
     use serde_json::Value;
@@ -992,7 +984,7 @@ mod tests {
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
@@ -1000,25 +992,18 @@ mod tests {
         AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId,
         TeamName,
     };
-    use crate::workflow::{self, WorkflowStateFile};
 
     fn selection_state_for_source_files(
         source_files: &[SourceFile],
-        workflow_state: &workflow::WorkflowStateFile,
         query: &ReadQuery,
         seen_watermark: Option<IsoTimestamp>,
     ) -> (BucketCounts, Vec<ClassifiedMessage>) {
-        let classified_all = classify_all(
-            apply_idle_notification_dedup(
-                dedupe_message_id_surface(
-                    merged_surface(source_files),
-                    |message: &SourcedMessage| message.envelope.message_id,
-                    |message: &SourcedMessage| message.envelope.timestamp,
-                ),
-                workflow_state,
-            ),
-            workflow_state,
-        );
+        let classified_all =
+            classify_all(apply_idle_notification_dedup(dedupe_message_id_surface(
+                merged_surface(source_files),
+                |message: &SourcedMessage| message.envelope.message_id,
+                |message: &SourcedMessage| message.envelope.timestamp,
+            )));
         if let Some(message_id) = query.mailbox.message_id_filter {
             let selected = classified_all
                 .iter()
@@ -1050,11 +1035,10 @@ mod tests {
 
     fn selected_after_filters(
         messages: &[SourcedMessage],
-        workflow_state: &workflow::WorkflowStateFile,
         query: &ReadQuery,
         seen_watermark: Option<IsoTimestamp>,
     ) -> Vec<ClassifiedMessage> {
-        let classified = classify_all(messages.to_vec(), workflow_state);
+        let classified = classify_all(messages.to_vec());
         if let Some(message_id) = query.mailbox.message_id_filter {
             return classified
                 .into_iter()
@@ -1091,21 +1075,10 @@ mod tests {
             .collect()
     }
 
-    fn apply_idle_notification_dedup(
-        deduped: Vec<SourcedMessage>,
-        workflow_state: &workflow::WorkflowStateFile,
-    ) -> Vec<SourcedMessage> {
-        let projected = deduped
-            .into_iter()
-            .map(|message| SourcedMessage {
-                envelope: workflow::project_envelope(&message.envelope, workflow_state),
-                source_path: message.source_path,
-                source_index: message.source_index,
-            })
-            .collect::<Vec<_>>();
-        let latest_idle_for_sender = messages_from_idle_sender(&projected);
+    fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+        let latest_idle_for_sender = messages_from_idle_sender(&deduped);
 
-        projected
+        deduped
             .into_iter()
             .enumerate()
             .filter_map(|(index, message)| {
@@ -1202,13 +1175,10 @@ mod tests {
         }
     }
 
-    fn classify_all(
-        messages: Vec<SourcedMessage>,
-        workflow_state: &workflow::WorkflowStateFile,
-    ) -> Vec<ClassifiedMessage> {
+    fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
         let projected = messages
             .iter()
-            .map(|message| workflow::project_envelope(&message.envelope, workflow_state))
+            .map(|message| message.envelope.clone())
             .collect::<Vec<_>>();
         let thread_index = ThreadIndex::new(&projected);
 
@@ -1286,7 +1256,6 @@ mod tests {
     }
 
     struct ReadRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
         metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
         metadata_row_batches: Option<Vec<Vec<boundary::MailStoreMailboxMetadataRow>>>,
@@ -1306,21 +1275,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, crate::error::AtmError> {
-            unreachable!("read roster-truth tests must not load team config")
-        }
-
-        fn team_dir(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-        ) -> Result<PathBuf, crate::error::AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -1353,21 +1307,6 @@ mod tests {
             Ok(())
         }
 
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not rebuild projections")
-        }
-
         fn deliver_non_claude_payloads(
             &self,
             _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -1398,22 +1337,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            unreachable!("read roster-truth tests do not commit workflow state")
         }
     }
 
@@ -1595,7 +1518,6 @@ mod tests {
 
     #[test]
     fn malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable() {
-        let workflow_state = workflow::WorkflowStateFile::default();
         let malformed = format!(
             r#"{{"type":"idle_notification","from":"{}""#,
             ROLE_TEAM_LEAD
@@ -1606,10 +1528,8 @@ mod tests {
         ];
         let query = base_read_query();
 
-        let selected = std::panic::catch_unwind(|| {
-            selected_after_filters(&messages, &workflow_state, &query, None)
-        })
-        .expect("malformed idle notification should not panic");
+        let selected = std::panic::catch_unwind(|| selected_after_filters(&messages, &query, None))
+            .expect("malformed idle notification should not panic");
 
         assert_eq!(selected.len(), 2);
         let valid = selected
@@ -1675,12 +1595,7 @@ mod tests {
         let mut query = base_read_query();
         query.mailbox.selection_mode = ReadSelection::Actionable;
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
@@ -1707,12 +1622,7 @@ mod tests {
         query.mailbox.selection_mode = ReadSelection::Actionable;
         query.mailbox.contains_filter = Some("root context".to_string());
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(detail_id));
@@ -1743,12 +1653,7 @@ mod tests {
         query.mailbox.selection_mode = ReadSelection::Actionable;
         query.mailbox.contains_filter = Some("root context".to_string());
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert!(selected.is_empty());
     }
@@ -1773,12 +1678,7 @@ mod tests {
         let mut query = base_read_query();
         query.mailbox.selection_mode = ReadSelection::Actionable;
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(detail_id));
@@ -1805,12 +1705,7 @@ mod tests {
         let mut query = base_read_query();
         query.mailbox.selection_mode = ReadSelection::Actionable;
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(supersede_id));
@@ -1830,17 +1725,13 @@ mod tests {
             source_path: PathBuf::from("recipient.json"),
             source_index: 0.into(),
         }];
-        let workflow_state = workflow::WorkflowStateFile::default();
         let mut actionable = base_read_query();
         actionable.mailbox.selection_mode = ReadSelection::Actionable;
         let mut all = actionable.clone();
         all.mailbox.selection_mode = ReadSelection::All;
 
-        assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
-        assert_eq!(
-            selected_after_filters(&messages, &workflow_state, &all, None).len(),
-            1
-        );
+        assert!(selected_after_filters(&messages, &actionable, None).is_empty());
+        assert_eq!(selected_after_filters(&messages, &all, None).len(), 1);
     }
 
     #[test]
@@ -1856,14 +1747,13 @@ mod tests {
             source_path: PathBuf::from("recipient.json"),
             source_index: 0.into(),
         }];
-        let workflow_state = workflow::WorkflowStateFile::default();
         let mut actionable = base_read_query();
         actionable.mailbox.selection_mode = ReadSelection::Actionable;
         let mut all = actionable.clone();
         all.mailbox.selection_mode = ReadSelection::All;
 
-        assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
-        assert!(selected_after_filters(&messages, &workflow_state, &all, None).is_empty());
+        assert!(selected_after_filters(&messages, &actionable, None).is_empty());
+        assert!(selected_after_filters(&messages, &all, None).is_empty());
     }
 
     #[test]
@@ -1897,12 +1787,7 @@ mod tests {
         let mut query = base_read_query();
         query.mailbox.task_filter = Some(task_id);
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
@@ -1928,12 +1813,7 @@ mod tests {
         let mut query = base_read_query();
         query.mailbox.message_id_filter = Some(root_id);
 
-        let (_counts, selected) = selection_state_for_source_files(
-            &source_files,
-            &workflow::WorkflowStateFile::default(),
-            &query,
-            None,
-        );
+        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(root_id));
@@ -1942,8 +1822,6 @@ mod tests {
     #[test]
     fn metadata_backed_read_contains_fetches_durable_body_when_summary_misses() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (mut metadata_row, mut message_record) = metadata_row(
             "durable body with needle",
             Some("summary miss"),
@@ -1953,7 +1831,6 @@ mod tests {
         message_record.envelope.read = true;
         let load_count = Arc::new(AtomicUsize::new(0));
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: vec![metadata_row],
             metadata_row_batches: None,
@@ -1999,14 +1876,11 @@ mod tests {
     #[test]
     fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (metadata_row, message_record) =
             metadata_row("peek target", Some("peek summary"), TEST_SENDER);
         let persist_count = Arc::new(AtomicUsize::new(0));
         let seen_count = Arc::new(AtomicUsize::new(0));
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: vec![metadata_row],
             metadata_row_batches: None,
@@ -2042,10 +1916,7 @@ mod tests {
     #[test]
     fn read_mail_rejects_explicit_cross_agent_targets_on_mutating_path() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
             metadata_row_batches: None,
@@ -2071,10 +1942,7 @@ mod tests {
     #[test]
     fn peek_mail_rejects_explicit_targets_missing_from_atm_roster() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: false,
             metadata_rows: Vec::new(),
             metadata_row_batches: None,
@@ -2100,15 +1968,12 @@ mod tests {
     #[test]
     fn read_wait_propagates_contains_reload_errors_instead_of_timeout() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (metadata_row, message_record) = metadata_row(
             "durable body with needle",
             Some("summary miss"),
             TEST_SENDER,
         );
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
             metadata_row_batches: Some(vec![Vec::new(), vec![metadata_row]]),

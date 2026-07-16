@@ -260,6 +260,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
 
     print_doctor_summary(report);
     print_doctor_observability(report);
+    print_doctor_post_send(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -281,6 +282,34 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_post_send(report: &DoctorReport) {
+    let post_send = &report.post_send;
+    if post_send.config_root.as_os_str().is_empty()
+        && post_send.external_rules.is_empty()
+        && post_send.recipient_paths.is_empty()
+    {
+        return;
+    }
+    println!(
+        "Post-send configuration: {}",
+        post_send.config_root.display()
+    );
+    for rule in &post_send.external_rules {
+        println!(
+            "  override recipient={} executable={} argv={:?}",
+            rule.recipient_matcher,
+            rule.executable.display(),
+            rule.argv
+        );
+    }
+    for recipient in &post_send.recipient_paths {
+        println!(
+            "  recipient={} path={:?}",
+            recipient.recipient, recipient.path
+        );
+    }
 }
 
 fn print_doctor_summary(report: &DoctorReport) {
@@ -320,6 +349,12 @@ fn print_doctor_environment(report: &DoctorReport) {
         && report.environment.atm_team.is_none()
         && report.environment.atm_identity.is_none()
         && report.environment.team_override.is_none()
+        && report.client_context.team.is_none()
+        && report.client_context.identity.is_none()
+        && report.client_context.version.is_none()
+        && report.daemon_context.as_ref().is_none_or(|context| {
+            context.team.is_none() && context.identity.is_none() && context.version.is_none()
+        })
     {
         return;
     }
@@ -337,6 +372,37 @@ fn print_doctor_environment(report: &DoctorReport) {
     }
     if let Some(team_override) = &report.environment.team_override {
         println!("  --team={team_override}");
+    }
+    if report.client_context.team.is_some()
+        || report.client_context.identity.is_some()
+        || report.client_context.version.is_some()
+    {
+        println!("  client_context:");
+        if let Some(team) = &report.client_context.team {
+            println!("    team={team}");
+        }
+        if let Some(identity) = &report.client_context.identity {
+            println!("    identity={identity}");
+        }
+        if let Some(version) = &report.client_context.version {
+            println!("    version={version}");
+        }
+    }
+    if let Some(daemon_context) = &report.daemon_context
+        && (daemon_context.team.is_some()
+            || daemon_context.identity.is_some()
+            || daemon_context.version.is_some())
+    {
+        println!("  daemon_context (daemon launch-time process env, not the caller):");
+        if let Some(team) = &daemon_context.team {
+            println!("    team={team}");
+        }
+        if let Some(identity) = &daemon_context.identity {
+            println!("    identity={identity}");
+        }
+        if let Some(version) = &daemon_context.version {
+            println!("    version={version}");
+        }
     }
 }
 
@@ -579,7 +645,7 @@ fn print_log_record_line(record: &AtmLogRecord) {
     println!(
         "{} {:?} {} {} {}",
         record.timestamp.into_inner().to_rfc3339(),
-        record.severity,
+        record.level,
         record.service,
         target,
         action

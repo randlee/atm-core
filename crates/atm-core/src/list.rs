@@ -148,13 +148,6 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &query.caller_team,
         config.as_ref(),
     )?;
-    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm list`.",
-        ));
-    }
-
     validate_target_member_in_roster(runtime, &target)?;
 
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
@@ -267,7 +260,6 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
 
     use serde_json::Map;
     use tempfile::tempdir;
@@ -281,13 +273,12 @@ mod tests {
     use crate::read::ClassifiedMessage;
     use crate::read::filters;
     use crate::schema::{AtmMessageId, InboxMessage, ThreadMode};
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId, TeamName,
     };
-    use crate::workflow::WorkflowStateFile;
 
     fn classified_message(
         text: &str,
@@ -366,7 +357,6 @@ mod tests {
     }
 
     struct ListRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
         metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
         message_records: HashMap<MessageKey, boundary::Message>,
@@ -381,17 +371,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, AtmError> {
-            unreachable!("list roster-truth tests must not load team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -420,21 +399,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -467,22 +431,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
-        {
-            unreachable!("list roster-truth tests do not commit workflow state")
         }
     }
 
@@ -591,7 +539,7 @@ mod tests {
     }
 
     fn runtime_with_messages(
-        tempdir: &tempfile::TempDir,
+        _tempdir: &tempfile::TempDir,
         rows_and_messages: Vec<(boundary::MailStoreMailboxMetadataRow, boundary::Message)>,
         roster_present: bool,
     ) -> (ListRuntime, Arc<AtomicUsize>) {
@@ -605,7 +553,6 @@ mod tests {
             .unzip();
         (
             ListRuntime {
-                team_dir: tempdir.path().join(".claude").join("teams").join(TEST_TEAM),
                 roster_present,
                 metadata_rows,
                 message_records: message_records.into_iter().collect(),
@@ -618,10 +565,7 @@ mod tests {
     #[test]
     fn list_mail_uses_atm_roster_truth_for_explicit_targets() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ListRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
             message_records: HashMap::new(),
@@ -643,10 +587,7 @@ mod tests {
     #[test]
     fn list_mail_rejects_explicit_targets_missing_from_atm_roster() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ListRuntime {
-            team_dir,
             roster_present: false,
             metadata_rows: Vec::new(),
             message_records: HashMap::new(),

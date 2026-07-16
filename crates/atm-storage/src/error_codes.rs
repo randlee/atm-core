@@ -33,12 +33,15 @@ pub enum AtmErrorCode {
     DaemonUnavailable,
     RuntimeRootInvalid,
     RuntimeBootstrapRefused,
+    SocketOverrideForbidden,
     DaemonMayHaveExecuted,
     DaemonLifecycleWedge,
     DaemonLaunchGateRejected,
     DaemonServingStateRejected,
     DaemonStaleOwnerRecoveryFailed,
     DaemonAutoStartFailed,
+    DaemonConnectionSaturated,
+    ClientDaemonVersionIncompatible,
     DaemonAdvisorySessionAlreadyRegistered,
     DaemonAdvisorySessionNotRegistered,
     DaemonAdvisorySessionCleanupFailed,
@@ -133,12 +136,15 @@ impl AtmErrorCode {
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
             Self::RuntimeRootInvalid => "ATM_RUNTIME_ROOT_INVALID",
             Self::RuntimeBootstrapRefused => "ATM_RUNTIME_BOOTSTRAP_REFUSED",
+            Self::SocketOverrideForbidden => "ATM_SOCKET_OVERRIDE_FORBIDDEN",
             Self::DaemonMayHaveExecuted => "ATM_DAEMON_MAY_HAVE_EXECUTED",
             Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
             Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
             Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
             Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
+            Self::DaemonConnectionSaturated => "ATM_DAEMON_CONNECTION_SATURATED",
+            Self::ClientDaemonVersionIncompatible => "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE",
             Self::DaemonAdvisorySessionAlreadyRegistered => {
                 "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED"
             }
@@ -259,12 +265,15 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_DAEMON_UNAVAILABLE" => AtmErrorCode::DaemonUnavailable,
         "ATM_RUNTIME_ROOT_INVALID" => AtmErrorCode::RuntimeRootInvalid,
         "ATM_RUNTIME_BOOTSTRAP_REFUSED" => AtmErrorCode::RuntimeBootstrapRefused,
+        "ATM_SOCKET_OVERRIDE_FORBIDDEN" => AtmErrorCode::SocketOverrideForbidden,
         "ATM_DAEMON_MAY_HAVE_EXECUTED" => AtmErrorCode::DaemonMayHaveExecuted,
         "ATM_DAEMON_LIFECYCLE_WEDGE" => AtmErrorCode::DaemonLifecycleWedge,
         "ATM_DAEMON_LAUNCH_GATE_REJECTED" => AtmErrorCode::DaemonLaunchGateRejected,
         "ATM_DAEMON_SERVING_STATE_REJECTED" => AtmErrorCode::DaemonServingStateRejected,
         "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
         "ATM_DAEMON_AUTO_START_FAILED" => AtmErrorCode::DaemonAutoStartFailed,
+        "ATM_DAEMON_CONNECTION_SATURATED" => AtmErrorCode::DaemonConnectionSaturated,
+        "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE" => AtmErrorCode::ClientDaemonVersionIncompatible,
         "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {
             AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         }

@@ -44,8 +44,8 @@ command = ["post-send-notify.sh"]
 
 [startup.arch-ctm]
 all = [
-  "Use atm_send or atm_ack for all messages to team-lead or quality-mgr",
-  "Use atm_read to read messages from team-members"
+  "Use native atm send or atm ack for messages to team-lead or quality-mgr",
+  "Use native atm read to read messages from team-members"
 ]
 ```
 

@@ -1,9 +1,9 @@
 # Smoke
 
 - status: `passed`
-- timestamp: `2026-07-09T16:15:15.648602+00:00`
-- binary SHA: `bc4192a195f5b2f99d6029cfa72c5a146ef58b0a`
-- duration secs: `51.378`
+- timestamp: `2026-07-15T00:11:54.924930+00:00`
+- binary SHA: `b610431fbba7728933d039cca4d1922668efa7cb`
+- duration secs: `9.782`
 - summary: `pass=28`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
@@ -27,7 +27,7 @@
 | `AD11-CMD-TEAMS-BACKUP-001` | teams backup preserves retained team scoping and remains daemon-independent in dry-run execution | `PASS` | teams backup preserves retained team scoping and remains daemon-independent in dry-run execution |
 | `AD11-CMD-TEAMS-RESTORE-001` | teams restore preserves retained path and dry-run behavior without requiring the daemon | `PASS` | teams restore preserves retained path and dry-run behavior without requiring the daemon |
 | `AD11-ROSTER-REPAIR-001` | fixture evidence preserves repaired pane metadata through team-admin and doctor projections | `PASS` | fixture-backed smoke evidence proves pane repair survives the accepted team-admin and doctor projection paths |
-| `AD17-ULID-001` | retained ATM message identity stays ULID-only on the accepted line | `PASS` | ULID-only message identity remains enforced in retained schema and workflow state |
+| `AD17-ULID-001` | retained ATM message identity stays ULID-only on the accepted line | `PASS` | ULID-only message identity remains enforced in the retained SQLite mailbox state |
 | `AD17-READ-001` | read mutation and contains filtering stay self-consistent on the durable store-backed path | `PASS` | read mutation still reports the post-mutation state and contains filtering still sees the durable full-body projection |
 | `AD17-CI-001` | windows CI retains the explicit atm-daemon lane on the accepted line | `PASS` | the explicit atm-daemon CI lane remains present and the Windows skip guard is absent |
 | `AD18-RUNTIME-ROOT-001` | raw CLI runtime ownership stays anchored to the accepted ATM_HOME root | `PASS` | raw CLI bootstrap, socket ownership, and daemon lock state all stay rooted under the accepted ATM_HOME runtime subtree |

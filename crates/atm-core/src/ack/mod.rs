@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
-use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
+use crate::send::{ResolvedRecipient, input, persist_message, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -160,11 +160,6 @@ fn ack_mail_with_runtime_impl<
 ) -> Result<AckOutcome, AtmError> {
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
-    let team_dir = runtime.team_dir(&request.home_dir, &team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&team));
-    }
-
     ensure_roster_member_exists(
         runtime,
         &team,
@@ -381,16 +376,10 @@ fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Res
 
 fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    home_dir: &std::path::Path,
     source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
     let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
-    let reply_team_dir = runtime.team_dir(home_dir, &reply_team)?;
-    if !reply_team_dir.exists() {
-        return Err(AtmError::team_not_found(&reply_team));
-    }
-
     ensure_roster_member_exists(
         runtime,
         &reply_team,
@@ -445,65 +434,39 @@ fn persist_source_ack_state<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     context: &AckPersistenceContext<'_>,
     ack_timestamp: IsoTimestamp,
 ) -> Result<PersistedSourceAck, AtmError> {
-    runtime.commit_workflow_state(
+    let source_record = load_ack_source_record(
+        runtime,
         home_dir(context.request),
         context.team,
         context.actor,
-        std::iter::empty(),
-        runtime.mailbox_timeout_policy().workflow_lock_timeout,
-        |workflow_state| {
-            let source_record = load_ack_source_record(
-                runtime,
-                home_dir(context.request),
-                context.team,
-                context.actor,
-                &context.source.row,
-            )?;
-            ensure_ack_is_pending(context.request.message_id, &source_record.envelope)?;
-            let reply_target = validate_reply_target(
-                runtime,
-                home_dir(context.request),
-                &source_record,
-                context.team,
-            )?;
+        &context.source.row,
+    )?;
+    ensure_ack_is_pending(context.request.message_id, &source_record.envelope)?;
+    let reply_target = validate_reply_target(runtime, &source_record, context.team)?;
 
-            let mut projected_envelope = source_record.envelope.clone();
-            projected_envelope.read = true;
-            projected_envelope.pending_ack_at = None;
-            projected_envelope.acknowledged_at = Some(ack_timestamp);
+    let mut projected_envelope = source_record.envelope.clone();
+    projected_envelope.read = true;
+    projected_envelope.pending_ack_at = None;
+    projected_envelope.acknowledged_at = Some(ack_timestamp);
 
-            runtime.persist_message_state(boundary::MailMessageState {
-                team: context.team.clone(),
-                agent: context.actor.clone(),
-                actor: context.actor.clone(),
-                message_key: context.source.row.message_key.clone(),
-                read: true,
-                pending_ack_at: None,
-                acknowledged_at: Some(ack_timestamp),
-                expires_at: source_record.envelope.expires_at,
-                deleted_at: None,
-                updated_at: Some(ack_timestamp),
-            })?;
+    runtime.persist_message_state(boundary::MailMessageState {
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        actor: context.actor.clone(),
+        message_key: context.source.row.message_key.clone(),
+        read: true,
+        pending_ack_at: None,
+        acknowledged_at: Some(ack_timestamp),
+        expires_at: source_record.envelope.expires_at,
+        deleted_at: None,
+        updated_at: Some(ack_timestamp),
+    })?;
 
-            let changed = crate::workflow::apply_projected_state(
-                workflow_state,
-                &source_record.envelope,
-                &projected_envelope,
-            );
-            Ok((
-                PersistedSourceAck {
-                    task_id: source_record.envelope.task_id.clone(),
-                    suppressed_self_ack: is_self_ack_reply_target(
-                        context.actor,
-                        context.team,
-                        &reply_target,
-                    ),
-                    reply_target,
-                },
-                changed,
-            ))
-        },
-    )
+    Ok(PersistedSourceAck {
+        task_id: source_record.envelope.task_id.clone(),
+        suppressed_self_ack: is_self_ack_reply_target(context.actor, context.team, &reply_target),
+        reply_target,
+    })
 }
 
 fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -543,7 +506,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &persisted_source.reply_target.team,
         &persisted_source.reply_target.agent,
     )?;
-    let persistence = persist_message_and_seed_workflow(
+    let persistence = persist_message(
         runtime,
         home_dir(context.request),
         &reply_snapshot,
@@ -847,7 +810,6 @@ mod tests {
     use std::collections::VecDeque;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
-    use std::time::Duration;
 
     use super::{
         AckReplyDisposition, AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply,
@@ -863,13 +825,12 @@ mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, TeamConfig};
+    use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
-    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::workflow::WorkflowStateFile;
     use serde_json::Map;
 
     struct AckRuntime {
@@ -911,7 +872,6 @@ mod tests {
     }
 
     struct AckRosterRuntime {
-        team_dir: PathBuf,
         roster_members: Vec<(TeamName, AgentName)>,
         inbox_path: PathBuf,
         source_row: boundary::MailStoreMailboxMetadataRow,
@@ -920,7 +880,6 @@ mod tests {
     }
 
     struct AckReloadRuntime {
-        team_dir: PathBuf,
         roster_members: Vec<(TeamName, AgentName)>,
         source_row: boundary::MailStoreMailboxMetadataRow,
         source_records: Mutex<VecDeque<boundary::Message>>,
@@ -965,21 +924,6 @@ mod tests {
             Ok(None)
         }
 
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, crate::error::AtmError> {
-            unreachable!("ack writer-path test does not load team config")
-        }
-
-        fn team_dir(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-        ) -> Result<PathBuf, crate::error::AtmError> {
-            unreachable!("ack writer-path test does not resolve team directories")
-        }
-
         fn inbox_path(
             &self,
             _home_dir: &Path,
@@ -1006,21 +950,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
             Ok(())
-        }
-
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("ack writer-path test should not rebuild compatibility inboxes")
         }
 
         fn deliver_non_claude_payloads(
@@ -1054,22 +983,6 @@ mod tests {
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
         }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            _body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            unreachable!("ack writer-path test does not commit workflow state")
-        }
     }
 
     impl RetainedServiceRuntime for AckRosterRuntime {
@@ -1081,21 +994,6 @@ mod tests {
                 default_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
                 ..Default::default()
             }))
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, crate::error::AtmError> {
-            unreachable!("ack roster-gate tests must not load team config")
-        }
-
-        fn team_dir(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-        ) -> Result<PathBuf, crate::error::AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -1124,21 +1022,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
             Ok(())
-        }
-
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("ack roster-gate tests do not rebuild compatibility inboxes")
         }
 
         fn deliver_non_claude_payloads(
@@ -1184,24 +1067,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            let (result, _changed) = body(&mut workflow)?;
-            Ok(result)
         }
     }
 
@@ -1285,21 +1150,6 @@ mod tests {
             unreachable!("ack reload test does not load config")
         }
 
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, crate::error::AtmError> {
-            unreachable!("ack reload test does not load team config")
-        }
-
-        fn team_dir(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-        ) -> Result<PathBuf, crate::error::AtmError> {
-            Ok(self.team_dir.clone())
-        }
-
         fn inbox_path(
             &self,
             _home_dir: &Path,
@@ -1326,21 +1176,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), crate::error::AtmError> {
             unreachable!("ack reload test does not save seen watermark")
-        }
-
-        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
-            RetainedMailboxTimeoutPolicy {
-                workflow_lock_timeout: Duration::from_millis(1),
-            }
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("ack reload test does not rebuild compat inbox")
         }
 
         fn deliver_non_claude_payloads(
@@ -1377,24 +1212,6 @@ mod tests {
             _team: &TeamName,
         ) -> Result<Vec<boundary::RosterEntry>, crate::error::AtmError> {
             Ok(Vec::new())
-        }
-
-        fn commit_workflow_state<T, I, F>(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _extra_write_paths: I,
-            _timeout: Duration,
-            body: F,
-        ) -> Result<T, crate::error::AtmError>
-        where
-            I: IntoIterator<Item = PathBuf>,
-            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
-        {
-            let mut workflow = WorkflowStateFile::default();
-            let (result, _changed) = body(&mut workflow)?;
-            Ok(result)
         }
     }
 
@@ -1842,10 +1659,7 @@ mod tests {
     #[test]
     fn ack_mail_rejects_actor_missing_from_atm_roster() {
         let tempdir = tempfile::tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = AckRosterRuntime {
-            team_dir,
             roster_members: Vec::new(),
             inbox_path: tempdir.path().join("reply.jsonl"),
             source_row: boundary::MailStoreMailboxMetadataRow {
@@ -1920,7 +1734,6 @@ mod tests {
         let source_message_id = AtmMessageId::new();
         let source_key = MessageKey::from(source_message_id);
         let runtime = AckRosterRuntime {
-            team_dir,
             roster_members: vec![(team.clone(), actor.clone())],
             inbox_path: tempdir.path().join("reply.jsonl"),
             source_row: boundary::MailStoreMailboxMetadataRow {
@@ -2055,7 +1868,6 @@ mod tests {
             },
         };
         let runtime = AckReloadRuntime {
-            team_dir,
             roster_members: vec![(team.clone(), actor.clone())],
             source_row: boundary::MailStoreMailboxMetadataRow {
                 message_key: source_key,
@@ -2117,7 +1929,6 @@ mod tests {
         let source_key = MessageKey::from(source_message_id);
         let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
         let runtime = AckRosterRuntime {
-            team_dir,
             roster_members: vec![
                 (team.clone(), actor.clone()),
                 (
