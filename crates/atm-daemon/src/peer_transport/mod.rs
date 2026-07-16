@@ -932,7 +932,7 @@ impl PeerTransportRuntime {
     }
 
     pub(crate) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
-        self.server.bound_addr()
+        server::bound_addr(&self.server)
     }
 
     #[cfg(test)]
