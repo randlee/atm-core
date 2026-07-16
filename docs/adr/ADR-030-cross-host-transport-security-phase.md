@@ -32,3 +32,7 @@ Functional closure must not:
 - AG.10 owns the secured-transport implementation closure
 - any earlier release verdict must explicitly state whether it excludes
   transport-security guarantees
+
+The remote-target contract and dispatch-boundary decision is tracked
+independently in ADR-031 so transport-security sequencing does not become the
+accidental home for send-routing policy.

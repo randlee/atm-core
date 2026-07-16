@@ -2682,32 +2682,29 @@ There are three distinct paths:
 
 3. Remote host path
    - cross-host delivery is daemon-to-daemon only
-   - routing expands from `agent@team` to `agent@team.host`
+   - agent/member names and team names do not contain `.`
+   - the supported remote-send CLI forms are exactly:
+     - `atm send <agent>@<team>.<host> ...`
+     - `atm send <agent>@<team> --host <host> ...`
+   - those two forms normalize into the same internal request shape with a
+     typed remote-host field
+   - the inline form splits on the final `.` after `@`
+   - mixed inline-host plus `--host` input is rejected instead of silently
+     preferring one source
+   - send makes one routing decision at the boundary:
+     - empty remote-host field -> local mailbox path
+     - non-empty remote-host field -> cross-host queue / remote-delivery path
    - sender-side daemons do not write remote host mailbox JSON directly
    - successful remote delivery requires remote daemon acceptance
    - Phase AG adds a durable cross-host control plane in front of this path:
      - SQLite-backed interface/bind configuration
-     - SQLite-backed exact-host allowlist enforcement against the remote socket
-       host token (currently the peer IP literal)
+     - SQLite-backed exact-host allowlist enforcement
      - CLI management for both
-     - one doctor-visible `cross_host` projection carrying:
-       - `legacy_fallback_active`
-       - `bound_endpoints`
-       - `interfaces`
-       - `allowlist`
-     - per-interface bind result persistence so one bad row does not hide the
-       healthy rows
-     - the currently shipped AG transition still permits legacy listener
-       fallback when no enabled durable interface rows exist; doctor must
-       surface that fallback explicitly rather than pretending durable rows are
-       already the sole source of truth
-   - before the real LAN/VPN host-pair rows are re-run, AG.7 keeps a local
-     daemon-to-daemon harness on the same peer-listener request path so
-     unauthorized-host rejection, authorized send/read/ack, degraded
-     notification classification, and bounded retry semantics can be validated
-     in CI without claiming live-network closure
-   - loopback self-test remains a local diagnostic variant of the daemon
-     listener/send path and is not equivalent to remote host-pair proof
+     - doctor-visible state for both
+   - same-host proof through `localhost` or the host's own advertised/bound IP
+     remains an ordinary use of the daemon listener/send path, not a separate
+     transport mode
+   - same-host proof is not equivalent to remote host-pair proof
 
 ### 21.3.1 New-Message Failure Contract
 
@@ -2783,15 +2780,13 @@ Test-transport rule:
   boundary in process
 
 Remote-delivery semantics:
-- bounded transient retry is acceptable for short intermittent failures
-- transport-security closure is sequenced after functional control-plane
-  closure under ADR-030; functional cross-host readiness must not implicitly
-  claim TLS/security closure before that ADR's phase work lands
-- there is no durable long-lived remote outbox
-- if the remote host remains unreachable after the bounded retry window, send
-  fails rather than leaving stale pending delivery behind
-- sender-side daemons do not treat a remote send as delivered until the remote
-  daemon accepts it
+- this section is only the high-level summary
+- the authoritative remote-target contract is ADR-031
+- the authoritative remote delivery state machine and timeout/retry/receipt
+  rules are defined in §21.6 and REQ-CORE-TRANSPORT-004/005
+- transport-security closure is still sequenced separately under ADR-030;
+  functional cross-host readiness must not implicitly claim TLS/security
+  closure before that phase work lands
 
 ### 21.5 Singleton Daemon
 
@@ -3112,8 +3107,8 @@ Phase R operational defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
+- remote synchronous wait deadline: `10s`
+- deferred background retry window: `60s..120s`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -3151,6 +3146,13 @@ Remote peer transport rules:
 - if a connection drops after the request write completes but before the remote
   daemon confirms acceptance, the send result is one typed
   `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
+- if the cross-host path is currently healthy, the CLI may wait up to `10s`
+  for remote acceptance before returning
+- if the cross-host path is currently unhealthy, the CLI returns immediately
+  with a deferred-delivery result and the daemon continues bounded retry in the
+  background
+- the deferred retry window is short-lived (`60s..120s`) and must conclude by
+  emitting a final delivery/failure receipt into the sender inbox
 - outbound peer delivery must resolve and open a fresh connection per attempt;
   ordinary local interface changes must not require daemon restart for new
   outbound attempts

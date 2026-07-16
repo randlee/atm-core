@@ -3559,17 +3559,22 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
-  Current-line note:
-  - the documented target transport remains TCP/TLS
-  - the active `1.3.1` implementation line is still functionally plain TCP and
-    therefore does not satisfy transport-security closure
-  - any release verdict before `AG.10` must say that explicitly rather than
-    treating the requirement as waived
-
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - remote routing uses an address form equivalent to `agent@team.host`
+  - agent/member names and team names must not contain `.`
+  - the supported remote-send CLI forms are exactly:
+    - `atm send <agent>@<team>.<host> ...`
+    - `atm send <agent>@<team> --host <host> ...`
+  - those two forms are logically equivalent and must normalize into one typed
+    request field for the remote host
+  - the inline form splits on the final `.` after `@`
+  - mixed inline-host plus `--host` input is rejected instead of silently
+    preferring one source
+  - when the normalized remote-host field is empty, send stays on the local
+    mailbox path
+  - when the normalized remote-host field is non-empty, send must route through
+    the dedicated cross-host queue / remote-delivery boundary
   - sender-side daemons must not write remote host inbox JSONL directly
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host listener configuration must use a
@@ -3581,13 +3586,7 @@ mail correctness.
     durable state
   - CLI commands are the primary operator surface for adding, updating,
     enabling, disabling, removing, and listing those interface rows
-  - each configured row retains bind observability state including
-    `last_bound_at`, `last_bind_error`, and stale visibility instead of
-    collapsing failure into one process-global flag
-  - durable interface rows are the intended steady-state listener model
-  - during the current AG transition, legacy listener configuration fallback
-    may still bind when no enabled durable rows exist; `atm doctor` must report
-    that fallback state explicitly so operators can migrate off it
+  - if no enabled interface rows exist, no cross-host listener binds
   - environment variables may remain as historical/transitional compatibility
     inputs but must not remain the intended steady-state configuration model
 
@@ -3595,68 +3594,25 @@ mail correctness.
   deny-by-default exact-host allowlist before any mailbox mutation occurs.
 
   Required behavior:
-  - inbound daemon peers are rejected unless one enabled exact host row
+  - inbound daemon peers are rejected unless one enabled exact hostname row
     authorizes them
-  - the compared host token is normalized once to lowercase and matched exactly
-  - in the current TCP transport, the presented host token is the remote socket
-    IP literal rather than reverse-DNS output
   - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
   - rejection happens before mailbox, ack/reply, or roster mutation
   - doctor output must surface allowlist enforcement state and configured host
     rows
 
-- `REQ-CORE-TRANSPORT-002E` `atm doctor` must expose the cross-host control
-  plane through a first-class `cross_host` projection rather than scattering
-  the data across unrelated findings only.
+- `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
+  contract and must not be implemented as a special loopback-only send mode.
 
   Required behavior:
-  - JSON doctor output must include a top-level `cross_host` object whenever
-    the daemon runtime is available
-  - `cross_host` must expose:
-    - `legacy_fallback_active`
-    - `bound_endpoints`
-    - `interfaces`
-    - `allowlist`
-  - each `interfaces` row must report:
-    - configured bind/advertise identity
-    - `enabled`
-    - whether the listener is currently bound
-    - `last_bound_at`
-    - `last_bind_error`
-    - `stale_at`
-  - `allowlist` must report:
-    - whether enforcement is active
-    - whether the enabled allowlist is empty
-    - every configured host row with enabled/disabled state
-  - text doctor output must render the same cross-host state in one dedicated
-    operator-visible section
-
-- `REQ-CORE-TRANSPORT-002C` Loopback self-test is an allowed local diagnostic
-  addressing mode and must not be misrepresented as proof of remote host-pair
-  closure.
-
-  Required behavior:
-  - loopback send paths remain local diagnostic/test surfaces
-  - loopback support must continue to use the daemon peer listener/send path
-  - successful loopback rows do not by themselves authorize remote cross-host
+  - same-host transport proof uses the same daemon peer listener/send path as
+    any other remote host proof
+  - `localhost` and the host's own advertised or bound IP address are valid
+    ordinary remote-host targets
+  - same-host proof must not require a dedicated wire field, request flag, or
+    special-case routing branch outside the normal remote-host classifier
+  - successful same-host rows do not by themselves authorize second-host
     release claims
-
-- `REQ-CORE-TRANSPORT-002D` Before live LAN/VPN host-pair execution is marked
-  complete, ATM must keep a controlled local daemon-to-daemon integration
-  harness that exercises the real peer-listener request path for the AG.7
-  release rows.
-
-  Required behavior:
-  - the local harness must prove unauthorized host rejection before mailbox
-    mutation
-  - the local harness must prove authorized send, receiver read, and
-    `--requires-ack` reply-state mutation over the peer listener
-  - the local harness must prove notification degradation remains a warning on
-    top of durable send success rather than collapsing success into failure
-  - the local harness must prove bounded retry / outcome-unknown behavior on
-    the peer transport before live host-pair reruns are attempted
-  - passing local harness results are scaffolding only and must not be recorded
-    as completion of the live AG-VAL-003A / AG-VAL-003..009 rows
 
 - `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
   pending messages behind when a host is unreachable.
@@ -3677,21 +3633,23 @@ mail correctness.
   acceptance within the bounded retry window.
 
   Required behavior:
-  - sender-side daemons may record observability/audit information locally
-    while attempting remote delivery
+  - when the cross-host path is currently healthy, the CLI may block for up to
+    `10s` waiting for remote daemon acceptance
   - a remote send must not be reported as successfully delivered until the
     remote daemon accepts it
-  - if the connection drops after the sender finishes writing the request but
-    before remote acceptance is confirmed, the daemon must return one typed
-    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-    must not report success
-  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
-    replay/re-export path rather than by silently assuming success
-  - if the bounded retry window expires without remote acceptance, the send
-    fails and must not leave durable delivered-message state behind
-  - pending replay/re-export state must be persisted in the host-scoped SQLite
-    root keyed by mailbox identity plus `message_key`, with bounded expiry and
-    operator-visible retained-failure state
+  - when the cross-host path is currently unhealthy, the CLI must return
+    immediately with a typed deferred-delivery result instead of blocking for
+    the full retry window
+  - the daemon may continue bounded background retry for a short transient
+    window after returning the deferred result
+  - after the bounded deferred window expires, the daemon must emit a final
+    delivery receipt or failure receipt into the sender's inbox
+  - the product must distinguish:
+    - remote accepted now
+    - deferred and still trying
+    - deferred and failed
+  - the daemon must not keep a durable multi-day remote outbox or silently
+    claim remote success after only local admission
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -3700,17 +3658,15 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget default: `30s`
-  - the remote retry budget must be configurable through one daemon transport
-    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
-    unstable networks without changing code
+  - remote synchronous wait deadline: `10s`
+  - deferred background retry window: `60s..120s`
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - retry queue depth: `256`
+  - deferred outbound queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
