@@ -15,6 +15,9 @@ use crate::{
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_storage::{
+    IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore, PeerInterfaceKey,
+};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -124,7 +127,6 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
     // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
@@ -138,9 +140,32 @@ pub(crate) struct RuntimeComposition {
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
+    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
     config_ingress: DaemonConfigIngress,
     config_current_dir: PathBuf,
     peer_transport_runtime: PeerTransportRuntime,
+}
+
+impl std::fmt::Debug for RuntimeComposition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeComposition")
+            .field("lifecycle", &self.lifecycle)
+            .field("_host_ownership_adapter", &self._host_ownership_adapter)
+            .field("endpoint_guard", &self.endpoint_guard)
+            .field("server_transport", &self.server_transport)
+            .field("request_dispatcher", &self.request_dispatcher)
+            .field("composition_observability", &self.composition_observability)
+            .field("_production_runtime", &self._production_runtime)
+            .field("_status_source", &self._status_source)
+            .field(
+                "peer_interface_config_store",
+                &"dyn PeerInterfaceConfigStore",
+            )
+            .field("config_ingress", &self.config_ingress)
+            .field("config_current_dir", &self.config_current_dir)
+            .field("peer_transport_runtime", &self.peer_transport_runtime)
+            .finish()
+    }
 }
 
 impl RuntimeComposition {
@@ -236,6 +261,7 @@ impl RuntimeComposition {
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
+            peer_interface_config_store: runtime_assembly.peer_interface_config_store,
             config_ingress,
             config_current_dir: current_dir,
             peer_transport_runtime,
@@ -290,15 +316,7 @@ impl RuntimeComposition {
 
     fn reload_runtime(&self) -> Result<(), AtmError> {
         self.request_dispatcher.reload_runtime_view()?;
-        let peer_transport_config = load_peer_transport_config(
-            self.config_current_dir.clone(),
-            &self.config_ingress,
-            &self.composition_observability,
-        )?;
-        self.peer_transport_runtime.reload_listener(
-            peer_transport_config.peer_listen_addr,
-            self.request_dispatcher(),
-        )?;
+        self.refresh_peer_listeners()?;
         Ok(())
     }
 
@@ -501,13 +519,96 @@ impl RuntimeComposition {
     }
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
-        self.peer_transport_runtime
-            .start(self.request_dispatcher.clone())
+        self.refresh_peer_listeners()
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         self.peer_transport_runtime.shutdown()
     }
+
+    fn refresh_peer_listeners(&self) -> Result<(), AtmError> {
+        let peer_transport_config = load_peer_transport_config(
+            self.config_current_dir.clone(),
+            &self.config_ingress,
+            &self.composition_observability,
+        )?;
+        let rows = self
+            .peer_interface_config_store
+            .list_interfaces()?
+            .into_iter()
+            .filter(|row| row.enabled)
+            .map(|row| ListenerRow {
+                key: Some(
+                    PeerInterfaceKey::new(row.interface_name.clone(), row.bind_addr, row.port)
+                        .expect("persisted daemon peer interface row uses a valid key"),
+                ),
+                listen_addr: std::net::SocketAddr::new(row.bind_addr, row.port),
+            })
+            .collect::<Vec<_>>();
+        let rows = if rows.is_empty() {
+            let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
+            tracing::warn!(
+                subsystem = "composition",
+                action = "peer_listener_legacy_config_fallback",
+                outcome = "deprecated",
+                "{}",
+                detail
+            );
+            self.composition_observability.emit_or_warn(
+                "peer_listener_legacy_config_fallback",
+                "deprecated",
+                detail,
+            );
+            peer_transport_config
+                .peer_listen_addr
+                .into_iter()
+                .map(|listen_addr| ListenerRow {
+                    key: None,
+                    listen_addr,
+                })
+                .collect::<Vec<_>>()
+        } else {
+            rows
+        };
+        let outcomes = self.peer_transport_runtime.reload_listeners(
+            rows.iter().map(|row| row.listen_addr).collect(),
+            self.request_dispatcher(),
+        )?;
+        let outcome_map = outcomes
+            .into_iter()
+            .map(|outcome| (outcome.listen_addr, outcome))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let now = IsoTimestamp::now();
+        for row in rows {
+            let Some(key) = row.key else {
+                continue;
+            };
+            let Some(outcome) = outcome_map.get(&row.listen_addr) else {
+                continue;
+            };
+            self.peer_interface_config_store.record_binding_update(
+                &PeerInterfaceBindingUpdate {
+                    key,
+                    observed_at: if outcome.error_message.is_none() {
+                        Some(now)
+                    } else {
+                        None
+                    },
+                    refresh_deadline_at: None,
+                    stale_at: outcome.error_message.as_ref().map(|_| now),
+                    last_bound_at: outcome.bound_addr.map(|_| now),
+                    last_bind_error: outcome.error_message.clone(),
+                },
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ListenerRow {
+    key: Option<PeerInterfaceKey>,
+    listen_addr: std::net::SocketAddr,
 }
 
 fn build_host_ownership_adapter(
@@ -784,6 +885,8 @@ pub(crate) fn compose_runtime(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use atm_storage::{AddPeerInterfaceCommand, PeerInterfaceKind};
+    use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -1012,6 +1115,89 @@ mod tests {
                 .expect("recovery guidance")
                 .contains("valid target or argument"),
             "{error}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn legacy_peer_listen_addr_fallback_emits_deprecation_warning() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace_dir = tempdir.path().join("workspace");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[daemon]\npeer_listen_addr = \"127.0.0.1:43121\"\n",
+        )
+        .expect("legacy config");
+        let _cwd_guard = CwdGuard::install();
+        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
+
+        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
+        runtime
+            .refresh_peer_listeners()
+            .expect("refresh peer listeners with legacy fallback");
+
+        let retained_log_path =
+            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
+        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
+        assert!(
+            retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
+            "{retained_log}"
+        );
+        assert!(
+            retained_log.contains("peer_listener_legacy_config_fallback"),
+            "{retained_log}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn durable_peer_interface_rows_do_not_emit_legacy_fallback_warning() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace_dir = tempdir.path().join("workspace");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[daemon]\npeer_listen_addr = \"127.0.0.1:43122\"\n",
+        )
+        .expect("legacy config also present");
+        let _cwd_guard = CwdGuard::install();
+        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
+
+        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
+        runtime
+            .peer_interface_config_store
+            .add_interface(
+                AddPeerInterfaceCommand::new(
+                    "lan0",
+                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    43123,
+                    PeerInterfaceKind::Lan,
+                    "test-suite",
+                )
+                .expect("valid interface command"),
+            )
+            .expect("insert durable interface row");
+
+        runtime
+            .refresh_peer_listeners()
+            .expect("refresh peer listeners with durable rows");
+
+        let retained_log_path =
+            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
+        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
+        assert!(
+            !retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
+            "{retained_log}"
+        );
+        assert!(
+            !retained_log.contains("peer_listener_legacy_config_fallback"),
+            "{retained_log}"
         );
     }
 

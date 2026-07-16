@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-028 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
 | Deciders | ATM maintainers |
 | Relates to | ADR-026, ADR-027, Phase AG |
@@ -27,8 +27,29 @@ The control plane must define:
 - stale/refresh handling for roaming hosts
 - doctor-visible bind success/failure state
 
+The accepted control-plane shape is:
+
+- durable table: `daemon_peer_interfaces`
+- one authoritative row key: `(interface_name, bind_addr, port)`
+- CLI ownership:
+  - `atm daemon interfaces add`
+  - `atm daemon interfaces update`
+  - `atm daemon interfaces enable`
+  - `atm daemon interfaces disable`
+  - `atm daemon interfaces remove`
+  - `atm daemon interfaces list`
+- daemon ownership:
+  - load enabled rows at startup and reload
+  - attempt every enabled row independently
+  - persist `last_bound_at` or `last_bind_error` per row
+  - leave stale/degraded rows visible instead of deleting them
+- compatibility rule:
+  - `ATM_DAEMON_PEER_ADDR` and config-file listener inputs remain transitional
+    only when no durable interface rows are configured
+
 ## Consequences
 
 - env-driven peer addressing remains historical/transitional only
 - daemon bind behavior becomes deny-by-default when no enabled rows exist
-- AG.4 owns the implementation closure for this ADR
+- AG.4 closes the implementation for the interface configuration half of the
+  Phase AG control plane
