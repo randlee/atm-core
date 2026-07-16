@@ -1,0 +1,96 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-HARNESS-NO-REAL-ROUTING-PROOF>
+  a triage:Finding ;
+  triage:findingId "AG7-HARNESS-NO-REAL-ROUTING-PROOF" ;
+  triage:title "AG.7 live-revalidation harness does not actually prove cross-host routing works (matches AG-FIND-005)" ;
+  triage:description "AG.7 QA-1 Blocking finding, cross-referenced with AG-FIND-005: the AG.7 live-revalidation test harness claims to validate cross-host routing but does not actually exercise the genuine remote-send dispatch path (it exercises loopback or a mocked path instead), consistent with the independently confirmed AG-FIND-005 defect that ordinary atm send never reaches peer_transport_runtime. Sweep for the AG.7 revalidation harness code/test files across worktrees from AG.7 onward. Do not attempt to fix AG-FIND-005 itself; only correlate this AG.7-specific harness-fidelity finding." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T20:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-HARNESS-NO-REAL-ROUTING-PROOF/AG7/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG7/34846433> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG7/34846433> .
+
+<urn:atm:triage:occurrence/AG7-HARNESS-NO-REAL-ROUTING-PROOF/AG7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 85 ;
+  triage:snippet "fn install_test_roster_with_harness(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:description "Test harness uses mock dispatchers (DoctorOnlyDispatcher, DaemonRequestDispatcher) and loopback transport without exercising the actual send command path through peer_transport_runtime. Peer transport tests bypass the sending command entry point entirely." ;
+  triage:occursIn <urn:atm:triage:worktree/AG7/34846433> .
+
+<urn:atm:triage:worktree/AG3/8841e870>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/cross-host-communication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
+  triage:headSha "8841e870" ;
+  triage:orderIndex 3 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG4/fdfc20c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "fdfc20c5" ;
+  triage:orderIndex 4 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG5/90dac63e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "90dac63e" ;
+  triage:orderIndex 5 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG6/48c85b8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "48c85b8d" ;
+  triage:orderIndex 6 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG7/34846433>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "34846433" ;
+  triage:orderIndex 7 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG8/283bd53b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s8-transport-security-planning" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
+  triage:headSha "283bd53b" ;
+  triage:orderIndex 8 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG10/16c5ba03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "16c5ba03" ;
+  triage:orderIndex 9 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AG9/462b3ee3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "462b3ee3" ;
+  triage:orderIndex 10 ;
+  triage:status "absent" .
