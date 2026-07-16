@@ -32,3 +32,18 @@ Functional closure must not:
 - AG.10 owns the secured-transport implementation closure
 - any earlier release verdict must explicitly state whether it excludes
   transport-security guarantees
+
+## Follow-on Remote-Send Routing Constraint
+
+If ordinary cross-host `atm send` routing is updated after this ADR's security
+work, the routing contract must stay narrow and explicit:
+
+- the supported remote-send CLI forms are exactly:
+  - `atm send <agent>@<team>.<host> ...`
+  - `atm send <agent>@<team> --host <host> ...`
+- those two forms normalize into one typed remote-host field on the request
+- send makes one routing decision at the boundary:
+  - empty remote-host field -> local mailbox path
+  - non-empty remote-host field -> cross-host queue / remote-delivery boundary
+- host-routing logic must not leak through general daemon/runtime code after
+  that classification point

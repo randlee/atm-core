@@ -3562,7 +3562,15 @@ mail correctness.
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - remote routing uses an address form equivalent to `agent@team.host`
+  - the supported remote-send CLI forms are exactly:
+    - `atm send <agent>@<team>.<host> ...`
+    - `atm send <agent>@<team> --host <host> ...`
+  - those two forms are logically equivalent and must normalize into one typed
+    request field for the remote host
+  - when the normalized remote-host field is empty, send stays on the local
+    mailbox path
+  - when the normalized remote-host field is non-empty, send must route through
+    the dedicated cross-host queue / remote-delivery boundary
   - sender-side daemons must not write remote host inbox JSONL directly
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host listener configuration must use a

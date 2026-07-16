@@ -2682,7 +2682,14 @@ There are three distinct paths:
 
 3. Remote host path
    - cross-host delivery is daemon-to-daemon only
-   - routing expands from `agent@team` to `agent@team.host`
+   - the supported remote-send CLI forms are exactly:
+     - `atm send <agent>@<team>.<host> ...`
+     - `atm send <agent>@<team> --host <host> ...`
+   - those two forms normalize into the same internal request shape with a
+     typed remote-host field
+   - send makes one routing decision at the boundary:
+     - empty remote-host field -> local mailbox path
+     - non-empty remote-host field -> cross-host queue / remote-delivery path
    - sender-side daemons do not write remote host mailbox JSON directly
    - successful remote delivery requires remote daemon acceptance
    - Phase AG adds a durable cross-host control plane in front of this path:
