@@ -870,6 +870,30 @@ fn render_cross_host_section(cross_host: &atm_core::doctor::CrossHostDoctorRepor
             ));
         }
     }
+    output.push_str(&format!(
+        "  Security: mode={} local_identity_present={}\n",
+        cross_host.security.mode, cross_host.security.local_identity_present
+    ));
+    output.push_str(&format!(
+        "    local_identity_fingerprint_sha256={}\n",
+        cross_host
+            .security
+            .local_identity_fingerprint_sha256
+            .as_deref()
+            .unwrap_or("-")
+    ));
+    output.push_str(&format!(
+        "    trusted_peers={}\n",
+        cross_host.security.trusted_peers.len()
+    ));
+    for row in &cross_host.security.trusted_peers {
+        output.push_str(&format!(
+            "    trust {} fingerprint_sha256={} display_name={}\n",
+            row.host_name,
+            row.fingerprint_sha256,
+            row.display_name.as_deref().unwrap_or("-")
+        ));
+    }
     output
 }
 
@@ -879,8 +903,9 @@ mod tests {
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
-        CrossHostInterfaceDoctorRow,
+        CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
     };
+    use atm_storage::PeerSecurityMode;
     use serde_json::json;
 
     use super::{
@@ -978,11 +1003,20 @@ mod tests {
                 empty: false,
                 hosts: Vec::new(),
             },
+            security: CrossHostSecurityDoctorReport {
+                mode: PeerSecurityMode::SecureRequired,
+                updated_by: Some("sender-a@test-team".to_string()),
+                updated_at: None,
+                local_identity_present: true,
+                local_identity_fingerprint_sha256: Some("abcd".repeat(16)),
+                trusted_peers: Vec::new(),
+            },
         });
 
         assert!(rendered.contains("Cross-host control plane:"));
         assert!(rendered.contains("Bound endpoints: 10.10.0.15:43101"));
         assert!(rendered.contains("en0 bind=10.10.0.15:43101"));
         assert!(rendered.contains("Allowlist: enforced=true empty=false"));
+        assert!(rendered.contains("Security: mode=secure-required local_identity_present=true"));
     }
 }

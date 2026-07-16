@@ -27,6 +27,7 @@ use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::{install_sqlite_retained_runtime_factory, open_sqlite_boundary};
+use atm_storage::{PeerSecurityMode, SetPeerSecurityModeCommand, UpsertTrustedPeerCommand};
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
@@ -48,6 +49,14 @@ fn test_recipient_name() -> AgentName {
     atm_core::test_support::TEST_RECIPIENT
         .parse()
         .expect("member")
+}
+
+fn test_sender_identity() -> String {
+    format!(
+        "{}@{}",
+        atm_core::test_support::TEST_SENDER,
+        atm_core::test_support::TEST_TEAM
+    )
 }
 
 fn install_retained_runtime_factory() {
@@ -148,6 +157,43 @@ fn install_shared_lifecycle_reset_guard() -> LifecycleFlagResetGuard {
     LifecycleFlagResetGuard::install(lifecycle)
 }
 
+fn configure_secure_mode_and_trust_self(
+    store: &Arc<dyn atm_storage::PeerSecurityStore + Send + Sync>,
+    host: &str,
+) {
+    store
+        .set_security_mode(
+            SetPeerSecurityModeCommand::new(
+                PeerSecurityMode::SecureRequired,
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+            )
+            .expect("security mode command"),
+        )
+        .expect("set security mode");
+    let identity = store
+        .load_or_create_local_identity()
+        .expect("load or create local identity");
+    store
+        .upsert_trusted_peer(
+            UpsertTrustedPeerCommand::new(
+                host,
+                identity.fingerprint_sha256,
+                Some("loopback".to_string()),
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+            )
+            .expect("trusted peer command"),
+        )
+        .expect("approve trusted peer");
+}
+
 #[derive(Debug)]
 struct SleepingDispatcher {
     sleep_for: Duration,
@@ -234,6 +280,68 @@ fn peer_listener_round_trips_one_doctor_request() {
 }
 
 #[test]
+fn secure_peer_listener_round_trips_one_doctor_request() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag10-secure-roundtrip-{}.db", std::process::id())),
+    )
+    .expect("backend");
+    backend
+        .allowed_host_store()
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let peer_security_store = backend.peer_security_store();
+    configure_secure_mode_and_trust_self(&peer_security_store, "127.0.0.1");
+    let listener_transport =
+        PeerTransportRuntime::new_server_for_test_with_security_and_allowed_host_store(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+            RuntimeStatusCache::new(),
+            backend.allowed_host_store(),
+            peer_security_store.clone(),
+        );
+    listener_transport
+        .start(Arc::new(DoctorOnlyDispatcher))
+        .expect("start secure peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test_with_security_store(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+        peer_security_store,
+    );
+    let response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..atm_core::doctor::DoctorQuery::default()
+        }))
+        .expect("secure peer listener doctor response");
+    assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown secure peer listener");
+}
+
+#[test]
 fn peer_listener_rejects_unauthorized_host_before_dispatch() {
     let _guard = install_shared_lifecycle_reset_guard();
     let backend = atm_storage_rusqlite::SqliteStorageBackend::new(
@@ -278,6 +386,192 @@ fn peer_listener_rejects_unauthorized_host_before_dispatch() {
 }
 
 #[test]
+fn secure_peer_listener_rejects_untrusted_client_before_dispatch() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let server_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag10-secure-server-{}.db", std::process::id())),
+    )
+    .expect("server backend");
+    server_backend
+        .allowed_host_store()
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let server_security_store = server_backend.peer_security_store();
+    server_security_store
+        .set_security_mode(
+            SetPeerSecurityModeCommand::new(
+                PeerSecurityMode::SecureRequired,
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+            )
+            .expect("security mode command"),
+        )
+        .expect("set security mode");
+    server_security_store
+        .load_or_create_local_identity()
+        .expect("server identity");
+
+    let listener_transport =
+        PeerTransportRuntime::new_server_for_test_with_security_and_allowed_host_store(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+            RuntimeStatusCache::new(),
+            server_backend.allowed_host_store(),
+            server_security_store,
+        );
+    let dispatcher = Arc::new(CountingDispatcher::default());
+    listener_transport
+        .start(dispatcher.clone())
+        .expect("start secure peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag10-secure-client-{}.db", std::process::id())),
+    )
+    .expect("client backend");
+    let client_security_store = client_backend.peer_security_store();
+    configure_secure_mode_and_trust_self(&client_security_store, "127.0.0.1");
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test_with_security_store(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+        client_security_store,
+    );
+    let error = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..DoctorQuery::default()
+        }))
+        .expect_err("untrusted secure client should be rejected");
+    assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+    assert_eq!(dispatcher.count.load(Ordering::SeqCst), 0);
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown secure peer listener");
+}
+
+#[test]
+fn secure_client_does_not_silently_fallback_when_server_fingerprint_mismatches() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let server_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-{}.db", std::process::id())),
+    )
+    .expect("server backend");
+    server_backend
+        .allowed_host_store()
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let server_security_store = server_backend.peer_security_store();
+    configure_secure_mode_and_trust_self(&server_security_store, "127.0.0.1");
+    let listener_transport =
+        PeerTransportRuntime::new_server_for_test_with_security_and_allowed_host_store(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+            RuntimeStatusCache::new(),
+            server_backend.allowed_host_store(),
+            server_security_store,
+        );
+    let dispatcher = Arc::new(CountingDispatcher::default());
+    listener_transport
+        .start(dispatcher.clone())
+        .expect("start secure peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-client-{}.db", std::process::id())),
+    )
+    .expect("client backend");
+    let client_security_store = client_backend.peer_security_store();
+    client_security_store
+        .set_security_mode(
+            SetPeerSecurityModeCommand::new(
+                PeerSecurityMode::SecureRequired,
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+            )
+            .expect("security mode command"),
+        )
+        .expect("set security mode");
+    client_security_store
+        .load_or_create_local_identity()
+        .expect("client identity");
+    client_security_store
+        .upsert_trusted_peer(
+            UpsertTrustedPeerCommand::new(
+                "127.0.0.1",
+                "00".repeat(32),
+                Some("wrong".to_string()),
+                format!(
+                    "{}@{}",
+                    atm_core::test_support::TEST_SENDER,
+                    atm_core::test_support::TEST_TEAM
+                ),
+            )
+            .expect("trusted peer command"),
+        )
+        .expect("approve wrong trusted peer");
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test_with_security_store(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+        client_security_store,
+    );
+    let error = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..DoctorQuery::default()
+        }))
+        .expect_err("fingerprint mismatch should fail");
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(dispatcher.count.load(Ordering::SeqCst), 0);
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown secure peer listener");
+}
+
+#[test]
 fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
     let _guard = install_shared_lifecycle_reset_guard();
     let backend = atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(
@@ -289,7 +583,7 @@ fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                &test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -363,7 +657,7 @@ fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() 
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                &test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -544,7 +838,7 @@ fn peer_listener_preserves_sent_outcome_when_post_send_degrades() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                &test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -825,6 +1119,7 @@ fn persist_replay_request_requires_configured_replay_store_with_recovery() {
         endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7001))),
         config: PeerTransportConfig::default(),
         replay_store: None,
+        peer_security_store: None,
         codec: atm_core::protocol::JsonAtmProtocolCodec,
         observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
     };
@@ -858,6 +1153,7 @@ fn persist_replay_request_missing_endpoint_matches_send_surface_contract() {
         endpoint: None,
         config: PeerTransportConfig::default(),
         replay_store: Some(replay_store),
+        peer_security_store: None,
         codec: atm_core::protocol::JsonAtmProtocolCodec,
         observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
     };
@@ -895,6 +1191,7 @@ fn persist_replay_request_invalid_retry_budget_reports_actionable_recovery() {
             peer_listen_addr: None,
         },
         replay_store: Some(replay_store),
+        peer_security_store: None,
         codec: atm_core::protocol::JsonAtmProtocolCodec,
         observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
     };

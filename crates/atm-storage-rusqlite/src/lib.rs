@@ -12,6 +12,7 @@ mod nudge_template_override_store;
 mod observability;
 mod peer_host_allowlist_store;
 mod peer_interface_store;
+mod peer_security_store;
 mod roster_store;
 mod shared_db;
 mod writer;
@@ -23,7 +24,7 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AllowedHostStore, Message, MessageKey, MessageQuery, MessageStore, PeerInterfaceConfigStore,
-    RosterStore,
+    PeerSecurityStore, RosterStore,
 };
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
@@ -197,6 +198,11 @@ struct SqlitePeerInterfaceConfigStore {
 
 #[derive(Debug)]
 struct SqliteAllowedHostStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqlitePeerSecurityStore {
     db: Arc<SharedDb>,
 }
 
@@ -460,6 +466,7 @@ pub struct SqliteStorageBackend {
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_interface_config_store: Arc<SqlitePeerInterfaceConfigStore>,
     allowed_host_store: Arc<SqliteAllowedHostStore>,
+    peer_security_store: Arc<SqlitePeerSecurityStore>,
 }
 
 impl SqliteStorageBackend {
@@ -481,7 +488,8 @@ impl SqliteStorageBackend {
             peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
                 &db,
             ))),
-            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(db)),
+            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(Arc::clone(&db))),
+            peer_security_store: Arc::new(SqlitePeerSecurityStore::new(db)),
         })
     }
 
@@ -497,7 +505,8 @@ impl SqliteStorageBackend {
             peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
                 &db,
             ))),
-            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(db)),
+            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(Arc::clone(&db))),
+            peer_security_store: Arc::new(SqlitePeerSecurityStore::new(db)),
         })
     }
 
@@ -551,6 +560,10 @@ impl SqliteStorageBackend {
 
     pub fn allowed_host_store(&self) -> Arc<dyn AllowedHostStore + Send + Sync> {
         self.allowed_host_store.clone()
+    }
+
+    pub fn peer_security_store(&self) -> Arc<dyn PeerSecurityStore + Send + Sync> {
+        self.peer_security_store.clone()
     }
 
     #[cfg(test)]
@@ -998,6 +1011,10 @@ mod tests {
         "test-agent".parse().expect("agent")
     }
 
+    fn test_sender_identity() -> String {
+        format!("{}@{}", agent(), team())
+    }
+
     fn message(key: &str, text: &str) -> Message {
         let team = team();
         let agent = agent();
@@ -1097,7 +1114,7 @@ mod tests {
                     "10.0.0.5".parse().expect("advertise addr"),
                     43101,
                     atm_storage::PeerInterfaceKind::Vpn,
-                    "arch-ctm@atm-dev",
+                    &test_sender_identity(),
                 )
                 .expect("add command"),
             )
@@ -1118,7 +1135,7 @@ mod tests {
                     "10.0.0.6".parse().expect("advertise"),
                     43101,
                     atm_storage::PeerInterfaceKind::Vpn,
-                    "arch-ctm@atm-dev",
+                    &test_sender_identity(),
                     Some(false),
                 )
                 .expect("update command"),
@@ -1141,7 +1158,7 @@ mod tests {
             .allow_host(
                 atm_storage::AllowHostCommand::new(
                     "10.10.100.98",
-                    "arch-ctm@atm-dev",
+                    &test_sender_identity(),
                     Some("windows host".to_string()),
                 )
                 .expect("allow command"),
@@ -1162,7 +1179,7 @@ mod tests {
 
         let reenabled = store
             .allow_host(
-                atm_storage::AllowHostCommand::new("10.10.100.98", "arch-ctm@atm-dev", None)
+                atm_storage::AllowHostCommand::new("10.10.100.98", &test_sender_identity(), None)
                     .expect("re-enable command"),
             )
             .expect("re-enable host");

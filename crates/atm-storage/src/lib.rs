@@ -12,13 +12,15 @@ mod validation;
 pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
     AckRequirementState, AckTransition, AddPeerInterfaceCommand, AgentType, AllowHostCommand,
-    AllowedHostName, AllowedHostRow, AllowedHostStore, BuiltInNudgeTemplateKind, MailMessageState,
-    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
-    NudgeTemplateOverrideStore, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore,
-    PeerInterfaceKey, PeerInterfaceKind, PeerInterfaceRow, RosterChangedEvent, RosterHarness,
-    RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, TaskState,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpdatePeerInterfaceCommand,
-    derive_ack_requirement,
+    AllowedHostName, AllowedHostRow, AllowedHostStore, BuiltInNudgeTemplateKind,
+    LocalPeerIdentityRow, MailMessageState, Message, MessageFingerprint, MessageKey,
+    MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+    PeerInterfaceBindingUpdate, PeerInterfaceConfigStore, PeerInterfaceKey, PeerInterfaceKind,
+    PeerInterfaceRow, PeerSecurityMode, PeerSecuritySettingsRow, PeerSecurityStore,
+    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+    RosterStore, SetPeerSecurityModeCommand, StorageNotifier, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeerRow,
+    UpdatePeerInterfaceCommand, UpsertTrustedPeerCommand, derive_ack_requirement,
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;

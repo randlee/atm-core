@@ -11,7 +11,8 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, CrossHostAllowedHostDoctorRow, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
-        CrossHostInterfaceDoctorRow, DaemonRuntimeDoctorReport, DoctorExecutionContext,
+        CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
+        CrossHostTrustedPeerDoctorRow, DaemonRuntimeDoctorReport, DoctorExecutionContext,
         DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorKind},
@@ -45,7 +46,7 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, RosterStore};
+use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerSecurityStore, RosterStore};
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -269,6 +270,7 @@ pub(crate) struct DaemonRequestDispatcher {
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
     allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     peer_transport_runtime: PeerTransportRuntime,
@@ -287,6 +289,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 &"dyn PeerInterfaceConfigStore",
             )
             .field("allowed_host_store", &"dyn AllowedHostStore")
+            .field("peer_security_store", &"dyn PeerSecurityStore")
             .field(
                 "remote_replay_store_present",
                 &self.remote_replay_store.is_some(),
@@ -562,6 +565,7 @@ impl DaemonRequestDispatcher {
             roster_store: Some(roster_store),
             peer_interface_config_store: runtime_assembly.peer_interface_config_store,
             allowed_host_store: runtime_assembly.allowed_host_store,
+            peer_security_store: runtime_assembly.peer_security_store,
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
             peer_transport_runtime,
@@ -913,6 +917,9 @@ impl DaemonRequestDispatcher {
     ) -> Result<(CrossHostDoctorReport, Vec<DoctorFinding>), AtmError> {
         let interface_rows = self.peer_interface_config_store.list_interfaces()?;
         let host_rows = self.allowed_host_store.list_hosts()?;
+        let security_settings = self.peer_security_store.load_security_settings()?;
+        let local_identity = self.peer_security_store.load_local_identity()?;
+        let trusted_peers = self.peer_security_store.list_trusted_peers()?;
         let live_bound_addr = self.peer_transport_runtime.bound_addr()?;
         let has_enabled_interface_rows = interface_rows.iter().any(|row| row.enabled);
         let legacy_fallback_active = !has_enabled_interface_rows && live_bound_addr.is_some();
@@ -955,6 +962,23 @@ impl DaemonRequestDispatcher {
             })
             .collect::<Vec<_>>();
         let enabled_allowlist_count = host_rows.iter().filter(|row| row.enabled).count();
+        let security = CrossHostSecurityDoctorReport {
+            mode: security_settings.mode,
+            updated_by: security_settings.updated_by,
+            updated_at: security_settings.updated_at,
+            local_identity_present: local_identity.is_some(),
+            local_identity_fingerprint_sha256: local_identity
+                .as_ref()
+                .map(|row| row.fingerprint_sha256.clone()),
+            trusted_peers: trusted_peers
+                .iter()
+                .map(|row| CrossHostTrustedPeerDoctorRow {
+                    host_name: row.host_name.to_string(),
+                    fingerprint_sha256: row.fingerprint_sha256.clone(),
+                    display_name: row.display_name.clone(),
+                })
+                .collect(),
+        };
 
         let mut findings = Vec::new();
         if legacy_fallback_active {
@@ -1027,6 +1051,7 @@ impl DaemonRequestDispatcher {
                     empty: enabled_allowlist_count == 0,
                     hosts: allowlist_hosts,
                 },
+                security,
             },
             findings,
         ))
@@ -1161,6 +1186,7 @@ impl DaemonRequestDispatcher {
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_interface_config_store: runtime_assembly.peer_interface_config_store.clone(),
             allowed_host_store: runtime_assembly.allowed_host_store.clone(),
+            peer_security_store: runtime_assembly.peer_security_store.clone(),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
             peer_transport_runtime,

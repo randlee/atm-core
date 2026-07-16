@@ -136,6 +136,31 @@ CREATE TABLE IF NOT EXISTS daemon_allowed_hosts (
     note TEXT NULL
 );
 
+CREATE TABLE IF NOT EXISTS daemon_peer_security_settings (
+    singleton_key INTEGER PRIMARY KEY CHECK (singleton_key = 1),
+    mode TEXT NOT NULL CHECK (mode IN ('secure-required', 'insecure-allowed')),
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_local_peer_identity (
+    singleton_key INTEGER PRIMARY KEY CHECK (singleton_key = 1),
+    certificate_der BLOB NOT NULL,
+    private_key_der BLOB NOT NULL,
+    fingerprint_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_trusted_peers (
+    host_name TEXT PRIMARY KEY,
+    fingerprint_sha256 TEXT NOT NULL,
+    display_name TEXT NULL,
+    approved_by TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -167,6 +192,9 @@ CREATE INDEX IF NOT EXISTS idx_daemon_peer_interfaces_enabled
 
 CREATE INDEX IF NOT EXISTS idx_daemon_allowed_hosts_enabled
     ON daemon_allowed_hosts(enabled, host_name);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_trusted_peers_host_name
+    ON daemon_trusted_peers(host_name);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.

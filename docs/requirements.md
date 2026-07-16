@@ -3561,10 +3561,12 @@ mail correctness.
 
   Current-line note:
   - the documented target transport remains TCP/TLS
-  - the active `1.3.1` implementation line is still functionally plain TCP and
-    therefore does not satisfy transport-security closure
-  - any release verdict before `AG.10` must say that explicitly rather than
-    treating the requirement as waived
+  - the AG.10 implementation line now includes a TLS-backed secure mode plus
+    an explicit insecure-allowed fallback mode, but transport-security closure
+    remains incomplete until the secure real-host reruns (`AG-VAL-013`,
+    `AG-VAL-015`) are retained
+  - any release verdict before those secure host-pair reruns complete must say
+    that explicitly rather than treating the requirement as waived
 
   Required behavior:
   - native agent/plugin code talks only to the local daemon

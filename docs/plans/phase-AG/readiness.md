@@ -31,7 +31,7 @@ release line.
 | `AG.7` | `PENDING` | `34846433` | local daemon-to-daemon harness and functional code-path closure exist on the current line; real Windows/macOS or Windows/Mac-Studio host-pair execution remains open until the live hardware matrix is rerun |
 | `AG.8` | `PENDING` | `TBD` | planning/reconciliation sprint: documents the current plain-TCP security posture, records that AG.7 live evidence is still pending, and defines AG.10's secure transport direction |
 | `AG.9` | `PENDING` | `TBD` | copied-state revalidation and final release verdict not yet executed |
-| `AG.10` | `PENDING` | `TBD` | secured cross-host transport implementation not yet executed |
+| `AG.10` | `PENDING` | `working tree` | TLS-backed secure mode, trusted-peer approval, doctor visibility, secure loopback proof, and local untrusted-peer rejection are implemented on the AG.10 line; secure LAN/VPN reruns remain open before transport-security closure can be claimed |
 
 Allowed closure-result values:
 
@@ -73,6 +73,7 @@ Allowed closure-result values:
   Cross-host closure first required a real product control plane, then a local
   harness proving the daemon-to-daemon path on the current implementation line,
   and still requires AG.7 live host-pair reruns plus AG.10 transport-security
-  closure before any secure release claim is allowed. The active line remains
-  plain TCP today, so any interim release-usable statement must explicitly
-  exclude transport-security guarantees.`
+  closure before any secure release claim is allowed. The AG.10 development
+  line now carries secure transport locally, but any interim release-usable
+  statement must still exclude transport-security guarantees until the secure
+  LAN/VPN host-pair reruns are retained.`

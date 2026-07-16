@@ -8,6 +8,7 @@ use crate::observability::AtmObservabilityHealth;
 use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::{PeerSecurityMode, PeerSecuritySettingsRow};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -137,12 +138,47 @@ pub struct CrossHostAllowlistDoctorReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostTrustedPeerDoctorRow {
+    pub host_name: String,
+    pub fingerprint_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossHostSecurityDoctorReport {
+    pub mode: PeerSecurityMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<IsoTimestamp>,
+    pub local_identity_present: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_identity_fingerprint_sha256: Option<String>,
+    pub trusted_peers: Vec<CrossHostTrustedPeerDoctorRow>,
+}
+
+impl From<PeerSecuritySettingsRow> for CrossHostSecurityDoctorReport {
+    fn from(value: PeerSecuritySettingsRow) -> Self {
+        Self {
+            mode: value.mode,
+            updated_by: value.updated_by,
+            updated_at: value.updated_at,
+            local_identity_present: false,
+            local_identity_fingerprint_sha256: None,
+            trusted_peers: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CrossHostDoctorReport {
     pub legacy_fallback_active: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bound_endpoints: Vec<String>,
     pub interfaces: Vec<CrossHostInterfaceDoctorRow>,
     pub allowlist: CrossHostAllowlistDoctorReport,
+    pub security: CrossHostSecurityDoctorReport,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

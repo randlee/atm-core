@@ -242,6 +242,7 @@ impl RuntimeComposition {
         let peer_transport_runtime = build_peer_transport_runtime(
             runtime_assembly.remote_replay_store.clone(),
             runtime_assembly.allowed_host_store.clone(),
+            runtime_assembly.peer_security_store.clone(),
             peer_transport_config,
             observability.clone(),
             status_cache.clone(),
@@ -612,6 +613,7 @@ fn build_host_ownership_adapter(
 fn build_peer_transport_runtime(
     replay_store: Arc<dyn RemoteReplayStore>,
     allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    peer_security_store: Arc<dyn atm_storage::PeerSecurityStore + Send + Sync>,
     peer_transport_config: PeerTransportConfig,
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
@@ -619,6 +621,7 @@ fn build_peer_transport_runtime(
     PeerTransportRuntime::new_with_observability(
         Some(replay_store),
         Some(allowed_host_store),
+        Some(peer_security_store),
         peer_transport_config,
         SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
         status_cache,

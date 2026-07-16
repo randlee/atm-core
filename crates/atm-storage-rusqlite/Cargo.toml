@@ -21,6 +21,8 @@ serde_json.workspace = true
 serde.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 tracing.workspace = true
+rcgen = { version = "0.14", features = ["crypto"] }
+sha2 = "0.10"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 rusqlite = { version = "0.33.0", features = ["bundled"] }

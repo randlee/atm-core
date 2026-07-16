@@ -521,6 +521,126 @@ impl AllowHostCommand {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PeerSecurityMode {
+    SecureRequired,
+    InsecureAllowed,
+}
+
+impl PeerSecurityMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SecureRequired => "secure-required",
+            Self::InsecureAllowed => "insecure-allowed",
+        }
+    }
+}
+
+impl fmt::Display for PeerSecurityMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PeerSecurityMode {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "secure-required" => Ok(Self::SecureRequired),
+            "insecure-allowed" => Ok(Self::InsecureAllowed),
+            other => Err(AtmError::validation(format!(
+                "unsupported peer security mode `{other}`"
+            ))
+            .with_recovery(
+                "Use either secure-required or insecure-allowed before retrying the daemon security command.",
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerSecuritySettingsRow {
+    pub mode: PeerSecurityMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SetPeerSecurityModeCommand {
+    pub mode: PeerSecurityMode,
+    pub updated_by: String,
+}
+
+impl SetPeerSecurityModeCommand {
+    pub fn new(mode: PeerSecurityMode, updated_by: impl Into<String>) -> Result<Self, AtmError> {
+        let updated_by = require_non_blank(
+            updated_by.into(),
+            "peer security updated_by",
+            "Populate the caller identity before changing daemon peer security mode.",
+        )?;
+        Ok(Self { mode, updated_by })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalPeerIdentityRow {
+    pub certificate_der: Vec<u8>,
+    pub private_key_der: Vec<u8>,
+    pub fingerprint_sha256: String,
+    pub created_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedPeerRow {
+    pub host_name: AllowedHostName,
+    pub fingerprint_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub approved_by: String,
+    pub approved_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpsertTrustedPeerCommand {
+    pub host_name: AllowedHostName,
+    pub fingerprint_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub approved_by: String,
+}
+
+impl UpsertTrustedPeerCommand {
+    pub fn new(
+        host_name: impl Into<String>,
+        fingerprint_sha256: impl Into<String>,
+        display_name: Option<String>,
+        approved_by: impl Into<String>,
+    ) -> Result<Self, AtmError> {
+        let host_name = AllowedHostName::new(host_name.into())?;
+        let fingerprint_sha256 = normalize_sha256_fingerprint(fingerprint_sha256.into())?;
+        let approved_by = require_non_blank(
+            approved_by.into(),
+            "trusted peer approved_by",
+            "Populate the caller identity before approving daemon peer trust.",
+        )?;
+        Ok(Self {
+            host_name,
+            fingerprint_sha256,
+            display_name: display_name.and_then(|value| {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }),
+            approved_by,
+        })
+    }
+}
+
 fn normalize_allowed_host_name(raw: String) -> Result<String, AtmError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -571,6 +691,25 @@ fn normalize_allowed_host_name(raw: String) -> Result<String, AtmError> {
                 "Use one exact hostname composed of letters, digits, `-`, and `.` or a literal IP address before retrying the daemon host command.",
             ));
         }
+    }
+    Ok(normalized)
+}
+
+fn normalize_sha256_fingerprint(raw: String) -> Result<String, AtmError> {
+    let normalized = raw
+        .trim()
+        .chars()
+        .filter(|ch| *ch != ':')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if normalized.len() != 64 || !normalized.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(AtmError::validation(format!(
+            "peer fingerprint `{}` must be 64 hexadecimal characters",
+            raw.trim()
+        ))
+        .with_recovery(
+            "Use the SHA-256 fingerprint reported by `atm daemon security identity show` or `atm daemon security trust list` before retrying the trust command.",
+        ));
     }
     Ok(normalized)
 }
@@ -886,6 +1025,30 @@ pub trait AllowedHostStore: sealed::Sealed + Send + Sync {
     fn list_hosts(&self) -> Result<Vec<AllowedHostRow>, AtmError>;
 
     fn load_host(&self, host: &AllowedHostName) -> Result<Option<AllowedHostRow>, AtmError>;
+}
+
+pub trait PeerSecurityStore: sealed::Sealed + Send + Sync {
+    fn load_security_settings(&self) -> Result<PeerSecuritySettingsRow, AtmError>;
+
+    fn set_security_mode(
+        &self,
+        command: SetPeerSecurityModeCommand,
+    ) -> Result<PeerSecuritySettingsRow, AtmError>;
+
+    fn load_local_identity(&self) -> Result<Option<LocalPeerIdentityRow>, AtmError>;
+
+    fn load_or_create_local_identity(&self) -> Result<LocalPeerIdentityRow, AtmError>;
+
+    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeerRow>, AtmError>;
+
+    fn load_trusted_peer(&self, host: &AllowedHostName) -> Result<Option<TrustedPeerRow>, AtmError>;
+
+    fn upsert_trusted_peer(
+        &self,
+        command: UpsertTrustedPeerCommand,
+    ) -> Result<TrustedPeerRow, AtmError>;
+
+    fn remove_trusted_peer(&self, host: &AllowedHostName) -> Result<bool, AtmError>;
 }
 
 #[cfg(test)]
