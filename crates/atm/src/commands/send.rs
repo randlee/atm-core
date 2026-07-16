@@ -370,6 +370,38 @@ mod tests {
 
     #[test]
     #[serial(env)]
+    fn build_request_parses_inline_remote_target_with_dotted_host_and_records_host() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team.127.0.0.1".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            host: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("request");
+
+        assert_eq!(request.to.to_string(), "recipient-a@test-team");
+        assert_eq!(
+            request.remote_host.as_ref().map(RemoteTargetHost::as_str),
+            Some("127.0.0.1")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
     fn build_request_parses_explicit_remote_host_and_preserves_team_target() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),

@@ -165,7 +165,7 @@ fn parse_send_target_impl(
         });
     }
 
-    if let Some((raw_team, raw_host)) = raw_team_or_remote.rsplit_once('.') {
+    if let Some((raw_team, raw_host)) = raw_team_or_remote.split_once('.') {
         validate_send_target_segment(raw_team, "team")?;
         return Ok(ParsedSendTarget {
             to: format!("{raw_agent}@{raw_team}").parse()?,
