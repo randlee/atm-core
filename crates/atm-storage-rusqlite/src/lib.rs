@@ -1120,7 +1120,7 @@ mod tests {
             )
             .expect("add interface");
         assert_eq!(row.interface_name, "vpn0");
-        assert!(row.enabled);
+        assert!(!row.enabled);
 
         let updated = store
             .update_interface(
@@ -1148,6 +1148,19 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].bind_addr.to_string(), "10.0.0.6");
         assert!(!listed[0].enabled);
+
+        let enabled = store
+            .set_interface_enabled(
+                &atm_storage::PeerInterfaceKey::new(
+                    "vpn0",
+                    "10.0.0.6".parse().expect("bind addr"),
+                    43101,
+                )
+                .expect("key"),
+                true,
+            )
+            .expect("enable interface");
+        assert!(enabled.enabled);
     }
 
     #[test]

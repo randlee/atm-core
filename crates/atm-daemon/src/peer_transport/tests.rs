@@ -282,9 +282,9 @@ fn peer_listener_round_trips_one_doctor_request() {
 #[test]
 fn secure_peer_listener_round_trips_one_doctor_request() {
     let _guard = install_shared_lifecycle_reset_guard();
-    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-secure-roundtrip-{}.db", std::process::id())),
-    )
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(
+        format!("atm-ag10-secure-roundtrip-{}.db", std::process::id()),
+    ))
     .expect("backend");
     backend
         .allowed_host_store()
@@ -474,10 +474,12 @@ fn secure_peer_listener_rejects_untrusted_client_before_dispatch() {
 #[test]
 fn secure_client_does_not_silently_fallback_when_server_fingerprint_mismatches() {
     let _guard = install_shared_lifecycle_reset_guard();
-    let server_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-{}.db", std::process::id())),
-    )
-    .expect("server backend");
+    let server_backend =
+        atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(format!(
+            "atm-ag10-fingerprint-mismatch-{}.db",
+            std::process::id()
+        )))
+        .expect("server backend");
     server_backend
         .allowed_host_store()
         .allow_host(
@@ -511,10 +513,12 @@ fn secure_client_does_not_silently_fallback_when_server_fingerprint_mismatches()
         .bound_addr_for_test()
         .expect("bound peer listener addr");
 
-    let client_backend = atm_storage_rusqlite::SqliteStorageBackend::new(
-        std::env::temp_dir().join(format!("atm-ag10-fingerprint-mismatch-client-{}.db", std::process::id())),
-    )
-    .expect("client backend");
+    let client_backend =
+        atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(format!(
+            "atm-ag10-fingerprint-mismatch-client-{}.db",
+            std::process::id()
+        )))
+        .expect("client backend");
     let client_security_store = client_backend.peer_security_store();
     client_security_store
         .set_security_mode(

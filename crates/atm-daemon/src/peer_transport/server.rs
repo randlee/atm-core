@@ -54,7 +54,10 @@ impl std::fmt::Debug for PeerServerTransport {
             .field("authorization_policy", &"dyn PeerAuthorizationPolicy")
             .field(
                 "peer_security_store",
-                &self.peer_security_store.as_ref().map(|_| "dyn PeerSecurityStore"),
+                &self
+                    .peer_security_store
+                    .as_ref()
+                    .map(|_| "dyn PeerSecurityStore"),
             )
             .field("observability", &self.observability)
             .field("state", &self.state)

@@ -11,8 +11,8 @@ use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
-use atm_storage::{PeerSecurityMode, SetPeerSecurityModeCommand, UpsertTrustedPeerCommand};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
+use atm_storage::{PeerSecurityMode, SetPeerSecurityModeCommand, UpsertTrustedPeerCommand};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -49,10 +49,7 @@ fn add_member_via_retained_admin(
     .expect("add member");
 }
 
-fn configure_secure_loopback(
-    db_path: &std::path::Path,
-    host: &str,
-) {
+fn configure_secure_loopback(db_path: &std::path::Path, host: &str) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     assembly
         .allowed_host_store_arc()

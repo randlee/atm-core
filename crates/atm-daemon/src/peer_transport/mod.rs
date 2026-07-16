@@ -23,13 +23,13 @@ use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecur
 use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::{DaemonSubsystem, SubsystemObservability};
 
-mod server;
 mod security;
+mod server;
 #[cfg(test)]
 mod tests;
 
-use server::PeerServerTransport;
 use security::load_peer_security_mode;
+use server::PeerServerTransport;
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
@@ -260,7 +260,10 @@ impl std::fmt::Debug for PeerClientTransport {
             )
             .field(
                 "peer_security_store",
-                &self.peer_security_store.as_ref().map(|_| "dyn PeerSecurityStore"),
+                &self
+                    .peer_security_store
+                    .as_ref()
+                    .map(|_| "dyn PeerSecurityStore"),
             )
             .field("codec", &"JsonAtmProtocolCodec")
             .field("observability", &self.observability)
@@ -472,13 +475,12 @@ impl PeerClientTransport {
     ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
         let mut stream = self.connect_peer_stream(endpoint)?;
         self.apply_peer_io_deadlines(&stream)?;
-        match load_peer_security_mode(self.peer_security_store.as_ref())
-            .map_err(|error| {
-                Box::new(AttemptFailure {
-                    kind: AttemptFailureKind::NonRetryable,
-                    error,
-                })
-            })? {
+        match load_peer_security_mode(self.peer_security_store.as_ref()).map_err(|error| {
+            Box::new(AttemptFailure {
+                kind: AttemptFailureKind::NonRetryable,
+                error,
+            })
+        })? {
             PeerSecurityMode::SecureRequired => {
                 let store = self.peer_security_store.as_ref().ok_or_else(|| {
                     Box::new(AttemptFailure {
@@ -491,14 +493,13 @@ impl PeerClientTransport {
                         ),
                     })
                 })?;
-                let mut tls = security::open_client_tls_stream(stream, endpoint, store).map_err(
-                    |error| {
+                let mut tls =
+                    security::open_client_tls_stream(stream, endpoint, store).map_err(|error| {
                         Box::new(AttemptFailure {
                             kind: AttemptFailureKind::NonRetryable,
                             error,
                         })
-                    },
-                )?;
+                    })?;
                 self.publish_request_frame(&mut tls, request_frame)?;
                 match self.decode_response_frame(
                     request_frame.request_id,

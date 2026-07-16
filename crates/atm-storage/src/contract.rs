@@ -714,6 +714,18 @@ fn normalize_sha256_fingerprint(raw: String) -> Result<String, AtmError> {
     Ok(normalized)
 }
 
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+
+    let digest = sha2::Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
 impl TeamNudgeTemplateOverrideRow {
     pub fn template_body(&self) -> Option<&str> {
         match &self.mode {
@@ -1041,7 +1053,8 @@ pub trait PeerSecurityStore: sealed::Sealed + Send + Sync {
 
     fn list_trusted_peers(&self) -> Result<Vec<TrustedPeerRow>, AtmError>;
 
-    fn load_trusted_peer(&self, host: &AllowedHostName) -> Result<Option<TrustedPeerRow>, AtmError>;
+    fn load_trusted_peer(&self, host: &AllowedHostName)
+    -> Result<Option<TrustedPeerRow>, AtmError>;
 
     fn upsert_trusted_peer(
         &self,

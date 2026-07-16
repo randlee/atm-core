@@ -1190,6 +1190,14 @@ mod tests {
                 .expect("valid interface command"),
             )
             .expect("insert durable interface row");
+        runtime
+            .peer_interface_config_store
+            .set_interface_enabled(
+                &atm_storage::PeerInterfaceKey::new("lan0", IpAddr::V4(Ipv4Addr::LOCALHOST), 43123)
+                    .expect("peer interface key"),
+                true,
+            )
+            .expect("enable durable interface row");
 
         runtime
             .refresh_peer_listeners()

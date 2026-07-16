@@ -605,8 +605,9 @@ impl ShowSecurityCommand {
     fn run(self) -> Result<()> {
         let outcome = with_default_peer_security_store(|store| {
             let settings = store.load_security_settings()?;
-            let local_identity_fingerprint_sha256 =
-                store.load_local_identity()?.map(|row| row.fingerprint_sha256);
+            let local_identity_fingerprint_sha256 = store
+                .load_local_identity()?
+                .map(|row| row.fingerprint_sha256);
             let trusted_peers = store.list_trusted_peers()?;
             Ok(PeerSecurityShowOutcome {
                 settings,

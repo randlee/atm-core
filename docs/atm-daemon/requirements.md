@@ -147,6 +147,10 @@ Initial crate requirement IDs:
     transport path
   - no release wording may imply the daemon already satisfies the TLS portion
     of this requirement before AG.10 passes
+  - the AG.10 secure transport trust model is self-signed peer identity plus
+    explicit SHA-256 fingerprint pinning, not PKI chain validation
+  - the TLS handshake must never silently downgrade to insecure transport on
+    verification failure; insecure transport remains an explicit operator mode
   - one cross-platform local IPC contract for same-host
     - Unix implementation: Unix domain socket
     - Windows implementation: named-pipe-backed local IPC
@@ -165,6 +169,8 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-002A`.
   Required daemon behavior:
   - apply every enabled interface row independently
+  - newly inserted durable interface rows must start disabled until the
+    operator enables them explicitly
   - persist per-row bind success/failure state
   - keep degraded/stale rows queryable through the CLI instead of deleting
     them during reload

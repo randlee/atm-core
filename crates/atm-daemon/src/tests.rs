@@ -946,6 +946,17 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
         )
         .expect("store interface");
     interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "vpn0",
+                "10.10.100.10".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
+    interface_store
         .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
             key: atm_storage::PeerInterfaceKey::new(
                 "vpn0",
@@ -1117,6 +1128,17 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
             .expect("add interface"),
         )
         .expect("store interface");
+    interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "en0",
+                "192.168.1.20".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
     interface_store
         .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
             key: atm_storage::PeerInterfaceKey::new(
