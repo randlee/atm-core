@@ -2,9 +2,9 @@
 id: AG.6
 title: Doctor Visibility For The Cross-Host Control Plane
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-target: develop
+branch: feature/pAG-s6-doctor-visibility
+worktree: ../atm-core-worktrees/feature/pAG-s6-doctor-visibility
+target: integrate/phase-AG
 ---
 
 # Sprint AG.6 — Doctor Visibility For The Cross-Host Control Plane
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.6
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s6-doctor-visibility
+branch: feature/pAG-s6-doctor-visibility
 status: planned
 estimated_scope: medium
 ```
@@ -112,7 +112,8 @@ Illustrative output shape:
 ## Smoke-Test Plan
 
 - local preflight smoke:
-  - loopback mode still works after AG.4 / AG.5
+  - `localhost` and self-IP same-host remote-target delivery still work after
+    AG.4 / AG.5
 - copied-state and real host-pair validation remain explicitly deferred to
   later sprints
 

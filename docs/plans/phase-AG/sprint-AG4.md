@@ -2,9 +2,9 @@
 id: AG.4
 title: Durable Interface Configuration And Binding
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-target: develop
+branch: feature/pAG-s4-durable-interface-config
+worktree: ../atm-core-worktrees/feature/pAG-s4-durable-interface-config
+target: integrate/phase-AG
 ---
 
 # Sprint AG.4 — Durable Interface Configuration And Binding
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.4
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s4-durable-interface-config
+branch: feature/pAG-s4-durable-interface-config
 status: planned
 estimated_scope: medium
 ```

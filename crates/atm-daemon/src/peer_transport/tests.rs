@@ -590,7 +590,7 @@ fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                &test_sender_identity(),
+                test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -647,7 +647,7 @@ fn peer_listener_rejects_disabled_host_before_dispatch() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -730,7 +730,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                &test_sender_identity(),
+                test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -911,7 +911,7 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                &test_sender_identity(),
+                test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -1040,7 +1040,7 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                &test_sender_identity(),
+                test_sender_identity(),
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),

@@ -2,9 +2,9 @@
 id: AG.7
 title: Live Cross-Host Revalidation
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-target: develop
+branch: feature/pAG-s7-live-revalidation
+worktree: ../atm-core-worktrees/feature/pAG-s7-live-revalidation
+target: integrate/phase-AG
 ---
 
 # Sprint AG.7 — Peer-Listener Harness Revalidation
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.7
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s7-live-revalidation
+branch: feature/pAG-s7-live-revalidation
 status: planned
 estimated_scope: medium
 ```

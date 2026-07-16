@@ -2,9 +2,9 @@
 id: AG.9
 title: Copied-State Revalidation And Release Verdict
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-target: develop
+branch: feature/pAG-s9-release-verdict
+worktree: ../atm-core-worktrees/feature/pAG-s9-release-verdict
+target: integrate/phase-AG
 ---
 
 # Sprint AG.9 — Copied-State Revalidation And Release Verdict
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.9
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s9-release-verdict
+branch: feature/pAG-s9-release-verdict
 status: planned
 estimated_scope: medium
 ```

@@ -189,8 +189,6 @@ Initial crate requirement IDs:
     loopback-bypass-sensitive handlers
 - `REQ-DAEMON-TRANSPORT-002E` `atm-daemon` owns projecting the retained
   cross-host control-plane state into the doctor-visible `cross_host` report.
-  Satisfies:
-  `REQ-CORE-TRANSPORT-002E`.
   Required daemon behavior:
   - compute `legacy_fallback_active` from the actual runtime bind state rather
     than configuration intent alone
@@ -204,8 +202,7 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-002C`.
 - `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns a controlled local
   daemon-to-daemon integration harness on the real peer-listener request path
-  before live AG.7 host-pair rows are marked complete. Satisfies:
-  `REQ-CORE-TRANSPORT-002D`.
+  before live AG.7 host-pair rows are marked complete.
   Required daemon behavior:
   - exercise unauthorized-host rejection before mailbox mutation
   - exercise authorized send, receiver read, and `--requires-ack` reply-state
@@ -546,8 +543,6 @@ Required runtime rules:
   - configured values may raise the documented defaults, but they must not
     drop below the daemon timeout floor of `250ms`; same-host request and
     daemon-health deadlines must not drop below `1s`
-  - `daemon.remote_retry_budget` is configurable only in the inclusive range
-    `1s..=300s`; out-of-range values are startup-fatal and reload-fatal
 - runtime queues and handles must obey one documented concrete cap policy
 - resource-cap matrix:
   - max concurrent accepted connections: `64`

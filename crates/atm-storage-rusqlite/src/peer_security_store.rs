@@ -135,7 +135,7 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
             certificate_der,
             private_key_der,
             fingerprint_sha256,
-            now.clone(),
+            now,
             now,
         )?;
         self.db.with_transaction(|transaction| {

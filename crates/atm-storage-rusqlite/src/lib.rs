@@ -1114,7 +1114,7 @@ mod tests {
                     "10.0.0.5".parse().expect("advertise addr"),
                     43101,
                     atm_storage::PeerInterfaceKind::Vpn,
-                    &test_sender_identity(),
+                    test_sender_identity(),
                 )
                 .expect("add command"),
             )
@@ -1135,7 +1135,7 @@ mod tests {
                     "10.0.0.6".parse().expect("advertise"),
                     43101,
                     atm_storage::PeerInterfaceKind::Vpn,
-                    &test_sender_identity(),
+                    test_sender_identity(),
                     Some(false),
                 )
                 .expect("update command"),
@@ -1171,7 +1171,7 @@ mod tests {
             .allow_host(
                 atm_storage::AllowHostCommand::new(
                     "10.10.100.98",
-                    &test_sender_identity(),
+                    test_sender_identity(),
                     Some("windows host".to_string()),
                 )
                 .expect("allow command"),
@@ -1192,7 +1192,7 @@ mod tests {
 
         let reenabled = store
             .allow_host(
-                atm_storage::AllowHostCommand::new("10.10.100.98", &test_sender_identity(), None)
+                atm_storage::AllowHostCommand::new("10.10.100.98", test_sender_identity(), None)
                     .expect("re-enable command"),
             )
             .expect("re-enable host");

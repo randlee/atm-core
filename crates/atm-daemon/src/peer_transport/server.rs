@@ -116,8 +116,7 @@ impl PeerServerTransport {
                     .with_recovery("Restart atm-daemon before retrying cross-host peer shutdown.")
             })?;
             std::mem::take(&mut *state)
-                .into_iter()
-                .map(|(_, handle)| handle)
+                .into_values()
                 .collect::<Vec<_>>()
         };
         for handle in drained {
@@ -224,7 +223,7 @@ impl PeerServerTransport {
         Ok(outcomes)
     }
 
-    pub(super) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
+    fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
         self.state
             .lock()
             .map(|state| state.values().next().map(|handle| handle.bound_addr))
@@ -404,6 +403,10 @@ fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {
     }
 }
 
+pub(super) fn bound_addr(server: &PeerServerTransport) -> Result<Option<SocketAddr>, AtmError> {
+    server.bound_addr()
+}
+
 fn serve_peer_listener(
     listener: TcpListener,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -440,6 +443,10 @@ fn serve_peer_listener(
     })
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "peer listener workers need the full transport context without hiding it in ad hoc global state"
+)]
 fn spawn_peer_connection_worker<'scope, 'env>(
     scope: &'scope thread::Scope<'scope, 'env>,
     stream: TcpStream,
@@ -525,6 +532,10 @@ fn report_peer_connection_result(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the connection handler receives the full decoded peer transport context explicitly"
+)]
 fn handle_peer_connection(
     mut stream: TcpStream,
     peer_addr: SocketAddr,
@@ -644,6 +655,10 @@ fn prepare_peer_connection_stream(stream: &TcpStream) -> Result<(), AtmError> {
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "authorization, dispatch, and bounded writeback state are passed explicitly for one peer request"
+)]
 fn handle_authorized_or_rejected_request(
     stream: &mut (impl Read + Write),
     peer_addr: SocketAddr,
