@@ -2686,6 +2686,8 @@ There are three distinct paths:
    - sender-side daemons do not write remote host mailbox JSON directly
    - successful remote delivery requires remote daemon acceptance
    - Phase AG adds a durable cross-host control plane in front of this path:
+     - one durable peer-interface-config surface is the persistent record of
+       which cross-host listener rows the daemon may bind and advertise
      - SQLite-backed interface/bind configuration
      - SQLite-backed exact-host allowlist enforcement against the remote socket
        host token (currently the peer IP literal)
@@ -2697,10 +2699,20 @@ There are three distinct paths:
        - `allowlist`
      - per-interface bind result persistence so one bad row does not hide the
        healthy rows
+     - each configured interface row carries enough lifecycle state for
+       diagnosis across daemon restarts, including whether the row is enabled,
+       when it was last observed, whether it has gone stale, and the last
+       successful bind or bind failure
      - the currently shipped AG transition still permits legacy listener
-       fallback when no enabled durable interface rows exist; doctor must
-       surface that fallback explicitly rather than pretending durable rows are
-       already the sole source of truth
+       fallback when no enabled durable interface rows exist; that in-memory /
+       ephemeral path is deprecated and may survive only as a historical
+       compatibility fallback while no durable rows exist
+     - doctor must surface legacy fallback explicitly rather than pretending
+       durable rows are already the sole source of truth
+     - the durable peer-interface-config concept exists so cross-host listener
+       configuration survives daemon restart and can be inspected, changed, and
+       diagnosed through one persistent operator-visible surface rather than ad
+       hoc per-process startup state
    - loopback self-test remains a local diagnostic variant of the daemon
      listener/send path and is not equivalent to remote host-pair proof
 
