@@ -63,8 +63,9 @@
   triage:openOn <urn:atm:triage:worktree/4/7221d01b> ;
   triage:openOn <urn:atm:triage:worktree/5/c59dd323> ;
   triage:openOn <urn:atm:triage:worktree/6/5bfd7eae> ;
-  triage:promoteTo <urn:atm:triage:worktree/4/7221d01b> ;
-  triage:highestOpenBranch "feature/pAG-s7-live-revalidation" .
+  triage:promoteTo <urn:atm:triage:worktree/6/5bfd7eae> ;
+  triage:highestOpenBranch "feature/pAG-s10-secured-transport" ;
+  triage:reconciliationNote "Corrected by team-lead post-triage: this finding's own occurrence/openOn evidence shows the pattern open through worktree/6 (feature/pAG-s10-secured-transport, headSha 5bfd7eae), inconsistent with the originally-reported promoteTo of worktree/4 (feature/pAG-s7-live-revalidation). Reconciled to s10 for consistency with sibling findings AG7-ARCH-002, AG7-ATM-QA-102, AG7-ATM-QA-103, AG7-ATM-QA-104, which independently derived s10 as highest_open_branch from the same occurrence pattern." .
 
 <urn:atm:triage:occurrence/AG7-ARCH-001/1/1>
   a triage:Occurrence ;
