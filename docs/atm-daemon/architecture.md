@@ -225,6 +225,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   currently shipped AG transition still permits legacy listener fallback when
   no enabled durable rows exist; doctor/runtime projection must surface that
   state explicitly so operators can distinguish migrated vs fallback binds.
+- before AG.7 live LAN/VPN closure, the daemon keeps a controlled local
+  daemon-to-daemon harness on the same peer-listener request path so CI can
+  validate unauthorized-host rejection, authorized send/read/ack, degraded
+  warning classification, and bounded retry semantics without misreporting that
+  local proof as live-network success.
 - inbound peer authorization is a fail-closed gate in the peer listener path:
   the daemon normalizes the remote socket host token once to lowercase,
   compares it exactly against durable allowed-host rows, and rejects before

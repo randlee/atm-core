@@ -178,6 +178,18 @@ Initial crate requirement IDs:
   a local diagnostic surface only and must not let loopback success imply
   remote host-pair authorization. Satisfies:
   `REQ-CORE-TRANSPORT-002C`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns a controlled local
+  daemon-to-daemon integration harness on the real peer-listener request path
+  before live AG.7 host-pair rows are marked complete. Satisfies:
+  `REQ-CORE-TRANSPORT-002D`.
+  Required daemon behavior:
+  - exercise unauthorized-host rejection before mailbox mutation
+  - exercise authorized send, receiver read, and `--requires-ack` reply-state
+    mutation over the peer listener
+  - exercise degraded post-send warning surfacing without downgrading durable
+    send success
+  - exercise bounded retry / outcome-unknown behavior separately from live
+    hardware execution
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
   policy for transport, store busy timeout, ingest batch, retry, and doctor
   query operations. Satisfies:

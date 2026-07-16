@@ -2697,6 +2697,11 @@ There are three distinct paths:
        fallback when no enabled durable interface rows exist; doctor must
        surface that fallback explicitly rather than pretending durable rows are
        already the sole source of truth
+   - before the real LAN/VPN host-pair rows are re-run, AG.7 keeps a local
+     daemon-to-daemon harness on the same peer-listener request path so
+     unauthorized-host rejection, authorized send/read/ack, degraded
+     notification classification, and bounded retry semantics can be validated
+     in CI without claiming live-network closure
    - loopback self-test remains a local diagnostic variant of the daemon
      listener/send path and is not equivalent to remote host-pair proof
 

@@ -27,8 +27,8 @@ release line.
 | `AG.3` | `PASS` | `85a7d4df` | loopback self-test surface landed and is retained as a supported local diagnostic mode; it is not remote host-pair proof |
 | `AG.4` | `PENDING` | `TBD` | durable interface-selection/bind control plane not yet implemented |
 | `AG.5` | `PENDING` | `TBD` | durable inbound host-allowlist control plane not yet implemented |
-| `AG.6` | `PENDING` | `TBD` | `atm doctor` visibility for the cross-host control plane not yet executed |
-| `AG.7` | `PENDING` | `TBD` | renewed live host-pair validation on the real product surface not yet executed |
+| `AG.6` | `PASS` | `48c85b8d` | `atm doctor` now projects interface/bind state, allowlist state, staleness, bind failures, and legacy-fallback visibility for the shipped AG.4/AG.5 model |
+| `AG.7` | `PENDING` | `TBD` | local daemon-to-daemon harness is required before the real LAN/VPN reruns; live host-pair execution remains open until the hardware matrix is re-run |
 | `AG.8` | `PENDING` | `TBD` | transport-security / encryption hardening not yet executed |
 | `AG.9` | `PENDING` | `TBD` | copied-state revalidation and final release verdict not yet executed |
 | `AG.10` | `PENDING` | `TBD` | secured cross-host transport implementation not yet executed |

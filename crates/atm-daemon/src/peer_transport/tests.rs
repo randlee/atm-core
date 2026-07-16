@@ -5,19 +5,28 @@ use super::{
     remote_replay_store_not_configured_error,
 };
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::test_support::DoctorOnlyDispatcher;
 use crate::test_support::LifecycleFlagResetGuard;
 use crate::{DaemonSubsystem, SubsystemObservability};
-use atm_core::boundary::{AtmProtocol, ClientTransport, MessageKey, RequestDispatcher};
+use atm_core::ack::AckRequest;
+use atm_core::boundary::{
+    AtmProtocol, ClientTransport, MessageKey, ReplaySource, RequestDispatcher, RosterHarness,
+};
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmErrorCode;
 use atm_core::protocol::{
     HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-    RuntimeMemberState, RuntimeReadinessState, TeamMemberHeartbeatRequest,
-    TeamMemberHeartbeatResponse,
+    RuntimeMemberState, RuntimeReadinessState, SendRequestEnvelope, SendResponseEnvelope,
+    TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
+use atm_core::read::ReadQuery;
+use atm_core::schema::AgentMember;
+use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_runtime_test_support::{install_sqlite_retained_runtime_factory, open_sqlite_boundary};
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
@@ -39,6 +48,67 @@ fn test_recipient_name() -> AgentName {
     atm_core::test_support::TEST_RECIPIENT
         .parse()
         .expect("member")
+}
+
+fn install_retained_runtime_factory() {
+    install_sqlite_retained_runtime_factory();
+}
+
+fn write_workspace_config(workspace_dir: &std::path::Path) {
+    std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
+}
+
+fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
+    let team_dir = home_dir
+        .join(".claude")
+        .join("teams")
+        .join(atm_core::test_support::TEST_TEAM);
+    std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+    let config = atm_core::schema::TeamConfig {
+        members: members
+            .iter()
+            .map(|name| AgentMember::with_name((*name).parse().expect("member")))
+            .collect(),
+        ..Default::default()
+    };
+    std::fs::write(
+        team_dir.join("config.json"),
+        serde_json::to_vec(&config).expect("team config"),
+    )
+    .expect("write team config");
+}
+
+fn replay_source_static(label: &'static str) -> ReplaySource {
+    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
+fn install_test_roster_with_harness(
+    db_path: &std::path::Path,
+    members: &[(&str, RosterHarness, &std::path::Path)],
+) {
+    let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
+    let roster_store = assembly.roster_store_arc();
+    let team = test_team_name();
+    let members = members
+        .iter()
+        .map(|(name, harness, home_dir)| {
+            let mut member = AgentMember::with_name((*name).parse().expect("member"));
+            member.home_dir = (*home_dir).to_path_buf().into();
+            let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
+                team.clone(),
+                member,
+            );
+            record.harness = *harness;
+            record
+        })
+        .collect::<Vec<_>>();
+    roster_store
+        .replace_roster(
+            &team,
+            &members,
+            Some(&replay_source_static("peer-transport-ag7-test")),
+        )
+        .expect("replace roster");
 }
 
 fn read_request_frame(
@@ -256,6 +326,283 @@ fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
         .expect("authorized host should round-trip");
     assert!(matches!(response, ResponseEnvelope::Doctor(_)));
     assert_eq!(dispatcher.count.load(Ordering::SeqCst), 1);
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_listener_authorized_send_read_and_ack_round_trip_for_mailbox_requests() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    write_workspace_config(&workspace_dir);
+    install_test_roster_with_harness(
+        &db_path,
+        &[
+            (
+                ROLE_TEAM_LEAD,
+                RosterHarness::ClaudeCode,
+                workspace_dir.as_path(),
+            ),
+            ("qa-a", RosterHarness::ClaudeCode, workspace_dir.as_path()),
+        ],
+    );
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                "arch-ctm@atm-dev",
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let status_cache = RuntimeStatusCache::new();
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        status_cache.clone(),
+        assembly.allowed_host_store_arc(),
+    );
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test_with_peer_transport(
+        atm_home.clone(),
+        status_cache,
+        db_path.clone(),
+        listener_transport.clone(),
+    ));
+    listener_transport
+        .start(dispatcher)
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let send_response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                test_team_name(),
+                SendMessageSource::Inline("peer-listener hello".to_string()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("send request"),
+        )))
+        .expect("authorized send should succeed");
+    match send_response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+            assert_eq!(outcome.outcome.as_str(), "sent");
+            assert!(outcome.requires_ack);
+        }
+        other => panic!("unexpected send response: {other:?}"),
+    }
+
+    let read_response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Receive(
+            ReadQuery::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                "qa-a".parse().expect("caller"),
+                None,
+                test_team_name(),
+                atm_core::types::ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query"),
+        ))
+        .expect("authorized read should succeed");
+    let source_message_id = match read_response {
+        ResponseEnvelope::Receive(outcome) => {
+            let message = outcome.message.expect("message");
+            assert_eq!(message.envelope.text, "peer-listener hello");
+            message.envelope.message_id.expect("message id")
+        }
+        other => panic!("unexpected read response: {other:?}"),
+    };
+
+    let ack_response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+            AckRequest {
+                home_dir: atm_home.clone(),
+                current_dir: workspace_dir.clone(),
+                caller_identity: "qa-a".parse().expect("caller"),
+                caller_team: test_team_name(),
+                message_id: source_message_id,
+                reply_body: "ack over peer listener".to_string(),
+            },
+        )))
+        .expect("authorized ack should succeed");
+    match ack_response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+            assert!(matches!(
+                outcome.reply_disposition,
+                atm_core::ack::AckReplyDisposition::Sent { .. }
+            ));
+            assert!(outcome.warnings.is_empty());
+        }
+        other => panic!("unexpected ack response: {other:?}"),
+    }
+
+    let sender_read_response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Receive(
+            ReadQuery::new(
+                atm_home.clone(),
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                None,
+                test_team_name(),
+                atm_core::types::ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query"),
+        ))
+        .expect("sender read should succeed");
+    match sender_read_response {
+        ResponseEnvelope::Receive(outcome) => {
+            let message = outcome.message.expect("ack reply message");
+            assert_eq!(message.envelope.text, "ack over peer listener");
+            assert_eq!(
+                message.envelope.acknowledges_message_id,
+                Some(source_message_id)
+            );
+        }
+        other => panic!("unexpected sender read response: {other:?}"),
+    }
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_listener_preserves_sent_outcome_when_post_send_degrades() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    install_test_roster_with_harness(
+        &db_path,
+        &[
+            (
+                ROLE_TEAM_LEAD,
+                RosterHarness::ClaudeCode,
+                workspace_dir.as_path(),
+            ),
+            ("qa-a", RosterHarness::CodexCli, workspace_dir.as_path()),
+        ],
+    );
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                "arch-ctm@atm-dev",
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        RuntimeStatusCache::new(),
+        assembly.allowed_host_store_arc(),
+    );
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path,
+    ));
+    listener_transport
+        .start(dispatcher)
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                test_team_name(),
+                SendMessageSource::Inline("hello degraded nudge".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
+        )))
+        .expect("send should still succeed");
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+            assert_eq!(outcome.outcome.as_str(), "sent");
+            assert_eq!(outcome.warnings.len(), 1);
+            assert_eq!(
+                outcome.warnings[0].code,
+                Some(AtmErrorCode::PostSendGraftUnavailable)
+            );
+            assert!(outcome.warnings[0].recovery.is_some());
+        }
+        other => panic!("unexpected response: {other:?}"),
+    }
 
     listener_transport
         .shutdown()

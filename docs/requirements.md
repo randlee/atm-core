@@ -3608,6 +3608,23 @@ mail correctness.
   - successful loopback rows do not by themselves authorize remote cross-host
     release claims
 
+- `REQ-CORE-TRANSPORT-002D` Before live LAN/VPN host-pair execution is marked
+  complete, ATM must keep a controlled local daemon-to-daemon integration
+  harness that exercises the real peer-listener request path for the AG.7
+  release rows.
+
+  Required behavior:
+  - the local harness must prove unauthorized host rejection before mailbox
+    mutation
+  - the local harness must prove authorized send, receiver read, and
+    `--requires-ack` reply-state mutation over the peer listener
+  - the local harness must prove notification degradation remains a warning on
+    top of durable send success rather than collapsing success into failure
+  - the local harness must prove bounded retry / outcome-unknown behavior on
+    the peer transport before live host-pair reruns are attempted
+  - passing local harness results are scaffolding only and must not be recorded
+    as completion of the live AG-VAL-003A / AG-VAL-003..009 rows
+
 - `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
   pending messages behind when a host is unreachable.
 
