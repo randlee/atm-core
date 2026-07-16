@@ -53,7 +53,7 @@ pub fn with_default_nudge_template_override_store<T>(
 /// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
 /// assemble its canonical daemon peer-interface store.
 pub fn with_default_peer_interface_config_store<T>(
-    f: impl FnOnce(&(dyn atm_storage::PeerInterfaceConfigStore + Send + Sync)) -> Result<T, AtmError>,
+    f: impl FnOnce(&(dyn atm_runtime::PeerInterfaceConfigStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     atm_runtime::with_default_peer_interface_config_store(f)
 }
@@ -66,7 +66,7 @@ pub fn with_default_peer_interface_config_store<T>(
 /// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
 /// assemble its canonical daemon allowed-host store.
 pub fn with_default_allowed_host_store<T>(
-    f: impl FnOnce(&(dyn atm_storage::AllowedHostStore + Send + Sync)) -> Result<T, AtmError>,
+    f: impl FnOnce(&(dyn atm_runtime::AllowedHostStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     atm_runtime::with_default_allowed_host_store(f)
 }

@@ -1160,14 +1160,14 @@ mod tests {
         assert!(!denied.enabled);
         assert!(denied.disabled_at.is_some());
 
-        let reenabled = store
+        let re_enabled = store
             .allow_host(
                 atm_storage::AllowHostCommand::new("10.10.100.98", "arch-ctm@atm-dev", None)
                     .expect("re-enable command"),
             )
             .expect("re-enable host");
-        assert!(reenabled.enabled);
-        assert!(reenabled.disabled_at.is_none());
+        assert!(re_enabled.enabled);
+        assert!(re_enabled.disabled_at.is_none());
 
         let listed = store.list_hosts().expect("list hosts");
         assert_eq!(listed.len(), 1);
