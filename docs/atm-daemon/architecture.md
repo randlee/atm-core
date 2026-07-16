@@ -243,7 +243,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - if the request body has been fully written but remote acceptance has not been
   confirmed when the connection drops, the runtime returns one typed
   `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-  hands recovery to bounded replay/re-export rather than guessing success
+  hands recovery to the bounded deferred-delivery retry window rather than
+  guessing success
 - outbound peer attempts resolve and dial per attempt so ordinary interface
   changes on the sender host do not require daemon restart
 - inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
@@ -746,21 +747,17 @@ Required timeout defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
-- peer-transport retry-budget config is resolved once through daemon
-  `ConfigIngress` during runtime composition; invalid config is a startup
-  error, not a silent fallback to the default budget
+- remote synchronous wait deadline: `10s`
+- deferred background retry window: `60s..120s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 - lifecycle wake-worker join during runtime teardown: `1s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max
-- configurable timeout or retry-budget overrides may raise these defaults, but
+- configurable timeout overrides may raise these defaults, but
   they must not violate the floor contract:
   - global minimum timeout floor: `250ms`
   - same-host request and daemon-health minimum floor: `1s`
-  - `daemon.remote_retry_budget` accepted range: `1s..=300s`
 
 Shutdown sub-deadline rationale:
 - these per-component bounds sit under the existing daemon shutdown ceilings so
