@@ -354,8 +354,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
-        peer_loopback_host: None,
-        peer_loopback_delivery: false,
+        remote_host: None,
         dry_run: false,
     }
 }
