@@ -180,8 +180,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
-  - TCP/TLS
+  - TCP/TLS as the cross-host target contract
   - in-process `LoopbackClientTransport` (`test-socket`)
+- the active `1.3.1` implementation line still uses plain TCP for the cross-host
+  path; ADR-030 and AG.10 define the closure path from today's functional
+  transport to the required secured transport
 - same-host local IPC and cross-host daemon transport must use one shared ATM
   frame header and request/response packet family rather than separate local
   and remote message systems, as defined by `protocol-icd.md`

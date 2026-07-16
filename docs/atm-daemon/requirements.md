@@ -140,6 +140,13 @@ Initial crate requirement IDs:
     than preserved as the active closure of this rule
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
+
+  Current-line note:
+  - the cross-host requirement is still TCP/TLS as the target contract
+  - the active `1.3.1` line remains plain TCP until AG.10 lands the secured
+    transport path
+  - no release wording may imply the daemon already satisfies the TLS portion
+    of this requirement before AG.10 passes
   - one cross-platform local IPC contract for same-host
     - Unix implementation: Unix domain socket
     - Windows implementation: named-pipe-backed local IPC

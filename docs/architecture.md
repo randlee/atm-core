@@ -2780,6 +2780,8 @@ Test-transport rule:
 
 Remote-delivery semantics:
 - bounded transient retry is acceptable for short intermittent failures
+- the architecture target for cross-host transport remains TCP/TLS, but the
+  active `1.3.1` implementation line is still plain TCP until AG.10 lands
 - transport-security closure is sequenced after functional control-plane
   closure under ADR-030; functional cross-host readiness must not implicitly
   claim TLS/security closure before that ADR's phase work lands

@@ -498,33 +498,40 @@ Entry gate:
 - AG.4 and AG.5 are complete
 - AG.6 doctor visibility is complete
 
-### AG.8 Transport Security And Encryption Hardening
+### AG.8 Transport Security And Release-Language Reconciliation
 
 Primary objective:
 
-- reconcile and plan the late transport-security gap after functional
-  cross-host behavior is real
+- reconcile the documented transport-security contract with the actual current
+  plain-TCP implementation line without claiming secure transport is already
+  shipped
 
 Outputs:
 
-- requirements/architecture reconciliation for transport security
-- implementation plan for encryption / peer-auth hardening
-- explicit release-language boundaries while this remains open
+- requirements/architecture/readiness reconciliation for transport security
+- explicit statement of what earlier AG closure does and does not authorize
+- concrete AG.10 implementation scope for certificate, trust, handshake,
+  doctor, and smoke/test work
+- explicit record that AG.7 live host-pair validation is still pending
 
 Entry gate:
 
-- functional host-pair validation is already credible on the AG.4 / AG.5
-  surfaces
+- the AG.4/AG.5/AG.6/AG.7 functional code paths and local harness exist on the
+  current line
+- AG.7 live hardware rows may still be pending, but AG.8 must say so plainly
 
 ### AG.10 Secured Cross-Host Transport Implementation
 
 Primary objective:
 
-- implement the actual secured daemon-to-daemon transport defined by AG.8
+- implement the secured daemon-to-daemon transport defined concretely by AG.8
 
 Outputs:
 
-- secured transport implementation
+- TLS-backed daemon-to-daemon transport
+- on-demand local self-signed daemon certificate generation and durable storage
+- explicit peer trust approval / persistence path
+- explicit insecure-mode support with doctor/runtime visibility
 - secure loopback validation support
 - secure LAN/routed validation support
 
