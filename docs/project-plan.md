@@ -91,8 +91,9 @@ Phase-AG planning note:
   - retained loopback self-test support as a supported diagnostic mode
 - only after that product work lands does AG return to live Windows/macOS
   host-pair validation and copied-state release proof
-- the current AG corrective planning branch for the remote-target routing and
-  revalidation line is `docs/cross-host-remote-target-contract`
+- the AG corrective routing/revalidation plan is now merged into `develop`, and
+  execution proceeds on separate per-sprint worktrees beginning with
+  `feature/pAG-s11-remote-target-contract`
 - transport security / encryption remains a later AG sprint concern and must
   not be implied by earlier functional cross-host closure
 
@@ -691,16 +692,20 @@ Status summary:
 Planning branch:
 - historical early execution: `feature/cross-host-communication`
 - earlier corrective replan: `plan/phase-ag-multihost-advertise-allowlist`
-- current corrective routing/revalidation planning branch:
-  `docs/cross-host-remote-target-contract`
+- current corrective routing/revalidation plan source: `develop`
 
 Branch-routing note:
 - PR #542 (`feature/cross-host-communication` -> `develop`) is retained as the
   historical early-AG planning/execution record
 - PR #555 (`plan/phase-ag-multihost-advertise-allowlist` -> `develop`) is the
   earlier corrective AG replanning line
-- `docs/cross-host-remote-target-contract` is the current AG planning line for
-  AG.11 through AG.17 plan hardening
+- the hardened AG.11 through AG.15 execution line now uses separate sprint
+  branches/worktrees:
+  `feature/pAG-s11-remote-target-contract`,
+  `feature/pAG-s12-localhost-proof`,
+  `feature/pAG-s13-selfip-proof`,
+  `feature/pAG-s14-integration-coverage`, and
+  `feature/pAG-s15-othermac-smoke`
 - if AG later opens product-code fixes from concrete findings, those follow-up
   branches must declare their own normal integration path explicitly
 

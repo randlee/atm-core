@@ -2,8 +2,8 @@
 id: AG.14
 title: Automated Integration Coverage For The Corrective Path
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: feature/pAG-s14-integration-coverage
+worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.14
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
+branch: feature/pAG-s14-integration-coverage
 status: planned
 estimated_scope: medium
 ```
