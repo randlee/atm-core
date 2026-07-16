@@ -1,0 +1,189 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG-FIND-FILESIZE-RUNTIMEHEALTH>
+  a triage:Finding ;
+  triage:findingId "AG-FIND-FILESIZE-RUNTIMEHEALTH" ;
+  triage:title "runtime_health.rs exceeds file-size ceiling, growing across AG sprints" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs has grown past the 1000-line non-test code ceiling across successive AG sprints. Followup sweep confirms violation persists on all active branches (s4-s10) with increasing overage. Highest overage: pAG-s10/s9 at 373 non-test lines over ceiling. Even integrate/phase-AG exceeds ceiling at 1139 non-test lines." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/integrate-ag/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s4/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-ag/6e5b1494> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling (1207 non-test lines, overage 207)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "c425c803" ;
+  triage:totalLines 1215 ;
+  triage:productionLines 1207 ;
+  triage:ceiling 1000 ;
+  triage:overage 207 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4/c425c803> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling (1207 non-test lines, overage 207)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:totalLines 1215 ;
+  triage:productionLines 1207 ;
+  triage:ceiling 1000 ;
+  triage:overage 207 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling with increased overage (1347 non-test lines, overage 347); includes project_cross_host_report function" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:totalLines 1355 ;
+  triage:productionLines 1347 ;
+  triage:ceiling 1000 ;
+  triage:overage 347 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling (1347 non-test lines, overage 347); includes project_cross_host_report function" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:totalLines 1355 ;
+  triage:productionLines 1347 ;
+  triage:ceiling 1000 ;
+  triage:overage 347 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling with highest overage (1373 non-test lines, overage 373); high-water mark for runtime_health growth" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:totalLines 1381 ;
+  triage:productionLines 1373 ;
+  triage:ceiling 1000 ;
+  triage:overage 373 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/pAG-s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling at highest overage level (1373 non-test lines, overage 373); promote_to target" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c47dbae5" ;
+  triage:totalLines 1381 ;
+  triage:productionLines 1373 ;
+  triage:ceiling 1000 ;
+  triage:overage 373 ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
+
+<urn:atm:triage:occurrence/AG-FIND-FILESIZE-RUNTIMEHEALTH/integrate-ag/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production code ceiling on integrate/phase-AG baseline (1139 non-test lines, overage 139); indicates violation exists on develop baseline prior to phase-AG sprint work" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "6e5b1494" ;
+  triage:totalLines 1147 ;
+  triage:productionLines 1139 ;
+  triage:ceiling 1000 ;
+  triage:overage 139 ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/6e5b1494> .
+
+<urn:atm:triage:worktree/pAG-s4/c425c803>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s5/6ed274cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s6/32f9f07b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s7/530ee77c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s9/c47dbae5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate-ag/6e5b1494>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "6e5b1494" ;
+  triage:orderIndex 7 .
