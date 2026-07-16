@@ -2,8 +2,8 @@
 id: AG.11
 title: Corrective Remote-Target Contract And Dispatch Routing
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: feature/pAG-s11-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s11-remote-target-contract
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.11
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s11-remote-target-contract
+branch: feature/pAG-s11-remote-target-contract
 status: planned
 estimated_scope: medium
 ```

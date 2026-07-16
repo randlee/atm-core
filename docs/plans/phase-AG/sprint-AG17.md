@@ -2,8 +2,8 @@
 id: AG.17
 title: Corrective Copied-State Revalidation And Release Verdict
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: TBD
+worktree: TBD
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.17
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: TBD
+branch: TBD
 status: planned
 estimated_scope: medium
 ```
