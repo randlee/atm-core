@@ -38,10 +38,14 @@ Functional closure must not:
 If ordinary cross-host `atm send` routing is updated after this ADR's security
 work, the routing contract must stay narrow and explicit:
 
+- agent/member names and team names must not contain `.`
 - the supported remote-send CLI forms are exactly:
   - `atm send <agent>@<team>.<host> ...`
   - `atm send <agent>@<team> --host <host> ...`
+- the inline form splits on the final `.` after `@`
 - those two forms normalize into one typed remote-host field on the request
+- mixed inline-host plus `--host` input is rejected instead of silently
+  preferring one source
 - send makes one routing decision at the boundary:
   - empty remote-host field -> local mailbox path
   - non-empty remote-host field -> cross-host queue / remote-delivery boundary

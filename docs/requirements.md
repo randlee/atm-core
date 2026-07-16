@@ -3562,11 +3562,15 @@ mail correctness.
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
+  - agent/member names and team names must not contain `.`
   - the supported remote-send CLI forms are exactly:
     - `atm send <agent>@<team>.<host> ...`
     - `atm send <agent>@<team> --host <host> ...`
   - those two forms are logically equivalent and must normalize into one typed
     request field for the remote host
+  - the inline form splits on the final `.` after `@`
+  - mixed inline-host plus `--host` input is rejected instead of silently
+    preferring one source
   - when the normalized remote-host field is empty, send stays on the local
     mailbox path
   - when the normalized remote-host field is non-empty, send must route through

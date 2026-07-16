@@ -1,8 +1,8 @@
 ---
 title: Phase AG Plan
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
+branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
 ---
 
 # Phase AG Plan
@@ -32,7 +32,8 @@ Phase `AG` therefore becomes:
   (`AG.7`)
 - late transport-security planning/reconciliation (`AG.8`)
 - secured transport implementation (`AG.10`)
-- copied-state revalidation and final release verdict (`AG.9`)
+- corrective remote-target routing and revalidation ladder after the reviewed
+  AG.6-AG.10 line (`AG.11` through `AG.17`)
 
 ## Historical Input And Namespace Rule
 
@@ -82,13 +83,15 @@ Entry-gate prerequisites:
 
 ## Branch Framing
 
-Phase `AG` now has two distinct lines:
+Phase `AG` now has three distinct records:
 
 - historical early execution on `feature/cross-host-communication`
-- corrective replanning on `plan/phase-ag-multihost-advertise-allowlist`
+- reviewed corrective replan history on
+  `plan/phase-ag-multihost-advertise-allowlist`
+- current hardened planning source on `docs/cross-host-remote-target-contract`
 
-The historical line remains important evidence, but it no longer defines the
-forward phase sequence by itself. The current branch is the corrective source
+The historical lines remain important evidence, but they no longer define the
+forward phase sequence by themselves. The current branch is the planning source
 of truth because it reconciles what was actually learned:
 
 - the original validation-only framing was insufficient
@@ -160,13 +163,46 @@ The findings ledger `owner` field must use one of these exact values:
 The phase proceeds under these assumptions:
 
 - AG.1 / AG.2 already proved the original product surface was insufficient
-- the remaining blocker is not another proof-of-concept transport hack; it is
-  completion of the durable control-plane surface
+- the remaining blockers are not another proof-of-concept transport hack; they
+  are completion of:
+  - the durable control-plane surface
+  - the still-missing remote-target send-dispatch contract captured in
+    `AG-FIND-005`
 - setup ambiguity is itself a real phase finding if it blocks reproducible
   execution
 - the highest-value next objective is to land interface/allowlist/doctor
   surfaces so the daemon-to-daemon channel can be exercised through real
   product controls rather than env hacks
+- after those surfaces exist, the lowest-risk proof order is:
+  - localhost remote-target loopback
+  - public-interface remote-target loopback
+  - automated integration coverage
+  - other-Mac smoke
+  - Windows/macOS smoke
+
+## Remote-Target Contract Rule
+
+The corrective AG.11 line uses exactly two operator-facing remote-target forms:
+
+- `atm send <agent>@<team>.<host> ...`
+- `atm send <agent>@<team> --host <host> ...`
+
+Parser rules for the inline form are part of the plan, not an implementation
+choice left open for later review:
+
+- agent/member names and team names must not contain `.`
+- inline parsing splits on the final `.` after `@`
+- the suffix after that final `.` is the remote host
+- the prefix before that final `.` is the team name
+- mixed inline-host plus `--host` input is rejected instead of silently
+  preferring one source
+
+Routing rules are equally narrow:
+
+- empty normalized `remote_host` => local mailbox path
+- non-empty normalized `remote_host` => cross-host delivery trait boundary
+- sender-side daemons must not write a remote target directly into a local
+  mailbox path
 
 ## Validation Lanes
 
@@ -238,6 +274,19 @@ These details are recorded in:
 - daemon bring-up on macOS clean-room state
 - daemon bring-up on Windows clean-room state
 - peer transport channel bring-up between hosts
+- localhost remote-target unauthorized rejection before mailbox mutation
+- localhost remote-target full-function success with real ATM payloads
+- public-interface remote-target unauthorized rejection before mailbox mutation
+- public-interface remote-target full-function success with real ATM payloads
+- automated integration coverage that proves:
+  - both supported remote-target CLI forms normalize identically
+  - remote-target sends do not fall back to the local mailbox path
+  - localhost and public-interface loopback both cover send/read/ack,
+    nudge/notification classification, and retry-visible recovery
+- other-Mac host-pair smoke covering unauthorized rejection plus the same
+  full-function matrix used on same-host loopback
+- Windows/macOS host-pair smoke covering unauthorized rejection plus the same
+  full-function matrix used on same-host loopback
 - Windows -> macOS durable send
 - macOS -> Windows durable send
 - receiver-side read on both directions
@@ -250,6 +299,23 @@ These details are recorded in:
   `REQ-CORE-TRANSPORT-001/003/005`; if the implementation remains plain TCP,
   AG must carry a named `PRODUCT-BUG` or requirement-drift finding and any
   release-usable statement must explicitly exclude transport-security coverage
+
+## Corrective Final-Verdict Rule
+
+The reviewed AG.6-AG.10 sprint docs remain authoritative historical planning
+artifacts and are not silently rewritten by the corrective line.
+
+However, once `AG-FIND-005` exists, the authoritative release verdict for
+Phase AG moves to `AG.17`.
+
+That means:
+
+- `AG.9` remains the reviewed earlier final-verdict sprint for the pre-
+  corrective line
+- `AG.10` remains the security prerequisite sprint for any transport-security
+  claim
+- `AG.17` is the only sprint allowed to declare the final release verdict for
+  the corrective line that includes AG.11 through AG.16
 
 ## Evidence Contract
 
@@ -555,6 +621,231 @@ Verification owner:
 
 - `quality-mgr`
 
+### AG.11 Corrective Remote-Target Contract And Dispatch Routing
+
+Primary objective:
+
+- close the missing send-routing gap by making remote-target syntax a
+  first-class CLI and runtime contract instead of a local-mailbox fallthrough
+
+Outputs:
+
+- exact remote-target syntax:
+  - `atm send <agent>@<team>.<host> ...`
+  - `atm send <agent>@<team> --host <host> ...`
+- exact parser contract:
+  - agent/member names and team names must not contain `.`
+  - split the inline form on the final `.` after `@`
+  - mixed inline-host plus `--host` input is rejected
+- one typed `remote_host` field in the send request model
+- one dispatch rule:
+  - empty `remote_host` => local mailbox path
+  - non-empty `remote_host` => cross-host delivery trait boundary
+- requirements / architecture / ADR updates aligned to that dispatch rule
+- finding handoff to `AG-FIND-005`
+
+Entry gate:
+
+- the reviewed AG.6-AG.10 planning line remains intact
+- corrective work is appended after AG.10 rather than silently rewriting
+  reviewed sprint scope
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.12 Localhost Full-Function Remote-Target Loopback
+
+Primary objective:
+
+- prove 100% of the remote-target functionality on localhost before involving
+  a public interface or a second host
+
+Outputs:
+
+- localhost unauthorized rejection evidence (`AG-VAL-016`)
+- localhost full-function success evidence (`AG-VAL-017`)
+- localhost transport-security disposition (`AG-VAL-018`)
+- retained proof that real ATM payloads traverse the peer-transport path
+  instead of the local mailbox path
+
+Entry gate:
+
+- AG.11 routing work is complete enough that localhost remote-target sends no
+  longer fall back to the local mailbox path
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.13 Public-Interface Full-Function Loopback
+
+Primary objective:
+
+- rerun the full remote-target functionality on one host through its
+  non-loopback advertised address
+
+Outputs:
+
+- public-interface unauthorized rejection evidence (`AG-VAL-019`)
+- public-interface full-function success evidence (`AG-VAL-020`)
+- retained proof that bind/advertise configuration and allowlist enforcement
+  both survive off-loopback addressing
+
+Entry gate:
+
+- AG.12 localhost remote-target closure is complete
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.14 Automated Integration Coverage For The Corrective Path
+
+Primary objective:
+
+- turn the AG.11-AG.13 corrective behavior into durable automated integration
+  coverage so the release does not depend only on manual smoke
+
+Outputs:
+
+- parser/normalization integration coverage for both supported remote-target
+  syntaxes
+- dispatch integration coverage proving remote-target sends no longer write to
+  the local mailbox path
+- localhost/public-interface loopback integration coverage for send/read/ack,
+  unauthorized rejection, nudge/notification classification, and
+  retry-visible recovery
+
+Entry gate:
+
+- AG.11 dispatch routing is complete
+- AG.12 and AG.13 have defined the exact same-host behavior the automated suite
+  must lock in
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.15 Other-Mac Cross-Host Smoke
+
+Primary objective:
+
+- prove the corrective path survives a real second-host topology on another
+  Mac before introducing Windows-specific variables
+
+Outputs:
+
+- other-Mac smoke evidence:
+  - `AG-VAL-021A`
+  - `AG-VAL-021B`
+  - `AG-VAL-021C`
+  - `AG-VAL-021D`
+  - `AG-VAL-021E`
+  - `AG-VAL-021F`
+- retained evidence for authorized send/read/ack and unauthorized rejection on
+  a Mac-to-Mac host pair
+- first-line recovery notes for firewall, routing, or operator mistakes
+  discovered on the second-host path
+
+Entry gate:
+
+- AG.13 public-interface loopback is complete
+- AG.14 automated integration coverage is complete enough to make second-host
+  failures actionable rather than ambiguous
+
+Execution owner:
+
+- `arch-ctm`
+- `macos-operator`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.16 Windows/macOS Cross-Host Smoke
+
+Primary objective:
+
+- prove the corrective path survives the real heterogeneous-host topology
+
+Outputs:
+
+- Windows/macOS smoke evidence:
+  - `AG-VAL-022A`
+  - `AG-VAL-022B`
+  - `AG-VAL-022C`
+  - `AG-VAL-022D`
+  - `AG-VAL-022E`
+  - `AG-VAL-022F`
+- retained evidence for authorized send/read/ack and unauthorized rejection on
+  the Windows/macOS host pair
+- recovery/runbook deltas for Windows-specific firewall, routing, or daemon
+  bring-up behavior
+
+Entry gate:
+
+- AG.15 other-Mac smoke is complete
+
+Execution owner:
+
+- `arch-ctm`
+- `windows-operator`
+- `macos-operator`
+
+Verification owner:
+
+- `quality-mgr`
+
+### AG.17 Corrective Copied-State Revalidation And Release Verdict
+
+Primary objective:
+
+- rerun the approved subset on disposable copied state after the AG.11-AG.16
+  corrective line is green, then record the release verdict that accounts for
+  both the original AG line and the corrective line
+
+Outputs:
+
+- copied-state rerun of the approved corrective subset
+- final findings-ledger reconciliation
+- final readiness verdict after AG.11-AG.16
+- explicit statement of whether cross-host is:
+  - functionally release-usable
+  - blocked
+  - functionally usable but not transport-secure
+
+Entry gate:
+
+- AG.16 Windows/macOS smoke is complete enough to justify copied-state rerun
+- AG.10 security status is known before the final verdict is issued
+- AG.9 is treated as historical reviewed verdict scope only; AG.17 is the
+  authoritative final verdict for the corrective line
+
+Execution owner:
+
+- `arch-ctm`
+
+Verification owner:
+
+- `quality-mgr`
+
 ## Exit Criteria
 
 Phase `AG` is complete only when all of the following are true:
@@ -565,6 +856,13 @@ Phase `AG` is complete only when all of the following are true:
 - the AG.6 doctor surface is complete
 - the clean-room cross-host lane is fully executed with evidence on that real
   product surface
+- the AG.11 corrective remote-target routing work is complete
+- the AG.12 localhost full-function loopback lane is complete
+- the AG.13 public-interface full-function loopback lane is complete
+- the AG.14 automated integration suite locks in the corrective path
+- the AG.15 other-Mac smoke lane is complete
+- the AG.16 Windows/macOS smoke lane is complete
+- the AG.17 copied-state and final corrective verdict are complete
 - if secure transport is part of the release claim, AG.10 is complete
 - the copied-state lane is either green or explicitly blocked by a named
   product defect outside operator/setup ambiguity

@@ -20,8 +20,15 @@ Current phase framing:
   - SQLite-backed inbound host allowlist enforcement
   - CLI administration for both
   - `atm doctor` visibility for both
-- only after that control plane lands does Phase AG return to live host-pair
-  validation and release closeout
+- corrective downstream sprints after the reviewed AG.6-AG.10 line then close
+  the still-missing remote-target dispatch gap and revalidate the full feature
+  ladder in this order:
+  - localhost remote-target loopback
+  - public-interface remote-target loopback
+  - automated integration coverage
+  - other-Mac smoke
+  - Windows/macOS smoke
+  - copied-state final verdict
 - TLS / transport security remains a late AG concern and must not be implied by
   earlier functional cross-host closure
 
@@ -46,6 +53,13 @@ Expected planning artifacts:
 - `sprint-AG8.md`
 - `sprint-AG9.md`
 - `sprint-AG10.md`
+- `sprint-AG11.md`
+- `sprint-AG12.md`
+- `sprint-AG13.md`
+- `sprint-AG14.md`
+- `sprint-AG15.md`
+- `sprint-AG16.md`
+- `sprint-AG17.md`
 
 Historical input:
 

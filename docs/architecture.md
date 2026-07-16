@@ -2682,11 +2682,15 @@ There are three distinct paths:
 
 3. Remote host path
    - cross-host delivery is daemon-to-daemon only
+   - agent/member names and team names do not contain `.`
    - the supported remote-send CLI forms are exactly:
      - `atm send <agent>@<team>.<host> ...`
      - `atm send <agent>@<team> --host <host> ...`
    - those two forms normalize into the same internal request shape with a
      typed remote-host field
+   - the inline form splits on the final `.` after `@`
+   - mixed inline-host plus `--host` input is rejected instead of silently
+     preferring one source
    - send makes one routing decision at the boundary:
      - empty remote-host field -> local mailbox path
      - non-empty remote-host field -> cross-host queue / remote-delivery path

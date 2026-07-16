@@ -91,10 +91,10 @@ Phase-AG planning note:
   - retained loopback self-test support as a supported diagnostic mode
 - only after that product work lands does AG return to live Windows/macOS
   host-pair validation and copied-state release proof
+- the current AG corrective planning branch for the remote-target routing and
+  revalidation line is `docs/cross-host-remote-target-contract`
 - transport security / encryption remains a later AG sprint concern and must
   not be implied by earlier functional cross-host closure
-- the active AG planning branch for this rework is
-  `plan/phase-ag-multihost-advertise-allowlist`
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -690,13 +690,17 @@ Status summary:
 
 Planning branch:
 - historical early execution: `feature/cross-host-communication`
-- corrective replan: `plan/phase-ag-multihost-advertise-allowlist`
+- earlier corrective replan: `plan/phase-ag-multihost-advertise-allowlist`
+- current corrective routing/revalidation planning branch:
+  `docs/cross-host-remote-target-contract`
 
 Branch-routing note:
 - PR #542 (`feature/cross-host-communication` -> `develop`) is retained as the
   historical early-AG planning/execution record
 - PR #555 (`plan/phase-ag-multihost-advertise-allowlist` -> `develop`) is the
-  current corrective AG replanning line
+  earlier corrective AG replanning line
+- `docs/cross-host-remote-target-contract` is the current AG planning line for
+  AG.11 through AG.17 plan hardening
 - if AG later opens product-code fixes from concrete findings, those follow-up
   branches must declare their own normal integration path explicitly
 
@@ -721,7 +725,14 @@ Execution shape:
 - `AG.7` live cross-host revalidation
 - `AG.8` transport security and encryption hardening
 - `AG.10` secured cross-host transport implementation
-- `AG.9` copied-state revalidation and release verdict
+- `AG.9` historical reviewed copied-state verdict for the pre-corrective line
+- `AG.11` exact remote-target contract and dispatch routing
+- `AG.12` localhost full-function remote-target loopback
+- `AG.13` public-interface full-function remote-target loopback
+- `AG.14` automated integration coverage for the corrective path
+- `AG.15` other-Mac cross-host smoke for the corrective path
+- `AG.16` Windows/macOS cross-host smoke for the corrective path
+- `AG.17` corrective copied-state revalidation and final release verdict
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
