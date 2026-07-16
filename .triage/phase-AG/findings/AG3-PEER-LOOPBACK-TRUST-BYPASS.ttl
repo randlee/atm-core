@@ -5,19 +5,16 @@
   a triage:Finding ;
   triage:findingId "AG3-PEER-LOOPBACK-TRUST-BYPASS" ;
   triage:title "AG.3 peer_loopback_delivery bypasses client-trust verification" ;
-  triage:description "AG.3 QA-1 Blocking finding: the loopback same-host diagnostic delivery path (peer_loopback_delivery) bypasses client-trust/authorization verification that the normal inbound peer listener path enforces. Sweep for the loopback delivery function/module across worktrees and check whether trust verification is invoked on that path." ;
+  triage:description "AG.3 QA-1 Blocking finding: the loopback same-host diagnostic delivery path (peer_loopback_delivery) bypasses client-trust/authorization verification that the normal inbound peer listener path enforces. Sweep for the loopback delivery function/module across worktrees and check whether trust verification is invoked on that path. FOLLOWUP: integrate/phase-AG has removed loopback special-case entirely, replacing with unified cross-host delivery contract that treats loopback/localhost as ordinary remote-target hosts. Feature branches (pAG-s4 through pAG-s9) still retain the loopback pattern pending merge-forward of integrate/phase-AG changes." ;
   triage:category "security" ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/3> ;
@@ -30,350 +27,274 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/3> ;
-  triage:openOn <urn:atm:triage:worktree/cross-host-communication/8841e870> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s4/fdfc20c5> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s5/90dac63e> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s6/48c85b8d> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s7/34846433> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s8/283bd53b> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s10/16c5ba03> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:openOn <urn:atm:triage:worktree/pAG-s4/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:fixedOn <urn:atm:triage:worktree/phase-AG-integrate/6e5b1494> ;
+  triage:promoteTo <urn:atm:triage:worktree/phase-AG-integrate/6e5b1494> ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded true ;
+  triage:regressed false .
 
-# Occurrences on feature/cross-host-communication (8841e870)
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/1>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 597 ;
-  triage:snippet "return self.dispatch_loopback_send(request);" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/cross-host-communication/8841e870> .
-
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/2>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 646 ;
-  triage:snippet "fn dispatch_loopback_send(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/cross-host-communication/8841e870> .
-
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/cross-host-communication/3>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 655 ;
-  triage:snippet "request.peer_loopback_delivery = true;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/cross-host-communication/8841e870> .
-
-# Occurrences on feature/pAG-s4-durable-interface-config (fdfc20c5)
+# Occurrences on feature/pAG-s4-durable-interface-config (c425c803)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 597 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s4/fdfc20c5> .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4/c425c803> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/2>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 646 ;
   triage:snippet "fn dispatch_loopback_send(" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s4/fdfc20c5> .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4/c425c803> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s4/3>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 655 ;
   triage:snippet "request.peer_loopback_delivery = true;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s4/fdfc20c5> .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4/c425c803> .
 
-# Occurrences on feature/pAG-s5-host-allowlist (90dac63e)
+# Occurrences on feature/pAG-s5-host-allowlist (6ed274cc)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s5/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/rpc.rs" ;
+  triage:line 241 ;
+  triage:snippet "peer_loopback_delivery: false," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
+
+<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 113 ;
+  triage:snippet "pub peer_loopback_delivery: bool," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
+
+<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 597 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s5/2>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 646 ;
-  triage:snippet "fn dispatch_loopback_send(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
-
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s5/3>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 655 ;
-  triage:snippet "request.peer_loopback_delivery = true;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
-
-# Occurrences on feature/pAG-s6-doctor-visibility (48c85b8d)
+# Occurrences on feature/pAG-s6-doctor-visibility (32f9f07b)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s6/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 607 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s6/2>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 656 ;
   triage:snippet "fn dispatch_loopback_send(" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s6/3>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 665 ;
   triage:snippet "request.peer_loopback_delivery = true;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
-# Occurrences on feature/pAG-s7-live-revalidation (34846433)
+# Occurrences on feature/pAG-s7-live-revalidation (530ee77c)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 607 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s7/34846433> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/2>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 656 ;
   triage:snippet "fn dispatch_loopback_send(" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s7/34846433> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s7/3>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 665 ;
   triage:snippet "request.peer_loopback_delivery = true;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s7/34846433> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
-# Occurrences on feature/pAG-s8-transport-security-planning (283bd53b)
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/1>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 607 ;
-  triage:snippet "return self.dispatch_loopback_send(request);" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s8/283bd53b> .
-
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/2>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 656 ;
-  triage:snippet "fn dispatch_loopback_send(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s8/283bd53b> .
-
-<urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s8/3>
-  a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
-  triage:line 665 ;
-  triage:snippet "request.peer_loopback_delivery = true;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s8/283bd53b> .
-
-# Occurrences on feature/pAG-s10-secured-transport (16c5ba03)
+# Occurrences on feature/pAG-s10-secured-transport (fa5ca78e)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 611 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/2>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 660 ;
   triage:snippet "fn dispatch_loopback_send(" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s10/3>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 669 ;
   triage:snippet "request.peer_loopback_delivery = true;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
-# Occurrences on feature/pAG-s9-release-verdict (462b3ee3)
+# Occurrences on feature/pAG-s9-release-verdict (c47dbae5)
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/1>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 611 ;
   triage:snippet "return self.dispatch_loopback_send(request);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/2>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 660 ;
   triage:snippet "fn dispatch_loopback_send(" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG3-PEER-LOOPBACK-TRUST-BYPASS/pAG-s9/3>
   a triage:Occurrence ;
-  triage:file "src/runtime_health.rs" ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 669 ;
   triage:snippet "request.peer_loopback_delivery = true;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
 # WorktreeSnapshots
-<urn:atm:triage:worktree/cross-host-communication/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pAG-s4/fdfc20c5>
+<urn:atm:triage:worktree/pAG-s4/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 .
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pAG-s5/90dac63e>
+<urn:atm:triage:worktree/pAG-s5/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 .
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pAG-s6/48c85b8d>
+<urn:atm:triage:worktree/pAG-s6/32f9f07b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:orderIndex 6 .
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pAG-s7/34846433>
+<urn:atm:triage:worktree/pAG-s7/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 .
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pAG-s8/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/pAG-s10/16c5ba03>
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 .
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/pAG-s9/462b3ee3>
+<urn:atm:triage:worktree/pAG-s9/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 .
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/phase-AG-integrate/6e5b1494>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "6e5b1494" ;
+  triage:orderIndex 7 .

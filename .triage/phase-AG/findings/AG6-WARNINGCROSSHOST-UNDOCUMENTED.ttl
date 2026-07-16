@@ -5,13 +5,13 @@
   a triage:Finding ;
   triage:findingId "AG6-WARNINGCROSSHOST-UNDOCUMENTED" ;
   triage:title "AG.6 introduced WarningCrossHost* variant(s) with no documentation" ;
-  triage:description "AG.6 QA-1 Blocking finding: AG.6 added a WarningCrossHost-prefixed enum variant/warning type in the doctor/runtime-health module for cross-host visibility, but it is not documented anywhere in requirements.md/architecture.md/doctor docs. Sweep for WarningCrossHost pattern and doc coverage across worktrees from AG.6 onward." ;
+  triage:description "WarningCrossHost-prefixed enum variants (WarningCrossHostListenerUnconfigured, WarningCrossHostListenerDegraded, WarningCrossHostAllowlistEmpty, WarningCrossHostLegacyFallbackActive) exist in crates/atm-storage/src/error_codes.rs but are not documented in docs/atm-error-codes.md." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
-  triage:repeatable true ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
   triage:sweepScope "repo" ;
   triage:category "documentation" ;
-  triage:severity "blocking" ;
+  triage:severity "minor" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
@@ -19,20 +19,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/5> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s7/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s8/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s8/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s10/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s10/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s9/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s6/48c85b8d> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s7/34846433> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s8/283bd53b> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s10/16c5ba03> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:openOn <urn:atm:triage:worktree/pAG-s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/1>
   a triage:Occurrence ;
@@ -42,8 +40,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/2>
   a triage:Occurrence ;
@@ -53,8 +51,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/3>
   a triage:Occurrence ;
@@ -64,8 +62,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/4>
   a triage:Occurrence ;
@@ -75,19 +73,30 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s6/48c85b8d> .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
+
+<urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s6/5>
+  a triage:Occurrence ;
+  triage:file "docs/atm-error-codes.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing WarningCrossHost* documentation in atm-error-codes.md registry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s7/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 964 ;
-  triage:snippet "code: AtmErrorCode::WarningCrossHostLegacyFallbackActive," ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 91 ;
+  triage:snippet "WarningCrossHostListenerUnconfigured," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s7/34846433> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s7/2>
   a triage:Occurrence ;
@@ -97,41 +106,19 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s7/34846433> .
-
-<urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s8/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 964 ;
-  triage:snippet "code: AtmErrorCode::WarningCrossHostLegacyFallbackActive," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s8/283bd53b> .
-
-<urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s8/2>
-  a triage:Occurrence ;
-  triage:file "docs/atm-error-codes.md" ;
-  triage:line 1 ;
-  triage:snippet "Missing WarningCrossHost* documentation in atm-error-codes.md registry" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s8/283bd53b> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s10/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 988 ;
-  triage:snippet "code: AtmErrorCode::WarningCrossHostLegacyFallbackActive," ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 91 ;
+  triage:snippet "WarningCrossHostListenerUnconfigured," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s10/2>
   a triage:Occurrence ;
@@ -141,19 +128,19 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s9/1>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/main.rs" ;
-  triage:line 151 ;
-  triage:snippet "| AtmErrorCode::WarningCrossHostListenerUnconfigured" ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 91 ;
+  triage:snippet "WarningCrossHostListenerUnconfigured," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG6-WARNINGCROSSHOST-UNDOCUMENTED/s9/2>
   a triage:Occurrence ;
@@ -163,61 +150,47 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
-<urn:atm:triage:worktree/cross-host/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pAG-s4/fdfc20c5>
+<urn:atm:triage:worktree/pAG-s4/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 .
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pAG-s5/90dac63e>
+<urn:atm:triage:worktree/pAG-s5/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 .
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pAG-s6/48c85b8d>
+<urn:atm:triage:worktree/pAG-s6/32f9f07b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:orderIndex 6 .
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pAG-s7/34846433>
+<urn:atm:triage:worktree/pAG-s7/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 .
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pAG-s8/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/pAG-s10/16c5ba03>
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 .
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/pAG-s9/462b3ee3>
+<urn:atm:triage:worktree/pAG-s9/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 .
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .

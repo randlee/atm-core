@@ -4,169 +4,150 @@
 <urn:atm:triage:finding/AG5-TERMINOLOGY-DRIFT>
   a triage:Finding ;
   triage:findingId "AG5-TERMINOLOGY-DRIFT" ;
-  triage:title "AG.5 docs use inconsistent terminology for the allowlist feature across files" ;
-  triage:description "AG.5 QA-1 Minor finding: docs/sprint materials use inconsistent naming for the host allowlist feature (e.g. 'host allowlist' vs 'allowed hosts' vs 'trusted hosts') across requirements.md/architecture.md/sprint docs, creating terminology drift. Sweep for these terms across doc files on each worktree." ;
+  triage:title "Inconsistent terminology between allowlist and other terms across AG.5 docs/code" ;
+  triage:description "AG.5 QA reported inconsistent terminology (e.g. 'allowlist' vs 'allow-list' vs 'trusted hosts' vs 'permitted hosts') used interchangeably across sprint docs, code comments, and CLI help text, creating confusion." ;
   triage:category "documentation" ;
   triage:severity "minor" ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "repo" ;
-  triage:pattern "host allowlist|allowed hosts|trusted hosts" ;
-  triage:fileFilter "docs" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s5/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s5/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s7/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s8/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s10/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s9/1> ;
-  triage:openOn <urn:atm:triage:worktree/s3/8841e870> ;
-  triage:openOn <urn:atm:triage:worktree/s4/fdfc20c5> ;
-  triage:openOn <urn:atm:triage:worktree/s5/90dac63e> ;
-  triage:openOn <urn:atm:triage:worktree/s7/34846433> ;
-  triage:openOn <urn:atm:triage:worktree/s8/283bd53b> ;
-  triage:openOn <urn:atm:triage:worktree/s10/16c5ba03> ;
-  triage:openOn <urn:atm:triage:worktree/s9/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:triagedAt "2026-07-15T23:59:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s4/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s3/1>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s4/1>
   a triage:Occurrence ;
-  triage:file "docs/requirements.md" ;
-  triage:line 3582 ;
-  triage:snippet "deny-by-default exact-host allowlist before any mailbox mutation occurs." ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/s3/8841e870> .
-
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s4/1>
-  a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/plan-phase-AG.md" ;
-  triage:line 446 ;
-  triage:snippet "CLI commands to add, disable, remove, and inspect allowed hosts" ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 83 ;
+  triage:snippet "plan/phase-ag-multihost-advertise-allowlist" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/fdfc20c5> .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4/c425c803> .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s5/1>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s5/1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
-  triage:line 719 ;
-  triage:snippet "AG.5 durable host allowlist enforcement" ;
+  triage:line 88 ;
+  triage:snippet "SQLite-backed deny-by-default exact-host allowlist enforcement" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s5/2>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s5/2>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
-  triage:line 36 ;
-  triage:snippet "CLI command surface for managing allowed hosts" ;
+  triage:file "docs/testing-guidelines.md" ;
+  triage:line 227 ;
+  triage:snippet "document an explicit allow-list for Tier 3" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s7/1>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s6/1>
   a triage:Occurrence ;
-  triage:file "docs/project-plan.md" ;
-  triage:line 719 ;
-  triage:snippet "AG.5 durable host allowlist enforcement" ;
+  triage:file "docs/testing-guidelines.md" ;
+  triage:line 227 ;
+  triage:snippet "document an explicit allow-list for Tier 3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/32f9f07b> .
+
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 220 ;
+  triage:snippet "config.json roster-boundary rules after the repository-local allowlist" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/s7/34846433> .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/530ee77c> .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s8/1>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s10/1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
-  triage:line 719 ;
-  triage:snippet "AG.5 durable host allowlist enforcement" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/s8/283bd53b> .
-
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s10/1>
-  a triage:Occurrence ;
-  triage:file "docs/adr/ADR-030-cross-host-transport-security-phase.md" ;
-  triage:line 16 ;
-  triage:snippet "cross-host delivery operable (`AG.4` interface control, `AG.5` host allowlist," ;
+  triage:line 88 ;
+  triage:snippet "SQLite-backed deny-by-default exact-host allowlist enforcement" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/s10/16c5ba03> .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> .
 
-<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/s9/1>
+<urn:atm:triage:occurrence/AG5-TERMINOLOGY-DRIFT/pAG-s9/1>
   a triage:Occurrence ;
-  triage:file "docs/architecture.md" ;
-  triage:line 2690 ;
-  triage:snippet "SQLite-backed exact-host allowlist enforcement against the remote socket" ;
+  triage:file "docs/testing-guidelines.md" ;
+  triage:line 227 ;
+  triage:snippet "document an explicit allow-list for Tier 3" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c47dbae5> .
 
-<urn:atm:triage:worktree/s3/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/s4/fdfc20c5>
+<urn:atm:triage:worktree/pAG-s4/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 .
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/s5/90dac63e>
+<urn:atm:triage:worktree/pAG-s5/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 .
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/s7/34846433>
+<urn:atm:triage:worktree/pAG-s6/32f9f07b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s7/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 .
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/s8/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/s10/16c5ba03>
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 .
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/s9/462b3ee3>
+<urn:atm:triage:worktree/pAG-s9/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 .
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .

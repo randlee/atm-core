@@ -5,107 +5,232 @@
   a triage:Finding ;
   triage:findingId "AG-FIND-BOUNDARYDOC" ;
   triage:title "New sealed-trait storage contracts missing from docs/atm-storage/boundaries.md" ;
-  triage:description "Three new sealed-trait contracts introduced across the AG batch have no corresponding section in docs/atm-storage/boundaries.md, breaking this repo's otherwise strictly-enforced documentation-completeness convention: AllowedHostStore (introduced AG.5, gap flagged AG.5 QA-1 Important#2), PeerInterfaceConfigStore (introduced AG.4, same gap flagged AG.4 QA-1), PeerSecurityStore (introduced AG.10, gap flagged AG.10 QA-1 ARCH-004)." ;
+  triage:description "Three new sealed-trait contracts introduced across the AG batch have no corresponding section in docs/atm-storage/boundaries.md, breaking this repo's otherwise strictly-enforced documentation-completeness convention: AllowedHostStore (introduced AG.5, gap flagged AG.5 QA-1 Important#2), PeerInterfaceConfigStore (introduced AG.4, same gap flagged AG.4 QA-1), PeerSecurityStore (introduced AG.10, gap flagged AG.10 QA-1 ARCH-004). Plan redesign (commit 4846ab3b) removes loopback framing but these stores remain structural and finding remains fully relevant." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "documentation" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-16T05:03:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/3> ;
-  triage:openOn <urn:atm:triage:worktree/s9/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:openOn <urn:atm:triage:worktree/s4/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/s9/c47dbae5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s9/c47dbae5> .
 
+# Occurrences in s4
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 713 ;
+  triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/c425c803> .
+
+# Occurrences in s5
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 854 ;
+  triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/6ed274cc> .
+
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 879 ;
+  triage:snippet "pub trait AllowedHostStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/6ed274cc> .
+
+# Occurrences in s6
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 854 ;
+  triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/32f9f07b> .
+
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 879 ;
+  triage:snippet "pub trait AllowedHostStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/32f9f07b> .
+
+# Occurrences in s7
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 854 ;
+  triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/530ee77c> .
+
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 879 ;
+  triage:snippet "pub trait AllowedHostStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/530ee77c> .
+
+# Occurrences in s10
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1005 ;
+  triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
+
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1030 ;
+  triage:snippet "pub trait AllowedHostStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
+
+<urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s10/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1042 ;
+  triage:snippet "pub trait PeerSecurityStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
+
+# Occurrences in s9
 <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/contract.rs" ;
-  triage:line 993 ;
+  triage:line 1005 ;
   triage:snippet "pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/2>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/contract.rs" ;
-  triage:line 1018 ;
+  triage:line 1030 ;
   triage:snippet "pub trait AllowedHostStore: sealed::Sealed + Send + Sync {" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG-FIND-BOUNDARYDOC/s9/3>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/contract.rs" ;
-  triage:line 1030 ;
+  triage:line 1042 ;
   triage:snippet "pub trait PeerSecurityStore: sealed::Sealed + Send + Sync {" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/s9/462b3ee3> .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
 
-<urn:atm:triage:worktree/s3/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/s4/fdfc20c5>
+# Worktree Snapshots
+<urn:atm:triage:worktree/s4/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 .
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/s5/90dac63e>
+<urn:atm:triage:worktree/s5/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 .
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/s6/48c85b8d>
+<urn:atm:triage:worktree/s6/32f9f07b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:orderIndex 6 .
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/s7/34846433>
+<urn:atm:triage:worktree/s7/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 .
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/s8/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/s10/16c5ba03>
+<urn:atm:triage:worktree/s10/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 .
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/s9/462b3ee3>
+<urn:atm:triage:worktree/s9/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 .
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate/6e5b1494>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "6e5b1494" ;
+  triage:orderIndex 7 .

@@ -4,27 +4,29 @@
 <urn:atm:triage:finding/AG5-DNS-HOSTNAME-CLI-UX-TRAP>
   a triage:Finding ;
   triage:findingId "AG5-DNS-HOSTNAME-CLI-UX-TRAP" ;
-  triage:title "AG.5 host-allowlist CLI accepts DNS hostnames but silently mishandles them (UX trap)" ;
-  triage:description "The host-allowlist add command accepts free-form hostname strings including DNS names, but downstream matching/storage logic assumes IP-literal semantics, silently producing a confusing non-match/no-op for operators who add a DNS hostname expecting it to work." ;
+  triage:title "CLI accepts DNS hostnames for allowlist entries but silently fails to match at runtime" ;
+  triage:description "AG.5 QA reported that the host-allowlist CLI accepts a DNS hostname as an allowlist entry but the runtime enforcement path only compares against resolved IPs, so hostname entries silently never match — a UX trap." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "usability" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-15T23:59:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/3> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s5/90dac63e> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s6/48c85b8d> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s7/34846433> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s8/283bd53b> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s10/16c5ba03> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
+  triage:openOn <urn:atm:triage:worktree/pAG-s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9/c47dbae5> ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
 
 <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/1>
   a triage:Occurrence ;
@@ -34,83 +36,69 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
 <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/2>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/contract.rs" ;
-  triage:line 524 ;
-  triage:snippet "fn normalize_allowed_host_name(raw: String) -> Result<String, AtmError>" ;
+  triage:line 443 ;
+  triage:snippet "let normalized = normalize_allowed_host_name(value.into())?;" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
 <urn:atm:triage:occurrence/AG5-DNS-HOSTNAME-CLI-UX-TRAP/pAG-s5/3>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
-  triage:line 86 ;
-  triage:snippet "let host_name = AllowedHostName::new(peer_addr.ip().to_string()).map_err(|error| {" ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_host_allowlist_store.rs" ;
+  triage:line 2 ;
+  triage:snippet "use atm_storage::contract::{AllowHostCommand, AllowedHostName, AllowedHostRow, AllowedHostStore};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s5/90dac63e> .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6ed274cc> .
 
-<urn:atm:triage:worktree/feature-cross-host/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pAG-s4/fdfc20c5>
+<urn:atm:triage:worktree/pAG-s4/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 .
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pAG-s5/90dac63e>
+<urn:atm:triage:worktree/pAG-s5/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 .
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pAG-s6/48c85b8d>
+<urn:atm:triage:worktree/pAG-s6/32f9f07b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:orderIndex 6 .
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pAG-s7/34846433>
+<urn:atm:triage:worktree/pAG-s7/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 .
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pAG-s8/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/pAG-s10/16c5ba03>
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 .
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/pAG-s9/462b3ee3>
+<urn:atm:triage:worktree/pAG-s9/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 .
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 .

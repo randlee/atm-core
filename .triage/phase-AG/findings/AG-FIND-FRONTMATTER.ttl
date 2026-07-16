@@ -5,69 +5,40 @@
   a triage:Finding ;
   triage:findingId "AG-FIND-FRONTMATTER" ;
   triage:title "Sprint-doc frontmatter status:planned lags readiness.md closure state" ;
-  triage:description "docs/plans/phase-AG/sprint-AG7.md, sprint-AG8.md, sprint-AG9.md, sprint-AG10.md frontmatter still read 'status: planned' while docs/plans/phase-AG/readiness.md's closure table records PASS/complete for those sprints (flagged AG.8 QA-1 Minor, AG.9 QA-1 Minor ATM-QA-004, informational in AG.7). sprint-AG3.md by contrast was correctly updated to 'status: accepted'." ;
+  triage:description "docs/plans/phase-AG/sprint-AG9.md and sprint-AG10.md frontmatter still read 'status: planned' while docs/plans/phase-AG/readiness.md records PASS/complete for those sprints. AG.3-AG.7 sprints are correctly marked 'status: accepted'. Remaining docs in AG.8-AG.10 and later still have 'status: planned' despite being validated complete." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "documentation" ;
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T19:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/cross-host-communication/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/cross-host-communication/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4-durable-interface-config/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4-durable-interface-config/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5-host-allowlist/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5-host-allowlist/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6-doctor-visibility/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6-doctor-visibility/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7-live-revalidation/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7-live-revalidation/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s8-transport-security-planning/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s8-transport-security-planning/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10-secured-transport/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10-secured-transport/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9-release-verdict/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9-release-verdict/2> ;
-  triage:openOn <urn:atm:triage:worktree/feature-cross-host-communication/8841e870> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s4-durable-interface-config/fdfc20c5> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s5-host-allowlist/90dac63e> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s6-doctor-visibility/48c85b8d> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s7-live-revalidation/34846433> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s8-transport-security-planning/283bd53b> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s10-secured-transport/16c5ba03> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pAG-s9-release-verdict/462b3ee3> ;
-  triage:promoteTo <urn:atm:triage:worktree/feature-pAG-s9-release-verdict/462b3ee3> ;
+  triage:triagedAt "2026-07-15T19:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7-live-revalidation/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10-secured-transport/fa5ca78e> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9-release-verdict/c47dbae5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/6e5b1494> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s9-release-verdict/c47dbae5> ;
   triage:highestOpenBranch "feature/pAG-s9-release-verdict" ;
-  triage:highestOpenBranchIndex 10 .
+  triage:highestOpenBranchIndex 6 .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/cross-host-communication/1>
-  a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-cross-host-communication/8841e870> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
-
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/cross-host-communication/2>
-  a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-cross-host-communication/8841e870> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
-
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4-durable-interface-config/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -75,11 +46,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s4-durable-interface-config/fdfc20c5> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/c425c803> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4-durable-interface-config/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s4/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -87,11 +57,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s4-durable-interface-config/fdfc20c5> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/c425c803> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5-host-allowlist/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -99,11 +68,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s5-host-allowlist/90dac63e> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6ed274cc> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5-host-allowlist/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s5/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -111,11 +79,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s5-host-allowlist/90dac63e> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6ed274cc> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6-doctor-visibility/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -123,11 +90,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s6-doctor-visibility/48c85b8d> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/32f9f07b> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6-doctor-visibility/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s6/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -135,11 +101,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s6-doctor-visibility/48c85b8d> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/32f9f07b> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7-live-revalidation/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -147,11 +112,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s7-live-revalidation/34846433> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/530ee77c> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7-live-revalidation/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s7/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -159,35 +123,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s7-live-revalidation/34846433> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/530ee77c> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s8-transport-security-planning/1>
-  a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s8-transport-security-planning/283bd53b> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
-
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s8-transport-security-planning/2>
-  a triage:Occurrence ;
-  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
-  triage:line 4 ;
-  triage:snippet "status: planned" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s8-transport-security-planning/283bd53b> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
-
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10-secured-transport/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -195,11 +134,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s10-secured-transport/16c5ba03> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/fa5ca78e> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10-secured-transport/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s10/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -207,11 +145,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s10-secured-transport/16c5ba03> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/fa5ca78e> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9-release-verdict/1>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
   triage:line 4 ;
@@ -219,11 +156,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s9-release-verdict/462b3ee3> ;
-  triage:note "readiness.md records AG.9 as PASS but frontmatter still says planned" .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c47dbae5> .
 
-<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9-release-verdict/2>
+<urn:atm:triage:occurrence/AG-FIND-FRONTMATTER/pAG-s9/2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
   triage:line 4 ;
@@ -231,70 +167,61 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pAG-s9-release-verdict/462b3ee3> ;
-  triage:note "readiness.md records AG.10 as PASS but frontmatter still says planned" .
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c47dbae5> .
 
-<urn:atm:triage:worktree/feature-cross-host-communication/8841e870>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/cross-host-communication" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/cross-host-communication" ;
-  triage:headSha "8841e870" ;
-  triage:orderIndex 3 ;
-  triage:status "open" .
-
-<urn:atm:triage:worktree/feature-pAG-s4-durable-interface-config/fdfc20c5>
+<urn:atm:triage:worktree/pAG-s4-durable-interface-config/c425c803>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
-  triage:headSha "fdfc20c5" ;
-  triage:orderIndex 4 ;
+  triage:headSha "c425c803" ;
+  triage:orderIndex 1 ;
   triage:status "open" .
 
-<urn:atm:triage:worktree/feature-pAG-s5-host-allowlist/90dac63e>
+<urn:atm:triage:worktree/pAG-s5-host-allowlist/6ed274cc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
-  triage:headSha "90dac63e" ;
-  triage:orderIndex 5 ;
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 2 ;
   triage:status "open" .
 
-<urn:atm:triage:worktree/feature-pAG-s6-doctor-visibility/48c85b8d>
+<urn:atm:triage:worktree/pAG-s6-doctor-visibility/32f9f07b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
-  triage:headSha "48c85b8d" ;
-  triage:orderIndex 6 ;
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 3 ;
   triage:status "open" .
 
-<urn:atm:triage:worktree/feature-pAG-s7-live-revalidation/34846433>
+<urn:atm:triage:worktree/pAG-s7-live-revalidation/530ee77c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "34846433" ;
-  triage:orderIndex 7 ;
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 4 ;
   triage:status "open" .
 
-<urn:atm:triage:worktree/feature-pAG-s8-transport-security-planning/283bd53b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s8-transport-security-planning" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s8-transport-security-planning" ;
-  triage:headSha "283bd53b" ;
-  triage:orderIndex 8 ;
-  triage:status "open" .
-
-<urn:atm:triage:worktree/feature-pAG-s10-secured-transport/16c5ba03>
+<urn:atm:triage:worktree/pAG-s10-secured-transport/fa5ca78e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "16c5ba03" ;
-  triage:orderIndex 9 ;
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 5 ;
   triage:status "open" .
 
-<urn:atm:triage:worktree/feature-pAG-s9-release-verdict/462b3ee3>
+<urn:atm:triage:worktree/pAG-s9-release-verdict/c47dbae5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
-  triage:headSha "462b3ee3" ;
-  triage:orderIndex 10 ;
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 6 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/integrate-phase-AG/6e5b1494>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "6e5b1494" ;
+  triage:orderIndex 7 ;
   triage:status "open" .
