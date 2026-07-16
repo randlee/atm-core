@@ -1,5 +1,6 @@
 //! Send command service implementation and post-send hook handling.
 
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -56,6 +57,42 @@ pub enum SendMessageSource {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PeerLoopbackHost(String);
+
+impl PeerLoopbackHost {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("loopback host must not be empty").with_recovery(
+                "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
+            ));
+        }
+        if trimmed.eq_ignore_ascii_case("localhost") || trimmed.parse::<IpAddr>().is_ok() {
+            return Ok(Self(trimmed.to_string()));
+        }
+        Err(AtmError::address_parse(format!(
+            "unsupported loopback host `{trimmed}`; expected `localhost` or a literal IP address"
+        ))
+        .with_recovery(
+            "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
+        ))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn parse_cli_target(raw_target: &str) -> Option<Result<Self, AtmError>> {
+        let (agent, host) = raw_target.trim().split_once('@')?;
+        if !agent.eq_ignore_ascii_case("loopback") {
+            return None;
+        }
+        Some(Self::parse(host))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
     pub home_dir: PathBuf,
@@ -70,6 +107,10 @@ pub struct SendRequest {
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_loopback_host: Option<PeerLoopbackHost>,
+    #[serde(default)]
+    pub peer_loopback_delivery: bool,
     pub dry_run: bool,
 }
 
@@ -100,6 +141,8 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            peer_loopback_host: None,
+            peer_loopback_delivery: false,
             dry_run,
         })
     }
@@ -461,7 +504,9 @@ fn prepare_send_context<
     };
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
+    if !request.peer_loopback_delivery {
+        validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
+    }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =

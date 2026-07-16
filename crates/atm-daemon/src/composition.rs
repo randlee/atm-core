@@ -213,19 +213,20 @@ impl RuntimeComposition {
             runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
+        let peer_transport_runtime = build_peer_transport_runtime(
+            runtime_assembly.remote_replay_store.clone(),
+            peer_transport_config,
+            observability.clone(),
+            status_cache.clone(),
+        );
         let request_dispatcher = build_request_dispatcher(
             home_dir,
             &status_cache,
             &observability,
             runtime_assembly.clone(),
+            peer_transport_runtime.clone(),
         );
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
-        let peer_transport_runtime = build_peer_transport_runtime(
-            runtime_assembly.remote_replay_store.clone(),
-            peer_transport_config,
-            observability,
-            status_cache.clone(),
-        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: host_ownership_adapter,
@@ -599,12 +600,14 @@ fn build_request_dispatcher(
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
     runtime_assembly: RuntimeAssembly,
+    peer_transport_runtime: PeerTransportRuntime,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
         runtime_assembly,
+        peer_transport_runtime,
     ))
 }
 
@@ -895,6 +898,8 @@ mod tests {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let _reset = LifecycleFlagResetGuard::install(lifecycle);
         let tempdir = TempDir::new().expect("tempdir");
+        let _cwd_guard = CwdGuard::install();
+        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
         let parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&parent_file, "x").expect("parent file");
         let socket_path = parent_file.join("atm.sock");

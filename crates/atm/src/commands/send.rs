@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use atm_core::send::{SendMessageSource, SendRequest, input};
+use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest, input};
 use atm_core::types::TaskId;
 use clap::Args;
 
@@ -78,12 +78,22 @@ impl SendCommand {
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
         let caller_context =
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
+        let loopback_host = PeerLoopbackHost::parse_cli_target(&self.to).transpose()?;
+        let target = loopback_host
+            .as_ref()
+            .map(|_| {
+                format!(
+                    "{}@{}",
+                    caller_context.caller_identity, caller_context.caller_team
+                )
+            })
+            .unwrap_or_else(|| self.to.clone());
         let message_source = self.build_message_source()?;
-        SendRequest::new(
+        let mut request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            &self.to,
+            &target,
             caller_context.caller_team,
             message_source,
             self.summary,
@@ -91,7 +101,9 @@ impl SendCommand {
             self.task_id,
             self.dry_run,
         )
-        .map_err(Into::into)
+        .map_err(anyhow::Error::from)?;
+        request.peer_loopback_host = loopback_host;
+        Ok(request)
     }
 
     fn build_message_source(&self) -> Result<SendMessageSource> {
@@ -137,7 +149,7 @@ mod tests {
 
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::SendMessageSource;
+    use atm_core::send::{PeerLoopbackHost, SendMessageSource};
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -321,6 +333,40 @@ mod tests {
 
         assert_eq!(request.caller_identity.as_str(), "env-sender");
         assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_rewrites_loopback_target_to_self_and_records_host() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "loopback@localhost".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("request");
+
+        assert_eq!(request.to.to_string(), format!("env-sender@{TEST_TEAM}"));
+        assert_eq!(
+            request
+                .peer_loopback_host
+                .as_ref()
+                .map(PeerLoopbackHost::as_str),
+            Some("localhost")
+        );
     }
 
     #[test]

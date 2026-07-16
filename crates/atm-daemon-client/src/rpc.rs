@@ -237,6 +237,8 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            peer_loopback_host: None,
+            peer_loopback_delivery: false,
             dry_run: false,
         }));
 
@@ -276,6 +278,8 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            peer_loopback_host: None,
+            peer_loopback_delivery: false,
             dry_run: false,
         }));
 

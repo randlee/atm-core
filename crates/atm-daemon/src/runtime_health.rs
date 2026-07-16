@@ -1,4 +1,5 @@
 use std::io::Write as _;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -27,7 +28,7 @@ use atm_core::{
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_post_send_emitter,
+    send::{PeerLoopbackHost, send_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -36,6 +37,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::peer_transport::PeerTransportRuntime;
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -266,6 +268,7 @@ pub(crate) struct DaemonRequestDispatcher {
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
+    peer_transport_runtime: PeerTransportRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -284,6 +287,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
             )
+            .field("peer_transport_runtime", &self.peer_transport_runtime)
             .finish()
     }
 }
@@ -518,6 +522,7 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_transport_runtime: PeerTransportRuntime,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -549,6 +554,7 @@ impl DaemonRequestDispatcher {
             roster_store: Some(roster_store),
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
+            peer_transport_runtime,
         }
     }
 
@@ -587,6 +593,9 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                if request.peer_loopback_host.is_some() {
+                    return self.dispatch_loopback_send(request);
+                }
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
                     request,
                     self.observability.as_ref(),
@@ -634,6 +643,50 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn dispatch_loopback_send(
+        &self,
+        mut request: atm_core::send::SendRequest,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let host = request
+            .peer_loopback_host
+            .take()
+            .ok_or_else(|| AtmError::daemon_unavailable("loopback peer host is missing"))?;
+        let endpoint = self.resolve_loopback_endpoint(&host)?;
+        request.peer_loopback_delivery = true;
+        self.peer_transport_runtime.send_to_endpoint(
+            endpoint,
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+        )
+    }
+
+    fn resolve_loopback_endpoint(&self, host: &PeerLoopbackHost) -> Result<SocketAddr, AtmError> {
+        let bound_addr = self
+            .peer_transport_runtime
+            .bound_addr()?
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "loopback peer delivery is unavailable because the daemon peer listener is not running",
+                )
+                .with_recovery(
+                    "Set [daemon].peer_listen_addr, restart atm-daemon, and retry the loopback send after the peer listener is bound.",
+                )
+            })?;
+        let host_addr = if host.as_str().eq_ignore_ascii_case("localhost") {
+            "127.0.0.1".parse().expect("loopback localhost parses")
+        } else {
+            host.as_str().parse().map_err(|error| {
+                AtmError::address_parse(format!(
+                    "invalid loopback host `{}`: {error}",
+                    host.as_str()
+                ))
+                .with_recovery(
+                    "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
+                )
+            })?
+        };
+        Ok(SocketAddr::new(host_addr, bound_addr.port()))
+    }
+
     fn compatibility_verdict(
         &self,
         preflight: atm_core::protocol::CompatibilityPreflight,
@@ -925,10 +978,11 @@ impl boundary::StatusSource for DaemonStatusSource {
 
 #[cfg(test)]
 impl DaemonRequestDispatcher {
-    pub(crate) fn new_for_test(
+    pub(crate) fn new_for_test_with_peer_transport(
         home_dir: std::path::PathBuf,
         status_cache: RuntimeStatusCache,
         roster_db_path: std::path::PathBuf,
+        peer_transport_runtime: crate::PeerTransportRuntime,
     ) -> Self {
         let observability = std::sync::Arc::new(
             crate::test_observability::TestDaemonObservability::new(
@@ -969,7 +1023,21 @@ impl DaemonRequestDispatcher {
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
+            peer_transport_runtime,
         }
+    }
+
+    pub(crate) fn new_for_test(
+        home_dir: std::path::PathBuf,
+        status_cache: RuntimeStatusCache,
+        roster_db_path: std::path::PathBuf,
+    ) -> Self {
+        Self::new_for_test_with_peer_transport(
+            home_dir,
+            status_cache,
+            roster_db_path,
+            crate::PeerTransportRuntime::default(),
+        )
     }
 }
 

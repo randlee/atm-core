@@ -14,6 +14,81 @@ This document does not replace those sources. It turns them into an exact
 Windows/macOS turn-taking procedure so `windows-agent` and `arch-ctm` can run
 `AG-VAL-003` through `AG-VAL-007` without improvising.
 
+## 2026-07-15 VPN Address Correction And Windows Pull Notes
+
+This section supersedes the earlier same-subnet example pair.
+
+Important correction:
+
+- there are no new daemon code changes in this note update
+- Windows must pull because the repo-local AG.2 setup/docs changed
+- Windows does not need to rebuild solely because of this note/config update
+  if the existing AG.2 daemon binary already comes from the current
+  `feature/cross-host-communication` code line
+
+Current confirmed AG.2 host values:
+
+- Windows host IP: `10.10.100.98`
+- macOS route-reachable VPN IP: `10.212.36.11`
+- listener port: `43101`
+
+Required setup correction:
+
+- `ATM_DAEMON_PEER_ADDR` is outbound-only
+- inbound listener bind comes from `.atm.toml` `[daemon].peer_listen_addr`
+- the daemon resolves `.atm.toml` from the current repo/worktree directory it
+  is started in, not from the location of the built binary artifact
+- this branch now carries the repo-local listener config:
+
+```toml
+[daemon]
+peer_listen_addr = "0.0.0.0:43101"
+```
+
+Outbound peer targets for the current VPN lane:
+
+- macOS:
+  - `ATM_DAEMON_PEER_ADDR=10.10.100.98:43101`
+- Windows:
+  - `ATM_DAEMON_PEER_ADDR=10.212.36.11:43101`
+
+Windows-agent exact next steps:
+
+1. Pull `feature/cross-host-communication` from remote.
+2. Confirm repo-local `.atm.toml` now contains:
+   - `[daemon]`
+   - `peer_listen_addr = "0.0.0.0:43101"`
+3. Keep the current AG.2 daemon build if it already came from this branch
+   state; no rebuild is required for this note/config-only correction.
+4. Restart the Windows AG.2 daemon from the repo root with:
+   - `ATM_DAEMON_PEER_ADDR=10.212.36.11:43101`
+5. Before attempting AG rows, capture:
+   - daemon startup transcript
+   - `atm doctor --json`
+   - `Test-NetConnection 10.212.36.11 -Port 43101`
+6. Report back with:
+   - daemon PID
+   - whether `Test-NetConnection 10.212.36.11 -Port 43101` succeeded
+   - whether `atm doctor --json` remained healthy/ready
+
+macOS paired operator action:
+
+1. Start/restart the AG.2 daemon from this same branch/worktree directory.
+2. If the built daemon artifact lives under another worktree
+   (for example `integrate/phase-AG/target/debug/atm-daemon`), that is fine,
+   but the process must still be launched with
+   `feature/cross-host-communication` as the current working directory so it
+   reads this branch's `.atm.toml`.
+3. Use:
+   - `ATM_DAEMON_PEER_ADDR=10.10.100.98:43101`
+4. Verify listener presence with:
+   - `lsof -nP -iTCP:43101 -sTCP:LISTEN`
+   - expected result for the VPN lane: `*:43101` or `0.0.0.0:43101`, not a
+     single LAN-only bind such as `192.168.128.82:43101`
+5. If macOS is bound only to a LAN address, stop and fix the start location
+   before asking Windows to retry connectivity. That is a local startup/config
+   mistake, not a Windows routing failure.
+
 ## Repo Root Convention
 
 All paths in this script are relative to the repository root.
