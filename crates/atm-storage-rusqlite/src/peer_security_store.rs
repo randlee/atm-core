@@ -131,13 +131,13 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
         let certificate_der = certified_key.cert.der().to_vec();
         let private_key_der = certified_key.signing_key.serialize_der();
         let fingerprint_sha256 = atm_storage::sha256_hex(&certificate_der);
-        let row = LocalPeerIdentityRow {
+        let row = LocalPeerIdentityRow::new(
             certificate_der,
             private_key_der,
             fingerprint_sha256,
-            created_at: now,
-            updated_at: now,
-        };
+            now.clone(),
+            now,
+        )?;
         self.db.with_transaction(|transaction| {
             transaction
                 .execute(
@@ -151,11 +151,11 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
                     ) VALUES (1, ?1, ?2, ?3, ?4, ?5)
                     ON CONFLICT(singleton_key) DO NOTHING;",
                     params![
-                        row.certificate_der,
-                        row.private_key_der,
-                        row.fingerprint_sha256,
-                        row.created_at.to_string(),
-                        row.updated_at.to_string(),
+                        row.certificate_der(),
+                        row.private_key_der(),
+                        row.fingerprint_sha256(),
+                        row.created_at().to_string(),
+                        row.updated_at().to_string(),
                     ],
                 )
                 .map_err(|error| {
@@ -247,10 +247,10 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
                         approved_at = excluded.approved_at,
                         updated_at = excluded.updated_at;",
                     params![
-                        command.host_name.as_str(),
-                        command.fingerprint_sha256,
-                        command.display_name,
-                        command.approved_by,
+                        command.host_name().as_str(),
+                        command.fingerprint_sha256(),
+                        command.display_name(),
+                        command.approved_by(),
                         now.to_string(),
                         now.to_string(),
                     ],
@@ -258,7 +258,7 @@ impl PeerSecurityStore for SqlitePeerSecurityStore {
                 .map_err(|error| {
                     self.db.error("failed to upsert daemon trusted peer", error)
                 })?;
-            load_trusted_peer_row(transaction, &self.db, &command.host_name)?.ok_or_else(|| {
+            load_trusted_peer_row(transaction, &self.db, command.host_name())?.ok_or_else(|| {
                 AtmError::mailbox_read(
                     "daemon trusted peer row was written but could not be reloaded",
                 )
@@ -387,18 +387,18 @@ fn decode_security_settings_row(
 fn decode_local_peer_identity_row(
     raw: StoredLocalPeerIdentityRow,
 ) -> Result<LocalPeerIdentityRow, AtmError> {
-    Ok(LocalPeerIdentityRow {
-        certificate_der: raw.certificate_der,
-        private_key_der: raw.private_key_der,
-        fingerprint_sha256: normalize_fingerprint(raw.fingerprint_sha256)?,
-        created_at: parse_timestamp(raw.created_at, "daemon_local_peer_identity.created_at")?,
-        updated_at: parse_timestamp(raw.updated_at, "daemon_local_peer_identity.updated_at")?,
-    })
+    LocalPeerIdentityRow::new(
+        raw.certificate_der,
+        raw.private_key_der,
+        normalize_fingerprint(raw.fingerprint_sha256)?,
+        parse_timestamp(raw.created_at, "daemon_local_peer_identity.created_at")?,
+        parse_timestamp(raw.updated_at, "daemon_local_peer_identity.updated_at")?,
+    )
 }
 
 fn decode_trusted_peer_row(raw: StoredTrustedPeerRow) -> Result<TrustedPeerRow, AtmError> {
-    Ok(TrustedPeerRow {
-        host_name: raw.host_name.parse().map_err(|error| {
+    TrustedPeerRow::new(
+        raw.host_name.parse().map_err(|error| {
             AtmError::validation(format!(
                 "failed to parse daemon_trusted_peers.host_name `{}`: {error}",
                 raw.host_name
@@ -407,12 +407,12 @@ fn decode_trusted_peer_row(raw: StoredTrustedPeerRow) -> Result<TrustedPeerRow, 
                 "Repair the malformed daemon_trusted_peers.host_name row before retrying the query.",
             )
         })?,
-        fingerprint_sha256: normalize_fingerprint(raw.fingerprint_sha256)?,
-        display_name: raw.display_name,
-        approved_by: raw.approved_by,
-        approved_at: parse_timestamp(raw.approved_at, "daemon_trusted_peers.approved_at")?,
-        updated_at: parse_timestamp(raw.updated_at, "daemon_trusted_peers.updated_at")?,
-    })
+        normalize_fingerprint(raw.fingerprint_sha256)?,
+        raw.display_name,
+        raw.approved_by,
+        parse_timestamp(raw.approved_at, "daemon_trusted_peers.approved_at")?,
+        parse_timestamp(raw.updated_at, "daemon_trusted_peers.updated_at")?,
+    )
 }
 
 fn parse_timestamp(raw: String, field: &str) -> Result<IsoTimestamp, AtmError> {

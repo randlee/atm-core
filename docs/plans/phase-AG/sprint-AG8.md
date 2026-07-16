@@ -23,9 +23,10 @@ estimated_scope: medium
 
 Lock the security direction for cross-host transport without implementing it in
 this sprint, and make every Phase AG requirement/architecture/readiness
-statement honest about the current line: functional cross-host code paths exist,
-real AG.7 live host-pair evidence is still pending, and the shipped transport is
-not yet secured.
+statement honest about the current line: functional peer-listener and
+control-plane code paths exist, but `AG-FIND-005` still blocks ordinary
+cross-host send dispatch, real AG.7 live host-pair evidence is still pending,
+and the shipped transport is not yet secured.
 
 ## Deliverables
 

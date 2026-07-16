@@ -607,7 +607,7 @@ impl ShowSecurityCommand {
             let settings = store.load_security_settings()?;
             let local_identity_fingerprint_sha256 = store
                 .load_local_identity()?
-                .map(|row| row.fingerprint_sha256);
+                .map(|row| row.fingerprint_sha256().to_string());
             let trusted_peers = store.list_trusted_peers()?;
             Ok(PeerSecurityShowOutcome {
                 settings,
@@ -655,7 +655,7 @@ impl ShowSecurityIdentityCommand {
         let outcome = with_default_peer_security_store(|store| {
             let row = store.load_or_create_local_identity()?;
             Ok(PeerSecurityIdentityOutcome {
-                fingerprint_sha256: row.fingerprint_sha256,
+                fingerprint_sha256: row.fingerprint_sha256().to_string(),
             })
         })?;
         if self.json {
@@ -688,7 +688,8 @@ impl ApproveTrustedPeerCliCommand {
         } else {
             println!(
                 "Approved trusted peer {} fingerprint_sha256={}",
-                outcome.row.host_name, outcome.row.fingerprint_sha256
+                outcome.row.host_name(),
+                outcome.row.fingerprint_sha256()
             );
         }
         Ok(())
@@ -730,9 +731,9 @@ impl ListTrustedPeersCliCommand {
         for row in &outcome.trusted_peers {
             println!(
                 "{} fingerprint_sha256={} display_name={}",
-                row.host_name,
-                row.fingerprint_sha256,
-                row.display_name.as_deref().unwrap_or("-"),
+                row.host_name(),
+                row.fingerprint_sha256(),
+                row.display_name().unwrap_or("-"),
             );
         }
         Ok(())

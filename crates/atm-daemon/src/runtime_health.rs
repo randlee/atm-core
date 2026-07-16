@@ -969,13 +969,13 @@ impl DaemonRequestDispatcher {
             local_identity_present: local_identity.is_some(),
             local_identity_fingerprint_sha256: local_identity
                 .as_ref()
-                .map(|row| row.fingerprint_sha256.clone()),
+                .map(|row| row.fingerprint_sha256().to_string()),
             trusted_peers: trusted_peers
                 .iter()
                 .map(|row| CrossHostTrustedPeerDoctorRow {
-                    host_name: row.host_name.to_string(),
-                    fingerprint_sha256: row.fingerprint_sha256.clone(),
-                    display_name: row.display_name.clone(),
+                    host_name: row.host_name().to_string(),
+                    fingerprint_sha256: row.fingerprint_sha256().to_string(),
+                    display_name: row.display_name().map(ToString::to_string),
                 })
                 .collect(),
         };

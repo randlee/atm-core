@@ -97,7 +97,7 @@ fn trusted_peer_fingerprint(
             "Run `atm daemon security trust approve {host_name} --fingerprint <sha256>` before retrying secure cross-host delivery."
         )));
     };
-    Ok(row.fingerprint_sha256)
+    Ok(row.fingerprint_sha256().to_string())
 }
 
 fn ensure_presented_peer_matches(
@@ -127,11 +127,13 @@ fn ensure_presented_peer_matches(
 }
 
 fn certificate_der(identity: &LocalPeerIdentityRow) -> CertificateDer<'static> {
-    CertificateDer::from(identity.certificate_der.clone())
+    CertificateDer::from(identity.certificate_der().to_vec())
 }
 
 fn private_key_der(identity: &LocalPeerIdentityRow) -> PrivateKeyDer<'static> {
-    PrivateKeyDer::from(PrivatePkcs8KeyDer::from(identity.private_key_der.clone()))
+    PrivateKeyDer::from(PrivatePkcs8KeyDer::from(
+        identity.private_key_der().to_vec(),
+    ))
 }
 
 fn complete_client_tls_handshake(tls: &mut ClientTlsStream) -> Result<(), std::io::Error> {

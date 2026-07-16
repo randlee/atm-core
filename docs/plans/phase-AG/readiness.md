@@ -23,7 +23,7 @@ release line.
 | Sprint | Closure Result | Candidate Commit | Notes |
 | --- | --- | --- | --- |
 | `AG.1` | `PASS` | `multiple` | setup contract and first live channel attempts were completed; the sprint correctly exposed the need for later product-control work |
-| `AG.2` | `RECLASSIFIED` | `multiple` | initial live validation attempts ran, but the sprint could not close because the required cross-host control plane did not exist yet; the first real reverse-direction send also exposed open product bug `AG-FIND-005` on the live send path |
+| `AG.2` | `RECLASSIFIED` | `multiple` | initial live validation attempts ran, but the sprint could not close because the required cross-host control plane did not exist yet; the first real reverse-direction send also exposed open product bug `AG-FIND-005` on the live send path, which remains a hard release blocker closed only by the AG.11-AG.17 corrective chain |
 | `AG.3` | `PASS` | `85a7d4df` | loopback self-test surface landed and is retained as a supported local diagnostic mode; it is not remote host-pair proof |
 | `AG.4` | `PENDING` | `TBD` | interface-control implementation is on the current AG development line, but sprint closure is still tracked through the held back-to-back queue rather than a separate accepted readiness update |
 | `AG.5` | `PENDING` | `TBD` | durable inbound allowlist implementation is on the current AG development line, but sprint closure is still tracked through the held back-to-back queue rather than a separate accepted readiness update |

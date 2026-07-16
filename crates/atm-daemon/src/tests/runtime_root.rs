@@ -79,7 +79,7 @@ fn configure_secure_loopback(db_path: &std::path::Path, host: &str) {
         .upsert_trusted_peer(
             UpsertTrustedPeerCommand::new(
                 host,
-                identity.fingerprint_sha256,
+                identity.fingerprint_sha256().to_string(),
                 Some("loopback".to_string()),
                 format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
             )

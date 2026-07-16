@@ -588,31 +588,139 @@ impl SetPeerSecurityModeCommand {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocalPeerIdentityRow {
-    pub certificate_der: Vec<u8>,
-    pub private_key_der: Vec<u8>,
-    pub fingerprint_sha256: String,
-    pub created_at: IsoTimestamp,
-    pub updated_at: IsoTimestamp,
+    certificate_der: Vec<u8>,
+    private_key_der: Vec<u8>,
+    fingerprint_sha256: String,
+    created_at: IsoTimestamp,
+    updated_at: IsoTimestamp,
+}
+
+impl LocalPeerIdentityRow {
+    pub fn new(
+        certificate_der: Vec<u8>,
+        private_key_der: Vec<u8>,
+        fingerprint_sha256: impl Into<String>,
+        created_at: IsoTimestamp,
+        updated_at: IsoTimestamp,
+    ) -> Result<Self, AtmError> {
+        if certificate_der.is_empty() {
+            return Err(AtmError::validation(
+                "daemon local peer identity certificate_der must not be empty".to_string(),
+            )
+            .with_recovery(
+                "Regenerate the local daemon peer identity before retrying the secure transport operation.",
+            ));
+        }
+        if private_key_der.is_empty() {
+            return Err(AtmError::validation(
+                "daemon local peer identity private_key_der must not be empty".to_string(),
+            )
+            .with_recovery(
+                "Regenerate the local daemon peer identity before retrying the secure transport operation.",
+            ));
+        }
+        let fingerprint_sha256 = normalize_sha256_fingerprint(fingerprint_sha256.into())?;
+        Ok(Self {
+            certificate_der,
+            private_key_der,
+            fingerprint_sha256,
+            created_at,
+            updated_at,
+        })
+    }
+
+    pub fn certificate_der(&self) -> &[u8] {
+        &self.certificate_der
+    }
+
+    pub fn private_key_der(&self) -> &[u8] {
+        &self.private_key_der
+    }
+
+    pub fn fingerprint_sha256(&self) -> &str {
+        &self.fingerprint_sha256
+    }
+
+    pub fn created_at(&self) -> &IsoTimestamp {
+        &self.created_at
+    }
+
+    pub fn updated_at(&self) -> &IsoTimestamp {
+        &self.updated_at
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TrustedPeerRow {
-    pub host_name: AllowedHostName,
-    pub fingerprint_sha256: String,
+    host_name: AllowedHostName,
+    fingerprint_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    pub approved_by: String,
-    pub approved_at: IsoTimestamp,
-    pub updated_at: IsoTimestamp,
+    display_name: Option<String>,
+    approved_by: String,
+    approved_at: IsoTimestamp,
+    updated_at: IsoTimestamp,
+}
+
+impl TrustedPeerRow {
+    pub fn new(
+        host_name: AllowedHostName,
+        fingerprint_sha256: impl Into<String>,
+        display_name: Option<String>,
+        approved_by: impl Into<String>,
+        approved_at: IsoTimestamp,
+        updated_at: IsoTimestamp,
+    ) -> Result<Self, AtmError> {
+        let fingerprint_sha256 = normalize_sha256_fingerprint(fingerprint_sha256.into())?;
+        let approved_by = require_non_blank(
+            approved_by.into(),
+            "trusted peer approved_by",
+            "Populate the caller identity before approving daemon peer trust.",
+        )?;
+        Ok(Self {
+            host_name,
+            fingerprint_sha256,
+            display_name: display_name.and_then(|value| {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }),
+            approved_by,
+            approved_at,
+            updated_at,
+        })
+    }
+
+    pub fn host_name(&self) -> &AllowedHostName {
+        &self.host_name
+    }
+
+    pub fn fingerprint_sha256(&self) -> &str {
+        &self.fingerprint_sha256
+    }
+
+    pub fn display_name(&self) -> Option<&str> {
+        self.display_name.as_deref()
+    }
+
+    pub fn approved_by(&self) -> &str {
+        &self.approved_by
+    }
+
+    pub fn approved_at(&self) -> &IsoTimestamp {
+        &self.approved_at
+    }
+
+    pub fn updated_at(&self) -> &IsoTimestamp {
+        &self.updated_at
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UpsertTrustedPeerCommand {
-    pub host_name: AllowedHostName,
-    pub fingerprint_sha256: String,
+    host_name: AllowedHostName,
+    fingerprint_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    pub approved_by: String,
+    display_name: Option<String>,
+    approved_by: String,
 }
 
 impl UpsertTrustedPeerCommand {
@@ -638,6 +746,22 @@ impl UpsertTrustedPeerCommand {
             }),
             approved_by,
         })
+    }
+
+    pub fn host_name(&self) -> &AllowedHostName {
+        &self.host_name
+    }
+
+    pub fn fingerprint_sha256(&self) -> &str {
+        &self.fingerprint_sha256
+    }
+
+    pub fn display_name(&self) -> Option<&str> {
+        self.display_name.as_deref()
+    }
+
+    pub fn approved_by(&self) -> &str {
+        &self.approved_by
     }
 }
 
