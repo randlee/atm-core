@@ -373,3 +373,12 @@ consumer of that enum only.
 - do not move to copied-state before the clean-room channel is real
 - do not widen to more rows while the first live channel attempt is unresolved
 - every failure must get a finding ID before another workaround is attempted
+
+## AG.9 Operator Notes
+
+- a successful sender-side `atm send --json` is not sufficient evidence of
+  cross-host delivery while `AG-FIND-005` is open
+- require receiver-side inbox proof plus daemon-log proof before classifying a
+  host-pair send as delivered
+- if delivery stays on the sender host, stop the matrix and record the routing
+  defect; do not continue into copied-state validation

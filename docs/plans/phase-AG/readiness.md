@@ -30,8 +30,8 @@ release line.
 | `AG.6` | `PASS` | `48c85b8d` | `atm doctor` now projects interface/bind state, allowlist state, staleness, bind failures, and legacy-fallback visibility for the shipped AG.4/AG.5 model |
 | `AG.7` | `PENDING` | `34846433` | local daemon-to-daemon harness and functional code-path closure exist on the current line; real Windows/macOS or Windows/Mac-Studio host-pair execution remains open until the live hardware matrix is rerun |
 | `AG.8` | `PENDING` | `TBD` | planning/reconciliation sprint: documents the current plain-TCP security posture, records that AG.7 live evidence is still pending, and defines AG.10's secure transport direction |
-| `AG.9` | `PENDING` | `TBD` | copied-state revalidation and final release verdict not yet executed |
-| `AG.10` | `PENDING` | `working tree` | TLS-backed secure mode, trusted-peer approval, doctor visibility, secure loopback proof, and local untrusted-peer rejection are implemented on the AG.10 line; secure LAN/VPN reruns remain open before transport-security closure can be claimed |
+| `AG.9` | `PASS` | `working tree` | copied-state revalidation is explicitly blocked because Lane A is not functionally green; final release verdict is now recorded honestly as functionally blocked by `AG-FIND-005` rather than merely transport-insecure |
+| `AG.10` | `PASS` | `16c5ba03` | TLS-backed secure mode, trusted-peer approval, doctor visibility, secure loopback proof, and local untrusted-peer rejection are implemented on the AG.10 line; secure LAN/VPN reruns remain open before transport-security closure can be claimed |
 
 Allowed closure-result values:
 
@@ -53,9 +53,9 @@ Allowed closure-result values:
   real host-pair evidence is still pending
 - `AG.9` does not begin until the required clean-room rows are green enough to
   justify copied-state revalidation
-- `AG.9` may not claim transport-security closure until `AG.10` is `PASS`; if
-  `AG.10` is deferred, the verdict must explicitly state cross-host is
-  functionally usable but not transport-secure
+- `AG.9` may not claim transport-security closure until `AG.10` is `PASS`
+- if `AG-FIND-005` remains open, the verdict must explicitly state cross-host
+  is functionally blocked, regardless of transport-security status
 - every failed row is linked to a finding in
   `cross-host-findings-ledger.md`
 - the final verdict states whether `1.3.1` cross-host communication is
@@ -69,11 +69,54 @@ Allowed closure-result values:
 - readiness status: `NOT READY`
 - final accepted candidate line: `TBD`
 - gate status: `BLOCKED`
-- notes: `Early AG work proved the original validation-only framing was wrong.
-  Cross-host closure first required a real product control plane, then a local
-  harness proving the daemon-to-daemon path on the current implementation line,
-  and still requires AG.7 live host-pair reruns plus AG.10 transport-security
-  closure before any secure release claim is allowed. The AG.10 development
-  line now carries secure transport locally, but any interim release-usable
-  statement must still exclude transport-security guarantees until the secure
-  LAN/VPN host-pair reruns are retained.`
+- notes: `Phase AG is blocked by AG-FIND-005. Ordinary cross-host send is not
+  wired into peer transport at all, so a real host-to-host send can report
+  success while never leaving the sender host. The AG.4-AG.10 control-plane and
+  AG.10 secure-transport work are real and locally validated, but transport
+  security is moot until the functional send-routing gap is fixed. Copied-state
+  revalidation is therefore not approved to run, because Lane A is not
+  functionally green.`
+
+## AG.9 Copied-State Revalidation Result
+
+- status: `BLOCKED`
+- approved subset executed: `none`
+- reason: `AG-FIND-005 leaves Lane A functionally red, so AG.9 cannot honestly
+  promote any copied-state rerun as meaningful release evidence`
+- consequence: `AG-VAL-010` remains blocked pending a dedicated fix sprint for
+  remote-send routing followed by fresh clean-room host-pair reruns
+
+## Final Release Verdict
+
+- cross-host communication: `FUNCTIONALLY BLOCKED`
+- transport security: `implemented for the daemon surfaces that do work
+  (secure loopback, trusted-peer rejection, doctor visibility), but not
+  release-meaningful until AG-FIND-005 is fixed`
+- release usability for `1.3.1` cross-host communication: `NOT RELEASE USABLE`
+
+Plain-language verdict:
+
+> Normal cross-host `atm send` is currently broken. It can report success while
+> keeping delivery on the sender host instead of routing through the remote
+> daemon. Until that routing defect is fixed, cross-host communication is
+> blocked, not merely insecure.
+
+## Operator Repair / Setup Notes
+
+- do not attempt copied-state reruns while `AG-FIND-005` is open; they do not
+  add trustworthy release evidence
+- do not interpret a successful `atm send --json` as proof of daemon-to-daemon
+  delivery unless receiver-side inbox evidence and daemon logs confirm remote
+  mutation
+
+## Follow-On Work Required
+
+- schedule a dedicated fix sprint for `AG-FIND-005`; no AG.4-AG.10 sprint owns
+  that code change
+- the fix must use one explicit routing branch only:
+  - local recipient -> current local mailbox path
+  - remote recipient -> remote-delivery trait path
+- remote-delivery routing must be isolated behind a trait or narrow trait set;
+  do not spread peer-routing decisions across general daemon/runtime code
+- after the fix lands, rerun Lane A clean-room host-pair rows before any
+  copied-state revalidation or release verdict is reconsidered

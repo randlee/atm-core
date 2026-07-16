@@ -71,6 +71,8 @@ with the actual release verdict.
   - if `AG.10` is `PASS`, the verdict may include transport-security closure
   - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
     cross-host is functionally usable but not transport-secure
+  - if `AG-FIND-005` remains open, the verdict must instead state cross-host is
+    functionally blocked, regardless of AG.10 transport-security status
 
 ## Acceptance Criteria
 
@@ -80,3 +82,5 @@ with the actual release verdict.
 - final release wording is explicit about the difference between functional
   cross-host closure and transport-security closure
 - AG.10 is named explicitly as a precondition for any transport-security claim
+- AG-FIND-005 blocks copied-state execution and forces a functional-blocked
+  verdict until a dedicated routing sprint fixes ordinary remote send

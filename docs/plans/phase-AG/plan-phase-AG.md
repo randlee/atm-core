@@ -565,6 +565,8 @@ Entry gate:
   - if `AG.10` is `PASS`, the verdict may include transport-security closure
   - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
     cross-host is functionally usable but not transport-secure
+  - if `AG-FIND-005` remains open, the verdict must instead state cross-host is
+    functionally blocked and copied-state revalidation must remain blocked
 
 Execution owner:
 
@@ -592,3 +594,5 @@ Phase `AG` is complete only when all of the following are true:
   release-usable
 - any functional release-usable statement is explicit about whether it excludes
   transport security
+- if ordinary remote send is not routed into peer transport, the release verdict
+  must classify cross-host as functionally blocked rather than merely insecure
