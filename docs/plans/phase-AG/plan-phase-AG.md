@@ -552,7 +552,8 @@ Outputs:
 - final findings ledger
 - readiness record
 - explicit statement of whether cross-host is:
-  - functionally release-usable only if `AG-FIND-005` is closed
+  - functionally release-usable only if the hard release blocker
+    `AG-FIND-005` is closed
   - blocked
   - functionally usable but not transport-secure
 
@@ -565,8 +566,9 @@ Entry gate:
   - if `AG.10` is `PASS`, the verdict may include transport-security closure
   - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
     cross-host is functionally usable but not transport-secure
-  - if `AG-FIND-005` remains open, the verdict must remain `blocked` rather
-    than downgrade the live send-path defect into a caveat
+  - if the hard release blocker `AG-FIND-005` remains open, the verdict must
+    remain `blocked` rather than downgrade the live send-path defect into a
+    caveat
 
 Execution owner:
 
@@ -594,5 +596,6 @@ Phase `AG` is complete only when all of the following are true:
   release-usable
 - any functional release-usable statement is explicit about whether it excludes
   transport security
-- no release-usable statement is allowed while `AG-FIND-005` remains open; the
-  AG.11-AG.17 corrective chain is the only closure path for that blocker
+- no release-usable statement is allowed while the hard release blocker
+  `AG-FIND-005` remains open; the AG.11-AG.17 corrective chain is the only
+  closure path for that blocker
