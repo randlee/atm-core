@@ -3607,6 +3607,32 @@ mail correctness.
   - doctor output must surface allowlist enforcement state and configured host
     rows
 
+- `REQ-CORE-TRANSPORT-002E` `atm doctor` must expose the cross-host control
+  plane through a first-class `cross_host` projection rather than scattering
+  the data across unrelated findings only.
+
+  Required behavior:
+  - JSON doctor output must include a top-level `cross_host` object whenever
+    the daemon runtime is available
+  - `cross_host` must expose:
+    - `legacy_fallback_active`
+    - `bound_endpoints`
+    - `interfaces`
+    - `allowlist`
+  - each `interfaces` row must report:
+    - configured bind/advertise identity
+    - `enabled`
+    - whether the listener is currently bound
+    - `last_bound_at`
+    - `last_bind_error`
+    - `stale_at`
+  - `allowlist` must report:
+    - whether enforcement is active
+    - whether the enabled allowlist is empty
+    - every configured host row with enabled/disabled state
+  - text doctor output must render the same cross-host state in one dedicated
+    operator-visible section
+
 - `REQ-CORE-TRANSPORT-002C` Loopback self-test is an allowed local diagnostic
   addressing mode and must not be misrepresented as proof of remote host-pair
   closure.
