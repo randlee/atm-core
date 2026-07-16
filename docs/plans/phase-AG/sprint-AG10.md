@@ -2,8 +2,8 @@
 id: AG.10
 title: Secured Cross-Host Transport Implementation
 status: planned
-branch: feature/pAG-s10-secured-cross-host-transport
-worktree: ../atm-core-worktrees/feature/pAG-s10-secured-cross-host-transport
+branch: feature/pAG-s10-secured-transport
+worktree: ../atm-core-worktrees/feature/pAG-s10-secured-transport
 target: integrate/phase-AG
 ---
 
@@ -13,8 +13,8 @@ target: integrate/phase-AG
 plan_type: sprint_plan
 phase: AG
 sprint: AG.10
-worktree: ../atm-core-worktrees/feature/pAG-s10-secured-cross-host-transport
-branch: feature/pAG-s10-secured-cross-host-transport
+worktree: ../atm-core-worktrees/feature/pAG-s10-secured-transport
+branch: feature/pAG-s10-secured-transport
 status: planned
 estimated_scope: large
 ```

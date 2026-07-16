@@ -2,8 +2,8 @@
 id: AG.15
 title: Other-Mac Cross-Host Smoke
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: feature/pAG-s15-othermac-smoke
+worktree: ../atm-core-worktrees/feature/pAG-s15-othermac-smoke
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.15
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s15-othermac-smoke
+branch: feature/pAG-s15-othermac-smoke
 status: planned
 estimated_scope: medium
 ```
