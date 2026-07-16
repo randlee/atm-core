@@ -120,7 +120,7 @@ Trait-surface rule:
 
 - `SendTargetParser` and `CrossHostDelivery` are repository-owned sealed
   traits, not external extension points
-- the sprint requires one fixed production implementor set chosen by the
+- the sprint requires one fixed production implementer set chosen by the
   composition root
 
 ## Acceptance Criteria
