@@ -21,8 +21,6 @@ The user-approved correction is intentionally narrow:
 - remote-target parsing must be explicit and operator-visible
 - localhost and the sender's own IP address must be ordinary remote-host
   values, not a special loopback-only mode
-- socket transport must reuse the same ATM wire message shapes already used on
-  other ATM transports
 - host-routing logic must stop at one typed boundary so socket logic does not
   leak through general send/runtime code
 
@@ -108,8 +106,6 @@ Dispatch rules:
   mailbox path
 - `localhost` and the sender host's own advertised or bound IP address are
   ordinary non-empty remote-host values on that same cross-host delivery path
-- no localhost-only or loopback-only dispatch branch exists in the production
-  contract
 
 Delivery-result rules:
 
@@ -152,8 +148,6 @@ Boundary rule:
 
 - parsing/normalization/classification ends at one typed remote-target
   contract
-- ATM payload framing and message shapes remain transport-invariant across
-  local IPC, socket transport, and any other supported ATM transport
 - socket and transport implementation details stay behind the cross-host
   delivery boundary and its storage/config boundaries
 
