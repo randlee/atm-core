@@ -2,8 +2,8 @@
 id: AG.8
 title: Transport Security And Encryption Hardening
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
+branch: feature/pAG-s8-transport-security-planning
+worktree: ../atm-core-worktrees/feature/pAG-s8-transport-security-planning
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.8
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s8-transport-security-planning
+branch: feature/pAG-s8-transport-security-planning
 status: planned
 estimated_scope: medium
 ```

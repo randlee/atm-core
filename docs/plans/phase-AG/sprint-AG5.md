@@ -2,8 +2,8 @@
 id: AG.5
 title: Durable Host Allowlist Enforcement
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
+branch: feature/pAG-s5-host-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s5-host-allowlist
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.5
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s5-host-allowlist
+branch: feature/pAG-s5-host-allowlist
 status: planned
 estimated_scope: medium
 ```

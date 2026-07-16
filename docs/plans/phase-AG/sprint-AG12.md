@@ -2,8 +2,8 @@
 id: AG.12
 title: Localhost Full-Function Same-Host Remote-Target Proof
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: feature/pAG-s12-localhost-proof
+worktree: ../atm-core-worktrees/feature/pAG-s12-localhost-proof
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.12
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s12-localhost-proof
+branch: feature/pAG-s12-localhost-proof
 status: planned
 estimated_scope: medium
 ```

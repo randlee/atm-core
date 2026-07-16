@@ -1,8 +1,8 @@
 ---
 title: Phase AG Plan
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: develop
+worktree: ../atm-core
 ---
 
 # Phase AG Plan
@@ -88,7 +88,8 @@ Phase `AG` now has three distinct records:
 - historical early execution on `feature/cross-host-communication`
 - reviewed corrective replan history on
   `plan/phase-ag-multihost-advertise-allowlist`
-- current hardened planning source on `docs/cross-host-remote-target-contract`
+- current hardened planning source merged into `develop`, with execution on
+  separate sprint worktrees
 
 The historical lines remain important evidence, but they no longer define the
 forward phase sequence by themselves. The current branch is the planning source
