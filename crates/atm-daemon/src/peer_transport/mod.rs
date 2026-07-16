@@ -23,10 +23,16 @@ use atm_storage::{AllowedHostName, AllowedHostStore};
 use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::{DaemonSubsystem, SubsystemObservability};
 
+mod config_helpers;
 mod server;
 #[cfg(test)]
 mod tests;
 
+use config_helpers::{
+    daemon_peer_endpoint_from_env, remote_peer_endpoint_not_configured_error,
+    remote_replay_persistence_failed_error, remote_replay_store_not_configured_error,
+    remote_retry_budget_expiry_error,
+};
 use server::PeerServerTransport;
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
@@ -162,51 +168,6 @@ impl PeerTransportConfig {
             remote_retry_budget,
             peer_listen_addr: config.and_then(|config| config.daemon.peer_listen_addr),
         })
-    }
-}
-
-fn remote_replay_store_not_configured_error() -> AtmError {
-    AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
-        "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
-    )
-}
-
-fn remote_peer_endpoint_not_configured_error() -> AtmError {
-    AtmError::daemon_unavailable("remote peer endpoint is not configured").with_recovery(
-        "Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery or replay persistence.",
-    )
-}
-
-fn remote_retry_budget_expiry_error(
-    source: impl std::error::Error + Send + Sync + 'static,
-) -> AtmError {
-    AtmError::daemon_unavailable("failed to convert remote retry budget into a replay expiry")
-        .with_recovery(
-            "Fix the daemon remote retry budget configuration and restart atm-daemon before retrying remote delivery so replay expiry can be computed deterministically.",
-        )
-        .with_source(source)
-}
-
-fn remote_replay_persistence_failed_error(source: AtmError) -> AtmError {
-    AtmError::remote_delivery_outcome_unknown(
-        "remote peer delivery outcome is unknown and replay persistence failed",
-    )
-    .with_source(source)
-}
-
-fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
-    match std::env::var("ATM_DAEMON_PEER_ADDR") {
-        Ok(raw) => parse_peer_endpoint(&raw),
-        Err(std::env::VarError::NotPresent) => None,
-        Err(std::env::VarError::NotUnicode(_)) => {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "env_parse",
-                outcome = "ignored",
-                "ignoring non-unicode ATM_DAEMON_PEER_ADDR value"
-            );
-            None
-        }
     }
 }
 

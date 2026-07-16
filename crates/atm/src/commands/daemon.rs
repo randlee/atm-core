@@ -2,12 +2,10 @@ use std::net::IpAddr;
 
 use anyhow::Result;
 use atm_core::error::AtmError;
-use atm_daemon_bootstrap::{
-    with_default_allowed_host_store, with_default_peer_interface_config_store,
-};
-use atm_storage::contract::{
+use atm_runtime::{
     AddPeerInterfaceCommand, AllowHostCommand, AllowedHostName, AllowedHostRow, PeerInterfaceKey,
     PeerInterfaceKind, PeerInterfaceRow, UpdatePeerInterfaceCommand,
+    with_default_allowed_host_store, with_default_peer_interface_config_store,
 };
 use clap::{Args, Subcommand, ValueEnum};
 

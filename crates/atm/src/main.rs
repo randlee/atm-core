@@ -73,14 +73,31 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
 }
 
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
-    match error.code {
+    config_exit_code(error.code)
+        .or_else(|| identity_exit_code(error.code))
+        .or_else(|| daemon_exit_code(error.code))
+        .or_else(|| mailbox_exit_code(error.code))
+        .or_else(|| file_policy_exit_code(error.code))
+        .or_else(|| observability_exit_code(error.code))
+        .or_else(|| misc_exit_code(error.code))
+        .unwrap_or(1)
+}
+
+fn config_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => 2,
+        | AtmErrorCode::ConfigTeamMissing => Some(2),
+        _ => None,
+    }
+}
+
+fn identity_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
@@ -98,7 +115,13 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
         | AtmErrorCode::HelpTopicNotFound
-        | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
+        | AtmErrorCode::TestFakeTransportInjectionFailed => Some(3),
+        _ => None,
+    }
+}
+
+fn daemon_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
@@ -115,44 +138,46 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown
-        | AtmErrorCode::WarningSqliteHealthDegraded => 4,
+        | AtmErrorCode::WarningSqliteHealthDegraded => Some(4),
+        _ => None,
+    }
+}
+
+fn mailbox_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::MailboxReadFailed
         | AtmErrorCode::MailboxWriteFailed
         | AtmErrorCode::MailboxLockFailed
         | AtmErrorCode::MailboxLockReadOnlyFilesystem
-        | AtmErrorCode::MailboxLockTimeout => 5,
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => 6,
+        | AtmErrorCode::MailboxLockTimeout => Some(5),
+        _ => None,
+    }
+}
+
+fn file_policy_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => Some(6),
+        _ => None,
+    }
+}
+
+fn observability_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
         AtmErrorCode::ObservabilityEmitFailed
         | AtmErrorCode::ObservabilityQueryFailed
         | AtmErrorCode::ObservabilityFollowFailed
         | AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityBootstrapFailed
-        | AtmErrorCode::ObservabilityHealthOk => 7,
-        AtmErrorCode::SerializationFailed => 8,
-        AtmErrorCode::WaitTimeout => 9,
-        AtmErrorCode::WarningInvalidTeamMemberSkipped
-        | AtmErrorCode::WarningMailboxRecordSkipped
-        | AtmErrorCode::WarningMalformedAtmFieldIgnored
-        | AtmErrorCode::WarningObservabilityHealthDegraded
-        | AtmErrorCode::WarningOriginInboxEntrySkipped
-        | AtmErrorCode::WarningMissingTeamConfigFallback
-        | AtmErrorCode::WarningSendAlertStateDegraded
-        | AtmErrorCode::WarningIdentityDrift
-        | AtmErrorCode::WarningRosterDrift
-        | AtmErrorCode::WarningBaselineMemberMissing
-        | AtmErrorCode::WarningRestoreInProgress
-        | AtmErrorCode::WarningStaleMailboxLock
-        | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::PostSendPaneMissing
-        | AtmErrorCode::PostSendTmuxSendFailed
-        | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed
-        | AtmErrorCode::WarningCrossHostListenerUnconfigured
-        | AtmErrorCode::WarningCrossHostListenerDegraded
-        | AtmErrorCode::WarningCrossHostAllowlistEmpty
-        | AtmErrorCode::WarningCrossHostLegacyFallbackActive
-        | AtmErrorCode::InternalError => 1,
+        | AtmErrorCode::ObservabilityHealthOk => Some(7),
+        _ => None,
+    }
+}
+
+fn misc_exit_code(code: AtmErrorCode) -> Option<i32> {
+    match code {
+        AtmErrorCode::SerializationFailed => Some(8),
+        AtmErrorCode::WaitTimeout => Some(9),
+        _ => None,
     }
 }
 

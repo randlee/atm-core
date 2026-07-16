@@ -46,6 +46,13 @@ pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, RosterStore};
+
+#[path = "runtime_health/doctor_projection.rs"]
+mod doctor_projection;
+use doctor_projection::{
+    finalize_doctor_findings, project_bound_endpoints, project_cross_host_allowlist_hosts,
+    project_cross_host_findings, project_cross_host_interfaces,
+};
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -861,32 +868,7 @@ impl DaemonRequestDispatcher {
                 findings: vec![runtime_status_finding],
             });
         }
-        report.recommendations = report
-            .findings
-            .iter()
-            .filter_map(|finding| finding.remediation.clone())
-            .collect();
-        let status = doctor::health::status_from_findings(&report.findings);
-        let (info_count, warning_count, error_count) = report.findings.iter().fold(
-            (0usize, 0usize, 0usize),
-            |(info, warning, error), finding| match finding.severity {
-                DoctorSeverity::Info => (info + 1, warning, error),
-                DoctorSeverity::Warning => (info, warning + 1, error),
-                DoctorSeverity::Error => (info, warning, error + 1),
-            },
-        );
-        let message = match status {
-            DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-            DoctorStatus::Warning => "ATM doctor completed with warnings",
-            DoctorStatus::Error => "ATM doctor found critical issues",
-        };
-        report.summary = DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        };
+        finalize_doctor_findings(&mut report);
         report.runtime_status = Some(runtime_status);
         // `daemon_context` reports the daemon process's own launch-time
         // environment, which is frozen when the singleton starts and does NOT
@@ -916,106 +898,17 @@ impl DaemonRequestDispatcher {
         let live_bound_addr = self.peer_transport_runtime.bound_addr()?;
         let has_enabled_interface_rows = interface_rows.iter().any(|row| row.enabled);
         let legacy_fallback_active = !has_enabled_interface_rows && live_bound_addr.is_some();
-
-        let interfaces = interface_rows
-            .iter()
-            .map(|row| CrossHostInterfaceDoctorRow {
-                interface_name: row.interface_name.clone(),
-                bind_addr: row.bind_addr.to_string(),
-                advertise_addr: row.advertise_addr.to_string(),
-                port: row.port,
-                enabled: row.enabled,
-                listener_bound: row.enabled
-                    && row.last_bound_at.is_some()
-                    && row.last_bind_error.is_none(),
-                last_bound_at: row.last_bound_at,
-                last_bind_error: row.last_bind_error.clone(),
-                stale_at: row.stale_at,
-            })
-            .collect::<Vec<_>>();
-
-        let mut bound_endpoints = interfaces
-            .iter()
-            .filter(|row| row.listener_bound)
-            .map(|row| format!("{}:{}", row.bind_addr, row.port))
-            .collect::<Vec<_>>();
-        if bound_endpoints.is_empty()
-            && let Some(bound_addr) = live_bound_addr
-        {
-            bound_endpoints.push(bound_addr.to_string());
-        }
-
-        let allowlist_hosts = host_rows
-            .iter()
-            .map(|row| CrossHostAllowedHostDoctorRow {
-                host_name: row.host_name.to_string(),
-                enabled: row.enabled,
-                disabled_at: row.disabled_at,
-                note: row.note.clone(),
-            })
-            .collect::<Vec<_>>();
+        let interfaces = project_cross_host_interfaces(&interface_rows);
+        let bound_endpoints = project_bound_endpoints(&interfaces, live_bound_addr);
+        let allowlist_hosts = project_cross_host_allowlist_hosts(&host_rows);
         let enabled_allowlist_count = host_rows.iter().filter(|row| row.enabled).count();
-
-        let mut findings = Vec::new();
-        if legacy_fallback_active {
-            let bound_addr = live_bound_addr.expect("checked above");
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostLegacyFallbackActive,
-                message: format!(
-                    "daemon cross-host listener is currently bound at {bound_addr} via legacy config fallback because no enabled durable interface rows exist"
-                ),
-                remediation: Some(
-                    "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor` so the durable interface rows become authoritative."
-                        .to_string(),
-                ),
-            });
-        } else if !has_enabled_interface_rows {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostListenerUnconfigured,
-                message:
-                    "no enabled daemon interface rows are configured for cross-host listener binding"
-                        .to_string(),
-                remediation: Some(
-                    "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor`."
-                        .to_string(),
-                ),
-            });
-        }
-
-        findings.extend(
-            interfaces
-                .iter()
-                .filter(|row| row.enabled && row.last_bind_error.is_some())
-                .map(|row| DoctorFinding {
-                    severity: DoctorSeverity::Warning,
-                    code: AtmErrorCode::WarningCrossHostListenerDegraded,
-                    message: format!(
-                        "daemon interface {} at {}:{} failed to bind for cross-host transport: {}",
-                        row.interface_name,
-                        row.bind_addr,
-                        row.port,
-                        row.last_bind_error.as_deref().unwrap_or("unknown bind failure")
-                    ),
-                    remediation: Some(
-                        "Run `atm daemon interfaces list` to inspect the row, correct the bind address or port, restart atm-daemon, and rerun `atm doctor`."
-                            .to_string(),
-                    ),
-                }),
+        let findings = project_cross_host_findings(
+            legacy_fallback_active,
+            has_enabled_interface_rows,
+            live_bound_addr,
+            &interfaces,
+            enabled_allowlist_count,
         );
-
-        if enabled_allowlist_count == 0 {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostAllowlistEmpty,
-                message: "cross-host host authorization is enforced but no enabled daemon allowed-host rows exist".to_string(),
-                remediation: Some(
-                    "Run `atm daemon hosts allow <host>` for each remote peer that should be admitted, then rerun `atm doctor`."
-                        .to_string(),
-                ),
-            });
-        }
 
         Ok((
             CrossHostDoctorReport {

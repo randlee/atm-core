@@ -30,6 +30,15 @@ struct PeerServerHandle {
     bound_addr: SocketAddr,
 }
 
+struct PeerConnectionWorkerContext<'a> {
+    dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: &'a Arc<dyn PeerAuthorizationPolicy>,
+    terminate: &'a Arc<AtomicBool>,
+    observability: &'a SubsystemObservability,
+    codec: &'a JsonAtmProtocolCodec,
+    registry: &'a Arc<ActiveConnectionRegistry>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PeerListenerOutcome {
     pub(crate) listen_addr: SocketAddr,
@@ -105,8 +114,7 @@ impl PeerServerTransport {
                     .with_recovery("Restart atm-daemon before retrying cross-host peer shutdown.")
             })?;
             std::mem::take(&mut *state)
-                .into_iter()
-                .map(|(_, handle)| handle)
+                .into_values()
                 .collect::<Vec<_>>()
         };
         for handle in drained {
@@ -121,95 +129,13 @@ impl PeerServerTransport {
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-        {
-            let mut configured = self.listen_addrs.lock().map_err(|_| {
-                AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
-                    "Restart atm-daemon before retrying cross-host peer listener reload.",
-                )
-            })?;
-            *configured = listen_addrs.clone();
-        }
-
-        let desired = listen_addrs
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        let mut state = self.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
-                "Restart atm-daemon before retrying cross-host peer listener reload.",
-            )
-        })?;
-
-        let stale_addrs = state
-            .keys()
-            .copied()
-            .filter(|addr| !desired.contains(addr))
-            .collect::<Vec<_>>();
-        for stale_addr in stale_addrs {
-            if let Some(handle) = state.remove(&stale_addr) {
-                shutdown_listener_handle(handle)?;
-            }
-        }
-
-        let mut outcomes = Vec::new();
-        let mut failures = Vec::new();
-        for listen_addr in listen_addrs {
-            if let Some(handle) = state.get(&listen_addr) {
-                outcomes.push(PeerListenerOutcome {
-                    listen_addr,
-                    bound_addr: Some(handle.bound_addr),
-                    error_message: None,
-                });
-                continue;
-            }
-            match self.bind_and_spawn_listener(listen_addr, dispatcher.clone()) {
-                Ok((bound_addr, handle)) => {
-                    self.observability.emit_or_warn(
-                        "peer_listener_start",
-                        "ok",
-                        format!("daemon peer listener bound at {bound_addr}"),
-                    );
-                    state.insert(listen_addr, handle);
-                    outcomes.push(PeerListenerOutcome {
-                        listen_addr,
-                        bound_addr: Some(bound_addr),
-                        error_message: None,
-                    });
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "peer_transport",
-                        action = "reload_listener",
-                        outcome = "degraded",
-                        %listen_addr,
-                        %error,
-                        "daemon peer listener reload failed to rebind the configured address"
-                    );
-                    self.observability.emit_or_warn(
-                        "peer_listener_reload",
-                        "degraded",
-                        format!("daemon peer listener reload failed for {listen_addr}"),
-                    );
-                    self.record_degraded(listen_addr, &error);
-                    failures.push(format!("{listen_addr}: {}", error.message));
-                    outcomes.push(PeerListenerOutcome {
-                        listen_addr,
-                        bound_addr: None,
-                        error_message: Some(error.message.clone()),
-                    });
-                }
-            }
-        }
-
-        if failures.is_empty() {
-            self.status_cache.clear_peer_listener_degraded();
-        } else {
-            self.status_cache.record_peer_listener_degraded(format!(
-                "daemon peer listener reload has degraded rows: {}",
-                failures.join("; ")
-            ));
-        }
-
+        self.replace_configured_listen_addrs(&listen_addrs)?;
+        let desired = listen_addrs.iter().copied().collect();
+        let mut state = self.lock_state_for_reload()?;
+        self.remove_stale_listener_handles(&mut state, &desired)?;
+        let (outcomes, failures) =
+            self.reconcile_listener_rows(&mut state, listen_addrs, dispatcher)?;
+        self.update_reload_status(&failures);
         Ok(outcomes)
     }
 
@@ -236,6 +162,131 @@ impl PeerServerTransport {
             "daemon peer listener at {listen_addr} is degraded: {}",
             error.message
         ));
+    }
+
+    fn replace_configured_listen_addrs(&self, listen_addrs: &[SocketAddr]) -> Result<(), AtmError> {
+        let mut configured = self.listen_addrs.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener reload.",
+            )
+        })?;
+        *configured = listen_addrs.to_vec();
+        Ok(())
+    }
+
+    fn lock_state_for_reload(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<SocketAddr, PeerServerHandle>>, AtmError> {
+        self.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener reload.",
+            )
+        })
+    }
+
+    fn remove_stale_listener_handles(
+        &self,
+        state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
+        desired: &std::collections::BTreeSet<SocketAddr>,
+    ) -> Result<(), AtmError> {
+        let stale_addrs = state
+            .keys()
+            .copied()
+            .filter(|addr| !desired.contains(addr))
+            .collect::<Vec<_>>();
+        for stale_addr in stale_addrs {
+            if let Some(handle) = state.remove(&stale_addr) {
+                shutdown_listener_handle(handle)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn reconcile_listener_rows(
+        &self,
+        state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
+        listen_addrs: Vec<SocketAddr>,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<(Vec<PeerListenerOutcome>, Vec<String>), AtmError> {
+        let mut outcomes = Vec::new();
+        let mut failures = Vec::new();
+        for listen_addr in listen_addrs {
+            if let Some(outcome) = listener_outcome_from_existing(state, listen_addr) {
+                outcomes.push(outcome);
+                continue;
+            }
+            outcomes.push(self.bind_listener_row(
+                state,
+                listen_addr,
+                dispatcher.clone(),
+                &mut failures,
+            ));
+        }
+        Ok((outcomes, failures))
+    }
+
+    fn bind_listener_row(
+        &self,
+        state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
+        listen_addr: SocketAddr,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        failures: &mut Vec<String>,
+    ) -> PeerListenerOutcome {
+        match self.bind_and_spawn_listener(listen_addr, dispatcher) {
+            Ok((bound_addr, handle)) => {
+                self.observability.emit_or_warn(
+                    "peer_listener_start",
+                    "ok",
+                    format!("daemon peer listener bound at {bound_addr}"),
+                );
+                state.insert(listen_addr, handle);
+                PeerListenerOutcome {
+                    listen_addr,
+                    bound_addr: Some(bound_addr),
+                    error_message: None,
+                }
+            }
+            Err(error) => self.listener_bind_failure_outcome(listen_addr, error, failures),
+        }
+    }
+
+    fn listener_bind_failure_outcome(
+        &self,
+        listen_addr: SocketAddr,
+        error: AtmError,
+        failures: &mut Vec<String>,
+    ) -> PeerListenerOutcome {
+        tracing::warn!(
+            subsystem = "peer_transport",
+            action = "reload_listener",
+            outcome = "degraded",
+            %listen_addr,
+            %error,
+            "daemon peer listener reload failed to rebind the configured address"
+        );
+        self.observability.emit_or_warn(
+            "peer_listener_reload",
+            "degraded",
+            format!("daemon peer listener reload failed for {listen_addr}"),
+        );
+        self.record_degraded(listen_addr, &error);
+        failures.push(format!("{listen_addr}: {}", error.message));
+        PeerListenerOutcome {
+            listen_addr,
+            bound_addr: None,
+            error_message: Some(error.message.clone()),
+        }
+    }
+
+    fn update_reload_status(&self, failures: &[String]) {
+        if failures.is_empty() {
+            self.status_cache.clear_peer_listener_degraded();
+        } else {
+            self.status_cache.record_peer_listener_degraded(format!(
+                "daemon peer listener reload has degraded rows: {}",
+                failures.join("; ")
+            ));
+        }
     }
 
     #[allow(
@@ -401,19 +452,19 @@ fn serve_peer_listener(
     let codec = JsonAtmProtocolCodec;
     let registry = Arc::new(ActiveConnectionRegistry::default());
     thread::scope(|scope| {
+        let worker_context = PeerConnectionWorkerContext {
+            dispatcher: &dispatcher,
+            authorization_policy: &authorization_policy,
+            terminate: &terminate,
+            observability: &observability,
+            codec: &codec,
+            registry: &registry,
+        };
         while !terminate.load(Ordering::SeqCst) {
             match listener.accept() {
-                Ok((stream, peer_addr)) => spawn_peer_connection_worker(
-                    scope,
-                    stream,
-                    peer_addr,
-                    &dispatcher,
-                    &authorization_policy,
-                    &terminate,
-                    &observability,
-                    &codec,
-                    &registry,
-                ),
+                Ok((stream, peer_addr)) => {
+                    spawn_peer_connection_worker(scope, stream, peer_addr, &worker_context)
+                }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     thread::sleep(PEER_LISTENER_ACCEPT_POLL_INTERVAL);
                 }
@@ -429,15 +480,10 @@ fn spawn_peer_connection_worker<'scope, 'env>(
     scope: &'scope thread::Scope<'scope, 'env>,
     stream: TcpStream,
     peer_addr: SocketAddr,
-    dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
-    authorization_policy: &Arc<dyn PeerAuthorizationPolicy>,
-    terminate: &Arc<AtomicBool>,
-    observability: &SubsystemObservability,
-    codec: &JsonAtmProtocolCodec,
-    registry: &Arc<ActiveConnectionRegistry>,
+    worker_context: &PeerConnectionWorkerContext<'_>,
 ) {
-    if registry.active_connections() >= MAX_CONCURRENT_PEER_CONNECTIONS {
-        observability.emit_or_warn(
+    if worker_context.registry.active_connections() >= MAX_CONCURRENT_PEER_CONNECTIONS {
+        worker_context.observability.emit_or_warn(
             "peer_listener_capacity",
             "degraded",
             "daemon peer listener rejected a connection at the bounded concurrency cap",
@@ -445,13 +491,13 @@ fn spawn_peer_connection_worker<'scope, 'env>(
         return;
     }
 
-    let dispatcher = Arc::clone(dispatcher);
-    let authorization_policy = Arc::clone(authorization_policy);
-    let terminate = Arc::clone(terminate);
-    let observability = observability.clone();
-    let codec = codec.clone();
-    let registry = Arc::clone(registry);
-    let connection_guard = registry.register();
+    let dispatcher = Arc::clone(worker_context.dispatcher);
+    let authorization_policy = Arc::clone(worker_context.authorization_policy);
+    let terminate = Arc::clone(worker_context.terminate);
+    let observability = worker_context.observability.clone();
+    let codec = worker_context.codec.clone();
+    let registry = Arc::clone(worker_context.registry);
+    let connection_guard = worker_context.registry.register();
     scope.spawn(move || {
         let _connection_guard = connection_guard;
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -540,36 +586,15 @@ fn handle_peer_connection(
     let request_id = frame.request_id;
     let (_, request) = codec.request_from_frame(frame)?;
     if let Err(error) = authorization_policy.authorize(peer_addr) {
-        tracing::warn!(
-            subsystem = "peer_transport",
-            action = "authorize_peer",
-            outcome = "denied",
-            presented_host = %peer_addr.ip(),
-            %peer_addr,
-            error_code = %error.code,
-            error_message = %error.message,
-            "daemon peer listener rejected an unauthorized remote host before dispatch"
-        );
-        let response_frame = codec.response_to_frame(
-            request_id,
-            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
-                &error,
-            )),
-        )?;
-        write_peer_frame_until(
+        write_authorization_rejection(
             &mut stream,
-            &response_frame,
+            peer_addr,
+            codec,
+            request_id,
             deadline,
             terminate.as_ref(),
-            "failed to write remote peer authorization rejection frame",
+            &error,
         )?;
-        stream.flush().map_err(|source| {
-            AtmError::daemon_unavailable(
-                "failed to flush remote peer authorization rejection frame",
-            )
-            .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
-            .with_source(source)
-        })?;
         return Ok(());
     }
     let response = dispatch_peer_request(request, dispatcher, registry, deadline)?;
@@ -587,6 +612,54 @@ fn handle_peer_connection(
             .with_source(source)
     })?;
     Ok(())
+}
+
+fn listener_outcome_from_existing(
+    state: &BTreeMap<SocketAddr, PeerServerHandle>,
+    listen_addr: SocketAddr,
+) -> Option<PeerListenerOutcome> {
+    state.get(&listen_addr).map(|handle| PeerListenerOutcome {
+        listen_addr,
+        bound_addr: Some(handle.bound_addr),
+        error_message: None,
+    })
+}
+
+fn write_authorization_rejection(
+    stream: &mut TcpStream,
+    peer_addr: SocketAddr,
+    codec: &JsonAtmProtocolCodec,
+    request_id: atm_core::protocol::RequestId,
+    deadline: Instant,
+    terminate: &AtomicBool,
+    error: &AtmError,
+) -> Result<(), AtmError> {
+    tracing::warn!(
+        subsystem = "peer_transport",
+        action = "authorize_peer",
+        outcome = "denied",
+        presented_host = %peer_addr.ip(),
+        %peer_addr,
+        error_code = %error.code,
+        error_message = %error.message,
+        "daemon peer listener rejected an unauthorized remote host before dispatch"
+    );
+    let response_frame = codec.response_to_frame(
+        request_id,
+        ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(error)),
+    )?;
+    write_peer_frame_until(
+        stream,
+        &response_frame,
+        deadline,
+        terminate,
+        "failed to write remote peer authorization rejection frame",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush remote peer authorization rejection frame")
+            .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+            .with_source(source)
+    })
 }
 
 fn dispatch_peer_request(

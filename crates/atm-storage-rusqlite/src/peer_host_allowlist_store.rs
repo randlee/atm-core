@@ -3,6 +3,7 @@ use atm_storage::contract::{AllowHostCommand, AllowedHostName, AllowedHostRow, A
 use rusqlite::{OptionalExtension, params};
 
 use crate::SqliteAllowedHostStore;
+use crate::shared_db::SqliteConnection;
 
 impl SqliteAllowedHostStore {
     pub(crate) fn new(db: std::sync::Arc<crate::shared_db::SharedDb>) -> Self {
@@ -160,7 +161,7 @@ struct StoredAllowedHostRow {
 }
 
 fn load_row(
-    connection: &rusqlite::Connection,
+    connection: &SqliteConnection,
     db: &crate::shared_db::SharedDb,
     host: &AllowedHostName,
 ) -> Result<Option<AllowedHostRow>, AtmError> {
