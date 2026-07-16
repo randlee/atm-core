@@ -183,6 +183,16 @@ impl PeerServerTransport {
         Ok(())
     }
 
+    fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
+        self.state
+            .lock()
+            .map(|state| state.as_ref().map(|handle| handle.bound_addr))
+            .map_err(|_| {
+                AtmError::daemon_unavailable("peer listener state lock poisoned")
+                    .with_recovery("Restart atm-daemon before retrying cross-host peer inspection.")
+            })
+    }
+
     #[cfg(test)]
     pub(super) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
         self.state
@@ -302,6 +312,10 @@ impl PeerServerTransport {
             bound_addr,
         })
     }
+}
+
+pub(super) fn bound_addr(server: &PeerServerTransport) -> Result<Option<SocketAddr>, AtmError> {
+    server.bound_addr()
 }
 
 fn serve_peer_listener(

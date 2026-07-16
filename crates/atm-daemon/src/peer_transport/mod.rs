@@ -631,6 +631,22 @@ impl PeerClientTransport {
         );
         DeliveryLoopDecision::Return(failure.error)
     }
+
+    fn send_with_outcome_persistence(
+        &self,
+        endpoint: SocketAddr,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        match self.send_to_endpoint(endpoint, request.clone()) {
+            Ok(response) => Ok(response),
+            Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
+                self.persist_outcome_unknown_request(&request)
+                    .map_err(remote_replay_persistence_failed_error)?;
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }
+    }
 }
 
 enum DeliveryLoopDecision {
@@ -833,15 +849,7 @@ impl ClientTransport for PeerClientTransport {
         let endpoint = self
             .endpoint
             .ok_or_else(remote_peer_endpoint_not_configured_error)?;
-        match self.send_to_endpoint(endpoint, request.clone()) {
-            Ok(response) => Ok(response),
-            Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
-                self.persist_outcome_unknown_request(&request)
-                    .map_err(remote_replay_persistence_failed_error)?;
-                Err(error)
-            }
-            Err(error) => Err(error),
-        }
+        self.send_with_outcome_persistence(endpoint, request)
     }
 }
 
@@ -896,6 +904,14 @@ impl PeerTransportRuntime {
         self.client.resume_pending_replay()
     }
 
+    pub(crate) fn send_to_endpoint(
+        &self,
+        endpoint: SocketAddr,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        self.client.send_with_outcome_persistence(endpoint, request)
+    }
+
     pub(crate) fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -913,6 +929,10 @@ impl PeerTransportRuntime {
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
         self.server.reload(listen_addr, dispatcher)
+    }
+
+    pub(crate) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
+        server::bound_addr(&self.server)
     }
 
     #[cfg(test)]
