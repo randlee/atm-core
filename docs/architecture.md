@@ -2687,7 +2687,8 @@ There are three distinct paths:
    - successful remote delivery requires remote daemon acceptance
    - Phase AG adds a durable cross-host control plane in front of this path:
      - SQLite-backed interface/bind configuration
-     - SQLite-backed exact-host allowlist enforcement
+     - SQLite-backed exact-host allowlist enforcement against the remote socket
+       host token (currently the peer IP literal)
      - CLI management for both
      - doctor-visible state for both
      - per-interface bind result persistence so one bad row does not hide the

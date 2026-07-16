@@ -221,6 +221,10 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
+- inbound peer authorization is a fail-closed gate in the peer listener path:
+  the daemon normalizes the remote socket host token once to lowercase,
+  compares it exactly against durable allowed-host rows, and rejects before
+  request dispatch can mutate mailbox, ack, roster, or loopback-bypass state.
 - bounded transient retry uses exponential backoff with jitter, an initial
   delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
   total retry ceiling within the documented timeout budget; it must not

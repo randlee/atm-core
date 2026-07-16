@@ -3585,8 +3585,11 @@ mail correctness.
   deny-by-default exact-host allowlist before any mailbox mutation occurs.
 
   Required behavior:
-  - inbound daemon peers are rejected unless one enabled exact hostname row
+  - inbound daemon peers are rejected unless one enabled exact host row
     authorizes them
+  - the compared host token is normalized once to lowercase and matched exactly
+  - in the current TCP transport, the presented host token is the remote socket
+    IP literal rather than reverse-DNS output
   - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
   - rejection happens before mailbox, ack/reply, or roster mutation
   - doctor output must surface allowlist enforcement state and configured host

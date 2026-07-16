@@ -141,6 +141,7 @@ dependencies = [
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
+ "atm-storage-rusqlite",
  "chrono",
  "fs2",
  "interprocess",

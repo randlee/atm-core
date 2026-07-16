@@ -19,7 +19,7 @@ use crate::runtime_status_cache::RuntimeStatusCache;
 use super::{
     MAX_CONCURRENT_PEER_CONNECTIONS, MAX_TRACKED_PEER_DISPATCH_HANDLES,
     PEER_ACCEPT_ERROR_RETRY_BACKOFF, PEER_CONNECTION_IO_SLICE, PEER_LISTENER_ACCEPT_POLL_INTERVAL,
-    PEER_LISTENER_SHUTDOWN_DEADLINE, PEER_REQUEST_DEADLINE,
+    PEER_LISTENER_SHUTDOWN_DEADLINE, PEER_REQUEST_DEADLINE, PeerAuthorizationPolicy,
 };
 
 #[derive(Debug)]
@@ -37,12 +37,24 @@ pub(crate) struct PeerListenerOutcome {
     pub(crate) error_message: Option<String>,
 }
 
-#[derive(Debug)]
 pub(super) struct PeerServerTransport {
     listen_addrs: Mutex<Vec<SocketAddr>>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
     observability: SubsystemObservability,
     state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>,
     status_cache: RuntimeStatusCache,
+}
+
+impl std::fmt::Debug for PeerServerTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerServerTransport")
+            .field("listen_addrs", &self.listen_addrs)
+            .field("authorization_policy", &"dyn PeerAuthorizationPolicy")
+            .field("observability", &self.observability)
+            .field("state", &self.state)
+            .field("status_cache", &self.status_cache)
+            .finish()
+    }
 }
 
 impl PeerServerTransport {
@@ -50,9 +62,11 @@ impl PeerServerTransport {
         listen_addr: Option<SocketAddr>,
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
+        authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
     ) -> Self {
         Self {
             listen_addrs: Mutex::new(listen_addr.into_iter().collect()),
+            authorization_policy,
             observability,
             state: Mutex::new(BTreeMap::new()),
             status_cache,
@@ -303,12 +317,14 @@ impl PeerServerTransport {
         let terminate_for_thread = Arc::clone(&terminate);
         let observability = self.observability.clone();
         let status_cache = self.status_cache.clone();
+        let authorization_policy = Arc::clone(&self.authorization_policy);
         let join_handle = thread::Builder::new()
             .name("peer-transport-listener".to_string())
             .spawn(move || {
                 let result = serve_peer_listener(
                     listener,
                     dispatcher,
+                    authorization_policy,
                     terminate_for_thread,
                     observability.clone(),
                 );
@@ -378,6 +394,7 @@ fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {
 fn serve_peer_listener(
     listener: TcpListener,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
     terminate: Arc<AtomicBool>,
     observability: SubsystemObservability,
 ) -> Result<(), AtmError> {
@@ -386,10 +403,12 @@ fn serve_peer_listener(
     thread::scope(|scope| {
         while !terminate.load(Ordering::SeqCst) {
             match listener.accept() {
-                Ok((stream, _peer_addr)) => spawn_peer_connection_worker(
+                Ok((stream, peer_addr)) => spawn_peer_connection_worker(
                     scope,
                     stream,
+                    peer_addr,
                     &dispatcher,
+                    &authorization_policy,
                     &terminate,
                     &observability,
                     &codec,
@@ -409,7 +428,9 @@ fn serve_peer_listener(
 fn spawn_peer_connection_worker<'scope, 'env>(
     scope: &'scope thread::Scope<'scope, 'env>,
     stream: TcpStream,
+    peer_addr: SocketAddr,
     dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: &Arc<dyn PeerAuthorizationPolicy>,
     terminate: &Arc<AtomicBool>,
     observability: &SubsystemObservability,
     codec: &JsonAtmProtocolCodec,
@@ -425,6 +446,7 @@ fn spawn_peer_connection_worker<'scope, 'env>(
     }
 
     let dispatcher = Arc::clone(dispatcher);
+    let authorization_policy = Arc::clone(authorization_policy);
     let terminate = Arc::clone(terminate);
     let observability = observability.clone();
     let codec = codec.clone();
@@ -433,7 +455,15 @@ fn spawn_peer_connection_worker<'scope, 'env>(
     scope.spawn(move || {
         let _connection_guard = connection_guard;
         let result = catch_unwind(AssertUnwindSafe(|| {
-            handle_peer_connection(stream, dispatcher, &codec, terminate, registry)
+            handle_peer_connection(
+                stream,
+                peer_addr,
+                dispatcher,
+                authorization_policy,
+                &codec,
+                terminate,
+                registry,
+            )
         }));
         report_peer_connection_result(&observability, result);
     });
@@ -479,7 +509,9 @@ fn report_peer_connection_result(
 
 fn handle_peer_connection(
     mut stream: TcpStream,
+    peer_addr: SocketAddr,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
     codec: &JsonAtmProtocolCodec,
     terminate: Arc<AtomicBool>,
     registry: Arc<ActiveConnectionRegistry>,
@@ -507,6 +539,39 @@ fn handle_peer_connection(
     )?;
     let request_id = frame.request_id;
     let (_, request) = codec.request_from_frame(frame)?;
+    if let Err(error) = authorization_policy.authorize(peer_addr) {
+        tracing::warn!(
+            subsystem = "peer_transport",
+            action = "authorize_peer",
+            outcome = "denied",
+            presented_host = %peer_addr.ip(),
+            %peer_addr,
+            error_code = %error.code,
+            error_message = %error.message,
+            "daemon peer listener rejected an unauthorized remote host before dispatch"
+        );
+        let response_frame = codec.response_to_frame(
+            request_id,
+            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
+                &error,
+            )),
+        )?;
+        write_peer_frame_until(
+            &mut stream,
+            &response_frame,
+            deadline,
+            terminate.as_ref(),
+            "failed to write remote peer authorization rejection frame",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to flush remote peer authorization rejection frame",
+            )
+            .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+            .with_source(source)
+        })?;
+        return Ok(());
+    }
     let response = dispatch_peer_request(request, dispatcher, registry, deadline)?;
     let response_frame = codec.response_to_frame(request_id, response)?;
     write_peer_frame_until(

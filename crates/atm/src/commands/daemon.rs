@@ -2,10 +2,12 @@ use std::net::IpAddr;
 
 use anyhow::Result;
 use atm_core::error::AtmError;
-use atm_daemon_bootstrap::with_default_peer_interface_config_store;
+use atm_daemon_bootstrap::{
+    with_default_allowed_host_store, with_default_peer_interface_config_store,
+};
 use atm_storage::contract::{
-    AddPeerInterfaceCommand, PeerInterfaceKey, PeerInterfaceKind, PeerInterfaceRow,
-    UpdatePeerInterfaceCommand,
+    AddPeerInterfaceCommand, AllowHostCommand, AllowedHostName, AllowedHostRow, PeerInterfaceKey,
+    PeerInterfaceKind, PeerInterfaceRow, UpdatePeerInterfaceCommand,
 };
 use clap::{Args, Subcommand, ValueEnum};
 
@@ -21,12 +23,19 @@ pub struct DaemonCommand {
 #[derive(Debug, Subcommand)]
 enum DaemonSubcommand {
     Interfaces(DaemonInterfacesCommand),
+    Hosts(DaemonHostsCommand),
 }
 
 #[derive(Debug, Args)]
 struct DaemonInterfacesCommand {
     #[command(subcommand)]
     command: DaemonInterfacesSubcommand,
+}
+
+#[derive(Debug, Args)]
+struct DaemonHostsCommand {
+    #[command(subcommand)]
+    command: DaemonHostsSubcommand,
 }
 
 #[derive(Debug, Subcommand)]
@@ -37,6 +46,14 @@ enum DaemonInterfacesSubcommand {
     Disable(ToggleInterfaceCommand),
     Remove(RemoveInterfaceCommand),
     List(ListInterfacesCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum DaemonHostsSubcommand {
+    Allow(AllowHostCliCommand),
+    Deny(ToggleHostCliCommand),
+    Remove(RemoveHostCliCommand),
+    List(ListHostsCliCommand),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -138,6 +155,39 @@ struct ListInterfacesCommand {
     json: bool,
 }
 
+#[derive(Debug, Args)]
+struct AllowHostCliCommand {
+    host_name: String,
+
+    #[arg(long)]
+    note: Option<String>,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct ToggleHostCliCommand {
+    host_name: String,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct RemoveHostCliCommand {
+    host_name: String,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct ListHostsCliCommand {
+    #[arg(long)]
+    json: bool,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct PeerInterfaceMutationOutcome {
     row: PeerInterfaceRow,
@@ -154,10 +204,27 @@ struct PeerInterfaceListOutcome {
     interfaces: Vec<PeerInterfaceRow>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct AllowedHostMutationOutcome {
+    row: AllowedHostRow,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct AllowedHostRemoveOutcome {
+    removed: bool,
+    host_name: AllowedHostName,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct AllowedHostListOutcome {
+    hosts: Vec<AllowedHostRow>,
+}
+
 impl DaemonCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         match self.command {
             DaemonSubcommand::Interfaces(command) => command.run(),
+            DaemonSubcommand::Hosts(command) => command.run(),
         }
     }
 }
@@ -171,6 +238,17 @@ impl DaemonInterfacesCommand {
             DaemonInterfacesSubcommand::Disable(command) => command.run(false),
             DaemonInterfacesSubcommand::Remove(command) => command.run(),
             DaemonInterfacesSubcommand::List(command) => command.run(),
+        }
+    }
+}
+
+impl DaemonHostsCommand {
+    fn run(self) -> Result<()> {
+        match self.command {
+            DaemonHostsSubcommand::Allow(command) => command.run(),
+            DaemonHostsSubcommand::Deny(command) => command.run(),
+            DaemonHostsSubcommand::Remove(command) => command.run(),
+            DaemonHostsSubcommand::List(command) => command.run(),
         }
     }
 }
@@ -303,6 +381,82 @@ impl ListInterfacesCommand {
     }
 }
 
+impl AllowHostCliCommand {
+    fn run(self) -> Result<()> {
+        let configured_by = configured_by_identity()?;
+        let outcome = with_default_allowed_host_store(|store| {
+            Ok(AllowedHostMutationOutcome {
+                row: store.allow_host(AllowHostCommand::new(
+                    self.host_name,
+                    configured_by,
+                    self.note,
+                )?)?,
+            })
+        })?;
+        print_allowed_host_mutation_outcome(&outcome, self.json)
+    }
+}
+
+impl ToggleHostCliCommand {
+    fn run(self) -> Result<()> {
+        let host_name = self.host_name.parse::<AllowedHostName>()?;
+        let outcome = with_default_allowed_host_store(|store| {
+            Ok(AllowedHostMutationOutcome {
+                row: store.deny_host(&host_name)?,
+            })
+        })?;
+        print_allowed_host_mutation_outcome(&outcome, self.json)
+    }
+}
+
+impl RemoveHostCliCommand {
+    fn run(self) -> Result<()> {
+        let host_name = self.host_name.parse::<AllowedHostName>()?;
+        with_default_allowed_host_store(|store| store.remove_host(&host_name))?;
+        let outcome = AllowedHostRemoveOutcome {
+            removed: true,
+            host_name,
+        };
+        if self.json {
+            println!("{}", serde_json::to_string_pretty(&outcome)?);
+        } else {
+            println!("Removed daemon allowed host {}", outcome.host_name);
+        }
+        Ok(())
+    }
+}
+
+impl ListHostsCliCommand {
+    fn run(self) -> Result<()> {
+        let outcome = with_default_allowed_host_store(|store| {
+            Ok(AllowedHostListOutcome {
+                hosts: store.list_hosts()?,
+            })
+        })?;
+        if self.json {
+            println!("{}", serde_json::to_string_pretty(&outcome)?);
+            return Ok(());
+        }
+        if outcome.hosts.is_empty() {
+            println!("No daemon allowed hosts configured");
+            return Ok(());
+        }
+        for row in &outcome.hosts {
+            println!(
+                "{} enabled={} disabled_at={} note={}",
+                row.host_name,
+                row.enabled,
+                row.disabled_at
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "-".to_string()),
+                row.note.as_deref().unwrap_or("-"),
+            );
+        }
+        Ok(())
+    }
+}
+
 fn configured_by_identity() -> Result<String> {
     let context = resolve_cli_caller_context(CallerContextOverrides::default())?;
     Ok(format!(
@@ -325,6 +479,28 @@ fn print_mutation_outcome(outcome: &PeerInterfaceMutationOutcome, json: bool) ->
             row.port,
             row.interface_kind,
             row.enabled
+        );
+    }
+    Ok(())
+}
+
+fn print_allowed_host_mutation_outcome(
+    outcome: &AllowedHostMutationOutcome,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        let row = &outcome.row;
+        println!(
+            "Configured daemon allowed host {} enabled={} disabled_at={} note={}",
+            row.host_name,
+            row.enabled,
+            row.disabled_at
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "-".to_string()),
+            row.note.as_deref().unwrap_or("-"),
         );
     }
     Ok(())

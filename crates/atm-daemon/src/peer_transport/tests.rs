@@ -21,6 +21,7 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -101,6 +102,23 @@ impl RequestDispatcher for SleepingDispatcher {
     }
 }
 
+#[derive(Debug, Default)]
+struct CountingDispatcher {
+    count: AtomicUsize,
+}
+
+impl atm_core::boundary::sealed::Sealed for CountingDispatcher {}
+
+impl RequestDispatcher for CountingDispatcher {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        DoctorOnlyDispatcher.dispatch(request)
+    }
+}
+
 #[test]
 fn peer_listener_round_trips_one_doctor_request() {
     let _guard = install_shared_lifecycle_reset_guard();
@@ -139,6 +157,105 @@ fn peer_listener_round_trips_one_doctor_request() {
         }
         other => panic!("unexpected response from peer listener: {other:?}"),
     }
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
+
+#[test]
+fn peer_listener_rejects_unauthorized_host_before_dispatch() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(
+        std::env::temp_dir().join(format!("atm-ag5-peer-auth-{}.db", std::process::id())),
+    )
+    .expect("backend");
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        RuntimeStatusCache::new(),
+        backend.allowed_host_store(),
+    );
+    let dispatcher = Arc::new(CountingDispatcher::default());
+    listener_transport
+        .start(dispatcher.clone())
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let error = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..DoctorQuery::default()
+        }))
+        .expect_err("unauthorized host should be rejected");
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert_eq!(dispatcher.count.load(Ordering::SeqCst), 0);
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
+
+#[test]
+fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(std::env::temp_dir().join(
+        format!("atm-ag5-peer-auth-allowed-{}.db", std::process::id()),
+    ))
+    .expect("backend");
+    backend
+        .allowed_host_store()
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "127.0.0.1",
+                "arch-ctm@atm-dev",
+                Some("loopback".to_string()),
+            )
+            .expect("allow host command"),
+        )
+        .expect("allow host");
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        RuntimeStatusCache::new(),
+        backend.allowed_host_store(),
+    );
+    let dispatcher = Arc::new(CountingDispatcher::default());
+    listener_transport
+        .start(dispatcher.clone())
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let tempdir = TempDir::new().expect("tempdir");
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let response = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+            ..DoctorQuery::default()
+        }))
+        .expect("authorized host should round-trip");
+    assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+    assert_eq!(dispatcher.count.load(Ordering::SeqCst), 1);
 
     listener_transport
         .shutdown()

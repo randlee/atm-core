@@ -434,6 +434,147 @@ pub struct PeerInterfaceBindingUpdate {
     pub last_bind_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct AllowedHostName(String);
+
+impl AllowedHostName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let normalized = normalize_allowed_host_name(value.into())?;
+        Ok(Self(normalized))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for AllowedHostName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl AsRef<str> for AllowedHostName {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for AllowedHostName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl FromStr for AllowedHostName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AllowedHostRow {
+    pub host_name: AllowedHostName,
+    pub enabled: bool,
+    pub added_by: String,
+    pub added_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disabled_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AllowHostCommand {
+    pub host_name: AllowedHostName,
+    pub added_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl AllowHostCommand {
+    pub fn new(
+        host_name: impl Into<String>,
+        added_by: impl Into<String>,
+        note: Option<String>,
+    ) -> Result<Self, AtmError> {
+        let host_name = AllowedHostName::new(host_name.into())?;
+        let added_by = require_non_blank(
+            added_by.into(),
+            "allowed host added_by",
+            "Populate the caller identity before recording daemon host authorization.",
+        )?;
+        Ok(Self {
+            host_name,
+            added_by,
+            note: note.and_then(|value| {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }),
+        })
+    }
+}
+
+fn normalize_allowed_host_name(raw: String) -> Result<String, AtmError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AtmError::validation("allowed host name must not be blank".to_string())
+            .with_recovery(
+                "Provide a literal host token such as 10.10.100.98 or windows-dev-1 before retrying the daemon host command.",
+            ));
+    }
+    if trimmed.chars().any(|ch| {
+        matches!(ch, '*' | '?' | '[' | ']' | '{' | '}' | '/' | '\\') || ch.is_whitespace()
+    }) {
+        return Err(AtmError::validation(format!(
+            "allowed host name `{trimmed}` contains wildcard-style or unsupported characters"
+        ))
+        .with_recovery(
+            "Use one exact host token only; wildcards, regex-like patterns, path separators, and subnet forms are not supported.",
+        ));
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    if normalized.parse::<IpAddr>().is_ok() {
+        return Ok(normalized);
+    }
+    for label in normalized.split('.') {
+        if label.is_empty() {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` contains an empty DNS label"
+            ))
+            .with_recovery(
+                "Use one exact hostname with non-empty labels or a literal IP address before retrying the daemon host command.",
+            ));
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` has a label starting or ending with `-`"
+            ))
+            .with_recovery(
+                "Use one exact hostname with labels that begin and end with letters or digits before retrying the daemon host command.",
+            ));
+        }
+        if !label
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+        {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` contains unsupported hostname characters"
+            ))
+            .with_recovery(
+                "Use one exact hostname composed of letters, digits, `-`, and `.` or a literal IP address before retrying the daemon host command.",
+            ));
+        }
+    }
+    Ok(normalized)
+}
+
 impl TeamNudgeTemplateOverrideRow {
     pub fn template_body(&self) -> Option<&str> {
         match &self.mode {
@@ -735,13 +876,25 @@ pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {
     ) -> Result<PeerInterfaceRow, AtmError>;
 }
 
+pub trait AllowedHostStore: sealed::Sealed + Send + Sync {
+    fn allow_host(&self, command: AllowHostCommand) -> Result<AllowedHostRow, AtmError>;
+
+    fn deny_host(&self, host: &AllowedHostName) -> Result<AllowedHostRow, AtmError>;
+
+    fn remove_host(&self, host: &AllowedHostName) -> Result<(), AtmError>;
+
+    fn list_hosts(&self) -> Result<Vec<AllowedHostRow>, AtmError>;
+
+    fn load_host(&self, host: &AllowedHostName) -> Result<Option<AllowedHostRow>, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        AckRequirementState, AllowedHostName, BuiltInNudgeTemplateKind, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
         derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
@@ -992,5 +1145,17 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn allowed_host_name_normalizes_case_and_whitespace() {
+        let host = AllowedHostName::new("  WINdows-DEV-1.Example  ").expect("host");
+        assert_eq!(host.as_str(), "windows-dev-1.example");
+    }
+
+    #[test]
+    fn allowed_host_name_rejects_wildcard_style_input() {
+        let error = AllowedHostName::new("*.example").expect_err("wildcard should fail");
+        assert!(error.message.contains("wildcard-style"));
     }
 }

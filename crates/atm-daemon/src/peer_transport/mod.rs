@@ -18,6 +18,7 @@ use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::{AllowedHostName, AllowedHostStore};
 
 use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::{DaemonSubsystem, SubsystemObservability};
@@ -48,6 +49,68 @@ const PEER_LISTENER_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 const PEER_ACCEPT_ERROR_RETRY_BACKOFF: Duration = Duration::from_millis(200);
 const MAX_CONCURRENT_PEER_CONNECTIONS: usize = 64;
 const MAX_TRACKED_PEER_DISPATCH_HANDLES: usize = 256;
+
+trait PeerAuthorizationPolicy: Send + Sync {
+    fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError>;
+}
+
+#[derive(Debug, Default)]
+struct AllowAllPeerAuthorizationPolicy;
+
+impl PeerAuthorizationPolicy for AllowAllPeerAuthorizationPolicy {
+    fn authorize(&self, _peer_addr: SocketAddr) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+struct SqliteAllowedHostAuthorizationPolicy {
+    store: Arc<dyn AllowedHostStore + Send + Sync>,
+}
+
+impl SqliteAllowedHostAuthorizationPolicy {
+    fn new(store: Arc<dyn AllowedHostStore + Send + Sync>) -> Self {
+        Self { store }
+    }
+}
+
+impl std::fmt::Debug for SqliteAllowedHostAuthorizationPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SqliteAllowedHostAuthorizationPolicy")
+            .field("store", &"dyn AllowedHostStore")
+            .finish()
+    }
+}
+
+impl PeerAuthorizationPolicy for SqliteAllowedHostAuthorizationPolicy {
+    fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError> {
+        let host_name = AllowedHostName::new(peer_addr.ip().to_string()).map_err(|error| {
+            AtmError::validation(format!(
+                "remote peer {} presented an invalid host token: {}",
+                peer_addr, error.message
+            ))
+            .with_recovery(
+                "Retry from a peer with a valid literal host token or repair the host authorization policy before retrying cross-host delivery.",
+            )
+        })?;
+        match self.store.load_host(&host_name)? {
+            Some(row) if row.enabled => Ok(()),
+            Some(_) => Err(AtmError::validation(format!(
+                "remote peer {} presented host `{}` but that host is disabled",
+                peer_addr, host_name
+            ))
+            .with_recovery(format!(
+                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+            ))),
+            None => Err(AtmError::validation(format!(
+                "remote peer {} presented host `{}` but no enabled daemon host row authorizes it",
+                peer_addr, host_name
+            ))
+            .with_recovery(format!(
+                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+            ))),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -869,6 +932,7 @@ impl PeerTransportRuntime {
     pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         Self::new_with_observability(
             replay_store,
+            None,
             PeerTransportConfig::default(),
             SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
             RuntimeStatusCache::new(),
@@ -877,15 +941,23 @@ impl PeerTransportRuntime {
 
     pub(crate) fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        allowed_host_store: Option<Arc<dyn AllowedHostStore + Send + Sync>>,
         config: PeerTransportConfig,
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
     ) -> Self {
+        let authorization_policy: Arc<dyn PeerAuthorizationPolicy> = allowed_host_store
+            .map(|store| {
+                Arc::new(SqliteAllowedHostAuthorizationPolicy::new(store))
+                    as Arc<dyn PeerAuthorizationPolicy>
+            })
+            .unwrap_or_else(|| Arc::new(AllowAllPeerAuthorizationPolicy));
         Self {
             server: Arc::new(PeerServerTransport::new(
                 config.peer_listen_addr,
                 observability.clone(),
                 status_cache,
+                authorization_policy,
             )),
             client: PeerClientTransport::new_with_observability(
                 replay_store,
@@ -961,6 +1033,7 @@ impl PeerTransportRuntime {
                 None,
                 SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
                 RuntimeStatusCache::new(),
+                Arc::new(AllowAllPeerAuthorizationPolicy),
             )),
             client: PeerClientTransport::new_for_test(endpoint, config, replay_db_path),
         }
@@ -993,6 +1066,31 @@ impl PeerTransportRuntime {
                 Some(listen_addr),
                 observability.clone(),
                 status_cache,
+                Arc::new(AllowAllPeerAuthorizationPolicy),
+            )),
+            client: PeerClientTransport::new_with_observability(None, config, observability),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_server_for_test_with_allowed_host_store(
+        listen_addr: SocketAddr,
+        observability: SubsystemObservability,
+        status_cache: RuntimeStatusCache,
+        allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    ) -> Self {
+        let config = PeerTransportConfig {
+            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+            peer_listen_addr: Some(listen_addr),
+        };
+        Self {
+            server: Arc::new(PeerServerTransport::new(
+                Some(listen_addr),
+                observability.clone(),
+                status_cache,
+                Arc::new(SqliteAllowedHostAuthorizationPolicy::new(
+                    allowed_host_store,
+                )),
             )),
             client: PeerClientTransport::new_with_observability(None, config, observability),
         }

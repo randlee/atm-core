@@ -16,7 +16,8 @@ use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, Re
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 use atm_storage::{
-    IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore, PeerInterfaceKey,
+    AllowedHostStore, IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore,
+    PeerInterfaceKey,
 };
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -240,6 +241,7 @@ impl RuntimeComposition {
         let server_transport = build_server_transport(&observability);
         let peer_transport_runtime = build_peer_transport_runtime(
             runtime_assembly.remote_replay_store.clone(),
+            runtime_assembly.allowed_host_store.clone(),
             peer_transport_config,
             observability.clone(),
             status_cache.clone(),
@@ -609,12 +611,14 @@ fn build_host_ownership_adapter(
 
 fn build_peer_transport_runtime(
     replay_store: Arc<dyn RemoteReplayStore>,
+    allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
     peer_transport_config: PeerTransportConfig,
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
 ) -> PeerTransportRuntime {
     PeerTransportRuntime::new_with_observability(
         Some(replay_store),
+        Some(allowed_host_store),
         peer_transport_config,
         SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
         status_cache,

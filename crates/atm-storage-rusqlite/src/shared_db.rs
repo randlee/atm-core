@@ -126,6 +126,16 @@ CREATE TABLE IF NOT EXISTS daemon_peer_interfaces (
     UNIQUE(interface_name, bind_addr, port)
 );
 
+CREATE TABLE IF NOT EXISTS daemon_allowed_hosts (
+    host_name TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)) DEFAULT 1,
+    added_by TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    disabled_at TEXT NULL,
+    note TEXT NULL
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -154,6 +164,9 @@ CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
 
 CREATE INDEX IF NOT EXISTS idx_daemon_peer_interfaces_enabled
     ON daemon_peer_interfaces(enabled, interface_kind, interface_name);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_allowed_hosts_enabled
+    ON daemon_allowed_hosts(enabled, host_name);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.

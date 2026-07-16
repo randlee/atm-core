@@ -10,6 +10,7 @@
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
+mod peer_host_allowlist_store;
 mod peer_interface_store;
 mod roster_store;
 mod shared_db;
@@ -21,7 +22,8 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    Message, MessageKey, MessageQuery, MessageStore, PeerInterfaceConfigStore, RosterStore,
+    AllowedHostStore, Message, MessageKey, MessageQuery, MessageStore, PeerInterfaceConfigStore,
+    RosterStore,
 };
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
@@ -190,6 +192,11 @@ struct SqliteNudgeTemplateOverrideStore {
 
 #[derive(Debug)]
 struct SqlitePeerInterfaceConfigStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqliteAllowedHostStore {
     db: Arc<SharedDb>,
 }
 
@@ -452,6 +459,7 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_interface_config_store: Arc<SqlitePeerInterfaceConfigStore>,
+    allowed_host_store: Arc<SqliteAllowedHostStore>,
 }
 
 impl SqliteStorageBackend {
@@ -470,7 +478,10 @@ impl SqliteStorageBackend {
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
-            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(db)),
+            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
+                &db,
+            ))),
+            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(db)),
         })
     }
 
@@ -483,7 +494,10 @@ impl SqliteStorageBackend {
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
-            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(db)),
+            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
+                &db,
+            ))),
+            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(db)),
         })
     }
 
@@ -533,6 +547,10 @@ impl SqliteStorageBackend {
 
     pub fn peer_interface_config_store(&self) -> Arc<dyn PeerInterfaceConfigStore + Send + Sync> {
         self.peer_interface_config_store.clone()
+    }
+
+    pub fn allowed_host_store(&self) -> Arc<dyn AllowedHostStore + Send + Sync> {
+        self.allowed_host_store.clone()
     }
 
     #[cfg(test)]
@@ -1113,6 +1131,56 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].bind_addr.to_string(), "10.0.0.6");
         assert!(!listed[0].enabled);
+    }
+
+    #[test]
+    fn sqlite_backend_allows_denies_removes_and_lists_hosts() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.allowed_host_store();
+        let row = store
+            .allow_host(
+                atm_storage::AllowHostCommand::new(
+                    "10.10.100.98",
+                    "arch-ctm@atm-dev",
+                    Some("windows host".to_string()),
+                )
+                .expect("allow command"),
+            )
+            .expect("allow host");
+        assert_eq!(row.host_name.as_str(), "10.10.100.98");
+        assert!(row.enabled);
+
+        let denied = store
+            .deny_host(
+                &"10.10.100.98"
+                    .parse::<atm_storage::AllowedHostName>()
+                    .expect("host name"),
+            )
+            .expect("deny host");
+        assert!(!denied.enabled);
+        assert!(denied.disabled_at.is_some());
+
+        let reenabled = store
+            .allow_host(
+                atm_storage::AllowHostCommand::new("10.10.100.98", "arch-ctm@atm-dev", None)
+                    .expect("re-enable command"),
+            )
+            .expect("re-enable host");
+        assert!(reenabled.enabled);
+        assert!(reenabled.disabled_at.is_none());
+
+        let listed = store.list_hosts().expect("list hosts");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].host_name.as_str(), "10.10.100.98");
+
+        store
+            .remove_host(
+                &"10.10.100.98"
+                    .parse::<atm_storage::AllowedHostName>()
+                    .expect("host name"),
+            )
+            .expect("remove host");
+        assert!(store.list_hosts().expect("list after remove").is_empty());
     }
 
     #[test]

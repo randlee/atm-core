@@ -165,6 +165,11 @@ Initial crate requirement IDs:
   durable deny-by-default exact-host allowlist before any mailbox, ack, or
   roster mutation occurs. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
+  Required daemon behavior:
+  - normalize the compared host token once to lowercase
+  - compare against the remote peer socket host token exactly
+  - reject unauthorized peers before dispatch enters mailbox, ack, roster, or
+    loopback-bypass-sensitive handlers
 - `REQ-DAEMON-TRANSPORT-002C` `atm-daemon` owns the loopback self-test path as
   a local diagnostic surface only and must not let loopback success imply
   remote host-pair authorization. Satisfies:
