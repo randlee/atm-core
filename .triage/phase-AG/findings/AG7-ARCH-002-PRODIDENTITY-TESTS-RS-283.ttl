@@ -1,0 +1,163 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283>
+  a triage:Finding ;
+  triage:findingId "AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283" ;
+  triage:title "Hardcoded production identity literal 'arch-ctm@atm-dev' in peer_transport/tests.rs test code (second occurrence)" ;
+  triage:description "arch-qa found in AG7-QA-2 recheck: crates/atm-daemon/src/peer_transport/tests.rs:283, the same literal 'arch-ctm@atm-dev' appears as the added_by field in test peer_listener_rejects_disabled_host_before_dispatch. Same rule violation as AG7-ARCH-001 (RULE-008/009 zero tolerance - production team+identity literals in test code are BLOCKING). Recurring literal across 5+ AG sprints." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-008" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/5bfd7eae> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s10/5bfd7eae> .
+
+# Occurrences on pAG-s5
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 227 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c9827a07cf407229170fa3724c81865bc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 283 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c9827a07cf407229170fa3724c81865bc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5/6a6e803c> .
+
+# Occurrences on pAG-s6
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 222 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289cdacfbab7f939641144f77ea7cea9fd7b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 279 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289cdacfbab7f939641144f77ea7cea9fd7b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6/c3c4289c> .
+
+# Occurrences on pAG-s7
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 227 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b07fb64832c8525087043c944ef7a6c55" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 283 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b07fb64832c8525087043c944ef7a6c55" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7/7221d01b> .
+
+# Occurrence on pAG-s9
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 647 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323667193013dadf06673643473217dc361" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9/c59dd323> .
+
+# Occurrence on pAG-s10
+<urn:atm:triage:occurrence/AG7-ARCH-002-PRODIDENTITY-TESTS-RS-283/pAG-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
+  triage:line 650 ;
+  triage:snippet "\"arch-ctm@atm-dev\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae0fce93781ced1c6f063aba5a963a393c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/5bfd7eae> .
+
+# Worktree Snapshots
+<urn:atm:triage:worktree/pAG-s4/91c2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7482568fd7760aaa739ac8001b5e57414" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s5/6a6e803c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c9827a07cf407229170fa3724c81865bc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s6/c3c4289c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289cdacfbab7f939641144f77ea7cea9fd7b" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s7/7221d01b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b07fb64832c8525087043c944ef7a6c55" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s9/c59dd323>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323667193013dadf06673643473217dc361" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAG-s10/5bfd7eae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae0fce93781ced1c6f063aba5a963a393c" ;
+  triage:orderIndex 10 .

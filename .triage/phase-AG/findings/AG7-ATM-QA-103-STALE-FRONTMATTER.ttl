@@ -1,0 +1,1009 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-ATM-QA-103-STALE-FRONTMATTER>
+  a triage:Finding ;
+  triage:findingId "AG7-ATM-QA-103-STALE-FRONTMATTER" ;
+  triage:title "Sprint-doc frontmatter branch/worktree fields point to stale plan branches" ;
+  triage:description "Sprint AG.4-AG.10 doc frontmatter blocks still reference plan/phase-ag-multihost-advertise-allowlist branch and stale worktree paths instead of actual feature branches (pAG-s4 through pAG-s10). This is a more specific variant of AG-FIND-FRONTMATTER (status:planned being stale) - here the branch and worktree metadata fields are incorrect, affecting doc automation and cross-references. Detected in AG.7 (PR #558, feature/pAG-s7-live-revalidation @ 7221d01b) during QA-2 recheck, but appears across all open AG sprint branches. AG.9 and AG.10 partially fixed AG.8 and AG.10 docs in later sprints." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAG-s10-secured-transport" ;
+  triage:highestOpenBranchIndex 6 ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG10/2> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG10/2> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG10/2> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG10/2> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG9/2> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG9/2> ;
+
+  triage:openOn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/9f03cffd> .
+
+# Occurrences in pAG-s4
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG8/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG8/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s4/AG10/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7> .
+
+# Occurrences in pAG-s5 (abbreviated - same pattern)
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG8/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG8/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s5/AG10/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c> .
+
+# Occurrences in pAG-s6 (abbreviated)
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG8/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG8/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s6/AG10/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c> .
+
+# Occurrences in pAG-s7
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG8/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG8/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s7/AG10/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG10.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b> .
+
+# Occurrences in pAG-s9 (subset: AG.4, 5, 6, 7, 9)
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s9/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323> .
+
+# Occurrences in pAG-s10 (subset: AG.4, 5, 6, 7, 9)
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG4/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG4.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG5/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG5.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG6/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG6.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG7.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-103-STALE-FRONTMATTER/pAG-s10/AG9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG9.md" ;
+  triage:line 17 ;
+  triage:snippet "branch: plan/phase-ag-multihost-advertise-allowlist (YAML)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/pAG-s4-durable-interface-config/91c2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "91c2f1c7" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s5-host-allowlist/6a6e803c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6a6e803c" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s6-doctor-visibility/c3c4289c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s7-live-revalidation/7221d01b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:orderIndex 4 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s9-release-verdict/c59dd323>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:orderIndex 5 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s10-secured-transport/5bfd7eae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:orderIndex 6 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/integrate-phase-AG/9f03cffd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "9f03cffd" ;
+  triage:orderIndex 7 ;
+  triage:status "open" .
