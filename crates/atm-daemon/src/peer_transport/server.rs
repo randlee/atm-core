@@ -87,7 +87,7 @@ impl PeerServerTransport {
         dead_code,
         reason = "retained for transitional peer-runtime entrypoints"
     )]
-    pub(super) fn start(
+    fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
@@ -95,7 +95,7 @@ impl PeerServerTransport {
         self.reload(listen_addrs, dispatcher)
     }
 
-    pub(super) fn shutdown(&self) -> Result<(), AtmError> {
+    fn shutdown(&self) -> Result<(), AtmError> {
         let handles = self
             .state
             .lock()
@@ -125,48 +125,28 @@ impl PeerServerTransport {
         Ok(())
     }
 
-    pub(super) fn reload(
+    fn reload(
         &self,
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-        self.update_configured_listen_addrs(&listen_addrs)?;
-
-        let desired = listen_addrs
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        let mut state = self.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
-                "Restart atm-daemon before retrying cross-host peer listener reload.",
-            )
-        })?;
-
-        self.remove_stale_listeners(&mut state, &desired)?;
-
+        self.replace_configured_listen_addrs(&listen_addrs)?;
+        let mut state = self.lock_state_for_reload()?;
+        self.remove_stale_listeners(&mut state, &listen_addrs)?;
         let mut outcomes = Vec::new();
         let mut failures = Vec::new();
         for listen_addr in listen_addrs {
-            outcomes.push(self.reload_listener_row(
+            self.reload_listener_outcome(
                 &mut state,
                 listen_addr,
                 dispatcher.clone(),
+                &mut outcomes,
                 &mut failures,
-            ));
+            );
         }
-
-        if failures.is_empty() {
-            self.status_cache.clear_peer_listener_degraded();
-        } else {
-            self.status_cache.record_peer_listener_degraded(format!(
-                "daemon peer listener reload has degraded rows: {}",
-                failures.join("; ")
-            ));
-        }
-
+        self.publish_reload_status(&failures);
         Ok(outcomes)
     }
-
     fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
         self.state
             .lock()
@@ -178,21 +158,14 @@ impl PeerServerTransport {
     }
 
     #[cfg(test)]
-    pub(super) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
+    fn bound_addr_for_test(&self) -> Option<SocketAddr> {
         self.state
             .lock()
             .ok()
             .and_then(|state| state.values().next().map(|handle| handle.bound_addr))
     }
 
-    fn record_degraded(&self, listen_addr: SocketAddr, error: &AtmError) {
-        self.status_cache.record_peer_listener_degraded(format!(
-            "daemon peer listener at {listen_addr} is degraded: {}",
-            error.message
-        ));
-    }
-
-    fn update_configured_listen_addrs(&self, listen_addrs: &[SocketAddr]) -> Result<(), AtmError> {
+    fn replace_configured_listen_addrs(&self, listen_addrs: &[SocketAddr]) -> Result<(), AtmError> {
         let mut configured = self.listen_addrs.lock().map_err(|_| {
             AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
                 "Restart atm-daemon before retrying cross-host peer listener reload.",
@@ -202,11 +175,25 @@ impl PeerServerTransport {
         Ok(())
     }
 
+    fn lock_state_for_reload(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<SocketAddr, PeerServerHandle>>, AtmError> {
+        self.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener reload.",
+            )
+        })
+    }
+
     fn remove_stale_listeners(
         &self,
         state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
-        desired: &std::collections::BTreeSet<SocketAddr>,
+        listen_addrs: &[SocketAddr],
     ) -> Result<(), AtmError> {
+        let desired = listen_addrs
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
         let stale_addrs = state
             .keys()
             .copied()
@@ -220,19 +207,21 @@ impl PeerServerTransport {
         Ok(())
     }
 
-    fn reload_listener_row(
+    fn reload_listener_outcome(
         &self,
         state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
         listen_addr: SocketAddr,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        outcomes: &mut Vec<PeerListenerOutcome>,
         failures: &mut Vec<String>,
-    ) -> PeerListenerOutcome {
+    ) {
         if let Some(handle) = state.get(&listen_addr) {
-            return PeerListenerOutcome {
+            outcomes.push(PeerListenerOutcome {
                 listen_addr,
                 bound_addr: Some(handle.bound_addr),
                 error_message: None,
-            };
+            });
+            return;
         }
         match self.bind_and_spawn_listener(listen_addr, dispatcher) {
             Ok((bound_addr, handle)) => {
@@ -242,11 +231,11 @@ impl PeerServerTransport {
                     format!("daemon peer listener bound at {bound_addr}"),
                 );
                 state.insert(listen_addr, handle);
-                PeerListenerOutcome {
+                outcomes.push(PeerListenerOutcome {
                     listen_addr,
                     bound_addr: Some(bound_addr),
                     error_message: None,
-                }
+                });
             }
             Err(error) => {
                 tracing::warn!(
@@ -264,13 +253,31 @@ impl PeerServerTransport {
                 );
                 self.record_degraded(listen_addr, &error);
                 failures.push(format!("{listen_addr}: {}", error.message));
-                PeerListenerOutcome {
+                outcomes.push(PeerListenerOutcome {
                     listen_addr,
                     bound_addr: None,
                     error_message: Some(error.message.clone()),
-                }
+                });
             }
         }
+    }
+
+    fn publish_reload_status(&self, failures: &[String]) {
+        if failures.is_empty() {
+            self.status_cache.clear_peer_listener_degraded();
+        } else {
+            self.status_cache.record_peer_listener_degraded(format!(
+                "daemon peer listener reload has degraded rows: {}",
+                failures.join("; ")
+            ));
+        }
+    }
+
+    fn record_degraded(&self, listen_addr: SocketAddr, error: &AtmError) {
+        self.status_cache.record_peer_listener_degraded(format!(
+            "daemon peer listener at {listen_addr} is degraded: {}",
+            error.message
+        ));
     }
 
     #[allow(
@@ -388,8 +395,52 @@ impl PeerServerTransport {
     }
 }
 
-pub(super) fn bound_addr(server: &PeerServerTransport) -> Result<Option<SocketAddr>, AtmError> {
-    server.bound_addr()
+pub(super) fn new_peer_server_transport(
+    listen_addr: Option<SocketAddr>,
+    observability: SubsystemObservability,
+    status_cache: RuntimeStatusCache,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+) -> PeerServerTransport {
+    PeerServerTransport::new(
+        listen_addr,
+        observability,
+        status_cache,
+        authorization_policy,
+    )
+}
+
+pub(super) fn start_peer_server_transport(
+    transport: &PeerServerTransport,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+) -> Result<Vec<PeerListenerOutcome>, AtmError> {
+    transport.start(dispatcher)
+}
+
+pub(super) fn shutdown_peer_server_transport(
+    transport: &PeerServerTransport,
+) -> Result<(), AtmError> {
+    transport.shutdown()
+}
+
+pub(super) fn reload_peer_server_transport(
+    transport: &PeerServerTransport,
+    listen_addrs: Vec<SocketAddr>,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+) -> Result<Vec<PeerListenerOutcome>, AtmError> {
+    transport.reload(listen_addrs, dispatcher)
+}
+
+pub(super) fn peer_server_bound_addr(
+    transport: &PeerServerTransport,
+) -> Result<Option<SocketAddr>, AtmError> {
+    transport.bound_addr()
+}
+
+#[cfg(test)]
+pub(super) fn peer_server_bound_addr_for_test(
+    transport: &PeerServerTransport,
+) -> Option<SocketAddr> {
+    transport.bound_addr_for_test()
 }
 
 fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {

@@ -27,7 +27,12 @@ mod server;
 #[cfg(test)]
 mod tests;
 
-use server::PeerServerTransport;
+#[cfg(test)]
+use server::peer_server_bound_addr_for_test;
+use server::{
+    PeerServerTransport, new_peer_server_transport, peer_server_bound_addr,
+    reload_peer_server_transport, shutdown_peer_server_transport, start_peer_server_transport,
+};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
@@ -953,7 +958,7 @@ impl PeerTransportRuntime {
             })
             .unwrap_or_else(|| Arc::new(AllowAllPeerAuthorizationPolicy));
         Self {
-            server: Arc::new(PeerServerTransport::new(
+            server: Arc::new(new_peer_server_transport(
                 config.peer_listen_addr,
                 observability.clone(),
                 status_cache,
@@ -992,20 +997,21 @@ impl PeerTransportRuntime {
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
-        self.server.start(dispatcher).map(|_| ())
+        start_peer_server_transport(&self.server, dispatcher).map(|_| ())
     }
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        self.server.shutdown()
+        shutdown_peer_server_transport(&self.server)
     }
+
     pub(crate) fn reload_listeners(
         &self,
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<server::PeerListenerOutcome>, AtmError> {
-        self.server.reload(listen_addrs, dispatcher)
+        reload_peer_server_transport(&self.server, listen_addrs, dispatcher)
     }
     pub(crate) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
-        server::bound_addr(&self.server)
+        peer_server_bound_addr(&self.server)
     }
     #[cfg(test)]
     pub(crate) fn new_for_test(
@@ -1014,7 +1020,7 @@ impl PeerTransportRuntime {
         replay_db_path: PathBuf,
     ) -> Self {
         Self {
-            server: Arc::new(PeerServerTransport::new(
+            server: Arc::new(new_peer_server_transport(
                 None,
                 SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
                 RuntimeStatusCache::new(),
@@ -1047,7 +1053,7 @@ impl PeerTransportRuntime {
             peer_listen_addr: Some(listen_addr),
         };
         Self {
-            server: Arc::new(PeerServerTransport::new(
+            server: Arc::new(new_peer_server_transport(
                 Some(listen_addr),
                 observability.clone(),
                 status_cache,
@@ -1083,7 +1089,7 @@ impl PeerTransportRuntime {
 
     #[cfg(test)]
     pub(crate) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
-        self.server.bound_addr_for_test()
+        peer_server_bound_addr_for_test(&self.server)
     }
 
     #[cfg(test)]

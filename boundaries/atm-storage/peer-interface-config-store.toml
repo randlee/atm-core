@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-PeerInterfaceConfigStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "PeerInterfaceConfigStore"
+
+[public]
+trait = "PeerInterfaceConfigStore"
+notes = "shared durable daemon peer-interface configuration contract for the AG.4 cross-host control plane"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["daemon_peer_interface_rows", "daemon_peer_bind_state_updates", "daemon_peer_interface_staleness_state"]
+io_forbidden = ["socket_io", "process_spawn", "direct_listener_bind"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-daemon", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["AddPeerInterfaceCommand", "UpdatePeerInterfaceCommand", "PeerInterfaceKey"]
+response_types = ["PeerInterfaceRow", "Vec<PeerInterfaceRow>", "bool"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-INTERFACE-CONFIG-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_daemon_direct_sqlite_lookup", "no_bind_inside_storage_boundary"]
+
+[status]
+state = "active"
+notes = ["AG.4 introduced the durable daemon peer-interface control plane as a storage-owned contract", "CLI, daemon bootstrap, and runtime composition may depend on this trait while concrete storage remains behind atm-storage-rusqlite"]
