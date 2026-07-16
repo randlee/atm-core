@@ -3577,7 +3577,10 @@ mail correctness.
   - each configured row retains bind observability state including
     `last_bound_at`, `last_bind_error`, and stale visibility instead of
     collapsing failure into one process-global flag
-  - if no enabled interface rows exist, no cross-host listener binds
+  - durable interface rows are the intended steady-state listener model
+  - during the current AG transition, legacy listener configuration fallback
+    may still bind when no enabled durable rows exist; `atm doctor` must report
+    that fallback state explicitly so operators can migrate off it
   - environment variables may remain as historical/transitional compatibility
     inputs but must not remain the intended steady-state configuration model
 
