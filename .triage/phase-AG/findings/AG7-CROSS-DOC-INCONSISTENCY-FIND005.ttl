@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-CROSS-DOC-INCONSISTENCY-FIND005>
+  a triage:Finding ;
+  triage:findingId "AG7-CROSS-DOC-INCONSISTENCY-FIND005" ;
+  triage:title "Cross-document inconsistency in how AG-FIND-005 (ordinary-send dispatch blocker) is described" ;
+  triage:description "AG-FIND-005 is described inconsistently across phase-AG documentation: cross-host-findings-ledger.md and readiness.md treat it as a blocking release gate, while plan-phase-AG.md and sprint-AG9.md use conditional language suggesting it could be a noted caveat rather than a hard blocker. This creates ambiguity about phase AG closure readiness." ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "repo" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-15T22:11:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/s4/c425c803> ;
+  triage:openOn <urn:atm:triage:worktree/s5/6ed274cc> ;
+  triage:openOn <urn:atm:triage:worktree/s6/32f9f07b> ;
+  triage:openOn <urn:atm:triage:worktree/s7/530ee77c> ;
+  triage:openOn <urn:atm:triage:worktree/s9/c47dbae5> ;
+  triage:openOn <urn:atm:triage:worktree/s10/fa5ca78e> ;
+  triage:promoteTo <urn:atm:triage:worktree/s10/fa5ca78e> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "c425c803" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/c425c803> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s5/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/6ed274cc> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/32f9f07b> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | ... | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/530ee77c> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/plan-phase-AG.md" ;
+  triage:line 568 ;
+  triage:snippet "if AG-FIND-005 remains open, the verdict must instead state cross-host is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c47dbae5" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
+
+<urn:atm:triage:occurrence/AG7-CROSS-DOC-INCONSISTENCY-FIND005/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-findings-ledger.md" ;
+  triage:line 54 ;
+  triage:snippet "AG-FIND-005 | Ordinary cross-host send | blocking | PRODUCT-BUG | ... | open |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
+
+<urn:atm:triage:worktree/s4/c425c803>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s4-durable-interface-config" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s4-durable-interface-config" ;
+  triage:headSha "c425c803" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/6ed274cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "6ed274cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s6/32f9f07b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "32f9f07b" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/530ee77c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "530ee77c" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s9/c47dbae5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "c47dbae5" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s10/fa5ca78e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 10 .
