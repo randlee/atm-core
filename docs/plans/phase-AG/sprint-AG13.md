@@ -2,8 +2,8 @@
 id: AG.13
 title: Self-IP Full-Function Same-Host Proof
 status: planned
-branch: docs/cross-host-remote-target-contract
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
+branch: feature/pAG-s13-selfip-proof
+worktree: ../atm-core-worktrees/feature/pAG-s13-selfip-proof
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.13
-worktree: ../atm-core-worktrees/docs/cross-host-remote-target-contract
-branch: docs/cross-host-remote-target-contract
+worktree: ../atm-core-worktrees/feature/pAG-s13-selfip-proof
+branch: feature/pAG-s13-selfip-proof
 status: planned
 estimated_scope: medium
 ```

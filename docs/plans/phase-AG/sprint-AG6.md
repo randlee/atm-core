@@ -4,7 +4,7 @@ title: Doctor Visibility For The Cross-Host Control Plane
 status: planned
 branch: feature/pAG-s6-doctor-visibility
 worktree: ../atm-core-worktrees/feature/pAG-s6-doctor-visibility
-target: integrate/phase-AG
+target: develop
 ---
 
 # Sprint AG.6 — Doctor Visibility For The Cross-Host Control Plane
