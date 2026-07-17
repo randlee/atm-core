@@ -13,7 +13,16 @@ impl WriterStatementCache {
             connection,
             "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, message_id, parent_message_id, thread_mode, recorded_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
-             ON CONFLICT(team, agent, message_key) DO NOTHING;",
+             ON CONFLICT(team, agent, message_key) DO UPDATE SET
+               envelope_json = excluded.envelope_json,
+               from_agent = excluded.from_agent,
+               message_text = excluded.message_text,
+               summary = excluded.summary,
+               message_at = excluded.message_at,
+               message_id = excluded.message_id,
+               parent_message_id = excluded.parent_message_id,
+               thread_mode = excluded.thread_mode,
+               recorded_at = excluded.recorded_at;",
         )?;
         statement.execute(params)
     }

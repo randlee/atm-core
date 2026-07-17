@@ -1077,6 +1077,27 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_backend_save_message_updates_existing_envelope_for_same_key() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut original = message("atm:test-upsert", "hello");
+
+        store.save_message(&original).expect("save original");
+
+        original.envelope.text = "updated".to_string();
+        original.envelope.summary = Some("updated summary".to_string());
+        original.envelope.timestamp = IsoTimestamp::now();
+        store.save_message(&original).expect("save updated");
+
+        let loaded = store
+            .load_message(&original.message_key)
+            .expect("load")
+            .expect("message");
+        assert_eq!(loaded.envelope.text, "updated");
+        assert_eq!(loaded.envelope.summary.as_deref(), Some("updated summary"));
+    }
+
+    #[test]
     fn sqlite_backend_saves_loads_and_lists_rosters() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.roster_store();
