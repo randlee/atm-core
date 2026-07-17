@@ -180,8 +180,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
-  - TCP/TLS
+  - TCP/TLS as the cross-host target contract
   - in-process `LoopbackClientTransport` (`test-socket`)
+- the active `1.3.1` implementation line still uses plain TCP for the cross-host
+  path; ADR-030 and AG.10 define the closure path from today's functional
+  transport to the required secured transport
 - same-host local IPC and cross-host daemon transport must use one shared ATM
   frame header and request/response packet family rather than separate local
   and remote message systems, as defined by `protocol-icd.md`
@@ -221,6 +224,19 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
+- durable interface rows are the intended listener control plane, but the
+  currently shipped AG transition still permits legacy listener fallback when
+  no enabled durable rows exist; doctor/runtime projection must surface that
+  state explicitly so operators can distinguish migrated vs fallback binds.
+- before AG.7 live LAN/VPN closure, the daemon keeps a controlled local
+  daemon-to-daemon harness on the same peer-listener request path so CI can
+  validate unauthorized-host rejection, authorized send/read/ack, degraded
+  warning classification, and bounded retry semantics without misreporting that
+  local proof as live-network success.
+- inbound peer authorization is a fail-closed gate in the peer listener path:
+  the daemon normalizes the remote socket host token once to lowercase,
+  compares it exactly against durable allowed-host rows, and rejects before
+  request dispatch can mutate mailbox, ack, roster, or loopback-bypass state.
 - bounded transient retry uses exponential backoff with jitter, an initial
   delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
   total retry ceiling within the documented timeout budget; it must not
@@ -249,6 +265,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - if the configured listener bind address is an explicit local IP that later
   disappears or changes, the runtime must enter degraded status and require
   bounded reload/rebind via the runtime reload path
+- when multiple durable interface rows are enabled, the daemon must attempt
+  them independently and persist row-local bind outcomes so one failed row
+  does not suppress the healthy listener set
 - graceful shutdown finalization must remain bounded; best-effort SQLite WAL
   checkpoint and observability flush steps must time out rather than block
   daemon exit indefinitely

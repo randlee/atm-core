@@ -22,6 +22,8 @@ use interprocess::local_socket::traits::Stream as _;
 use crate::observability::CliObservability;
 
 #[cfg(test)]
+use atm_core::send::qualified_sender_identity;
+#[cfg(test)]
 use std::collections::BTreeMap;
 
 const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
@@ -87,7 +89,7 @@ impl InternalNudgeInput {
         BTreeMap::from([
             (
                 "from",
-                nudge_template::qualified_sender_identity(&self.event),
+                qualified_sender_identity(&self.event.sender, Some(&self.event.sender_team)),
             ),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
@@ -346,7 +348,6 @@ fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmEr
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::time::Duration;
 
     use atm_core::boundary::{
@@ -549,13 +550,13 @@ mod tests {
         #[cfg(not(windows))]
         let tmux_path = tempdir.path().join("tmux");
         #[cfg(windows)]
-        fs::write(
+        std::fs::write(
             &tmux_path,
             "@echo off\r\n>> \"%ATM_TEST_TMUX_LOG%\" echo %*\r\nexit /b 0\r\n",
         )
         .expect("write tmux shim");
         #[cfg(not(windows))]
-        fs::write(
+        std::fs::write(
             &tmux_path,
             "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$ATM_TEST_TMUX_LOG\"\nexit 0\n",
         )
@@ -563,9 +564,11 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
+            let mut perms = std::fs::metadata(&tmux_path)
+                .expect("metadata")
+                .permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&tmux_path, perms).expect("chmod");
+            std::fs::set_permissions(&tmux_path, perms).expect("chmod");
         }
 
         let tmux_log_value = tmux_log.display().to_string();
@@ -577,7 +580,7 @@ mod tests {
         super::TmuxNudgeSink
             .deliver(&base_event(), "<atm/>")
             .expect("deliver");
-        let logged = fs::read_to_string(&tmux_log).expect("tmux log");
+        let logged = std::fs::read_to_string(&tmux_log).expect("tmux log");
         assert_eq!(logged.matches("Enter").count(), 2);
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
     }

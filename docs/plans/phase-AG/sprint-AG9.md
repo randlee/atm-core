@@ -4,7 +4,7 @@ title: Copied-State Revalidation And Release Verdict
 status: planned
 branch: feature/pAG-s9-release-verdict
 worktree: ../atm-core-worktrees/feature/pAG-s9-release-verdict
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.9 — Copied-State Revalidation And Release Verdict

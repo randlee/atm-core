@@ -105,6 +105,62 @@ CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     PRIMARY KEY (team_name, template_kind)
 );
 
+CREATE TABLE IF NOT EXISTS daemon_peer_interfaces (
+    interface_id INTEGER PRIMARY KEY,
+    interface_name TEXT NOT NULL,
+    bind_addr TEXT NOT NULL,
+    advertise_addr TEXT NOT NULL,
+    port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+    interface_kind TEXT NOT NULL CHECK (
+        interface_kind IN ('lan', 'vpn', 'loopback', 'other')
+    ),
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)) DEFAULT 1,
+    configured_by TEXT NOT NULL,
+    configured_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_observed_at TEXT NULL,
+    refresh_deadline_at TEXT NULL,
+    stale_at TEXT NULL,
+    last_bound_at TEXT NULL,
+    last_bind_error TEXT NULL,
+    UNIQUE(interface_name, bind_addr, port)
+);
+
+CREATE TABLE IF NOT EXISTS daemon_allowed_hosts (
+    host_name TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)) DEFAULT 1,
+    added_by TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    disabled_at TEXT NULL,
+    note TEXT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_peer_security_settings (
+    singleton_key INTEGER PRIMARY KEY CHECK (singleton_key = 1),
+    mode TEXT NOT NULL CHECK (mode IN ('secure-required', 'insecure-allowed')),
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_local_peer_identity (
+    singleton_key INTEGER PRIMARY KEY CHECK (singleton_key = 1),
+    certificate_der BLOB NOT NULL,
+    private_key_der BLOB NOT NULL,
+    fingerprint_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_trusted_peers (
+    host_name TEXT PRIMARY KEY,
+    fingerprint_sha256 TEXT NOT NULL,
+    display_name TEXT NULL,
+    approved_by TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -130,6 +186,15 @@ CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
 
 CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
     ON team_nudge_template_overrides(team_name);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_peer_interfaces_enabled
+    ON daemon_peer_interfaces(enabled, interface_kind, interface_name);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_allowed_hosts_enabled
+    ON daemon_allowed_hosts(enabled, host_name);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_trusted_peers_host_name
+    ON daemon_trusted_peers(host_name);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.

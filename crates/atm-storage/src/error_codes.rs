@@ -88,6 +88,10 @@ pub enum AtmErrorCode {
     WarningStaleMailboxLock,
     WarningHookSkipped,
     WarningHookExecutionFailed,
+    WarningCrossHostListenerUnconfigured,
+    WarningCrossHostListenerDegraded,
+    WarningCrossHostAllowlistEmpty,
+    WarningCrossHostLegacyFallbackActive,
     PostSendPaneMissing,
     PostSendTmuxSendFailed,
     PostSendGraftUnavailable,
@@ -209,6 +213,14 @@ impl AtmErrorCode {
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
+            Self::WarningCrossHostListenerUnconfigured => {
+                "ATM_WARNING_CROSS_HOST_LISTENER_UNCONFIGURED"
+            }
+            Self::WarningCrossHostListenerDegraded => "ATM_WARNING_CROSS_HOST_LISTENER_DEGRADED",
+            Self::WarningCrossHostAllowlistEmpty => "ATM_WARNING_CROSS_HOST_ALLOWLIST_EMPTY",
+            Self::WarningCrossHostLegacyFallbackActive => {
+                "ATM_WARNING_CROSS_HOST_LEGACY_FALLBACK_ACTIVE"
+            }
             _ => return None,
         })
     }
@@ -342,6 +354,16 @@ fn parse_observability_or_warning_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_WARNING_STALE_MAILBOX_LOCK" => AtmErrorCode::WarningStaleMailboxLock,
         "ATM_WARNING_HOOK_SKIPPED" => AtmErrorCode::WarningHookSkipped,
         "ATM_WARNING_HOOK_EXECUTION_FAILED" => AtmErrorCode::WarningHookExecutionFailed,
+        "ATM_WARNING_CROSS_HOST_LISTENER_UNCONFIGURED" => {
+            AtmErrorCode::WarningCrossHostListenerUnconfigured
+        }
+        "ATM_WARNING_CROSS_HOST_LISTENER_DEGRADED" => {
+            AtmErrorCode::WarningCrossHostListenerDegraded
+        }
+        "ATM_WARNING_CROSS_HOST_ALLOWLIST_EMPTY" => AtmErrorCode::WarningCrossHostAllowlistEmpty,
+        "ATM_WARNING_CROSS_HOST_LEGACY_FALLBACK_ACTIVE" => {
+            AtmErrorCode::WarningCrossHostLegacyFallbackActive
+        }
         _ => return None,
     })
 }
@@ -382,5 +404,23 @@ impl<'de> Deserialize<'de> for AtmErrorCode {
     {
         let value = String::deserialize(deserializer)?;
         value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AtmErrorCode;
+
+    #[test]
+    fn cross_host_warning_codes_round_trip_through_wire_strings() {
+        for code in [
+            AtmErrorCode::WarningCrossHostListenerUnconfigured,
+            AtmErrorCode::WarningCrossHostListenerDegraded,
+            AtmErrorCode::WarningCrossHostAllowlistEmpty,
+            AtmErrorCode::WarningCrossHostLegacyFallbackActive,
+        ] {
+            let wire = code.as_str();
+            assert_eq!(wire.parse::<AtmErrorCode>().unwrap(), code);
+        }
     }
 }

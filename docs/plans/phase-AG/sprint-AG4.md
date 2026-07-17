@@ -4,7 +4,7 @@ title: Durable Interface Configuration And Binding
 status: planned
 branch: feature/pAG-s4-durable-interface-config
 worktree: ../atm-core-worktrees/feature/pAG-s4-durable-interface-config
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.4 — Durable Interface Configuration And Binding

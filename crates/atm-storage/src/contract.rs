@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
@@ -7,6 +9,11 @@ use std::str::FromStr;
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+mod peer_security;
+pub use peer_security::{
+    LocalPeerIdentityRow, PeerSecurityMode, PeerSecuritySettingsRow, SetPeerSecurityModeCommand,
+    TrustedPeerRow, UpsertTrustedPeerCommand,
+};
 
 #[doc(hidden)]
 pub mod sealed {
@@ -244,6 +251,364 @@ pub struct TeamNudgeTemplateOverrideRow {
     pub kind: BuiltInNudgeTemplateKind,
     pub mode: TeamNudgeTemplateOverrideMode,
     pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerInterfaceKind {
+    Lan,
+    Vpn,
+    Loopback,
+    Other,
+}
+
+impl PeerInterfaceKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Lan => "lan",
+            Self::Vpn => "vpn",
+            Self::Loopback => "loopback",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl fmt::Display for PeerInterfaceKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PeerInterfaceKind {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "lan" => Ok(Self::Lan),
+            "vpn" => Ok(Self::Vpn),
+            "loopback" => Ok(Self::Loopback),
+            "other" => Ok(Self::Other),
+            other => Err(AtmError::validation(format!(
+                "unsupported peer interface kind `{other}`"
+            ))
+            .with_recovery("Use one of lan, vpn, loopback, or other.")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceKey {
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub port: u16,
+}
+
+impl PeerInterfaceKey {
+    pub fn new(
+        interface_name: impl Into<String>,
+        bind_addr: IpAddr,
+        port: u16,
+    ) -> Result<Self, AtmError> {
+        let interface_name = require_non_blank(
+            interface_name.into(),
+            "peer interface name",
+            "Provide a non-empty daemon peer interface name before mutating interface configuration.",
+        )?;
+        Ok(Self {
+            interface_name,
+            bind_addr,
+            port,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceRow {
+    pub interface_id: i64,
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub enabled: bool,
+    pub configured_by: String,
+    pub configured_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_deadline_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bound_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bind_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AddPeerInterfaceCommand {
+    pub interface_name: String,
+    pub bind_addr: IpAddr,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub configured_by: String,
+}
+
+impl AddPeerInterfaceCommand {
+    pub fn new(
+        interface_name: impl Into<String>,
+        bind_addr: IpAddr,
+        advertise_addr: IpAddr,
+        port: u16,
+        interface_kind: PeerInterfaceKind,
+        configured_by: impl Into<String>,
+    ) -> Result<Self, AtmError> {
+        let interface_name = require_non_blank(
+            interface_name.into(),
+            "peer interface name",
+            "Provide a non-empty daemon peer interface name before adding interface configuration.",
+        )?;
+        let configured_by = require_non_blank(
+            configured_by.into(),
+            "peer interface configured_by",
+            "Populate the caller identity before recording daemon peer interface configuration.",
+        )?;
+        Ok(Self {
+            interface_name,
+            bind_addr,
+            advertise_addr,
+            port,
+            interface_kind,
+            configured_by,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdatePeerInterfaceCommand {
+    pub key: PeerInterfaceKey,
+    pub advertise_addr: IpAddr,
+    pub port: u16,
+    pub interface_kind: PeerInterfaceKind,
+    pub configured_by: String,
+    pub new_bind_addr: IpAddr,
+    pub enabled: Option<bool>,
+}
+
+impl UpdatePeerInterfaceCommand {
+    pub fn new(
+        key: PeerInterfaceKey,
+        new_bind_addr: IpAddr,
+        advertise_addr: IpAddr,
+        port: u16,
+        interface_kind: PeerInterfaceKind,
+        configured_by: impl Into<String>,
+        enabled: Option<bool>,
+    ) -> Result<Self, AtmError> {
+        let configured_by = require_non_blank(
+            configured_by.into(),
+            "peer interface configured_by",
+            "Populate the caller identity before updating daemon peer interface configuration.",
+        )?;
+        Ok(Self {
+            key,
+            advertise_addr,
+            port,
+            interface_kind,
+            configured_by,
+            new_bind_addr,
+            enabled,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerInterfaceBindingUpdate {
+    pub key: PeerInterfaceKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_deadline_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bound_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bind_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct AllowedHostName(String);
+
+impl AllowedHostName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let normalized = normalize_allowed_host_name(value.into())?;
+        Ok(Self(normalized))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for AllowedHostName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl AsRef<str> for AllowedHostName {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for AllowedHostName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl FromStr for AllowedHostName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AllowedHostRow {
+    pub host_name: AllowedHostName,
+    pub enabled: bool,
+    pub added_by: String,
+    pub added_at: IsoTimestamp,
+    pub updated_at: IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disabled_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AllowHostCommand {
+    pub host_name: AllowedHostName,
+    pub added_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl AllowHostCommand {
+    pub fn new(
+        host_name: impl Into<String>,
+        added_by: impl Into<String>,
+        note: Option<String>,
+    ) -> Result<Self, AtmError> {
+        let host_name = AllowedHostName::new(host_name.into())?;
+        let added_by = require_non_blank(
+            added_by.into(),
+            "allowed host added_by",
+            "Populate the caller identity before recording daemon host authorization.",
+        )?;
+        Ok(Self {
+            host_name,
+            added_by,
+            note: note.and_then(|value| {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }),
+        })
+    }
+}
+
+fn normalize_allowed_host_name(raw: String) -> Result<String, AtmError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AtmError::validation("allowed host name must not be blank".to_string())
+            .with_recovery(
+                "Provide a literal host token such as 10.10.100.98 or windows-dev-1 before retrying the daemon host command.",
+            ));
+    }
+    if trimmed.chars().any(|ch| {
+        matches!(ch, '*' | '?' | '[' | ']' | '{' | '}' | '/' | '\\') || ch.is_whitespace()
+    }) {
+        return Err(AtmError::validation(format!(
+            "allowed host name `{trimmed}` contains wildcard-style or unsupported characters"
+        ))
+        .with_recovery(
+            "Use one exact host token only; wildcards, regex-like patterns, path separators, and subnet forms are not supported.",
+        ));
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    if normalized.parse::<IpAddr>().is_ok() {
+        return Ok(normalized);
+    }
+    for label in normalized.split('.') {
+        if label.is_empty() {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` contains an empty DNS label"
+            ))
+            .with_recovery(
+                "Use one exact hostname with non-empty labels or a literal IP address before retrying the daemon host command.",
+            ));
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` has a label starting or ending with `-`"
+            ))
+            .with_recovery(
+                "Use one exact hostname with labels that begin and end with letters or digits before retrying the daemon host command.",
+            ));
+        }
+        if !label
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+        {
+            return Err(AtmError::validation(format!(
+                "allowed host name `{trimmed}` contains unsupported hostname characters"
+            ))
+            .with_recovery(
+                "Use one exact hostname composed of letters, digits, `-`, and `.` or a literal IP address before retrying the daemon host command.",
+            ));
+        }
+    }
+    Ok(normalized)
+}
+
+fn normalize_sha256_fingerprint(raw: String) -> Result<String, AtmError> {
+    let normalized = raw
+        .trim()
+        .chars()
+        .filter(|ch| *ch != ':')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if normalized.len() != 64 || !normalized.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(AtmError::validation(format!(
+            "peer fingerprint `{}` must be 64 hexadecimal characters",
+            raw.trim()
+        ))
+        .with_recovery(
+            "Use the SHA-256 fingerprint reported by `atm daemon security identity show` or `atm daemon security trust list` before retrying the trust command.",
+        ));
+    }
+    Ok(normalized)
+}
+
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+
+    let digest = sha2::Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
 }
 
 impl TeamNudgeTemplateOverrideRow {
@@ -522,13 +887,75 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
     ) -> Result<bool, AtmError>;
 }
 
+pub trait PeerInterfaceConfigStore: sealed::Sealed + Send + Sync {
+    fn add_interface(&self, command: AddPeerInterfaceCommand)
+    -> Result<PeerInterfaceRow, AtmError>;
+
+    fn update_interface(
+        &self,
+        command: UpdatePeerInterfaceCommand,
+    ) -> Result<PeerInterfaceRow, AtmError>;
+
+    fn set_interface_enabled(
+        &self,
+        key: &PeerInterfaceKey,
+        enabled: bool,
+    ) -> Result<PeerInterfaceRow, AtmError>;
+
+    fn remove_interface(&self, key: &PeerInterfaceKey) -> Result<bool, AtmError>;
+
+    fn list_interfaces(&self) -> Result<Vec<PeerInterfaceRow>, AtmError>;
+
+    fn record_binding_update(
+        &self,
+        update: &PeerInterfaceBindingUpdate,
+    ) -> Result<PeerInterfaceRow, AtmError>;
+}
+
+pub trait AllowedHostStore: sealed::Sealed + Send + Sync {
+    fn allow_host(&self, command: AllowHostCommand) -> Result<AllowedHostRow, AtmError>;
+
+    fn deny_host(&self, host: &AllowedHostName) -> Result<AllowedHostRow, AtmError>;
+
+    fn remove_host(&self, host: &AllowedHostName) -> Result<(), AtmError>;
+
+    fn list_hosts(&self) -> Result<Vec<AllowedHostRow>, AtmError>;
+
+    fn load_host(&self, host: &AllowedHostName) -> Result<Option<AllowedHostRow>, AtmError>;
+}
+
+pub trait PeerSecurityStore: sealed::Sealed + Send + Sync {
+    fn load_security_settings(&self) -> Result<PeerSecuritySettingsRow, AtmError>;
+
+    fn set_security_mode(
+        &self,
+        command: SetPeerSecurityModeCommand,
+    ) -> Result<PeerSecuritySettingsRow, AtmError>;
+
+    fn load_local_identity(&self) -> Result<Option<LocalPeerIdentityRow>, AtmError>;
+
+    fn load_or_create_local_identity(&self) -> Result<LocalPeerIdentityRow, AtmError>;
+
+    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeerRow>, AtmError>;
+
+    fn load_trusted_peer(&self, host: &AllowedHostName)
+    -> Result<Option<TrustedPeerRow>, AtmError>;
+
+    fn upsert_trusted_peer(
+        &self,
+        command: UpsertTrustedPeerCommand,
+    ) -> Result<TrustedPeerRow, AtmError>;
+
+    fn remove_trusted_peer(&self, host: &AllowedHostName) -> Result<bool, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        AckRequirementState, AllowedHostName, BuiltInNudgeTemplateKind, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
         derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
@@ -779,5 +1206,17 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn allowed_host_name_normalizes_case_and_whitespace() {
+        let host = AllowedHostName::new("  WINdows-DEV-1.Example  ").expect("host");
+        assert_eq!(host.as_str(), "windows-dev-1.example");
+    }
+
+    #[test]
+    fn allowed_host_name_rejects_wildcard_style_input() {
+        let error = AllowedHostName::new("*.example").expect_err("wildcard should fail");
+        assert!(error.message.contains("wildcard-style"));
     }
 }

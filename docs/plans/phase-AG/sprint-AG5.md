@@ -4,7 +4,7 @@ title: Durable Host Allowlist Enforcement
 status: planned
 branch: feature/pAG-s5-host-allowlist
 worktree: ../atm-core-worktrees/feature/pAG-s5-host-allowlist
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.5 — Durable Host Allowlist Enforcement

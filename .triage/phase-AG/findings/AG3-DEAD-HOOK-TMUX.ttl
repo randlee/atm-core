@@ -1,0 +1,169 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG3-DEAD-HOOK-TMUX>
+  a triage:Finding ;
+  triage:findingId "AG3-DEAD-HOOK-TMUX" ;
+  triage:title "Dead hook_tmux.rs module retained on feature/pAG-s10-secured-transport at 88eb5bcf — regressed after prior fix at fa5ca78e" ;
+  triage:description "crates/atm-core/src/send/hook_tmux.rs (tmux_nudge_message, run_tmux_send_keys, run_tmux_send_enter — zero call sites) is fully dead code. It was previously documented as fixed (removed or marked with #[expect(dead_code)]) at commit fa5ca78e on feature/pAG-s10-secured-transport. At the current commit 88eb5bcf on the same branch, the module re-appears with an explicit #[expect(dead_code, reason = '...')] attribute in send/mod.rs:38-42, indicating an intentional deferral of cleanup. This is classified as a REGRESSION: dead code that was previously eliminated has been reintroduced in a later commit on the same branch. AG10-REFACTOR-QA-1 (arch-qa ARCH-004, req-qa ATM-QA-AG10-003) independently confirmed the dead-code finding at 88eb5bcf." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:status "regressed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed true ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s11/2703a552> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/512f3afa> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s14/94b969b6> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/d05ee158> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/39dae6fa> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s10/fa5ca78e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s10/88eb5bcf> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/integrate-AG/1> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "2703a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s11/2703a552> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
+
+<urn:atm:triage:occurrence/AG3-DEAD-HOOK-TMUX/integrate-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(super) fn tmux_nudge_message(team: &TeamName) -> String { ... pub(super) fn run_tmux_send_keys(...) ... pub(super) fn run_tmux_send_enter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "39dae6fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/39dae6fa> .
+
+<urn:atm:triage:worktree/pAG-s10/88eb5bcf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s10/fa5ca78e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "fa5ca78e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s11/2703a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "2703a552" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s12/cbc6a19a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s13/512f3afa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s14/94b969b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s15/d05ee158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/39dae6fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "39dae6fa" ;
+  triage:orderIndex 7 .

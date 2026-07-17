@@ -1004,6 +1004,8 @@ pub struct RuntimeStatusSnapshot {
     #[serde(default)]
     pub degraded_ingest: bool,
     #[serde(default)]
+    pub degraded_peer_listener: bool,
+    #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
 }
 
@@ -1125,6 +1127,7 @@ mod tests {
             detail: Some("runtime cache ready".to_string()),
             singleton_owner_pid: Some(777),
             degraded_ingest: false,
+            degraded_peer_listener: false,
             member_counts: RuntimeStatusCounts {
                 active_members: 2,
                 idle_members: 1,

@@ -21,7 +21,9 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
+    BootstrapTraceReport, CrossHostAllowedHostDoctorRow, CrossHostAllowlistDoctorReport,
+    CrossHostDoctorReport, CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
+    CrossHostTrustedPeerDoctorRow, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
     DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     RecipientDeliveryPath, RecipientDeliveryPathReport,
@@ -219,6 +221,7 @@ fn build_doctor_report(
         config,
         mail_store,
         roster_store,
+        cross_host: None,
         daemon_runtime,
         drift_findings,
         runtime_status,

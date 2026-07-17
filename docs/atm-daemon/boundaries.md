@@ -216,12 +216,51 @@ Notes:
 - Runtime composition owns replay resume and exposes the transport only through
   the shared `ClientTransport` contract.
 - Runtime composition also owns peer-transport config resolution through the
-  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
-  workspace config loader directly or silently fall back to defaults after a
+  durable SQLite-backed interface and security stores; `PeerClientTransport`
+  must not call the workspace config loader directly or silently fall back to defaults after a
+
+## CrossHostDelivery
+
+Purpose:
+- owns the daemon-private remote-target delivery boundary that sits between
+  general send dispatch and socket transport details
+
+Notes:
+- the production implementation is `DaemonCrossHostDelivery`
+- runtime dispatch may branch only on `SendRequest.remote_host.is_some()`
+  versus local delivery; host resolution, outbound endpoint selection, and
+  transport invocation must stay inside `DaemonCrossHostDelivery`
+- `localhost` and self-IP same-host sends are ordinary remote hosts on this
+  same boundary; there is no loopback-only bypass branch
+- production composition injects one fixed `DaemonCrossHostDelivery`
+  implementer; callers must not construct ad hoc transport clients
+- listener bind selection is now owned only by durable peer-interface rows;
+  the deleted legacy `[daemon].peer_listen_addr` composition fallback must not
+  be reintroduced
   config-load failure.
 - The peer transport must reuse the shared ATM frame header and packet DTOs
   used by the same-host local IPC boundary; host-host traffic is not a second
   daemon message system.
+
+## PeerServerTransportAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-server-transport.toml](../../boundaries/atm-daemon/peer-server-transport.toml)
+
+Purpose:
+- Owns the daemon-side inbound peer listener used for remote daemon-to-daemon
+  request handling.
+
+Notes:
+- The concrete `PeerServerTransport` implementation stays runtime-private inside
+  `atm_daemon::peer_transport`.
+- This is intentionally a distinct daemon-private boundary rather than an
+  implementation of the same-host `ServerTransport` trait; see
+  [../../docs/adr/ADR-028-peer-server-transport-boundary.md](../../docs/adr/ADR-028-peer-server-transport-boundary.md).
+- The listener must reuse the shared ATM frame header and request/response
+  envelopes.
+- The listener must keep accept-loop recovery, connection concurrency,
+  request-dispatch tracking, and shutdown drain bounded.
 
 ## FileWatchEventSourceAdapter
 

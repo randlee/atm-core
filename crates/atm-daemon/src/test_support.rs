@@ -90,6 +90,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                 config: atm_core::boundary::ConfigDoctorReport::default(),
                 mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
                 roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
+                cross_host: None,
                 daemon_runtime: None,
                 drift_findings: Vec::new(),
                 runtime_status: None,

@@ -59,9 +59,12 @@ IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FORBIDDEN_EDGE_RE = re.compile(
     r"^(?P<left>[a-z0-9]+(?:[.-][a-z0-9]+)*)\s*->\s*(?P<right>[a-z0-9]+(?:[.-][a-z0-9]+)*)$"
 )
-PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
-PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
-PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+PUBLIC_VISIBILITY_PREFIX = r"pub(?:\s*\([^)]*\))?"
+PUBLIC_TYPE_TEMPLATE = rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+(?:struct|enum|type)\s+{{name}}\b"
+PUBLIC_REEXPORT_TEMPLATE = rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+use\b.*\b{{name}}\b"
+PUBLIC_FUNCTION_RE = re.compile(
+    rf"^\s*{PUBLIC_VISIBILITY_PREFIX}\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b"
+)
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
 SCB_RETAINED_ALLOWLIST_PATH = Path(".just/allowlists/scb_retained_allowlist.toml")
@@ -72,6 +75,7 @@ SCB_SINGLETON_ALLOWLIST_PATH = Path(".just/allowlists/scb_singleton_allowlist.to
 SCB_SINGLETON_FIXTURE_PATH = Path(".just/fixtures/scb_singleton_known_bad.rs")
 SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allowlist.toml")
 SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
+SCB_BOUNDARY_VISIBILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_boundary_visibility_allowlist.toml")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
     "fn load_team_config(",
@@ -264,6 +268,15 @@ class ScbSingletonAllowlistEntry:
 
 @dataclass(frozen=True)
 class ScbObservabilityAllowlistEntry:
+    rule: str
+    path: Path
+    symbol: str
+    why: str
+    sunset_sprint: str
+
+
+@dataclass(frozen=True)
+class ScbBoundaryVisibilityAllowlistEntry:
     rule: str
     path: Path
     symbol: str
@@ -623,6 +636,40 @@ def scb_observability_allowlist(repo_root: Path) -> list[ScbObservabilityAllowli
     return entries
 
 
+def scb_boundary_visibility_allowlist(repo_root: Path) -> list[ScbBoundaryVisibilityAllowlistEntry]:
+    allowlist_path = repo_root / SCB_BOUNDARY_VISIBILITY_ALLOWLIST_PATH
+    if not allowlist_path.exists():
+        raise SystemExit(
+            f"[boundaries] missing required allowlist: {SCB_BOUNDARY_VISIBILITY_ALLOWLIST_PATH.as_posix()}"
+        )
+    data = tomllib_load(allowlist_path)
+    raw_entries = data.get("allow", [])
+    if not isinstance(raw_entries, list):
+        raise SystemExit("[boundaries.allow] must be an array of tables")
+
+    entries: list[ScbBoundaryVisibilityAllowlistEntry] = []
+    for index, raw_entry in enumerate(raw_entries):
+        if not isinstance(raw_entry, dict):
+            raise SystemExit(f"[boundaries.allow][{index}] must be a TOML table")
+        required = ("rule", "path", "symbol", "why", "sunset_sprint")
+        for field in required:
+            value = raw_entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise SystemExit(
+                    f"[boundaries.allow][{index}].{field} must be a non-empty string"
+                )
+        entries.append(
+            ScbBoundaryVisibilityAllowlistEntry(
+                rule=raw_entry["rule"],
+                path=Path(raw_entry["path"]),
+                symbol=raw_entry["symbol"],
+                why=raw_entry["why"],
+                sunset_sprint=raw_entry["sunset_sprint"],
+            )
+        )
+    return entries
+
+
 def enclosing_function_name(lines: list[str], line_number: int) -> str | None:
     for index in range(line_number - 1, -1, -1):
         line = lines[index].strip()
@@ -707,6 +754,24 @@ def is_allowlisted_singleton_violation(
 def is_allowlisted_observability_violation(
     *,
     entries: list[ScbObservabilityAllowlistEntry],
+    rule: str,
+    rel_path: Path,
+    symbol: str | None,
+) -> bool:
+    for entry in entries:
+        if entry.rule != rule:
+            continue
+        if entry.path != rel_path:
+            continue
+        if symbol is None or entry.symbol != symbol:
+            continue
+        return True
+    return False
+
+
+def is_allowlisted_boundary_visibility_violation(
+    *,
+    entries: list[ScbBoundaryVisibilityAllowlistEntry],
     rule: str,
     rel_path: Path,
     symbol: str | None,
@@ -1568,14 +1633,27 @@ def collect_test_bypass_violations(repo_root: Path, records: list[BoundaryRecord
     return violations
 
 
-def find_public_type_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
+def find_public_type_violations(
+    record: BoundaryRecord,
+    source_path: Path,
+    repo_root: Path,
+    allowlist: list[ScbBoundaryVisibilityAllowlistEntry],
+) -> list[BoundaryViolation]:
     if record.implementation_type is None:
         return []
     pattern = re.compile(PUBLIC_TYPE_TEMPLATE.format(name=re.escape(record.implementation_type)))
+    rel_path = source_path.relative_to(repo_root)
     rel_source = source_path.relative_to(repo_root).as_posix()
     violations: list[BoundaryViolation] = []
     for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
         if pattern.search(line):
+            if is_allowlisted_boundary_visibility_violation(
+                entries=allowlist,
+                rule="SCB-BOUNDARY-VISIBILITY-001",
+                rel_path=rel_path,
+                symbol=record.implementation_type,
+            ):
+                continue
             violations.append(
                 BoundaryViolation(
                     f"{rel_source}:{line_number}",
@@ -1585,14 +1663,27 @@ def find_public_type_violations(record: BoundaryRecord, source_path: Path, repo_
     return violations
 
 
-def find_public_reexport_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
+def find_public_reexport_violations(
+    record: BoundaryRecord,
+    source_path: Path,
+    repo_root: Path,
+    allowlist: list[ScbBoundaryVisibilityAllowlistEntry],
+) -> list[BoundaryViolation]:
     if record.implementation_type is None:
         return []
     pattern = re.compile(PUBLIC_REEXPORT_TEMPLATE.format(name=re.escape(record.implementation_type)))
+    rel_path = source_path.relative_to(repo_root)
     rel_source = source_path.relative_to(repo_root).as_posix()
     violations: list[BoundaryViolation] = []
     for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
         if pattern.search(line):
+            if is_allowlisted_boundary_visibility_violation(
+                entries=allowlist,
+                rule="SCB-BOUNDARY-VISIBILITY-002",
+                rel_path=rel_path,
+                symbol=record.implementation_type,
+            ):
+                continue
             violations.append(
                 BoundaryViolation(
                     f"{rel_source}:{line_number}",
@@ -1602,10 +1693,16 @@ def find_public_reexport_violations(record: BoundaryRecord, source_path: Path, r
     return violations
 
 
-def find_public_constructor_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
+def find_public_constructor_violations(
+    record: BoundaryRecord,
+    source_path: Path,
+    repo_root: Path,
+    allowlist: list[ScbBoundaryVisibilityAllowlistEntry],
+) -> list[BoundaryViolation]:
     if record.implementation_type is None:
         return []
     lines = source_path.read_text(encoding="utf-8").splitlines()
+    rel_path = source_path.relative_to(repo_root)
     rel_source = source_path.relative_to(repo_root).as_posix()
     violations: list[BoundaryViolation] = []
     inside_impl = False
@@ -1618,6 +1715,17 @@ def find_public_constructor_violations(record: BoundaryRecord, source_path: Path
         elif inside_impl:
             brace_depth += line.count("{") - line.count("}")
             if PUBLIC_FUNCTION_RE.search(line):
+                symbol = enclosing_function_name(lines, line_number)
+                if is_allowlisted_boundary_visibility_violation(
+                    entries=allowlist,
+                    rule="SCB-BOUNDARY-VISIBILITY-003",
+                    rel_path=rel_path,
+                    symbol=symbol,
+                ):
+                    if brace_depth <= 0:
+                        inside_impl = False
+                        brace_depth = 0
+                    continue
                 violations.append(
                     BoundaryViolation(
                         f"{rel_source}:{line_number}",
@@ -1632,6 +1740,7 @@ def find_public_constructor_violations(record: BoundaryRecord, source_path: Path
 
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
+    allowlist = scb_boundary_visibility_allowlist(repo_root)
     alias_map = manifest_by_alias(repo_root)
     for record in records:
         if not record.is_active or record.implementation_visibility == "trait_only":
@@ -1642,10 +1751,10 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
             if record.implementation_visibility == "private":
-                violations.extend(find_public_type_violations(record, source_path, repo_root))
-                violations.extend(find_public_reexport_violations(record, source_path, repo_root))
+                violations.extend(find_public_type_violations(record, source_path, repo_root, allowlist))
+                violations.extend(find_public_reexport_violations(record, source_path, repo_root, allowlist))
             if record.implementation_constructor == "private":
-                violations.extend(find_public_constructor_violations(record, source_path, repo_root))
+                violations.extend(find_public_constructor_violations(record, source_path, repo_root, allowlist))
     return violations
 
 

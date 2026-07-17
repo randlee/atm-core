@@ -1,0 +1,142 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG7-ATM-QA-102-UNDEFINED-BASELINE-REQIDS>
+  a triage:Finding ;
+  triage:findingId "AG7-ATM-QA-102-UNDEFINED-BASELINE-REQIDS" ;
+  triage:title "docs/atm-daemon/requirements.md cites REQ-CORE-TRANSPORT-002D/002E as satisfied baseline requirements that do not exist" ;
+  triage:description "req-qa found in AG7-QA-2 recheck: docs/atm-daemon/requirements.md has REQ-DAEMON-TRANSPORT-002D/002E entries claiming 'Satisfies: REQ-CORE-TRANSPORT-002D'/'REQ-CORE-TRANSPORT-002E' respectively, but neither ID exists in baseline docs/requirements.md. The REQ-CORE-TRANSPORT-* series jumps 002C -> 003, skipping 002D/002E entirely. This is exactly the requirement-ID drift class that AG7-FIX-1's earlier requirement-ID sweep was supposed to catch and clearly missed." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AG7-ATM-QA-102" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_filter" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-102/s10/2> ;
+  triage:openOn <urn:atm:triage:worktree/s6/c3c4289c> ;
+  triage:openOn <urn:atm:triage:worktree/s7/7221d01b> ;
+  triage:openOn <urn:atm:triage:worktree/s9/c59dd323> ;
+  triage:openOn <urn:atm:triage:worktree/s10/5bfd7eae> ;
+  triage:fixedOn <urn:atm:triage:worktree/s5/none> ;
+  triage:promoteTo <urn:atm:triage:worktree/s10/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s6/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 180 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002D" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:occursIn <urn:atm:triage:worktree/s6/c3c4289c> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 180 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002E" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s7/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 195 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002D" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:occursIn <urn:atm:triage:worktree/s7/7221d01b> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 193 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002E" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s9/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 208 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002D" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c59dd323> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 193 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002E" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/5bfd7eae> .
+
+<urn:atm:triage:occurrence/AG7-ATM-QA-102/s10/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 208 ;
+  triage:snippet "REQ-CORE-TRANSPORT-002D" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/5bfd7eae> .
+
+<urn:atm:triage:worktree/s6/c3c4289c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "c3c4289c" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s7/7221d01b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "7221d01b" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s9/c59dd323>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "c59dd323" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s10/5bfd7eae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "5bfd7eae" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/s5/none>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "none" ;
+  triage:orderIndex 5 .

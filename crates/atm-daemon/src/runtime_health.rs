@@ -1,48 +1,35 @@
-use std::io::Write as _;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
-    boundary::{self, GraftNudgeTarget, PostSendHookEvent},
-    clear::clear_mail_with_runtime,
-    doctor::{
-        self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
-    },
-    error::{AtmError, AtmErrorKind},
-    error_codes::AtmErrorCode,
-    graft::{
-        GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-        read_graft_post_send_message, write_graft_post_send_message,
-    },
-    list::list_mail,
+    LocalServiceRuntime,
+    boundary::{self},
+    error::AtmError,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        RuntimeLivenessState, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
         TeamMemberHeartbeatResponse,
     },
-    read::{peek_mail_with_runtime, read_mail_with_runtime},
-    schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_post_send_emitter,
 };
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::peer_transport::delivery::{CrossHostDelivery, DaemonCrossHostDelivery};
+mod cross_host_doctor;
+mod dispatch_delivery;
+mod graft_post_send;
+use crate::peer_transport::PeerTransportRuntime;
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::RosterStore;
+use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerSecurityStore, RosterStore};
+use graft_post_send::DaemonGraftPostSendPort;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -56,204 +43,6 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
 
-const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
-
-#[derive(Debug, Clone)]
-struct DaemonGraftPostSendPort {
-    runtime: LocalServiceRuntime,
-}
-
-impl DaemonGraftPostSendPort {
-    fn new(runtime: LocalServiceRuntime) -> Self {
-        Self { runtime }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonGraftPostSendPort {}
-
-impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
-    fn deliver_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        target: &GraftNudgeTarget,
-    ) -> Result<(), AtmError> {
-        let Some(member) = self
-            .runtime
-            .load_roster_member(&target.recipient_team, &target.recipient)?
-        else {
-            return Err(graft_recipient_unavailable_error(
-                event,
-                "recipient is missing from the authoritative ATM roster",
-            )
-            .with_recovery(
-                "Repair the roster row and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ));
-        };
-        let recipient_home_dir =
-            canonical_home_dir(&member.metadata_json).ok_or_else(|| graft_recipient_unavailable_error(
-                event,
-                "recipient has no authoritative home_dir for graft post-send delivery",
-            ).with_recovery(format!(
-                "Repair the roster row with `atm teams update-member --team {} --member {} --home-dir <path>` and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                target.recipient_team, target.recipient
-            )))?;
-        let endpoint_path = graft_receiver_socket_path_from_home(
-            recipient_home_dir.as_path(),
-            &target.recipient_team,
-            &target.recipient,
-        );
-        deliver_post_send_to_graft_receiver(&endpoint_path, event)
-    }
-}
-
-fn deliver_post_send_to_graft_receiver(
-    endpoint_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    let mut stream = connect_graft_receiver(endpoint_path, event)?;
-    apply_graft_post_send_deadlines(&stream, event)?;
-    let request = GraftPostSendRequest {
-        event: event.clone(),
-    };
-    write_graft_post_send_message(
-        &mut stream,
-        &request,
-        "failed to write graft post-send request",
-        "graft post-send request exceeded the bounded payload cap",
-    )
-    .map_err(|error| graft_transport_error(event, error))?;
-    stream
-        .flush()
-        .map_err(|source| graft_transport_error(event, AtmError::daemon_unavailable(
-            "failed to flush graft post-send request",
-        )
-        .with_recovery(
-            "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-        )
-        .with_source(source)))?;
-    match read_graft_post_send_message::<GraftPostSendResponse>(
-        &mut stream,
-        "failed to read graft post-send response",
-        "graft post-send response exceeded the bounded payload cap",
-    )
-    .map_err(|error| graft_transport_error(event, error))?
-    {
-        GraftPostSendResponse::Delivered => Ok(()),
-        GraftPostSendResponse::Error(error) => Err(error.into_atm_error()),
-    }
-}
-
-fn connect_graft_receiver(
-    endpoint_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<LocalSocketStream, AtmError> {
-    let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("graft-post-send-connect".to_string())
-        .spawn(move || {
-            let _ = result_tx.send(LocalSocketStream::connect(name));
-        })
-        .map_err(|source| {
-            graft_recipient_unavailable_error(
-                event,
-                "failed to spawn bounded graft post-send connect helper",
-            )
-            .with_recovery(
-                "Retry after the daemon can spawn one bounded same-host connect helper thread.",
-            )
-            .with_source(source)
-        })?;
-    match result_rx.recv_timeout(GRAFT_POST_SEND_CONNECT_DEADLINE) {
-        Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(
-            graft_recipient_unavailable_error(event, "recipient has no active graft receiver path")
-                .with_recovery(
-                    "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "timed out connecting to the graft receiver path",
-            )
-            .with_recovery(
-                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "graft post-send connect helper disconnected unexpectedly",
-            )
-            .with_recovery(
-                "Restart the daemon and the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-    }
-}
-
-fn apply_graft_post_send_deadlines(
-    stream: &LocalSocketStream,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    apply_graft_post_send_deadline(
-        stream.set_recv_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send receive timeout",
-    )?;
-    apply_graft_post_send_deadline(
-        stream.set_send_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send send timeout",
-    )
-}
-
-fn apply_graft_post_send_deadline(
-    result: std::io::Result<()>,
-    event: &PostSendHookEvent,
-    message: &'static str,
-) -> Result<(), AtmError> {
-    match result {
-        Ok(()) => Ok(()),
-        #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
-        Err(source) => Err(
-            graft_recipient_unavailable_error(event, message)
-                .with_recovery(
-                    "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-    }
-}
-
-fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    let mut graft_error = graft_recipient_unavailable_error(event, &error.message);
-    for recovery in error.recovery {
-        graft_error = graft_error.with_recovery(recovery);
-    }
-    graft_error
-}
-
-fn graft_recipient_unavailable_error(
-    event: &PostSendHookEvent,
-    message: impl Into<String>,
-) -> AtmError {
-    AtmError::new_with_code(
-        AtmErrorCode::PostSendGraftUnavailable,
-        AtmErrorKind::DaemonUnavailable,
-        format!(
-            "recipient {}@{} {}",
-            event.recipient,
-            event.recipient_team,
-            message.into()
-        ),
-    )
-}
-
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
@@ -264,8 +53,13 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
+    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
+    allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
+    peer_transport_runtime: PeerTransportRuntime,
+    cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -277,6 +71,12 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field(
+                "peer_interface_config_store",
+                &"dyn PeerInterfaceConfigStore",
+            )
+            .field("allowed_host_store", &"dyn AllowedHostStore")
+            .field("peer_security_store", &"dyn PeerSecurityStore")
+            .field(
                 "remote_replay_store_present",
                 &self.remote_replay_store.is_some(),
             )
@@ -284,6 +84,8 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 "storage_finalizer_present",
                 &self.storage_finalizer.is_some(),
             )
+            .field("peer_transport_runtime", &self.peer_transport_runtime)
+            .field("cross_host_delivery", &"dyn CrossHostDelivery")
             .finish()
     }
 }
@@ -518,9 +320,11 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_transport_runtime: PeerTransportRuntime,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
+        let peer_interface_config_store = runtime_assembly.peer_interface_config_store.clone();
         let roster_store = runtime_assembly.shared_roster_store_arc();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
@@ -547,8 +351,16 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
+            peer_interface_config_store: peer_interface_config_store.clone(),
+            allowed_host_store: runtime_assembly.allowed_host_store,
+            peer_security_store: runtime_assembly.peer_security_store,
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
+            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
+                peer_interface_config_store,
+                peer_transport_runtime.clone(),
+            )),
+            peer_transport_runtime,
         }
     }
 
@@ -579,78 +391,7 @@ fn with_shutdown_finalizer_registry<R>(
 }
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
-
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-        let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-        match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    &post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
-                        request,
-                        self.observability.as_ref(),
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )))
-            }
-            RequestEnvelope::Heartbeat(request) => {
-                Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
-            }
-            RequestEnvelope::CompatibilityPreflight(preflight) => Ok(
-                ResponseEnvelope::CompatibilityVerdict(self.compatibility_verdict(preflight)?),
-            ),
-            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
-                query,
-                self.observability.as_ref(),
-            )?)),
-            RequestEnvelope::Peek(query) => Ok(ResponseEnvelope::Peek(Box::new(
-                peek_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
-            ))),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(
-                read_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
-            ))),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail_with_runtime(
-                query,
-                self.observability.as_ref(),
-                &self.service_runtime,
-            )?)),
-            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
-                self.project_doctor_report(query)?,
-            ))),
-        }
-    }
-}
-
 impl DaemonRequestDispatcher {
-    fn compatibility_verdict(
-        &self,
-        preflight: atm_core::protocol::CompatibilityPreflight,
-    ) -> Result<CompatibilityVerdict, AtmError> {
-        let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
-            && preflight.client_release == daemon_release
-        {
-            return Ok(CompatibilityVerdict::Compatible { daemon_release });
-        }
-        Ok(CompatibilityVerdict::Incompatible {
-            client_release: preflight.client_release,
-            daemon_release,
-            code: AtmErrorCode::ClientDaemonVersionIncompatible,
-        })
-    }
-
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
         let roster_store = self
             .roster_store
@@ -741,6 +482,9 @@ impl DaemonRequestDispatcher {
             return Err(AtmError::agent_not_found(
                 request.member.as_str(),
                 request.team.as_str(),
+            )
+            .with_recovery(
+                "Add the missing roster member back to the team before retrying daemon heartbeat traffic.",
             ));
         }
         let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
@@ -759,133 +503,6 @@ impl DaemonRequestDispatcher {
         Ok(self
             .status_cache
             .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
-    }
-
-    fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let daemon_observability_finding = match self.observability.health() {
-            Ok(health) => daemon_observability_finding(&health),
-            Err(error) => doctor::health::observability_finding_from_error(&error),
-        };
-        let daemon_runtime = DaemonRuntimeDoctorReport {
-            findings: vec![daemon_observability_finding],
-        };
-        let mut report = doctor::run_doctor_with_runtime_ports(
-            query,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            &self.doctor_ports,
-            Some(daemon_runtime),
-        )?;
-        let runtime_status = match &report.member_roster {
-            Some(roster) => self.status_cache.snapshot_for_members(
-                roster
-                    .members
-                    .iter()
-                    .map(|member| (roster.team.clone(), member.name.clone())),
-            ),
-            None => self.status_cache.snapshot(),
-        };
-        let runtime_status_finding = runtime_status_finding(&runtime_status);
-        report.findings.push(runtime_status_finding.clone());
-        if let Some(daemon_runtime) = report.daemon_runtime.as_mut() {
-            daemon_runtime.findings.push(runtime_status_finding);
-        } else {
-            report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
-                findings: vec![runtime_status_finding],
-            });
-        }
-        report.recommendations = report
-            .findings
-            .iter()
-            .filter_map(|finding| finding.remediation.clone())
-            .collect();
-        let status = doctor::health::status_from_findings(&report.findings);
-        let (info_count, warning_count, error_count) = report.findings.iter().fold(
-            (0usize, 0usize, 0usize),
-            |(info, warning, error), finding| match finding.severity {
-                DoctorSeverity::Info => (info + 1, warning, error),
-                DoctorSeverity::Warning => (info, warning + 1, error),
-                DoctorSeverity::Error => (info, warning, error + 1),
-            },
-        );
-        let message = match status {
-            DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-            DoctorStatus::Warning => "ATM doctor completed with warnings",
-            DoctorStatus::Error => "ATM doctor found critical issues",
-        };
-        report.summary = DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        };
-        report.runtime_status = Some(runtime_status);
-        // `daemon_context` reports the daemon process's own launch-time
-        // environment, which is frozen when the singleton starts and does NOT
-        // track the requesting shell. It is deliberately distinct from
-        // `client_context` (threaded through the request payload in
-        // `DoctorQuery::caller_*`), which reflects the invoking CLI process.
-        // Surfacing the daemon's launch-time identity is diagnostically useful:
-        // it explains why an earlier release appeared to report a stale team or
-        // identity for every caller (see issue #548).
-        report.daemon_context = Some(DoctorExecutionContext {
-            team: atm_core::caller_context::read_cli_team_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            version: Some(ReleaseVersion::current()),
-        });
-        Ok(report)
-    }
-}
-
-fn daemon_observability_finding(
-    health: &atm_core::observability::AtmObservabilityHealth,
-) -> DoctorFinding {
-    let path = health
-        .active_log_path
-        .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "<unavailable>".to_string());
-    let detail = health
-        .detail
-        .as_ref()
-        .map(|detail| format!(" Detail: {detail}"))
-        .unwrap_or_default();
-    match health.logging_state {
-        atm_core::observability::AtmObservabilityHealthState::Healthy => DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
-            message: format!(
-                "daemon retained observability sink is healthy at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: None,
-        },
-        atm_core::observability::AtmObservabilityHealthState::Degraded => DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
-            message: format!(
-                "daemon retained observability sink is degraded at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: Some(
-                "Inspect the daemon retained log path and sink errors, then re-run `atm doctor`."
-                    .to_string(),
-            ),
-        },
-        atm_core::observability::AtmObservabilityHealthState::Unavailable => DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthFailed,
-            message: format!(
-                "daemon retained observability sink is unavailable at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: Some(
-                "Restore the daemon retained-log path and confirm it is writable before re-running `atm doctor`."
-                    .to_string(),
-            ),
-        },
     }
 }
 
@@ -925,10 +542,11 @@ impl boundary::StatusSource for DaemonStatusSource {
 
 #[cfg(test)]
 impl DaemonRequestDispatcher {
-    pub(crate) fn new_for_test(
+    pub(crate) fn new_for_test_with_peer_transport(
         home_dir: std::path::PathBuf,
         status_cache: RuntimeStatusCache,
         roster_db_path: std::path::PathBuf,
+        peer_transport_runtime: crate::PeerTransportRuntime,
     ) -> Self {
         let observability = std::sync::Arc::new(
             crate::test_observability::TestDaemonObservability::new(
@@ -967,9 +585,30 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
+            peer_interface_config_store: runtime_assembly.peer_interface_config_store.clone(),
+            allowed_host_store: runtime_assembly.allowed_host_store.clone(),
+            peer_security_store: runtime_assembly.peer_security_store.clone(),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
+            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
+                runtime_assembly.peer_interface_config_store.clone(),
+                peer_transport_runtime.clone(),
+            )),
+            peer_transport_runtime,
         }
+    }
+
+    pub(crate) fn new_for_test(
+        home_dir: std::path::PathBuf,
+        status_cache: RuntimeStatusCache,
+        roster_db_path: std::path::PathBuf,
+    ) -> Self {
+        Self::new_for_test_with_peer_transport(
+            home_dir,
+            status_cache,
+            roster_db_path,
+            crate::PeerTransportRuntime::default(),
+        )
     }
 }
 

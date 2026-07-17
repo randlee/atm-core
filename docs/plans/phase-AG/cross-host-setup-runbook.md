@@ -38,6 +38,44 @@ Required rule:
 
 - do not point any of these at live `~/.atm`, live `~/.claude`, or any other
   retained user state during Lane A
+- on `1.3.1`, treat this as team/config isolation only unless the active host
+  daemon has been intentionally replaced for the validation lane
+
+Current `1.3.1` constraint observed during AG.1:
+
+- `ATM_HOME` and `ATM_CONFIG_HOME` isolate team/config discovery surfaces
+- they do not relocate the host daemon singleton, owner lock, durable SQLite
+  store, or default retained log sink
+- Lane A therefore cannot honestly claim daemon-runtime isolation on one host
+  unless the active host daemon is itself the only daemon under test
+- AG.1 records this as a setup-contract finding rather than pretending a
+  second clean-room daemon is supported
+
+Important implementation constraint discovered during AG.1 Windows setup:
+
+- the `1.3.1` runtime derives daemon singleton and durable SQLite state from
+  the OS-account home via `current_host_runtime_scope()`, not from `ATM_HOME`,
+  `ATM_CONFIG_HOME`, `HOME`, or `USERPROFILE`
+- under a normal operator account, release binaries therefore still use the
+  host-scoped `.atm/db/mail.db` even when `ATM_HOME`, `ATM_CONFIG_HOME`, and
+  `ATM_LOG_DIR` point at disposable directories
+- do not claim a strict no-live-OS-account-state clean-room PASS from a normal
+  account until the team has either provided an approved disposable
+  OS-account/container/VM isolation procedure or added an approved
+  release-binary durable-state override
+- for AG.1 Windows setup only, team-lead/windows-operator accepted using this
+  computer's host account environment because no installed/running ATM service
+  exists on the computer; reports using this exception must call it
+  `host-env` evidence, not strict clean-room evidence
+
+Minimal team bootstrap required before same-host commands:
+
+1. create `.claude/teams/<team>/config.json` under the disposable `ATM_HOME`
+   with at least `{"members":[]}`
+2. run `atm teams add-member <team> <member> ... --json` for each clean-room
+   member needed by the row
+3. only then run `atm doctor --json`, `atm list --json`, `atm clear --json`,
+   `atm send ... --json`, or `atm read ... --json`
 
 ## Binary Contract
 
@@ -58,6 +96,8 @@ Each operator must record:
 - exact resolved `atm` path
 - exact resolved `atm-daemon` path
 - whether the observed cross-host transport path is plain TCP or TLS-backed
+- whether the validation is using the one active host daemon or an explicitly
+  replaced host daemon instance
 
 ## Required Environment Contract
 
@@ -79,6 +119,143 @@ Notes:
   observable config, that is a setup-contract finding
 - AG.4 / AG.5 exist precisely because this env-driven contract is not an
   acceptable steady-state operator surface
+
+## Patched-Daemon Demo Contract For `AG-FIND-004`
+
+Use this section when validating the patched daemon from PR #551 / commit
+`69395061` rather than the released `1.3.1` binaries.
+
+The patched cross-host lane now requires two distinct settings per host:
+
+- outbound peer target:
+  - `ATM_DAEMON_PEER_ADDR=<remote-host-ip:port>`
+- inbound peer listener bind:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "<local-host-ip:port>"
+    ```
+
+Rules:
+
+- `ATM_DAEMON_PEER_ADDR` tells the local daemon where to dial
+- `daemon.peer_listen_addr` tells the local daemon what local TCP address to
+  bind and accept on
+- the daemon loads `.atm.toml` from the repo/worktree directory it is launched
+  in; if the operator runs a binary built in another worktree, the process must
+  still start with the intended repo root as its current working directory
+- for AG.2 operator setup, prefer wildcard listener bind
+  `0.0.0.0:43101` unless a host policy requires a narrower literal interface
+  bind
+- both values must be literal `IP:port`
+- the two hosts must use opposite values:
+  - Windows `.atm.toml` listener address = address macOS uses in
+    `ATM_DAEMON_PEER_ADDR`
+  - macOS `.atm.toml` listener address = address Windows uses in
+    `ATM_DAEMON_PEER_ADDR`
+
+### VPN / multi-interface address selection rule
+
+Do not assume both hosts share the same IPv4 subnet.
+
+For AG.2 the outbound peer target must be the remote host address that is
+actually reachable on the route used between the two hosts, not a guessed LAN
+address on the same-looking local subnet.
+
+Operator procedure:
+
+1. determine the route to the remote host IP
+2. identify the local interface/address used on that route
+3. bind the local listener on `0.0.0.0:43101` unless a narrower bind is
+   required
+4. set `ATM_DAEMON_PEER_ADDR` to the remote host's route-reachable
+   `IP:43101`
+
+Current AG.2 VPN lane example:
+
+- Windows host IP: `10.10.100.98`
+- macOS route to Windows uses `utun6`
+- macOS VPN address on that route: `10.212.36.11`
+- therefore:
+  - Windows should dial `10.212.36.11:43101`
+  - macOS should dial `10.10.100.98:43101`
+
+Useful verification commands:
+
+- macOS:
+  - `route -n get <windows-ip>`
+  - `ifconfig <reported-interface>`
+  - `lsof -nP -iTCP:43101 -sTCP:LISTEN`
+- Windows:
+  - `route print <mac-ip>`
+  - `Test-NetConnection <mac-ip> -Port 43101`
+
+2026-07-15 operator finding:
+
+- macOS produced a false cross-host blocker when the daemon binary from
+  `integrate/phase-AG/target/debug/atm-daemon` was started with
+  `integrate/phase-AG` as the working directory instead of
+  `feature/cross-host-communication`
+- result:
+  - outbound env was correct
+  - inbound listener config from the AG worktree `.atm.toml` was not used
+  - the daemon bound only to `192.168.128.82:43101`
+  - Windows correctly failed `Test-NetConnection 10.212.36.11 -Port 43101`
+- fix:
+  - start the daemon with `feature/cross-host-communication` as the current
+    working directory
+  - it is acceptable to execute a binary artifact located under another
+    worktree as long as the working directory is the AG worktree containing the
+    intended `.atm.toml`
+
+### Minimal macOS / Windows demo pair
+
+Example pair:
+
+- macOS listener: `192.168.1.20:43101`
+- Windows listener: `192.168.1.21:43101`
+
+Then configure:
+
+- on macOS:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "192.168.1.20:43101"
+    ```
+  - env:
+    - `ATM_DAEMON_PEER_ADDR=192.168.1.21:43101`
+
+- on Windows:
+  - `.atm.toml`:
+    ```toml
+    [daemon]
+    peer_listen_addr = "192.168.1.21:43101"
+    ```
+  - env:
+    - `ATM_DAEMON_PEER_ADDR=192.168.1.20:43101`
+
+### First live demo command order
+
+1. update both hosts to commit `69395061`
+2. write `.atm.toml` with the host-local `daemon.peer_listen_addr`
+3. start macOS patched daemon
+4. start Windows patched daemon
+5. capture `atm doctor --json` on both hosts
+6. from Windows, run the first durable send to the macOS recipient
+7. on macOS, run `atm read --all --json`
+8. if send succeeds, immediately retain:
+   - sender JSON result
+   - receiver read JSON result
+   - retained logs from both hosts
+
+Runbook discipline note:
+
+- do not apply exploratory code patches during AG execution just to "see what
+  happens"
+- a named finding fix is different: once a concrete ledger-linked defect exists
+  (for example `AG-FIND-004`) the deliberate implementation patch belongs in
+  normal branch/PR history with the finding id called out in the evidence trail
 
 ## Transport-Security Contract
 

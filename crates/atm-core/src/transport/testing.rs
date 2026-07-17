@@ -1,20 +1,12 @@
 use std::sync::Arc;
 
-use crate::ack;
 use crate::boundary::{self, ClientTransport};
-use crate::clear;
-use crate::doctor;
 use crate::error::AtmError;
-use crate::list;
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use crate::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
-use crate::read;
-use crate::send;
+use crate::protocol::{RequestEnvelope, ResponseEnvelope};
 
 #[derive(Clone)]
 pub struct FakeClientTransport {
@@ -44,61 +36,6 @@ impl boundary::sealed::Sealed for FakeClientTransport {}
 impl ClientTransport for FakeClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         (self.handler)(request)
-    }
-}
-
-pub struct LoopbackClientTransport {
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-}
-
-impl std::fmt::Debug for LoopbackClientTransport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LoopbackClientTransport")
-            .finish_non_exhaustive()
-    }
-}
-
-impl LoopbackClientTransport {
-    pub fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
-        Self { observability }
-    }
-}
-
-impl boundary::sealed::Sealed for LoopbackClientTransport {}
-
-impl ClientTransport for LoopbackClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(request, self.observability.as_ref())
-                    .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                ack::ack_mail(request, self.observability.as_ref()).map(|outcome| {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-                })
-            }
-            RequestEnvelope::CompatibilityPreflight(_) => Err(AtmError::daemon_unavailable(
-                "loopback compatibility preflight is not wired outside the daemon runtime",
-            )),
-            RequestEnvelope::Heartbeat(_) => Err(AtmError::daemon_unavailable(
-                "loopback heartbeat transport is not wired outside the daemon runtime",
-            )),
-            RequestEnvelope::List(query) => {
-                list::list_mail(query, self.observability.as_ref()).map(ResponseEnvelope::List)
-            }
-            RequestEnvelope::Peek(query) => read::peek_mail(query, self.observability.as_ref())
-                .map(|outcome| ResponseEnvelope::Peek(Box::new(outcome))),
-            RequestEnvelope::Receive(query) => read::read_mail(query, self.observability.as_ref())
-                .map(|outcome| ResponseEnvelope::Receive(Box::new(outcome))),
-            RequestEnvelope::Clear(query) => {
-                clear::clear_mail(query, self.observability.as_ref()).map(ResponseEnvelope::Clear)
-            }
-            RequestEnvelope::Doctor(query) => {
-                doctor::run_doctor(query, self.observability.as_ref())
-                    .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
-            }
-        }
     }
 }
 

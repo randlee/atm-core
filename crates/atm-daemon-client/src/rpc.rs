@@ -237,6 +237,7 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            remote_host: None,
             dry_run: false,
         }));
 
@@ -276,6 +277,7 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            remote_host: None,
             dry_run: false,
         }));
 
