@@ -546,7 +546,6 @@ impl AtmGraftClient for CliComposition<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::io;
     use std::io::Write;
     use std::sync::Arc;
@@ -1010,7 +1009,7 @@ mod tests {
         } else {
             "invalid-atm-daemon"
         });
-        fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
+        std::fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
         let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
         let transport = LocalIpcClientTransportAdapter::new(socket_path);
