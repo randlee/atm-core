@@ -22,10 +22,22 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
-        println!(
-            "Sent to {}@{} [message_id: {}]",
-            outcome.agent, outcome.team, outcome.message_id
-        );
+        match outcome.outcome {
+            atm_core::send::SendCommandOutcome::Deferred => {
+                println!(
+                    "Deferred to {}@{} [receipt_message_id: {}]",
+                    outcome.agent,
+                    outcome.team,
+                    outcome.receipt_message_id.unwrap_or(outcome.message_id)
+                );
+            }
+            _ => {
+                println!(
+                    "Sent to {}@{} [message_id: {}]",
+                    outcome.agent, outcome.team, outcome.message_id
+                );
+            }
+        }
     }
 
     for warning in &outcome.warnings {

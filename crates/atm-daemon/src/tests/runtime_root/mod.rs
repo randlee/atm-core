@@ -7,7 +7,7 @@ use atm_core::protocol::{
     SendResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{RemoteTargetHost, SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
@@ -27,6 +27,7 @@ use crate::test_support::{
 mod dispatch;
 mod local_ipc;
 mod loopback;
+mod self_ip;
 
 pub(super) fn add_member_via_retained_admin(
     db_path: &std::path::Path,

@@ -80,7 +80,8 @@ advertised or bound IP address.
 
 ## Entry Gate
 
-- AG.12 localhost remote-target closure is complete
+- AG.12 defines the localhost corrective proof lane, but AG.13 must not claim
+  AG.12 is landed or closed until `readiness.md` marks it complete
 
 ## Ownership
 

@@ -102,6 +102,7 @@ fn build_send_outcome(
         sender: context.canonical_sender.clone(),
         outcome: command_outcome,
         message_id,
+        receipt_message_id: None,
         requires_ack,
         task_id,
         summary: Some(summary.to_string()),

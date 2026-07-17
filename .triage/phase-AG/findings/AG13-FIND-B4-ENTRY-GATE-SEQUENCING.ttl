@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B4-ENTRY-GATE-SEQUENCING>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B4-ENTRY-GATE-SEQUENCING" ;
+  triage:title "Entry-gate sequencing violation compounds two levels deep (AG.11 -> AG.12 -> AG.13)" ;
+  triage:description "docs/plans/phase-AG/sprint-AG13.md's own Entry Gate section (line ~81-83) states \"AG.12 localhost remote-target closure is complete.\" This is false: docs/plans/phase-AG/readiness.md lines 37-39 list AG.11 as PASS but AG.12 and AG.13 both still PENDING/TBD; readiness.md lines 64-68 gate criteria explicitly state \"AG.12 does not begin until AG.11 lands\" / \"AG.13 does not begin until AG.12 lands\" -- both violated, since AG.13 work has proceeded while both AG.11 and AG.12 remain unlanded (both FAILED their own QA-1 rounds). This is the same ARCH-003/ARCH-004 pattern as AG.12 building ahead of AG.11, now recurring one level deeper." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "process" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/sprint-AG13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/readiness/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:notes "Process/documentation-accuracy issue. Entry Gate in sprint-AG13.md falsely claims AG.12 closure is complete, but readiness.md explicitly gates both AG.12 and AG.13 pending AG.11 landing. Both AG.11 and AG.12 remain unlanded with FAILED QA-1 verdicts. This compounds the ARCH-003/ARCH-004 pattern from AG.12 (building ahead of AG.11) one level deeper (AG.13 building ahead of AG.12, which itself never landed ahead of AG.11). Team-lead should consider whether this warrants attention independent of any held-findings convention. This is a blocking process violation that undermines plan integrity across three consecutive phases." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/sprint-AG13/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG13.md" ;
+  triage:line 81 ;
+  triage:snippet "Entry Gate section claims \"AG.12 localhost remote-target closure is complete\" (lines 81-83)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/readiness/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 37 ;
+  triage:snippet "Gate criteria: \"AG.12 does not begin until AG.11 lands\" / \"AG.13 does not begin until AG.12 lands\" (lines 37-39, 64-68) -- both violated" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .

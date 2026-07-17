@@ -5,6 +5,7 @@ use std::sync::Arc;
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
 
@@ -45,6 +46,7 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
         &self,
         request: SendRequest,
         remote_host: RemoteTargetHost,
+        deferred_receipt_message_id: AtmMessageId,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
 }
 
@@ -188,19 +190,42 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         &self,
         mut request: SendRequest,
         remote_host: RemoteTargetHost,
+        deferred_receipt_message_id: AtmMessageId,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
         let (decision, endpoint) = self.decide_remote_delivery(&remote_host)?;
         request.remote_host = None;
+        let replay_request = request.clone();
         match decision {
             RemoteDeliveryDecision::HealthyImmediateWait => self
                 .peer_transport_runtime
-                .send_to_endpoint(
+                .send_to_endpoint_immediate_wait(
                     endpoint,
                     RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
                 )
                 .map(Box::new)
                 .map(SendOutcome::Delivered)
-                .or_else(|error| Ok(Self::classify_error(&error))),
+                .or_else(|error| {
+                    let outcome = Self::classify_error(&error);
+                    if matches!(outcome, SendOutcome::Deferred | SendOutcome::OutcomeUnknown) {
+                        self.peer_transport_runtime
+                            .persist_remote_request_for_retry(
+                                endpoint,
+                                replay_request.caller_team.clone(),
+                                replay_request.caller_identity.clone(),
+                                boundary::MessageKey::from(deferred_receipt_message_id),
+                                RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                                    replay_request.clone(),
+                                )),
+                                Some(replay_request.caller_team.clone()),
+                                Some(replay_request.caller_identity.clone()),
+                                Some(deferred_receipt_message_id),
+                                Some(replay_request.to.to_string()),
+                                Some(remote_host.as_str().to_string()),
+                            )
+                            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
+                    }
+                    Ok(outcome)
+                }),
         }
     }
 }
@@ -256,7 +281,7 @@ fn resolve_remote_port_for_host(
 #[cfg(test)]
 mod tests {
     use super::{resolve_remote_port_for_host, select_resolved_remote_endpoint};
-    use atm_core::send::RemoteTargetHost;
+    use atm_core::send::parse_send_target;
     use atm_core::types::IsoTimestamp;
     use atm_storage::PeerInterfaceKind;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -331,7 +356,10 @@ mod tests {
                 true,
             ),
         ];
-        let host = RemoteTargetHost::parse("192.0.0.2").expect("host");
+        let host = parse_send_target("qa-a@test-team.192.0.0.2", None)
+            .expect("parse target")
+            .remote_host
+            .expect("host");
         let port = resolve_remote_port_for_host(rows, None, &host).expect("matching self-ip port");
         assert_eq!(port, 43101);
     }
