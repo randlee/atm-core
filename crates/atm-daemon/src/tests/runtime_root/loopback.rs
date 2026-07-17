@@ -223,6 +223,84 @@ fn dispatcher_loopback_send_rejects_unauthorized_host_before_mailbox_mutation() 
 
 #[test]
 #[serial_test::serial(env)]
+fn dispatcher_loopback_without_listener_fails_closed_without_mailbox_mutation() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
+
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+    let mut request = SendRequest::new(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        ROLE_TEAM_LEAD.parse().expect("caller"),
+        "qa-a@test-team",
+        TEST_TEAM.parse().expect("team"),
+        SendMessageSource::Inline("localhost without listener".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("send request");
+    request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
+        .expect("parse target")
+        .remote_host;
+
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .expect_err("localhost send without listener must fail closed");
+    assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+
+    let read = dispatcher
+        .dispatch(RequestEnvelope::Receive(
+            ReadQuery::new(
+                atm_home,
+                workspace_dir,
+                "qa-a".parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query"),
+        ))
+        .expect("read self inbox");
+    let ResponseEnvelope::Receive(report) = read else {
+        panic!("expected receive response");
+    };
+    assert!(
+        report.message.is_none(),
+        "localhost send without listener mutated the receiver mailbox"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");

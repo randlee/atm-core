@@ -1,10 +1,10 @@
 ---
 id: AG.14
 title: Automated Integration Coverage For The Corrective Path
-status: planned
+status: in_progress
 branch: feature/pAG-s14-integration-coverage
 worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.14 — Automated Integration Coverage For The Corrective Path
@@ -15,7 +15,7 @@ phase: AG
 sprint: AG.14
 worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
 branch: feature/pAG-s14-integration-coverage
-status: planned
+status: in_progress
 estimated_scope: medium
 ```
 
@@ -39,6 +39,24 @@ so the release does not depend only on manual smoke.
   - authorized send/read/ack
   - nudge/notification classification
   - retry-visible recovery
+
+## Deliverable-to-Test Matrix
+
+| deliverable | fidelity | concrete coverage |
+|---|---|---|
+| parser/normalization coverage for `<agent>@<team>.<host>` and `--host <host>` | ADR-003 Tier-1 | `atm-core::send::remote_target_parse_tests::remote_target_syntaxes_normalize_to_the_same_contract`; `atm::commands::send::tests::build_request_normalizes_inline_and_explicit_remote_target_forms_equally` |
+| localhost remote-target authorized send/read | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::loopback::dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox` |
+| localhost remote-target unauthorized rejection | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::loopback::dispatcher_loopback_send_rejects_unauthorized_host_before_mailbox_mutation` |
+| localhost remote-target fail-closed when no listener is available | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::loopback::dispatcher_loopback_without_listener_fails_closed_without_mailbox_mutation` |
+| localhost secure requires-ack round trip | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::loopback::dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state` |
+| localhost secure authorized send/read | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::loopback::dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_inbox` |
+| self-IP authorized send/read | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox` |
+| self-IP fail-closed when no listener is available | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation` |
+| self-IP unauthorized rejection | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation` |
+| self-IP secure requires-ack round trip | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state` |
+| production `CrossHostDelivery` end-to-end over the real daemon local-IPC surface | ADR-003 Tier-3 | `atm-daemon::tests::runtime_root::local_ipc::local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state` |
+| notification classification for remote-target degradation | ADR-003 Tier-2 | `atm-daemon::peer_transport::tests::harness::localhost_remote_target_notification_degradation_is_classified_without_failing_delivery` |
+| retry-visible recovery for deferred remote-target sends | ADR-003 Tier-2 | `atm-daemon::peer_transport::tests::harness::localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable` |
 
 ## Acceptance Criteria
 
