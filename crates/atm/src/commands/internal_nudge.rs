@@ -22,6 +22,8 @@ use interprocess::local_socket::traits::Stream as _;
 use crate::observability::CliObservability;
 
 #[cfg(test)]
+use atm_core::send::qualified_sender_identity;
+#[cfg(test)]
 use std::collections::BTreeMap;
 
 const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
@@ -87,7 +89,7 @@ impl InternalNudgeInput {
         BTreeMap::from([
             (
                 "from",
-                nudge_template::qualified_sender_identity(&self.event),
+                qualified_sender_identity(&self.event.sender, Some(&self.event.sender_team)),
             ),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),

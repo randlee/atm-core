@@ -1,5 +1,4 @@
 use super::*;
-use crate::address::AgentAddress;
 
 pub(super) struct HookExecution {
     pub(super) command_path: PathBuf,
@@ -22,13 +21,9 @@ pub(super) fn prepare_post_send_hook_execution(
 }
 
 fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
-    let recipient = AgentAddress {
-        agent: event.recipient.clone(),
-        team: Some(event.recipient_team.clone()),
-    };
     let mut payload = json!({
         "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
-        "to": recipient.to_string(),
+        "to": qualified_sender_identity(&event.recipient, Some(&event.recipient_team)),
         "sender": event.sender.as_str(),
         "recipient": event.recipient.as_str(),
         "team": event.recipient_team.as_str(),

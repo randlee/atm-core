@@ -1,6 +1,5 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -11,7 +10,6 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -31,16 +29,18 @@ mod persistence;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
+mod warning;
 
 use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
+pub use target::{PeerLoopbackHost, qualified_sender_identity};
 pub(crate) use target::{
-    ResolvedRecipient, qualified_sender_identity, resolve_message_body, resolve_recipient,
-    validate_non_self_recipient,
+    ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
 };
 pub(crate) use threading_helpers::prepare_threaded_message;
+pub use warning::WarningEntry;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -51,42 +51,6 @@ pub enum SendMessageSource {
         path: PathBuf,
         message: Option<String>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct PeerLoopbackHost(String);
-
-impl PeerLoopbackHost {
-    pub fn parse(value: &str) -> Result<Self, AtmError> {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return Err(AtmError::address_parse("loopback host must not be empty").with_recovery(
-                "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
-            ));
-        }
-        if trimmed.eq_ignore_ascii_case("localhost") || trimmed.parse::<IpAddr>().is_ok() {
-            return Ok(Self(trimmed.to_string()));
-        }
-        Err(AtmError::address_parse(format!(
-            "unsupported loopback host `{trimmed}`; expected `localhost` or a literal IP address"
-        ))
-        .with_recovery(
-            "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
-        ))
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-
-    pub fn parse_cli_target(raw_target: &str) -> Option<Result<Self, AtmError>> {
-        let (agent, host) = raw_target.trim().split_once('@')?;
-        if !agent.eq_ignore_ascii_case("loopback") {
-            return None;
-        }
-        Some(Self::parse(host))
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,50 +142,6 @@ impl SendCommandOutcome {
         match self {
             Self::Sent => "sent",
             Self::DryRun => "dry_run",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WarningEntry {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
-}
-
-impl WarningEntry {
-    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn with_code(
-        code: AtmErrorCode,
-        message: impl Into<String>,
-        recovery: Option<impl Into<String>>,
-    ) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn render(&self) -> String {
-        let message = match self.code {
-            Some(code) if !self.message.contains(code.as_str()) => {
-                format!("{} [{}]", self.message, code.as_str())
-            }
-            _ => self.message.clone(),
-        };
-        match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
-            None => message,
         }
     }
 }
