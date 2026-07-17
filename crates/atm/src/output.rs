@@ -905,7 +905,7 @@ mod tests {
         BootstrapTraceReport, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
         CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
     };
-    use atm_storage::PeerSecurityMode;
+    use atm_runtime::PeerSecurityMode;
     use serde_json::json;
 
     use super::{

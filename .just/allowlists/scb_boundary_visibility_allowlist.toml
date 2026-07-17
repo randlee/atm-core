@@ -40,6 +40,13 @@ sunset_sprint = "AG.1"
 [[allow]]
 rule = "SCB-BOUNDARY-VISIBILITY-003"
 path = "crates/atm-daemon/src/peer_transport/server.rs"
+symbol = "bound_addr"
+why = "ADR-028 and sprint AG.1 require PeerServerTransport::bound_addr to stay crate-private via pub(super) inside atm_daemon::peer_transport while the runtime wrapper projects the observable listener state."
+sunset_sprint = "AG.1"
+
+[[allow]]
+rule = "SCB-BOUNDARY-VISIBILITY-003"
+path = "crates/atm-daemon/src/peer_transport/server.rs"
 symbol = "bound_addr_for_test"
 why = "test-only peer listener helper stays crate-private via pub(super) inside atm_daemon::peer_transport"
 sunset_sprint = "AG.1"
