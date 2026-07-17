@@ -466,6 +466,98 @@ mod tests {
 
     #[test]
     #[serial(env)]
+    fn build_request_rejects_explicit_remote_host_without_qualified_team_target() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            host: Some("localhost".to_string()),
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("remote host without qualified team target must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("remote sends require a qualified target")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_rejects_dot_in_agent_segment_before_remote_host_split() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient.a@test-team.localhost".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            host: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("agent segment containing dot must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("agent name must not contain `.`")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_rejects_inline_remote_target_with_empty_host_segment() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("env-sender")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team.".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            host: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("empty inline host segment must fail");
+
+        assert!(error.to_string().contains("host must not be empty"));
+    }
+
+    #[test]
+    #[serial(env)]
     fn build_request_supports_file_with_trailing_inline_note() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
