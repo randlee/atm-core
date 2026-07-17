@@ -94,30 +94,46 @@ impl std::fmt::Debug for SqliteAllowedHostAuthorizationPolicy {
 impl PeerAuthorizationPolicy for SqliteAllowedHostAuthorizationPolicy {
     fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError> {
         let host_name = AllowedHostName::new(peer_addr.ip().to_string()).map_err(|error| {
-            AtmError::validation(format!(
-                "remote peer {} presented an invalid host token: {}",
-                peer_addr, error.message
-            ))
+            AtmError::new_with_code(
+                AtmErrorCode::MessageValidationFailed,
+                atm_core::error::AtmErrorKind::Validation,
+                format!(
+                    "remote peer {} presented an invalid host token: {}",
+                    peer_addr, error.message
+                ),
+            )
             .with_recovery(
                 "Retry from a peer with a valid literal host token or repair the host authorization policy before retrying cross-host delivery.",
             )
         })?;
         match self.store.load_host(&host_name)? {
             Some(row) if row.enabled => Ok(()),
-            Some(_) => Err(AtmError::validation(format!(
-                "remote peer {} presented host `{}` but that host is disabled",
-                peer_addr, host_name
-            ))
-            .with_recovery(format!(
-                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
-            ))),
-            None => Err(AtmError::validation(format!(
-                "remote peer {} presented host `{}` but no enabled daemon host row authorizes it",
-                peer_addr, host_name
-            ))
-            .with_recovery(format!(
-                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
-            ))),
+            Some(_) => Err(
+                AtmError::new_with_code(
+                    AtmErrorCode::MessageValidationFailed,
+                    atm_core::error::AtmErrorKind::Validation,
+                    format!(
+                        "remote peer {} presented host `{}` but that host is disabled",
+                        peer_addr, host_name
+                    ),
+                )
+                .with_recovery(format!(
+                    "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+                )),
+            ),
+            None => Err(
+                AtmError::new_with_code(
+                    AtmErrorCode::MessageValidationFailed,
+                    atm_core::error::AtmErrorKind::Validation,
+                    format!(
+                        "remote peer {} presented host `{}` but no enabled daemon host row authorizes it",
+                        peer_addr, host_name
+                    ),
+                )
+                .with_recovery(format!(
+                    "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+                )),
+            ),
         }
     }
 }

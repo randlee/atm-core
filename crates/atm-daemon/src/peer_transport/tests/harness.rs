@@ -440,3 +440,93 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
 fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() {
     local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry();
 }
+
+#[test]
+#[serial_test::serial(env)]
+fn local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender() {
+    let _guard = install_shared_lifecycle_reset_guard();
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    write_workspace_config(&workspace_dir);
+    install_test_roster_with_harness(
+        &db_path,
+        &[
+            (
+                ROLE_TEAM_LEAD,
+                RosterHarness::ClaudeCode,
+                workspace_dir.as_path(),
+            ),
+            ("qa-a", RosterHarness::ClaudeCode, workspace_dir.as_path()),
+        ],
+    );
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    let status_cache = RuntimeStatusCache::new();
+    let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        status_cache.clone(),
+        assembly.allowed_host_store_arc(),
+    );
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test_with_peer_transport(
+        atm_home.clone(),
+        status_cache,
+        db_path.clone(),
+        listener_transport.clone(),
+    ));
+    listener_transport
+        .start(dispatcher)
+        .expect("start peer listener");
+    let endpoint = listener_transport
+        .bound_addr_for_test()
+        .expect("bound peer listener addr");
+
+    let client_transport = PeerTransportRuntime::new_for_test(
+        endpoint,
+        PeerTransportConfig::default(),
+        tempdir.path().join("replay.db"),
+    );
+    let error = client_transport
+        .client_transport()
+        .send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                test_team_name(),
+                SendMessageSource::Inline("unauthorized peer-listener hello".to_string()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("send request"),
+        )))
+        .expect_err("unauthorized send should surface the remote allowlist error");
+    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+    assert!(
+        error
+            .message
+            .contains("no enabled daemon host row authorizes it"),
+        "unexpected error message: {}",
+        error.message
+    );
+    assert!(
+        error
+            .primary_recovery()
+            .is_some_and(|recovery| recovery.contains("atm daemon hosts allow 127.0.0.1")),
+        "unexpected recovery: {:?}",
+        error.primary_recovery()
+    );
+
+    listener_transport
+        .shutdown()
+        .expect("shutdown peer listener");
+}
