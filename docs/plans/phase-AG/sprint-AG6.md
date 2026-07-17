@@ -2,8 +2,8 @@
 id: AG.6
 title: Doctor Visibility For The Cross-Host Control Plane
 status: planned
-branch: plan/phase-ag-multihost-advertise-allowlist
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
+branch: feature/pAG-s6-doctor-visibility
+worktree: ../atm-core-worktrees/feature/pAG-s6-doctor-visibility
 target: develop
 ---
 
@@ -13,8 +13,8 @@ target: develop
 plan_type: sprint_plan
 phase: AG
 sprint: AG.6
-worktree: ../atm-core-worktrees/plan/phase-ag-multihost-advertise-allowlist
-branch: plan/phase-ag-multihost-advertise-allowlist
+worktree: ../atm-core-worktrees/feature/pAG-s6-doctor-visibility
+branch: feature/pAG-s6-doctor-visibility
 status: planned
 estimated_scope: medium
 ```
