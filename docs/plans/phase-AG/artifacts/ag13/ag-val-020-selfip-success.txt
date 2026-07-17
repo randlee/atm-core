@@ -15,10 +15,11 @@ Observed proof on Friday, July 17, 2026:
 - the self-IP fixture uses the host's non-loopback IPv4 address `192.0.0.2`, not `127.0.0.1` or `localhost`
 - authorized remote-target sends addressed to `qa-a@test-team.192.0.0.2` complete over the peer listener path
 - `--requires-ack` round-trips end-to-end and reply-state mutation remains intact on the self-IP path
-- the AG.13 notification-classification and retry-visible-recovery proofs stay green after the self-IP conversion
+- the AG.13 self-IP conversion keeps the core send/read/ack proof green on the host's non-loopback address
+- notification-classification and retry-visible-recovery still have green companion coverage, but those two proof points remain localhost-scoped harness checks rather than dedicated self-IP fixtures
 
 Named proof points:
 - full-function self-IP proof: `crates/atm-daemon/src/tests/runtime_root/self_ip.rs::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state`
 - notification classification proof: `crates/atm-daemon/src/peer_transport/tests/harness.rs::localhost_remote_target_notification_degradation_is_classified_without_failing_delivery`
-- retry-visible recovery proof: `crates/atm-daemon/src/peer_transport/tests/harness.rs::localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable`
+- companion localhost retry-visible recovery proof: `crates/atm-daemon/src/peer_transport/tests/harness.rs::localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable`
 - exact self-IP port-selection regression: `crates/atm-daemon/src/peer_transport/delivery.rs::resolve_remote_port_prefers_matching_interface_row_for_literal_self_ip`

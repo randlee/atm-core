@@ -39,6 +39,7 @@ pub(crate) struct RuntimeComposition {
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
+    replay_resume_worker: Mutex<Option<crate::peer_transport::ReplayResumeWorkerHandle>>,
     peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
     peer_transport_runtime: PeerTransportRuntime,
 }
@@ -54,6 +55,7 @@ impl std::fmt::Debug for RuntimeComposition {
             .field("composition_observability", &self.composition_observability)
             .field("_production_runtime", &self._production_runtime)
             .field("_status_source", &self._status_source)
+            .field("replay_resume_worker", &self.replay_resume_worker)
             .field(
                 "peer_interface_config_store",
                 &"dyn PeerInterfaceConfigStore",
@@ -152,6 +154,7 @@ impl RuntimeComposition {
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
+            replay_resume_worker: Mutex::new(None),
             peer_interface_config_store: runtime_assembly.peer_interface_config_store,
             peer_transport_runtime,
         })
@@ -408,10 +411,37 @@ impl RuntimeComposition {
     }
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
-        self.refresh_peer_listeners()
+        self.refresh_peer_listeners()?;
+        let worker = self.peer_transport_runtime.start_replay_resume_worker()?;
+        let mut slot = self.replay_resume_worker.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon replay worker slot lock poisoned").with_recovery(
+                "Restart atm-daemon; deferred remote-delivery background ownership was lost.",
+            )
+        })?;
+        *slot = Some(worker);
+        Ok(())
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
+        if let Some(worker) = self
+            .replay_resume_worker
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("daemon replay worker slot lock poisoned")
+                    .with_recovery(
+                        "Restart atm-daemon; deferred remote-delivery background ownership was lost.",
+                    )
+            })?
+            .take()
+        {
+            let _ = worker.stop_tx.send(());
+            worker.join_handle.join().map_err(|_| {
+                AtmError::daemon_unavailable("daemon replay worker panicked during shutdown")
+                    .with_recovery(
+                        "Restart atm-daemon; the deferred remote-delivery worker crashed during shutdown.",
+                    )
+            })?;
+        }
         self.peer_transport_runtime.shutdown()
     }
 }

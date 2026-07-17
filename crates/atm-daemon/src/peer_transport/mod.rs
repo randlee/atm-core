@@ -26,6 +26,7 @@ mod client_helpers;
 mod config_helpers;
 pub(crate) mod delivery;
 mod replay_persistence;
+mod replay_resume_worker;
 mod security;
 mod server;
 #[cfg(test)]
@@ -48,6 +49,7 @@ use replay_persistence::{
 };
 use security::load_peer_security_mode;
 use server::PeerServerTransport;
+pub(crate) use types::ReplayResumeWorkerHandle;
 use types::{DeliveryLoopDecision, DeliveryRetryState, ReplayResumeSummary};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
@@ -58,9 +60,11 @@ use types::{DeliveryLoopDecision, DeliveryRetryState, ReplayResumeSummary};
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const FOREGROUND_REMOTE_WAIT_BUDGET: Duration = Duration::from_secs(10);
-const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
-const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
-const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
+const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(60);
+const INITIAL_RETRY_BACKOFF: Duration = Duration::from_secs(5);
+const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
+const MAX_REMOTE_RETRY_ATTEMPTS: u32 = 6;
+const REPLAY_RESUME_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
 const PEER_LISTENER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const PEER_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -398,6 +402,7 @@ impl PeerClientTransport {
                 terminate: &terminate,
                 backoff: &mut backoff,
                 next_attempt: &mut attempt,
+                attempt_cap: MAX_REMOTE_RETRY_ATTEMPTS,
             };
             match self.send_once(endpoint, &frame) {
                 Ok(response) => {
@@ -661,6 +666,25 @@ impl PeerClientTransport {
             );
             return DeliveryLoopDecision::Return(error);
         }
+        if attempt.saturating_add(1) >= retry_state.attempt_cap {
+            tracing::error!(
+                subsystem = "peer_transport",
+                action = "send_to_endpoint",
+                outcome = "retry_attempt_cap_exhausted",
+                peer_addr = %endpoint,
+                attempt,
+                attempt_cap = retry_state.attempt_cap,
+                error_code = %error.code,
+                error_message = %error.message,
+                "daemon peer delivery exhausted the bounded retry-attempt cap"
+            );
+            self.observability.emit_or_warn(
+                "send_to_endpoint",
+                "failed",
+                "daemon peer delivery exhausted the bounded retry-attempt cap",
+            );
+            return DeliveryLoopDecision::Return(error);
+        }
         let remaining = retry_state.deadline.saturating_duration_since(now);
         let sleep_for =
             jittered_backoff(*retry_state.backoff, jitter_seed(endpoint, attempt)).min(remaining);
@@ -865,6 +889,10 @@ impl PeerTransportRuntime {
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.server.shutdown()
+    }
+
+    pub(crate) fn start_replay_resume_worker(&self) -> Result<ReplayResumeWorkerHandle, AtmError> {
+        replay_resume_worker::start_replay_resume_worker(self)
     }
 
     #[allow(dead_code, reason = "retained for existing peer-transport tests")]
