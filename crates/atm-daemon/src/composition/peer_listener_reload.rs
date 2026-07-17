@@ -1,24 +1,14 @@
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
 use atm_core::error::AtmError;
 use atm_storage::{IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceKey};
+use std::collections::BTreeMap;
 
-use super::{ListenerRow, RuntimeComposition, load_peer_transport_config};
+use super::{ListenerRow, RuntimeComposition};
 
 impl RuntimeComposition {
     pub(super) fn refresh_peer_listeners(&self) -> Result<(), AtmError> {
-        let peer_transport_config = load_peer_transport_config(
-            self.config_current_dir.clone(),
-            &self.config_ingress,
-            &self.composition_observability,
-        )?;
         let rows = enabled_listener_rows(self)?;
-        let rows = if rows.is_empty() {
-            legacy_listener_rows(self, peer_transport_config.peer_listen_addr)
-        } else {
-            rows
-        };
         let outcomes = self.peer_transport_runtime.reload_listeners(
             rows.iter().map(|row| row.listen_addr).collect(),
             self.request_dispatcher(),
@@ -69,32 +59,6 @@ fn enabled_listener_rows(composition: &RuntimeComposition) -> Result<Vec<Listene
                 )?),
                 listen_addr: SocketAddr::new(row.bind_addr, row.port),
             })
-        })
-        .collect()
-}
-
-fn legacy_listener_rows(
-    composition: &RuntimeComposition,
-    peer_listen_addr: Option<SocketAddr>,
-) -> Vec<ListenerRow> {
-    let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
-    tracing::warn!(
-        subsystem = "composition",
-        action = "peer_listener_legacy_config_fallback",
-        outcome = "deprecated",
-        "{}",
-        detail
-    );
-    composition.composition_observability.emit_or_warn(
-        "peer_listener_legacy_config_fallback",
-        "deprecated",
-        detail,
-    );
-    peer_listen_addr
-        .into_iter()
-        .map(|listen_addr| ListenerRow {
-            key: None,
-            listen_addr,
         })
         .collect()
 }
