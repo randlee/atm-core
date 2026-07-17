@@ -9,7 +9,8 @@ use atm_core::{
     list::list_mail,
     protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    send::{SendRequest, send_mail_with_runtime_and_post_send_emitter},
+    schema::AtmMessageId,
+    send::{RemoteTargetHost, SendRequest, send_mail_with_runtime_and_post_send_emitter},
 };
 
 use crate::peer_transport::delivery::SendOutcome as RemoteSendOutcome;
@@ -27,7 +28,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(mut request)) => {
-                request.origin_host = peer_origin.map(str::to_owned);
+                request.origin_host = peer_origin.map(RemoteTargetHost::parse).transpose()?;
                 self.dispatch_compose_send(request, &post_send_emitter)
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
@@ -70,7 +71,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl boundary::AckReplyDeliveryPort for DaemonRequestDispatcher {
-    fn deliver_reply(&self, reply: SendRequest) -> Result<(), AtmError> {
+    fn deliver_reply(&self, reply: SendRequest) -> Result<AtmMessageId, AtmError> {
         let Some(remote_host) = reply.remote_host.clone() else {
             return Err(AtmError::daemon_unavailable(
                 "cross-host acknowledgement reply delivery requires a remote host target",
@@ -80,7 +81,9 @@ impl boundary::AckReplyDeliveryPort for DaemonRequestDispatcher {
             ));
         };
         match self.cross_host_delivery.deliver_remote(reply, remote_host) {
-            Ok(RemoteSendOutcome::Delivered(_)) => Ok(()),
+            Ok(RemoteSendOutcome::Delivered(response)) => {
+                extract_delivered_message_id(*response)
+            }
             Ok(RemoteSendOutcome::Deferred) => Err(AtmError::daemon_unavailable(
                 "remote acknowledgement reply delivery was deferred because the cross-host path is not currently healthy",
             )
@@ -96,6 +99,21 @@ impl boundary::AckReplyDeliveryPort for DaemonRequestDispatcher {
             )),
             Err(error) => Err(error.into_atm_error()),
         }
+    }
+}
+
+/// Extract the remote-assigned message id from a delivered cross-host send
+/// response. The reply's real id must come from the destination daemon's
+/// response, never from a locally fabricated value.
+fn extract_delivered_message_id(response: ResponseEnvelope) -> Result<AtmMessageId, AtmError> {
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome.message_id),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "remote acknowledgement reply delivery response did not include a delivered message id: {other:?}"
+        ))
+        .with_recovery(
+            "Check the destination daemon's send response shape before retrying the acknowledgement.",
+        )),
     }
 }
 

@@ -273,8 +273,16 @@ pub trait AckReplyDeliveryPort: sealed::Sealed + Send + Sync {
     ///
     /// Returns `AtmError` when one cross-host acknowledgement reply cannot be
     /// routed back to the original remote sender's host after local
-    /// acknowledgement state has already persisted.
-    fn deliver_reply(&self, reply: crate::send::SendRequest) -> Result<(), AtmError>;
+    /// acknowledgement state has already persisted, or when the remote
+    /// daemon's response does not carry the delivered reply's real
+    /// message id.
+    ///
+    /// # Returns
+    ///
+    /// The remote-assigned [`AtmMessageId`] for the delivered reply message.
+    /// Implementations must surface the id the destination daemon actually
+    /// assigned rather than a locally fabricated one.
+    fn deliver_reply(&self, reply: crate::send::SendRequest) -> Result<AtmMessageId, AtmError>;
 }
 
 /// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.

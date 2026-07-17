@@ -627,7 +627,6 @@ fn persist_remote_sent_ack_reply(
             "Retry `atm ack` through atm-daemon so the acknowledgement reply can be routed to the remote sender's host.",
         )
     })?;
-    let reply_message_id = AtmMessageId::new();
     let to = format!(
         "{}@{}",
         persisted_source.reply_target.agent, persisted_source.reply_target.team
@@ -651,7 +650,9 @@ fn persist_remote_sent_ack_reply(
         acknowledges_message_id: Some(context.request.message_id),
         dry_run: false,
     };
-    port.deliver_reply(reply_request)?;
+    // The reply's real message id is assigned by the destination daemon when
+    // it persists the reply; it must never be fabricated locally.
+    let reply_message_id = port.deliver_reply(reply_request)?;
 
     Ok(PersistedAckReply::SentRemote(SentRemoteAckReply {
         reply_target: persisted_source.reply_target,
@@ -1498,6 +1499,40 @@ mod tests {
     }
 
     #[test]
+    fn resolve_reply_target_parses_stored_origin_host_into_remote_target_host() {
+        let mut message = message_with_from(ROLE_TEAM_LEAD);
+        message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
+        message.origin_host = Some("other-mac.local".to_string());
+
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect("resolve reply target");
+        assert_eq!(
+            target,
+            (
+                ROLE_TEAM_LEAD.parse().expect("agent"),
+                TEST_TEAM.parse().expect("team"),
+                Some(RemoteTargetHost::parse("other-mac.local").expect("host")),
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_reply_target_fails_closed_on_malformed_stored_origin_host() {
+        // The storage layer keeps `origin_host` as a raw `String` so no
+        // SQLite schema change is required; this asserts the single
+        // validation point (this function) rejects a value that could not
+        // have been produced by `RemoteTargetHost::parse` rather than
+        // silently treating a corrupted value as a local reply target.
+        let mut message = message_with_from(ROLE_TEAM_LEAD);
+        message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
+        message.origin_host = Some("not a valid host".to_string());
+
+        let error = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect_err("malformed origin host must fail closed");
+        assert_eq!(error.kind, AtmErrorKind::Address);
+    }
+
+    #[test]
     fn ack_reply_state_machine_builds_reply_plan_with_original_and_companion() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
@@ -2063,17 +2098,23 @@ mod tests {
 
     struct RecordingAckReplyDeliveryPort {
         delivered: Mutex<Vec<SendRequest>>,
+        remote_message_id: AtmMessageId,
     }
 
     impl crate::boundary::sealed::Sealed for RecordingAckReplyDeliveryPort {}
 
     impl AckReplyDeliveryPort for RecordingAckReplyDeliveryPort {
-        fn deliver_reply(&self, reply: SendRequest) -> Result<(), crate::error::AtmError> {
+        fn deliver_reply(
+            &self,
+            reply: SendRequest,
+        ) -> Result<AtmMessageId, crate::error::AtmError> {
             self.delivered
                 .lock()
                 .expect("delivered replies")
                 .push(reply);
-            Ok(())
+            // Simulate the destination daemon assigning its own message id,
+            // distinct from any id the caller might have fabricated locally.
+            Ok(self.remote_message_id)
         }
     }
 
@@ -2137,8 +2178,10 @@ mod tests {
             outbound_deliveries: Mutex::new(Vec::new()),
             persisted_states: Mutex::new(Vec::new()),
         };
+        let remote_message_id = AtmMessageId::new();
         let ack_reply_delivery = RecordingAckReplyDeliveryPort {
             delivered: Mutex::new(Vec::new()),
+            remote_message_id,
         };
 
         let outcome = super::ack_mail_with_runtime_impl(
@@ -2162,7 +2205,10 @@ mod tests {
         assert_eq!(outcome.message_id, source_message_id);
         assert!(matches!(
             outcome.reply_disposition,
-            AckReplyDisposition::Sent { .. }
+            AckReplyDisposition::Sent {
+                reply_message_id,
+                ..
+            } if reply_message_id == remote_message_id
         ));
 
         let delivered = ack_reply_delivery

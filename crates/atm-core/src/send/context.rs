@@ -97,7 +97,10 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
             thread_mode: request.thread_mode,
             expires_at: request.expires_at,
             task_id: task_id.clone(),
-            origin_host: request.origin_host.clone(),
+            origin_host: request
+                .origin_host
+                .as_ref()
+                .map(|host| host.as_str().to_owned()),
             extra: Map::new(),
         }));
     }
@@ -117,7 +120,10 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
-        origin_host: request.origin_host.clone(),
+        origin_host: request
+            .origin_host
+            .as_ref()
+            .map(|host| host.as_str().to_owned()),
         extra: Map::new(),
     };
     persist_message(

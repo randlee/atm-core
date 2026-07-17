@@ -206,7 +206,7 @@ pub struct SendRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<RemoteTargetHost>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub origin_host: Option<String>,
+    pub origin_host: Option<RemoteTargetHost>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
