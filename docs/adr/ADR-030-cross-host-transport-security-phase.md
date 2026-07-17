@@ -26,17 +26,12 @@ Functional closure must not:
 - imply peer-auth closure beyond the explicit host-authorization surface
 - silently downgrade the documented transport-security requirement
 
-Pinned-fingerprint trust authority is defined separately in ADR-032. ADR-030
-only governs when transport security must land within the phase sequence.
-
 ## Consequences
 
 - AG.8 owns the planning/reconciliation closure for transport security
 - AG.10 owns the secured-transport implementation closure
 - any earlier release verdict must explicitly state whether it excludes
   transport-security guarantees
-- future work can layer stronger certificate validation onto the active
-  transport-security line, but that trust-model authority is owned by ADR-032
 
 The remote-target contract and dispatch-boundary decision is tracked
 independently in ADR-031 so transport-security sequencing does not become the
