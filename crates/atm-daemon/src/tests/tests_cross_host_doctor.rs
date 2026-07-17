@@ -2,7 +2,7 @@ use super::{
     DaemonRequestDispatcher, RuntimeStatusCache, install_retained_runtime_factory, test_team,
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::DoctorQuery;
+use atm_core::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus};
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -173,17 +173,18 @@ fn doctor_stays_healthy_when_cross_host_is_unconfigured_and_unused() {
     match doctor {
         ResponseEnvelope::Doctor(report) => {
             let cross_host = report.cross_host.expect("cross host");
+            assert_eq!(report.summary.status, DoctorStatus::Healthy);
             assert!(cross_host.interfaces.is_empty());
             assert!(cross_host.bound_endpoints.is_empty());
             assert!(cross_host.allowlist.empty);
             assert!(report.findings.iter().any(|finding| {
                 finding.code == AtmErrorCode::WarningCrossHostListenerUnconfigured
+                    && finding.severity == DoctorSeverity::Info
             }));
-            assert!(
-                report.findings.iter().any(|finding| {
-                    finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
-                })
-            );
+            assert!(report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
+                    && finding.severity == DoctorSeverity::Info
+            }));
             assert!(
                 report
                     .recommendations
