@@ -6,6 +6,8 @@ use crate::boundary::{
 };
 use crate::error::AtmError;
 
+use super::qualified_sender_identity;
+
 pub fn resolve_template(
     override_row: Option<TeamNudgeTemplateOverrideRow>,
     kind: BuiltInNudgeTemplateKind,
@@ -22,10 +24,6 @@ pub fn resolve_template_body(
     kind: BuiltInNudgeTemplateKind,
 ) -> Option<String> {
     resolve_template(override_row, kind).body
-}
-
-pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    format!("{}@{}", event.sender, event.sender_team)
 }
 
 pub fn render_resolved_built_in_nudge(
@@ -54,7 +52,10 @@ pub fn render_built_in_nudge(
 
 fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
     BTreeMap::from([
-        ("from", qualified_sender_identity(event)),
+        (
+            "from",
+            qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        ),
         ("team", event.recipient_team.to_string()),
         ("message_id", event.message_id.to_string()),
         ("description", event.description.clone()),
@@ -134,14 +135,12 @@ fn render_template(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
-        resolve_template_body,
-    };
+    use super::{default_template, render_built_in_nudge, resolve_template, resolve_template_body};
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
         TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
+    use crate::send::qualified_sender_identity;
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 
@@ -204,7 +203,7 @@ mod tests {
     #[test]
     fn qualified_sender_identity_uses_sender_and_team() {
         assert_eq!(
-            qualified_sender_identity(&base_event()),
+            qualified_sender_identity(&base_event().sender, Some(&base_event().sender_team),),
             format!("{TEST_LEAD}@{TEST_TEAM}")
         );
     }

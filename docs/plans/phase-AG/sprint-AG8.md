@@ -4,7 +4,7 @@ title: Transport Security And Encryption Hardening
 status: planned
 branch: feature/pAG-s8-transport-security-planning
 worktree: ../atm-core-worktrees/feature/pAG-s8-transport-security-planning
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.8 — Transport Security Planning And Release-Language Reconciliation

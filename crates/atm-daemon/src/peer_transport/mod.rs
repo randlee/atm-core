@@ -1,14 +1,11 @@
-use std::io;
 use std::net::SocketAddr;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
 use std::time::{Duration, Instant};
 
-use atm_core::AtmConfig;
 use atm_core::boundary::{
     self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStateRecord, RemoteReplayStore,
     RequestDispatcher,
@@ -18,20 +15,31 @@ use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecurityStore};
 
 use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::{DaemonSubsystem, SubsystemObservability};
 
+mod client_helpers;
+mod config_helpers;
+pub(crate) mod delivery;
+mod security;
 mod server;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-use server::peer_server_bound_addr_for_test;
-use server::{
-    PeerServerTransport, new_peer_server_transport, peer_server_bound_addr,
-    reload_peer_server_transport, shutdown_peer_server_transport, start_peer_server_transport,
+use client_helpers::{
+    classify_io_error, daemon_terminate_flag, jitter_seed, jittered_backoff,
+    peer_closed_before_response_error, peer_flush_error, peer_read_deadline_error,
+    peer_response_decode_error, peer_response_id_mismatch_error, peer_write_deadline_error,
+    replay_metadata_for_request, wait_for_retry_backoff,
 };
+use config_helpers::{
+    remote_peer_endpoint_not_configured_error, remote_replay_persistence_failed_error,
+    remote_replay_store_not_configured_error, remote_retry_budget_expiry_error,
+};
+use security::load_peer_security_mode;
+use server::PeerServerTransport;
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
@@ -41,8 +49,6 @@ use server::{
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
-const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
-const MAX_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
@@ -53,6 +59,68 @@ const PEER_LISTENER_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 const PEER_ACCEPT_ERROR_RETRY_BACKOFF: Duration = Duration::from_millis(200);
 const MAX_CONCURRENT_PEER_CONNECTIONS: usize = 64;
 const MAX_TRACKED_PEER_DISPATCH_HANDLES: usize = 256;
+
+trait PeerAuthorizationPolicy: Send + Sync {
+    fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError>;
+}
+
+#[derive(Debug, Default)]
+struct AllowAllPeerAuthorizationPolicy;
+
+impl PeerAuthorizationPolicy for AllowAllPeerAuthorizationPolicy {
+    fn authorize(&self, _peer_addr: SocketAddr) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+struct SqliteAllowedHostAuthorizationPolicy {
+    store: Arc<dyn AllowedHostStore + Send + Sync>,
+}
+
+impl SqliteAllowedHostAuthorizationPolicy {
+    fn new(store: Arc<dyn AllowedHostStore + Send + Sync>) -> Self {
+        Self { store }
+    }
+}
+
+impl std::fmt::Debug for SqliteAllowedHostAuthorizationPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SqliteAllowedHostAuthorizationPolicy")
+            .field("store", &"dyn AllowedHostStore")
+            .finish()
+    }
+}
+
+impl PeerAuthorizationPolicy for SqliteAllowedHostAuthorizationPolicy {
+    fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError> {
+        let host_name = AllowedHostName::new(peer_addr.ip().to_string()).map_err(|error| {
+            AtmError::validation(format!(
+                "remote peer {} presented an invalid host token: {}",
+                peer_addr, error.message
+            ))
+            .with_recovery(
+                "Retry from a peer with a valid literal host token or repair the host authorization policy before retrying cross-host delivery.",
+            )
+        })?;
+        match self.store.load_host(&host_name)? {
+            Some(row) if row.enabled => Ok(()),
+            Some(_) => Err(AtmError::validation(format!(
+                "remote peer {} presented host `{}` but that host is disabled",
+                peer_addr, host_name
+            ))
+            .with_recovery(format!(
+                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+            ))),
+            None => Err(AtmError::validation(format!(
+                "remote peer {} presented host `{}` but no enabled daemon host row authorizes it",
+                peer_addr, host_name
+            ))
+            .with_recovery(format!(
+                "Run `atm daemon hosts allow {host_name}` on the receiving host before retrying cross-host delivery."
+            ))),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -65,89 +133,6 @@ impl Default for PeerTransportConfig {
         Self {
             remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
             peer_listen_addr: None,
-        }
-    }
-}
-
-impl PeerTransportConfig {
-    pub(crate) fn from_config(config: Option<&AtmConfig>) -> Result<Self, AtmError> {
-        if config.is_none() {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "config_default",
-                outcome = "default",
-                "no AtmConfig provided to PeerTransportConfig::from_config; using default remote_retry_budget"
-            );
-        }
-        let remote_retry_budget = config
-            .map(|config| config.daemon.remote_retry_budget)
-            .unwrap_or(DEFAULT_REMOTE_RETRY_BUDGET);
-        if remote_retry_budget < MIN_REMOTE_RETRY_BUDGET {
-            return Err(AtmError::validation(format!(
-                "daemon.remote_retry_budget must be at least {} second(s)",
-                MIN_REMOTE_RETRY_BUDGET.as_secs()
-            ))
-            .with_recovery(
-                "Raise daemon.remote_retry_budget to at least one second before starting atm-daemon.",
-            ));
-        }
-        if remote_retry_budget > MAX_REMOTE_RETRY_BUDGET {
-            return Err(AtmError::validation(format!(
-                "daemon.remote_retry_budget must not exceed {} second(s)",
-                MAX_REMOTE_RETRY_BUDGET.as_secs()
-            ))
-            .with_recovery(
-                "Lower daemon.remote_retry_budget to one week or less before starting atm-daemon.",
-            ));
-        }
-        Ok(Self {
-            remote_retry_budget,
-            peer_listen_addr: config.and_then(|config| config.daemon.peer_listen_addr),
-        })
-    }
-}
-
-fn remote_replay_store_not_configured_error() -> AtmError {
-    AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
-        "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
-    )
-}
-
-fn remote_peer_endpoint_not_configured_error() -> AtmError {
-    AtmError::daemon_unavailable("remote peer endpoint is not configured").with_recovery(
-        "Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery or replay persistence.",
-    )
-}
-
-fn remote_retry_budget_expiry_error(
-    source: impl std::error::Error + Send + Sync + 'static,
-) -> AtmError {
-    AtmError::daemon_unavailable("failed to convert remote retry budget into a replay expiry")
-        .with_recovery(
-            "Fix the daemon remote retry budget configuration and restart atm-daemon before retrying remote delivery so replay expiry can be computed deterministically.",
-        )
-        .with_source(source)
-}
-
-fn remote_replay_persistence_failed_error(source: AtmError) -> AtmError {
-    AtmError::remote_delivery_outcome_unknown(
-        "remote peer delivery outcome is unknown and replay persistence failed",
-    )
-    .with_source(source)
-}
-
-fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
-    match std::env::var("ATM_DAEMON_PEER_ADDR") {
-        Ok(raw) => parse_peer_endpoint(&raw),
-        Err(std::env::VarError::NotPresent) => None,
-        Err(std::env::VarError::NotUnicode(_)) => {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "env_parse",
-                outcome = "ignored",
-                "ignoring non-unicode ATM_DAEMON_PEER_ADDR value"
-            );
-            None
         }
     }
 }
@@ -184,6 +169,7 @@ struct PeerClientTransport {
     endpoint: Option<SocketAddr>,
     config: PeerTransportConfig,
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
 }
@@ -197,6 +183,13 @@ impl std::fmt::Debug for PeerClientTransport {
                 "replay_store",
                 &self.replay_store.as_ref().map(|_| "dyn RemoteReplayStore"),
             )
+            .field(
+                "peer_security_store",
+                &self
+                    .peer_security_store
+                    .as_ref()
+                    .map(|_| "dyn PeerSecurityStore"),
+            )
             .field("codec", &"JsonAtmProtocolCodec")
             .field("observability", &self.observability)
             .finish()
@@ -206,14 +199,15 @@ impl std::fmt::Debug for PeerClientTransport {
 impl PeerClientTransport {
     fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
         config: PeerTransportConfig,
         observability: SubsystemObservability,
     ) -> Self {
-        let endpoint = daemon_peer_endpoint_from_env();
         Self {
-            endpoint,
+            endpoint: None,
             config,
             replay_store,
+            peer_security_store,
             codec: JsonAtmProtocolCodec,
             observability,
         }
@@ -231,6 +225,7 @@ impl PeerClientTransport {
             endpoint: Some(endpoint),
             config,
             replay_store: Some(replay_store),
+            peer_security_store: None,
             codec: JsonAtmProtocolCodec,
             observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         }
@@ -404,16 +399,56 @@ impl PeerClientTransport {
     ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
         let mut stream = self.connect_peer_stream(endpoint)?;
         self.apply_peer_io_deadlines(&stream)?;
-        self.publish_request_frame(&mut stream, request_frame)?;
-        match self.decode_response_frame(
-            request_frame.request_id,
-            self.read_response_frame(&mut stream)?,
-        )? {
-            ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
+        match load_peer_security_mode(self.peer_security_store.as_ref()).map_err(|error| {
+            Box::new(AttemptFailure {
                 kind: AttemptFailureKind::NonRetryable,
-                error: error.into_atm_error(),
-            })),
-            response => Ok(response),
+                error,
+            })
+        })? {
+            PeerSecurityMode::SecureRequired => {
+                let store = self.peer_security_store.as_ref().ok_or_else(|| {
+                    Box::new(AttemptFailure {
+                        kind: AttemptFailureKind::NonRetryable,
+                        error: AtmError::daemon_unavailable(
+                            "daemon peer security store is unavailable in secure-required mode",
+                        )
+                        .with_recovery(
+                            "Restore the daemon peer security store before retrying secure cross-host delivery.",
+                        ),
+                    })
+                })?;
+                let mut tls =
+                    security::open_client_tls_stream(stream, endpoint, store).map_err(|error| {
+                        Box::new(AttemptFailure {
+                            kind: AttemptFailureKind::NonRetryable,
+                            error,
+                        })
+                    })?;
+                self.publish_request_frame(&mut tls, request_frame)?;
+                match self.decode_response_frame(
+                    request_frame.request_id,
+                    self.read_response_frame(&mut tls)?,
+                )? {
+                    ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
+                        kind: AttemptFailureKind::NonRetryable,
+                        error: error.into_atm_error(),
+                    })),
+                    response => Ok(response),
+                }
+            }
+            PeerSecurityMode::InsecureAllowed => {
+                self.publish_request_frame(&mut stream, request_frame)?;
+                match self.decode_response_frame(
+                    request_frame.request_id,
+                    self.read_response_frame(&mut stream)?,
+                )? {
+                    ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
+                        kind: AttemptFailureKind::NonRetryable,
+                        error: error.into_atm_error(),
+                    })),
+                    response => Ok(response),
+                }
+            }
         }
     }
 
@@ -450,7 +485,7 @@ impl PeerClientTransport {
 
     fn publish_request_frame(
         &self,
-        stream: &mut std::net::TcpStream,
+        stream: &mut impl std::io::Write,
         request_frame: &atm_core::protocol::FramePayload,
     ) -> Result<(), Box<AttemptFailure>> {
         atm_core::protocol::write_frame(
@@ -470,7 +505,7 @@ impl PeerClientTransport {
 
     fn read_response_frame(
         &self,
-        stream: &mut std::net::TcpStream,
+        stream: &mut impl std::io::Read,
     ) -> Result<atm_core::protocol::FramePayload, Box<AttemptFailure>> {
         atm_core::protocol::read_frame(
             stream,
@@ -659,205 +694,6 @@ enum DeliveryLoopDecision {
     Return(AtmError),
 }
 
-fn peer_read_deadline_error(source: io::Error) -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::Retryable,
-        error: AtmError::daemon_unavailable("failed to apply remote peer read deadline")
-            .with_recovery(
-                "Restart atm-daemon and retry after the peer socket can accept bounded read deadlines again.",
-            )
-            .with_source(source),
-    })
-}
-
-fn peer_write_deadline_error(source: io::Error) -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::Retryable,
-        error: AtmError::daemon_unavailable("failed to apply remote peer write deadline")
-            .with_recovery(
-                "Restart atm-daemon and retry after the peer socket can accept bounded write deadlines again.",
-            )
-            .with_source(source),
-    })
-}
-
-fn peer_flush_error(source: io::Error) -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::OutcomeUnknown,
-        error: AtmError::remote_delivery_outcome_unknown(
-            "failed to flush the remote peer request frame before waiting for a response",
-        )
-        .with_source(source),
-    })
-}
-
-fn peer_closed_before_response_error() -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::OutcomeUnknown,
-        error: AtmError::remote_delivery_outcome_unknown(
-            "remote peer closed the connection before returning a response frame",
-        )
-        .with_recovery(
-            "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
-        ),
-    })
-}
-
-fn peer_response_decode_error(error: AtmError) -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::NonRetryable,
-        error: AtmError::daemon_unavailable("failed to decode remote peer response frame")
-            .with_recovery(
-                "Align the peer daemon builds so both sides speak the same ATM daemon protocol before retrying the remote delivery.",
-            )
-            .with_source(error),
-    })
-}
-
-fn peer_response_id_mismatch_error(
-    response_id: atm_core::protocol::RequestId,
-    request_id: atm_core::protocol::RequestId,
-) -> Box<AttemptFailure> {
-    Box::new(AttemptFailure {
-        kind: AttemptFailureKind::NonRetryable,
-        error: AtmError::daemon_unavailable(format!(
-            "remote peer response request_id {} did not match request_id {}",
-            response_id, request_id
-        ))
-        .with_recovery(
-            "Align the peer daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
-        ),
-    })
-}
-
-fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> bool {
-    const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
-
-    let started = Instant::now();
-    loop {
-        if terminate.load(Ordering::SeqCst) {
-            return true;
-        }
-        let elapsed = started.elapsed();
-        if elapsed >= sleep_for {
-            return false;
-        }
-        let remaining = sleep_for.saturating_sub(elapsed);
-        thread::sleep(remaining.min(RETRY_POLL_INTERVAL));
-    }
-}
-
-fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
-    static DAEMON_TERMINATE_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
-
-    if let Some(flag) = DAEMON_TERMINATE_FLAG.get() {
-        return Ok(Arc::clone(flag));
-    }
-
-    let flag = crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag();
-    match DAEMON_TERMINATE_FLAG.set(Arc::clone(&flag)) {
-        Ok(()) => Ok(flag),
-        Err(existing) => Ok(existing),
-    }
-}
-
-fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
-    match error.kind() {
-        io::ErrorKind::TimedOut
-        | io::ErrorKind::Interrupted
-        | io::ErrorKind::ConnectionRefused
-        | io::ErrorKind::ConnectionReset
-        | io::ErrorKind::ConnectionAborted
-        | io::ErrorKind::BrokenPipe
-        | io::ErrorKind::AddrNotAvailable
-        | io::ErrorKind::NotConnected
-        | io::ErrorKind::HostUnreachable
-        | io::ErrorKind::NetworkUnreachable => AttemptFailureKind::Retryable,
-        _ => AttemptFailureKind::NonRetryable,
-    }
-}
-
-fn replay_metadata_for_request(
-    request: &RequestEnvelope,
-) -> Option<(TeamName, AgentName, MessageKey)> {
-    match request {
-        RequestEnvelope::Heartbeat(heartbeat) => Some((
-            heartbeat.team.clone(),
-            heartbeat.member.clone(),
-            heartbeat_message_key(heartbeat),
-        )),
-        _ => None,
-    }
-}
-
-fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> MessageKey {
-    MessageKey::new(format!(
-        "remote-heartbeat:{}:{}:{}:{}",
-        request.team.as_str(),
-        request.member.as_str(),
-        request.pid,
-        request.observed_at.into_inner().to_rfc3339(),
-    ))
-    .expect("validated heartbeat replay keys are never blank")
-}
-
-fn jittered_backoff(base: Duration, seed: u64) -> Duration {
-    let base_nanos = base.as_nanos();
-    if base_nanos == 0 {
-        return Duration::ZERO;
-    }
-    let offset_basis_points = (seed % 4001) as i128 - 2000;
-    let scaled = (base_nanos as i128 * (10_000 + offset_basis_points))
-        .div_euclid(10_000)
-        .max(1);
-    Duration::from_nanos(u64::try_from(scaled).unwrap_or(u64::MAX))
-}
-
-fn jitter_seed(endpoint: SocketAddr, attempt: u32) -> u64 {
-    let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(duration) => duration.as_nanos() as u64,
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "jitter_seed",
-                outcome = "default",
-                %error,
-                "system clock is before the unix epoch; using deterministic jitter fallback"
-            );
-            0
-        }
-    };
-    now ^ u64::from(endpoint.port()) ^ (u64::from(attempt) << 32)
-}
-
-fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
-    match raw.parse::<SocketAddr>() {
-        Ok(endpoint) => Some(endpoint),
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "parse_endpoint",
-                outcome = "skipped",
-                %raw,
-                %error,
-                "parse_peer_endpoint: invalid address format"
-            );
-            None
-        }
-    }
-}
-
-impl boundary::sealed::Sealed for PeerClientTransport {}
-
-impl ClientTransport for PeerClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let endpoint = self
-            .endpoint
-            .ok_or_else(remote_peer_endpoint_not_configured_error)?;
-        self.send_with_outcome_persistence(endpoint, request)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct PeerTransportRuntime {
     client: PeerClientTransport,
@@ -874,6 +710,8 @@ impl PeerTransportRuntime {
     pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         Self::new_with_observability(
             replay_store,
+            None,
+            None,
             PeerTransportConfig::default(),
             SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
             RuntimeStatusCache::new(),
@@ -882,18 +720,29 @@ impl PeerTransportRuntime {
 
     pub(crate) fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        allowed_host_store: Option<Arc<dyn AllowedHostStore + Send + Sync>>,
+        peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
         config: PeerTransportConfig,
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
     ) -> Self {
+        let authorization_policy: Arc<dyn PeerAuthorizationPolicy> = allowed_host_store
+            .map(|store| {
+                Arc::new(SqliteAllowedHostAuthorizationPolicy::new(store))
+                    as Arc<dyn PeerAuthorizationPolicy>
+            })
+            .unwrap_or_else(|| Arc::new(AllowAllPeerAuthorizationPolicy));
         Self {
-            server: Arc::new(new_peer_server_transport(
+            server: Arc::new(PeerServerTransport::new(
                 config.peer_listen_addr,
                 observability.clone(),
                 status_cache,
+                authorization_policy,
+                peer_security_store.clone(),
             )),
             client: PeerClientTransport::new_with_observability(
                 replay_store,
+                peer_security_store,
                 config,
                 observability,
             ),
@@ -925,11 +774,11 @@ impl PeerTransportRuntime {
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
-        start_peer_server_transport(&self.server, dispatcher).map(|_| ())
+        self.server.start(dispatcher).map(|_| ())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        shutdown_peer_server_transport(&self.server)
+        self.server.shutdown()
     }
 
     #[allow(dead_code, reason = "retained for existing peer-transport tests")]
@@ -938,11 +787,8 @@ impl PeerTransportRuntime {
         listen_addr: Option<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<(), AtmError> {
-        reload_peer_server_transport(
-            &self.server,
-            listen_addr.into_iter().collect::<Vec<_>>(),
-            dispatcher,
-        )?;
+        self.server
+            .reload(listen_addr.into_iter().collect::<Vec<_>>(), dispatcher)?;
         Ok(())
     }
 
@@ -951,11 +797,11 @@ impl PeerTransportRuntime {
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<server::PeerListenerOutcome>, AtmError> {
-        reload_peer_server_transport(&self.server, listen_addrs, dispatcher)
+        self.server.reload(listen_addrs, dispatcher)
     }
 
     pub(crate) fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
-        peer_server_bound_addr(&self.server)
+        server::bound_addr(&self.server)
     }
 
     #[cfg(test)]
@@ -965,12 +811,42 @@ impl PeerTransportRuntime {
         replay_db_path: PathBuf,
     ) -> Self {
         Self {
-            server: Arc::new(new_peer_server_transport(
+            server: Arc::new(PeerServerTransport::new(
                 None,
                 SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
                 RuntimeStatusCache::new(),
+                Arc::new(AllowAllPeerAuthorizationPolicy),
+                None,
             )),
             client: PeerClientTransport::new_for_test(endpoint, config, replay_db_path),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_security_store(
+        endpoint: SocketAddr,
+        config: PeerTransportConfig,
+        replay_db_path: PathBuf,
+        peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
+    ) -> Self {
+        let replay_store =
+            atm_runtime::sqlite_remote_replay_store_for_test(replay_db_path).expect("replay store");
+        Self {
+            server: Arc::new(PeerServerTransport::new(
+                None,
+                SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+                RuntimeStatusCache::new(),
+                Arc::new(AllowAllPeerAuthorizationPolicy),
+                Some(peer_security_store.clone()),
+            )),
+            client: PeerClientTransport {
+                endpoint: Some(endpoint),
+                config,
+                replay_store: Some(replay_store),
+                peer_security_store: Some(peer_security_store),
+                codec: JsonAtmProtocolCodec,
+                observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+            },
         }
     }
 
@@ -997,18 +873,71 @@ impl PeerTransportRuntime {
             peer_listen_addr: Some(listen_addr),
         };
         Self {
-            server: Arc::new(new_peer_server_transport(
+            server: Arc::new(PeerServerTransport::new(
                 Some(listen_addr),
                 observability.clone(),
                 status_cache,
+                Arc::new(AllowAllPeerAuthorizationPolicy),
+                None,
             )),
-            client: PeerClientTransport::new_with_observability(None, config, observability),
+            client: PeerClientTransport::new_with_observability(None, None, config, observability),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_server_for_test_with_allowed_host_store(
+        listen_addr: SocketAddr,
+        observability: SubsystemObservability,
+        status_cache: RuntimeStatusCache,
+        allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    ) -> Self {
+        let config = PeerTransportConfig {
+            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+            peer_listen_addr: Some(listen_addr),
+        };
+        Self {
+            server: Arc::new(PeerServerTransport::new(
+                Some(listen_addr),
+                observability.clone(),
+                status_cache,
+                Arc::new(SqliteAllowedHostAuthorizationPolicy::new(
+                    allowed_host_store,
+                )),
+                None,
+            )),
+            client: PeerClientTransport::new_with_observability(None, None, config, observability),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_server_for_test_with_security_and_allowed_host_store(
+        listen_addr: SocketAddr,
+        observability: SubsystemObservability,
+        status_cache: RuntimeStatusCache,
+        allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+        peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
+    ) -> Self {
+        let config = PeerTransportConfig {
+            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+            peer_listen_addr: Some(listen_addr),
+        };
+        Self {
+            server: Arc::new(PeerServerTransport::new(
+                Some(listen_addr),
+                observability.clone(),
+                status_cache,
+                Arc::new(SqliteAllowedHostAuthorizationPolicy::new(
+                    allowed_host_store,
+                )),
+                Some(peer_security_store),
+            )),
+            client: PeerClientTransport::new_with_observability(None, None, config, observability),
         }
     }
 
     #[cfg(test)]
     pub(crate) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
-        peer_server_bound_addr_for_test(&self.server)
+        self.server.bound_addr_for_test()
     }
 
     #[cfg(test)]

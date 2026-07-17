@@ -11,6 +11,7 @@ use std::time::Instant;
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
+use atm_storage::{PeerSecurityMode, PeerSecurityStore};
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
@@ -19,8 +20,10 @@ use crate::runtime_status_cache::RuntimeStatusCache;
 use super::{
     MAX_CONCURRENT_PEER_CONNECTIONS, MAX_TRACKED_PEER_DISPATCH_HANDLES,
     PEER_ACCEPT_ERROR_RETRY_BACKOFF, PEER_CONNECTION_IO_SLICE, PEER_LISTENER_ACCEPT_POLL_INTERVAL,
-    PEER_LISTENER_SHUTDOWN_DEADLINE, PEER_REQUEST_DEADLINE,
+    PEER_LISTENER_SHUTDOWN_DEADLINE, PEER_REQUEST_DEADLINE, PeerAuthorizationPolicy, security,
 };
+#[path = "server_reload.rs"]
+mod server_reload;
 
 #[derive(Debug)]
 struct PeerServerHandle {
@@ -37,22 +40,46 @@ pub(crate) struct PeerListenerOutcome {
     pub(crate) error_message: Option<String>,
 }
 
-#[derive(Debug)]
 pub(super) struct PeerServerTransport {
     listen_addrs: Mutex<Vec<SocketAddr>>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     observability: SubsystemObservability,
     state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>,
     status_cache: RuntimeStatusCache,
 }
 
+impl std::fmt::Debug for PeerServerTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerServerTransport")
+            .field("listen_addrs", &self.listen_addrs)
+            .field("authorization_policy", &"dyn PeerAuthorizationPolicy")
+            .field(
+                "peer_security_store",
+                &self
+                    .peer_security_store
+                    .as_ref()
+                    .map(|_| "dyn PeerSecurityStore"),
+            )
+            .field("observability", &self.observability)
+            .field("state", &self.state)
+            .field("status_cache", &self.status_cache)
+            .finish()
+    }
+}
+
 impl PeerServerTransport {
-    fn new(
+    pub(super) fn new(
         listen_addr: Option<SocketAddr>,
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
+        authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+        peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     ) -> Self {
         Self {
             listen_addrs: Mutex::new(listen_addr.into_iter().collect()),
+            authorization_policy,
+            peer_security_store,
             observability,
             state: Mutex::new(BTreeMap::new()),
             status_cache,
@@ -63,7 +90,7 @@ impl PeerServerTransport {
         dead_code,
         reason = "retained for transitional peer-runtime entrypoints"
     )]
-    fn start(
+    pub(super) fn start(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
@@ -71,7 +98,7 @@ impl PeerServerTransport {
         self.reload(listen_addrs, dispatcher)
     }
 
-    fn shutdown(&self) -> Result<(), AtmError> {
+    pub(super) fn shutdown(&self) -> Result<(), AtmError> {
         let handles = self
             .state
             .lock()
@@ -101,28 +128,38 @@ impl PeerServerTransport {
         Ok(())
     }
 
-    fn reload(
+    pub(super) fn reload(
         &self,
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-        self.replace_configured_listen_addrs(&listen_addrs)?;
-        let mut state = self.lock_state_for_reload()?;
-        self.remove_stale_listeners(&mut state, &listen_addrs)?;
-        let mut outcomes = Vec::new();
-        let mut failures = Vec::new();
-        for listen_addr in listen_addrs {
-            self.reload_listener_outcome(
-                &mut state,
-                listen_addr,
-                dispatcher.clone(),
-                &mut outcomes,
-                &mut failures,
-            );
+        server_reload::update_configured_listen_addrs(self, &listen_addrs)?;
+        let desired = listen_addrs
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut state = self.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
+                "Restart atm-daemon before retrying cross-host peer listener reload.",
+            )
+        })?;
+
+        server_reload::drop_stale_listener_handles(&mut state, &desired)?;
+        let (outcomes, failures) =
+            server_reload::reload_requested_listeners(self, &mut state, listen_addrs, dispatcher)?;
+
+        if failures.is_empty() {
+            self.status_cache.clear_peer_listener_degraded();
+        } else {
+            self.status_cache.record_peer_listener_degraded(format!(
+                "daemon peer listener reload has degraded rows: {}",
+                failures.join("; ")
+            ));
         }
-        self.publish_reload_status(&failures);
+
         Ok(outcomes)
     }
+
     fn bound_addr(&self) -> Result<Option<SocketAddr>, AtmError> {
         self.state
             .lock()
@@ -134,119 +171,11 @@ impl PeerServerTransport {
     }
 
     #[cfg(test)]
-    fn bound_addr_for_test(&self) -> Option<SocketAddr> {
+    pub(super) fn bound_addr_for_test(&self) -> Option<SocketAddr> {
         self.state
             .lock()
             .ok()
             .and_then(|state| state.values().next().map(|handle| handle.bound_addr))
-    }
-
-    fn replace_configured_listen_addrs(&self, listen_addrs: &[SocketAddr]) -> Result<(), AtmError> {
-        let mut configured = self.listen_addrs.lock().map_err(|_| {
-            AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
-                "Restart atm-daemon before retrying cross-host peer listener reload.",
-            )
-        })?;
-        *configured = listen_addrs.to_vec();
-        Ok(())
-    }
-
-    fn lock_state_for_reload(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<SocketAddr, PeerServerHandle>>, AtmError> {
-        self.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("peer listener state lock poisoned").with_recovery(
-                "Restart atm-daemon before retrying cross-host peer listener reload.",
-            )
-        })
-    }
-
-    fn remove_stale_listeners(
-        &self,
-        state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
-        listen_addrs: &[SocketAddr],
-    ) -> Result<(), AtmError> {
-        let desired = listen_addrs
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        let stale_addrs = state
-            .keys()
-            .copied()
-            .filter(|addr| !desired.contains(addr))
-            .collect::<Vec<_>>();
-        for stale_addr in stale_addrs {
-            if let Some(handle) = state.remove(&stale_addr) {
-                shutdown_listener_handle(handle)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn reload_listener_outcome(
-        &self,
-        state: &mut BTreeMap<SocketAddr, PeerServerHandle>,
-        listen_addr: SocketAddr,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        outcomes: &mut Vec<PeerListenerOutcome>,
-        failures: &mut Vec<String>,
-    ) {
-        if let Some(handle) = state.get(&listen_addr) {
-            outcomes.push(PeerListenerOutcome {
-                listen_addr,
-                bound_addr: Some(handle.bound_addr),
-                error_message: None,
-            });
-            return;
-        }
-        match self.bind_and_spawn_listener(listen_addr, dispatcher) {
-            Ok((bound_addr, handle)) => {
-                self.observability.emit_or_warn(
-                    "peer_listener_start",
-                    "ok",
-                    format!("daemon peer listener bound at {bound_addr}"),
-                );
-                state.insert(listen_addr, handle);
-                outcomes.push(PeerListenerOutcome {
-                    listen_addr,
-                    bound_addr: Some(bound_addr),
-                    error_message: None,
-                });
-            }
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "peer_transport",
-                    action = "reload_listener",
-                    outcome = "degraded",
-                    %listen_addr,
-                    %error,
-                    "daemon peer listener reload failed to rebind the configured address"
-                );
-                self.observability.emit_or_warn(
-                    "peer_listener_reload",
-                    "degraded",
-                    format!("daemon peer listener reload failed for {listen_addr}"),
-                );
-                self.record_degraded(listen_addr, &error);
-                failures.push(format!("{listen_addr}: {}", error.message));
-                outcomes.push(PeerListenerOutcome {
-                    listen_addr,
-                    bound_addr: None,
-                    error_message: Some(error.message.clone()),
-                });
-            }
-        }
-    }
-
-    fn publish_reload_status(&self, failures: &[String]) {
-        if failures.is_empty() {
-            self.status_cache.clear_peer_listener_degraded();
-        } else {
-            self.status_cache.record_peer_listener_degraded(format!(
-                "daemon peer listener reload has degraded rows: {}",
-                failures.join("; ")
-            ));
-        }
     }
 
     fn record_degraded(&self, listen_addr: SocketAddr, error: &AtmError) {
@@ -335,12 +264,16 @@ impl PeerServerTransport {
         let terminate_for_thread = Arc::clone(&terminate);
         let observability = self.observability.clone();
         let status_cache = self.status_cache.clone();
+        let authorization_policy = Arc::clone(&self.authorization_policy);
+        let peer_security_store = self.peer_security_store.clone();
         let join_handle = thread::Builder::new()
             .name("peer-transport-listener".to_string())
             .spawn(move || {
                 let result = serve_peer_listener(
                     listener,
                     dispatcher,
+                    authorization_policy,
+                    peer_security_store,
                     terminate_for_thread,
                     observability.clone(),
                 );
@@ -367,48 +300,6 @@ impl PeerServerTransport {
             bound_addr,
         })
     }
-}
-
-pub(super) fn new_peer_server_transport(
-    listen_addr: Option<SocketAddr>,
-    observability: SubsystemObservability,
-    status_cache: RuntimeStatusCache,
-) -> PeerServerTransport {
-    PeerServerTransport::new(listen_addr, observability, status_cache)
-}
-
-pub(super) fn start_peer_server_transport(
-    transport: &PeerServerTransport,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-    transport.start(dispatcher)
-}
-
-pub(super) fn shutdown_peer_server_transport(
-    transport: &PeerServerTransport,
-) -> Result<(), AtmError> {
-    transport.shutdown()
-}
-
-pub(super) fn reload_peer_server_transport(
-    transport: &PeerServerTransport,
-    listen_addrs: Vec<SocketAddr>,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-    transport.reload(listen_addrs, dispatcher)
-}
-
-pub(super) fn peer_server_bound_addr(
-    transport: &PeerServerTransport,
-) -> Result<Option<SocketAddr>, AtmError> {
-    transport.bound_addr()
-}
-
-#[cfg(test)]
-pub(super) fn peer_server_bound_addr_for_test(
-    transport: &PeerServerTransport,
-) -> Option<SocketAddr> {
-    transport.bound_addr_for_test()
 }
 
 fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {
@@ -449,9 +340,15 @@ fn shutdown_listener_handle(handle: PeerServerHandle) -> Result<(), AtmError> {
     }
 }
 
+pub(super) fn bound_addr(server: &PeerServerTransport) -> Result<Option<SocketAddr>, AtmError> {
+    server.bound_addr()
+}
+
 fn serve_peer_listener(
     listener: TcpListener,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     terminate: Arc<AtomicBool>,
     observability: SubsystemObservability,
 ) -> Result<(), AtmError> {
@@ -460,10 +357,13 @@ fn serve_peer_listener(
     thread::scope(|scope| {
         while !terminate.load(Ordering::SeqCst) {
             match listener.accept() {
-                Ok((stream, _peer_addr)) => spawn_peer_connection_worker(
+                Ok((stream, peer_addr)) => spawn_peer_connection_worker(
                     scope,
                     stream,
+                    peer_addr,
                     &dispatcher,
+                    &authorization_policy,
+                    peer_security_store.as_ref(),
                     &terminate,
                     &observability,
                     &codec,
@@ -480,10 +380,17 @@ fn serve_peer_listener(
     })
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "peer listener workers need the full transport context without hiding it in ad hoc global state"
+)]
 fn spawn_peer_connection_worker<'scope, 'env>(
     scope: &'scope thread::Scope<'scope, 'env>,
     stream: TcpStream,
+    peer_addr: SocketAddr,
     dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: &Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<&Arc<dyn PeerSecurityStore + Send + Sync>>,
     terminate: &Arc<AtomicBool>,
     observability: &SubsystemObservability,
     codec: &JsonAtmProtocolCodec,
@@ -499,6 +406,8 @@ fn spawn_peer_connection_worker<'scope, 'env>(
     }
 
     let dispatcher = Arc::clone(dispatcher);
+    let authorization_policy = Arc::clone(authorization_policy);
+    let peer_security_store = peer_security_store.cloned();
     let terminate = Arc::clone(terminate);
     let observability = observability.clone();
     let codec = codec.clone();
@@ -507,7 +416,16 @@ fn spawn_peer_connection_worker<'scope, 'env>(
     scope.spawn(move || {
         let _connection_guard = connection_guard;
         let result = catch_unwind(AssertUnwindSafe(|| {
-            handle_peer_connection(stream, dispatcher, &codec, terminate, registry)
+            handle_peer_connection(
+                stream,
+                peer_addr,
+                dispatcher,
+                authorization_policy,
+                peer_security_store,
+                &codec,
+                terminate,
+                registry,
+            )
         }));
         report_peer_connection_result(&observability, result);
     });
@@ -551,16 +469,76 @@ fn report_peer_connection_result(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the connection handler receives the full decoded peer transport context explicitly"
+)]
 fn handle_peer_connection(
     mut stream: TcpStream,
+    peer_addr: SocketAddr,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     codec: &JsonAtmProtocolCodec,
     terminate: Arc<AtomicBool>,
     registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<(), AtmError> {
+    prepare_peer_connection_stream(&stream)?;
     let deadline = Instant::now() + PEER_REQUEST_DEADLINE;
-    let Some(header_bytes) = read_peer_frame_header_until(
+    match super::load_peer_security_mode(peer_security_store.as_ref())? {
+        PeerSecurityMode::SecureRequired => {
+            return handle_secure_peer_connection(
+                stream,
+                peer_addr,
+                dispatcher,
+                authorization_policy,
+                peer_security_store,
+                codec,
+                terminate,
+                registry,
+                deadline,
+            );
+        }
+        PeerSecurityMode::InsecureAllowed => {}
+    }
+    handle_insecure_peer_connection(
         &mut stream,
+        peer_addr,
+        dispatcher,
+        authorization_policy,
+        codec,
+        terminate,
+        registry,
+        deadline,
+    )
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the secure branch receives the fully-decoded peer transport context explicitly"
+)]
+fn handle_secure_peer_connection(
+    stream: TcpStream,
+    peer_addr: SocketAddr,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
+    codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
+    deadline: Instant,
+) -> Result<(), AtmError> {
+    let store = peer_security_store.as_ref().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "daemon peer security store is unavailable in secure-required mode",
+        )
+        .with_recovery(
+            "Restore the daemon peer security store before retrying secure cross-host delivery.",
+        )
+    })?;
+    let mut tls = security::open_server_tls_stream(stream, peer_addr, store)?;
+    let Some(header_bytes) = read_peer_frame_header_until(
+        &mut tls,
         deadline,
         terminate.as_ref(),
         "failed to read remote peer request frame",
@@ -573,18 +551,155 @@ fn handle_peer_connection(
         "remote peer request frame exceeded the maximum supported size",
     )?;
     let frame = read_peer_frame_payload_until(
-        &mut stream,
+        &mut tls,
         header,
         deadline,
         terminate.as_ref(),
         "failed to read remote peer request frame",
     )?;
+    handle_authorized_or_rejected_request(
+        &mut tls,
+        peer_addr,
+        dispatcher,
+        authorization_policy,
+        codec,
+        terminate,
+        registry,
+        frame,
+        deadline,
+    )
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the insecure branch receives the fully-decoded peer transport context explicitly"
+)]
+fn handle_insecure_peer_connection(
+    stream: &mut TcpStream,
+    peer_addr: SocketAddr,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
+    deadline: Instant,
+) -> Result<(), AtmError> {
+    let Some(header_bytes) = read_peer_frame_header_until(
+        stream,
+        deadline,
+        terminate.as_ref(),
+        "failed to read remote peer request frame",
+    )?
+    else {
+        return Ok(());
+    };
+    let header = atm_core::protocol::decode_frame_header(
+        header_bytes,
+        "remote peer request frame exceeded the maximum supported size",
+    )?;
+    let frame = read_peer_frame_payload_until(
+        stream,
+        header,
+        deadline,
+        terminate.as_ref(),
+        "failed to read remote peer request frame",
+    )?;
+    handle_authorized_or_rejected_request(
+        stream,
+        peer_addr,
+        dispatcher,
+        authorization_policy,
+        codec,
+        terminate,
+        registry,
+        frame,
+        deadline,
+    )
+}
+
+fn prepare_peer_connection_stream(stream: &TcpStream) -> Result<(), AtmError> {
+    stream.set_nonblocking(false).map_err(|source| {
+        AtmError::daemon_unavailable("failed to switch peer connection into blocking mode")
+            .with_recovery(
+                "Restart atm-daemon after confirming the host allows bounded blocking TCP peer connections for secure transport.",
+            )
+            .with_source(source)
+    })?;
+    stream
+        .set_read_timeout(Some(PEER_CONNECTION_IO_SLICE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply remote peer read deadline")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host permits bounded TCP read deadlines for peer transport.",
+                )
+                .with_source(source)
+        })?;
+    stream
+        .set_write_timeout(Some(PEER_CONNECTION_IO_SLICE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply remote peer write deadline")
+                .with_recovery(
+                    "Restart atm-daemon after confirming the host permits bounded TCP write deadlines for peer transport.",
+                )
+                .with_source(source)
+        })?;
+    Ok(())
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "authorization, dispatch, and bounded writeback state are passed explicitly for one peer request"
+)]
+fn handle_authorized_or_rejected_request(
+    stream: &mut (impl Read + Write),
+    peer_addr: SocketAddr,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
+    frame: atm_core::protocol::FramePayload,
+    deadline: Instant,
+) -> Result<(), AtmError> {
     let request_id = frame.request_id;
     let (_, request) = codec.request_from_frame(frame)?;
+    if let Err(error) = authorization_policy.authorize(peer_addr) {
+        tracing::warn!(
+            subsystem = "peer_transport",
+            action = "authorize_peer",
+            outcome = "denied",
+            presented_host = %peer_addr.ip(),
+            %peer_addr,
+            error_code = %error.code,
+            error_message = %error.message,
+            "daemon peer listener rejected an unauthorized remote host before dispatch"
+        );
+        let response_frame = codec.response_to_frame(
+            request_id,
+            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
+                &error,
+            )),
+        )?;
+        write_peer_frame_until(
+            stream,
+            &response_frame,
+            deadline,
+            terminate.as_ref(),
+            "failed to write remote peer authorization rejection frame",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to flush remote peer authorization rejection frame",
+            )
+            .with_recovery("Retry after the remote daemon reconnects to the peer listener.")
+            .with_source(source)
+        })?;
+        return Ok(());
+    }
     let response = dispatch_peer_request(request, dispatcher, registry, deadline)?;
     let response_frame = codec.response_to_frame(request_id, response)?;
     write_peer_frame_until(
-        &mut stream,
+        stream,
         &response_frame,
         deadline,
         terminate.as_ref(),
@@ -691,7 +806,7 @@ fn emit_peer_connection_failure_event(
 }
 
 fn read_peer_frame_header_until(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     deadline: Instant,
     terminate: &AtomicBool,
     read_error: &'static str,
@@ -713,7 +828,7 @@ fn read_peer_frame_header_until(
 }
 
 fn read_peer_frame_payload_until(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     header: atm_core::protocol::FrameHeader,
     deadline: Instant,
     terminate: &AtomicBool,
@@ -730,7 +845,7 @@ fn read_peer_frame_payload_until(
 }
 
 fn write_peer_frame_until(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     frame: &atm_core::protocol::FramePayload,
     deadline: Instant,
     terminate: &AtomicBool,
@@ -766,7 +881,7 @@ fn write_peer_frame_until(
 }
 
 fn read_exact_with_deadline(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     mut buffer: &mut [u8],
     deadline: Instant,
     terminate: &AtomicBool,
@@ -786,14 +901,14 @@ fn read_exact_with_deadline(
 }
 
 fn write_all_with_deadline(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     mut buffer: &[u8],
     deadline: Instant,
     terminate: &AtomicBool,
     write_error: &'static str,
 ) -> Result<(), AtmError> {
     while !buffer.is_empty() {
-        apply_peer_io_slice_deadline(stream, deadline, terminate)?;
+        ensure_peer_io_window(deadline, terminate)?;
         match stream.write(buffer) {
             Ok(0) => {
                 return Err(AtmError::daemon_unavailable(write_error).with_recovery(
@@ -822,7 +937,7 @@ fn write_all_with_deadline(
 }
 
 fn read_with_deadline(
-    stream: &mut TcpStream,
+    stream: &mut (impl Read + Write),
     buffer: &mut [u8],
     deadline: Instant,
     terminate: &AtomicBool,
@@ -830,7 +945,7 @@ fn read_with_deadline(
     allow_eof: bool,
 ) -> Result<usize, AtmError> {
     loop {
-        apply_peer_io_slice_deadline(stream, deadline, terminate)?;
+        ensure_peer_io_window(deadline, terminate)?;
         match stream.read(buffer) {
             Ok(0) if allow_eof => return Ok(0),
             Ok(0) => {
@@ -858,11 +973,7 @@ fn read_with_deadline(
     }
 }
 
-fn apply_peer_io_slice_deadline(
-    stream: &TcpStream,
-    deadline: Instant,
-    terminate: &AtomicBool,
-) -> Result<(), AtmError> {
+fn ensure_peer_io_window(deadline: Instant, terminate: &AtomicBool) -> Result<(), AtmError> {
     if terminate.load(Ordering::SeqCst) {
         return Err(AtmError::daemon_unavailable(
             "daemon shutdown interrupted an in-flight peer connection",
@@ -877,20 +988,6 @@ fn apply_peer_io_slice_deadline(
                 "Retry the cross-host peer operation after confirming the destination daemon is healthy and not stalled on request handling.",
             )
     })?;
-    let slice = remaining.min(PEER_CONNECTION_IO_SLICE);
-    stream.set_read_timeout(Some(slice)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to apply remote peer read deadline")
-            .with_recovery(
-                "Restart atm-daemon after confirming the host permits bounded TCP read deadlines for peer transport.",
-            )
-            .with_source(source)
-    })?;
-    stream.set_write_timeout(Some(slice)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to apply remote peer write deadline")
-            .with_recovery(
-                "Restart atm-daemon after confirming the host permits bounded TCP write deadlines for peer transport.",
-            )
-            .with_source(source)
-    })?;
+    let _ = remaining.min(PEER_CONNECTION_IO_SLICE);
     Ok(())
 }

@@ -29,6 +29,17 @@ High-signal doctor output usually tells you one of three things:
 - ATM found a configuration, connectivity, or storage problem that needs a
   supported recovery step
 
+When the daemon is available, doctor also exposes a dedicated cross-host
+section:
+
+- JSON output uses the top-level `cross_host` object
+- text output renders a `Cross-host` section
+- both surfaces show:
+  - whether legacy listener fallback is still active
+  - which endpoints are currently bound
+  - every durable interface row with bind/degraded/stale visibility
+  - allowlist enforcement state and the configured host rows
+
 ## Log
 
 Use the ATM log surface when you need structured evidence for a failure,

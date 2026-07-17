@@ -44,16 +44,3 @@ pub fn with_default_nudge_template_override_store<T>(
 ) -> Result<T, AtmError> {
     atm_runtime::with_default_nudge_template_override_store(f)
 }
-
-/// Open the default SQLite boundary and expose only the approved daemon
-/// peer-interface configuration seam.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
-/// assemble its canonical daemon peer-interface store.
-pub fn with_default_peer_interface_config_store<T>(
-    f: impl FnOnce(&(dyn atm_storage::PeerInterfaceConfigStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    atm_runtime::with_default_peer_interface_config_store(f)
-}

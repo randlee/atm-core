@@ -36,7 +36,7 @@ impl PeerInterfaceConfigStore for SqlitePeerInterfaceConfigStore {
                         configured_by,
                         configured_at,
                         updated_at
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8);",
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, ?8);",
                     params![
                         command.interface_name,
                         command.bind_addr.to_string(),

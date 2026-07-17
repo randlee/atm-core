@@ -140,6 +140,17 @@ Initial crate requirement IDs:
     than preserved as the active closure of this rule
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
+
+  Current-line note:
+  - the cross-host requirement is still TCP/TLS as the target contract
+  - the active `1.3.1` line remains plain TCP until AG.10 lands the secured
+    transport path
+  - no release wording may imply the daemon already satisfies the TLS portion
+    of this requirement before AG.10 passes
+  - the AG.10 secure transport trust model is self-signed peer identity plus
+    explicit SHA-256 fingerprint pinning, not PKI chain validation
+  - the TLS handshake must never silently downgrade to insecure transport on
+    verification failure; insecure transport remains an explicit operator mode
   - one cross-platform local IPC contract for same-host
     - Unix implementation: Unix domain socket
     - Windows implementation: named-pipe-backed local IPC
@@ -158,17 +169,48 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-002A`.
   Required daemon behavior:
   - apply every enabled interface row independently
+  - newly inserted durable interface rows must start disabled until the
+    operator enables them explicitly
   - persist per-row bind success/failure state
   - keep degraded/stale rows queryable through the CLI instead of deleting
     them during reload
+  - during the current AG transition, when no enabled durable rows exist the
+    daemon may still bind via legacy listener fallback; doctor/runtime output
+    must label that state explicitly so operators know they are not yet on the
+    durable steady-state path
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` owns loading and enforcing the
   durable deny-by-default exact-host allowlist before any mailbox, ack, or
   roster mutation occurs. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
+  Required daemon behavior:
+  - normalize the compared host token once to lowercase
+  - compare against the remote peer socket host token exactly
+  - reject unauthorized peers before dispatch enters mailbox, ack, roster, or
+    loopback-bypass-sensitive handlers
+- `REQ-DAEMON-TRANSPORT-002E` `atm-daemon` owns projecting the retained
+  cross-host control-plane state into the doctor-visible `cross_host` report.
+  Required daemon behavior:
+  - compute `legacy_fallback_active` from the actual runtime bind state rather
+    than configuration intent alone
+  - include durable interface rows, bound endpoint visibility, and allowlist
+    rows in one typed projection
+  - surface empty-enforced-allowlist and degraded-bind states both as
+    structured findings and in the `cross_host` payload
 - `REQ-DAEMON-TRANSPORT-002C` `atm-daemon` owns the loopback self-test path as
   a local diagnostic surface only and must not let loopback success imply
   remote host-pair authorization. Satisfies:
   `REQ-CORE-TRANSPORT-002C`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns a controlled local
+  daemon-to-daemon integration harness on the real peer-listener request path
+  before live AG.7 host-pair rows are marked complete.
+  Required daemon behavior:
+  - exercise unauthorized-host rejection before mailbox mutation
+  - exercise authorized send, receiver read, and `--requires-ack` reply-state
+    mutation over the peer listener
+  - exercise degraded post-send warning surfacing without downgrading durable
+    send success
+  - exercise bounded retry / outcome-unknown behavior separately from live
+    hardware execution
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
   policy for transport, store busy timeout, ingest batch, retry, and doctor
   query operations. Satisfies:

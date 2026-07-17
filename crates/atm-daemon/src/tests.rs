@@ -13,8 +13,7 @@ use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::DoctorQuery;
-use atm_core::doctor::DoctorStatus;
+use atm_core::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::AtmObservabilityHealthState;
@@ -72,192 +71,9 @@ impl Drop for ShutdownFinalizerDrainGuard {
 
 mod local_ipc_depth;
 mod runtime_root;
-
-#[test]
-#[serial_test::serial(env)]
-fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
-    install_retained_runtime_factory();
-    // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
-    // from racing other lifecycle-control and singleton-sensitive daemon tests.
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let db_path = tempdir.path().join("mail.db");
-    let _env = EnvGuard::set_many([
-        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_CONFIG_HOME",
-            Some(tempdir.path().to_str().expect("utf8 config home")),
-        ),
-        (
-            SQLITE_RUNTIME_PATH_ENV,
-            Some(db_path.to_str().expect("utf8 sqlite db path")),
-        ),
-        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-    ]);
-    let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
-    let runtime = server_transport
-        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
-        .expect("prepare runtime");
-    let mut runtime = runtime;
-    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
-    let (lifecycle, _reset) = {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-        (lifecycle, reset)
-    };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
-    let (serve_result_tx, serve_result_rx) = mpsc::channel();
-    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-
-    let join = std::thread::spawn(move || {
-        let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
-            RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: Duration::from_millis(500),
-                force_cancel_deadline: Duration::from_secs(2),
-                begin_shutdown: || Ok(()),
-                reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
-                publish_ready: move || {
-                    ready_tx.send(()).map_err(|_| {
-                        AtmError::daemon_unavailable(
-                            "doctor round-trip test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
-                    })
-                },
-            },
-        );
-        serve_result_tx.send(result).expect("send serve result");
-    });
-
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Doctor(DoctorQuery {
-        home_dir: tempdir.path().join("home"),
-        current_dir: tempdir.path().join("cwd"),
-        team_override: None,
-        ..DoctorQuery::default()
-    });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
-    match response {
-        ResponseEnvelope::Doctor(report) => {
-            assert_eq!(report.summary.status, DoctorStatus::Healthy);
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
-
-    lifecycle.set_terminate_for_test(true);
-    serve_result_rx
-        .recv_timeout(Duration::from_secs(15))
-        .expect("recv serve result")
-        .expect("serve runtime result");
-    join.join().expect("join serve thread");
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
-    install_retained_runtime_factory();
-    let _drain_guard = ShutdownFinalizerDrainGuard;
-    let tempdir = TempDir::new().expect("tempdir");
-    let _cwd_guard = CwdGuard::install();
-    std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let db_path = tempdir.path().join("mail.db");
-    let _env = EnvGuard::set_many([
-        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_CONFIG_HOME",
-            Some(tempdir.path().to_str().expect("utf8 config home")),
-        ),
-        (
-            SQLITE_RUNTIME_PATH_ENV,
-            Some(db_path.to_str().expect("utf8 sqlite db path")),
-        ),
-        ("ATM_LOG_DIR", None),
-        ("ATM_DAEMON_SOCKET", None),
-        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-    ]);
-    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-    let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-    let observability = std::sync::Arc::new(
-        crate::test_observability::TestDaemonObservability::new(
-            atm_core::home::host_log_dir_from_home(&atm_home),
-        )
-        .expect("test observability"),
-    );
-    let socket_path = tempdir.path().join("daemon.sock");
-    let runtime =
-        crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
-    let (result_tx, result_rx) = mpsc::channel();
-    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-    let runtime_socket_path = socket_path.clone();
-
-    let join = std::thread::spawn(move || {
-        let result = runtime.start_with_socket_path_for_test(runtime_socket_path, Some(ready_tx));
-        result_tx.send(result).expect("send runtime result");
-    });
-
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Doctor(DoctorQuery {
-        home_dir: atm_home.clone(),
-        current_dir: atm_home.clone(),
-        team_override: None,
-        ..DoctorQuery::default()
-    });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
-    match response {
-        ResponseEnvelope::Doctor(report) => {
-            assert_eq!(
-                report.observability.logging_state,
-                AtmObservabilityHealthState::Healthy
-            );
-        }
-        other => panic!("expected doctor response, got {other:?}"),
-    }
-
-    observability
-        .wait_for_message_contains("daemon start requested", Duration::from_secs(10))
-        .expect("startup event should be recorded without busy-spin polling");
-
-    lifecycle.set_terminate_for_test(true);
-    result_rx
-        .recv_timeout(Duration::from_secs(15))
-        .expect("recv runtime result")
-        .expect("runtime result");
-    join.join().expect("join runtime thread");
-    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
-}
+#[path = "tests/runtime_startup.rs"]
+mod runtime_startup;
+mod tests_cross_host_doctor;
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
@@ -915,6 +731,287 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
 
 #[test]
 #[serial_test::serial(env)]
+fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    let _env = EnvGuard::set_many([(
+        SQLITE_RUNTIME_PATH_ENV,
+        Some(db_path.to_str().expect("utf8 sqlite db path")),
+    )]);
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    let interface_store = assembly.peer_interface_config_store.clone();
+    let allowed_host_store = assembly.allowed_host_store.clone();
+    interface_store
+        .add_interface(
+            atm_storage::AddPeerInterfaceCommand::new(
+                "vpn0",
+                "10.10.100.10".parse().expect("bind"),
+                "10.10.100.10".parse().expect("advertise"),
+                43101,
+                atm_storage::PeerInterfaceKind::Vpn,
+                "arch-ctm@atm-dev",
+            )
+            .expect("add interface"),
+        )
+        .expect("store interface");
+    interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "vpn0",
+                "10.10.100.10".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
+    interface_store
+        .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
+            key: atm_storage::PeerInterfaceKey::new(
+                "vpn0",
+                "10.10.100.10".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            observed_at: Some(IsoTimestamp::now()),
+            refresh_deadline_at: None,
+            stale_at: None,
+            last_bound_at: Some(IsoTimestamp::now()),
+            last_bind_error: None,
+        })
+        .expect("binding update");
+    allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new(
+                "10.10.100.98",
+                "arch-ctm@atm-dev",
+                Some("windows".to_string()),
+            )
+            .expect("allow host"),
+        )
+        .expect("allow host");
+    allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new("10.10.100.99", "arch-ctm@atm-dev", None)
+                .expect("allow host 2"),
+        )
+        .expect("allow host 2");
+    allowed_host_store
+        .deny_host(
+            &"10.10.100.99"
+                .parse::<atm_storage::AllowedHostName>()
+                .expect("host"),
+        )
+        .expect("deny host");
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+    let doctor = dispatcher
+        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: atm_home.clone(),
+            current_dir: atm_home,
+            team_override: Some(test_team().clone()),
+            ..DoctorQuery::default()
+        }))
+        .expect("doctor response");
+
+    match doctor {
+        ResponseEnvelope::Doctor(report) => {
+            if std::env::var_os("ATM_EMIT_DOCTOR_FIXTURE").is_some() {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serialize doctor report")
+                );
+            }
+            let cross_host = report.cross_host.expect("cross host");
+            assert!(!cross_host.legacy_fallback_active);
+            assert_eq!(cross_host.bound_endpoints, vec!["10.10.100.10:43101"]);
+            assert_eq!(cross_host.interfaces.len(), 1);
+            assert_eq!(cross_host.interfaces[0].interface_name, "vpn0");
+            assert!(cross_host.interfaces[0].listener_bound);
+            assert!(cross_host.allowlist.enforced);
+            assert!(!cross_host.allowlist.empty);
+            assert_eq!(cross_host.allowlist.hosts.len(), 2);
+            assert!(
+                cross_host
+                    .allowlist
+                    .hosts
+                    .iter()
+                    .any(|row| row.host_name == "10.10.100.98" && row.enabled)
+            );
+            assert!(
+                cross_host
+                    .allowlist
+                    .hosts
+                    .iter()
+                    .any(|row| row.host_name == "10.10.100.99" && !row.enabled)
+            );
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn doctor_reports_info_when_cross_host_listener_is_unconfigured_and_unused() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    let _env = EnvGuard::set_many([(
+        SQLITE_RUNTIME_PATH_ENV,
+        Some(db_path.to_str().expect("utf8 sqlite db path")),
+    )]);
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+    let doctor = dispatcher
+        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: atm_home.clone(),
+            current_dir: atm_home,
+            team_override: Some(test_team().clone()),
+            ..DoctorQuery::default()
+        }))
+        .expect("doctor response");
+
+    match doctor {
+        ResponseEnvelope::Doctor(report) => {
+            assert_eq!(report.summary.status, DoctorStatus::Healthy);
+            let cross_host = report.cross_host.expect("cross host");
+            assert!(cross_host.interfaces.is_empty());
+            assert!(cross_host.bound_endpoints.is_empty());
+            assert!(cross_host.allowlist.empty);
+            assert!(report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningCrossHostListenerUnconfigured
+                    && finding.severity == DoctorSeverity::Info
+            }));
+            assert!(report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
+                    && finding.severity == DoctorSeverity::Info
+            }));
+            assert!(
+                report
+                    .recommendations
+                    .iter()
+                    .any(|recommendation| { recommendation.contains("atm daemon interfaces add") })
+            );
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    let _env = EnvGuard::set_many([(
+        SQLITE_RUNTIME_PATH_ENV,
+        Some(db_path.to_str().expect("utf8 sqlite db path")),
+    )]);
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    let interface_store = assembly.peer_interface_config_store.clone();
+    let allowed_host_store = assembly.allowed_host_store.clone();
+    interface_store
+        .add_interface(
+            atm_storage::AddPeerInterfaceCommand::new(
+                "en0",
+                "192.168.1.20".parse().expect("bind"),
+                "192.168.1.20".parse().expect("advertise"),
+                43101,
+                atm_storage::PeerInterfaceKind::Lan,
+                "arch-ctm@atm-dev",
+            )
+            .expect("add interface"),
+        )
+        .expect("store interface");
+    interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "en0",
+                "192.168.1.20".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
+    interface_store
+        .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
+            key: atm_storage::PeerInterfaceKey::new(
+                "en0",
+                "192.168.1.20".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            observed_at: None,
+            refresh_deadline_at: None,
+            stale_at: Some(IsoTimestamp::now()),
+            last_bound_at: None,
+            last_bind_error: Some("address already in use".to_string()),
+        })
+        .expect("binding update");
+    allowed_host_store
+        .allow_host(
+            atm_storage::AllowHostCommand::new("192.168.1.21", "arch-ctm@atm-dev", None)
+                .expect("allow host"),
+        )
+        .expect("allow host");
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+    let doctor = dispatcher
+        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: atm_home.clone(),
+            current_dir: atm_home,
+            team_override: Some(test_team().clone()),
+            ..DoctorQuery::default()
+        }))
+        .expect("doctor response");
+
+    match doctor {
+        ResponseEnvelope::Doctor(report) => {
+            let cross_host = report.cross_host.expect("cross host");
+            assert_eq!(cross_host.interfaces.len(), 1);
+            assert!(!cross_host.interfaces[0].listener_bound);
+            assert_eq!(
+                cross_host.interfaces[0].last_bind_error.as_deref(),
+                Some("address already in use")
+            );
+            assert!(cross_host.interfaces[0].stale_at.is_some());
+            assert!(
+                report.findings.iter().any(|finding| {
+                    finding.code == AtmErrorCode::WarningCrossHostListenerDegraded
+                })
+            );
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -968,16 +1065,14 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
                     .map(AgentName::as_str),
                 Some(atm_core::test_support::TEST_SENDER)
             );
-            // daemon_context stays distinct: it reports the daemon's own
-            // launch-time process env, not the caller.
+            // daemon_context stays distinct, but atm-daemon must not read
+            // ATM_TEAM/ATM_IDENTITY directly, so team/identity remain unset
+            // even if the ambient process env disagrees with the caller.
             let daemon_context = report.daemon_context.expect("daemon context");
-            assert_eq!(
-                daemon_context.team.as_ref().map(TeamName::as_str),
-                Some("daemon-launch-team")
-            );
+            assert_eq!(daemon_context.team.as_ref().map(TeamName::as_str), None);
             assert_eq!(
                 daemon_context.identity.as_ref().map(AgentName::as_str),
-                Some("daemon-launch-identity")
+                None
             );
         }
         other => panic!("expected doctor response, got {other:?}"),

@@ -10,7 +10,8 @@ use atm_core::error::AtmError;
 use atm_core::home::host_mail_db_path;
 use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, load_atm_config};
 use atm_storage::{
-    MessageStore as SharedMessageStore, PeerInterfaceConfigStore, RosterStore as SharedRosterStore,
+    AllowedHostStore, MessageStore as SharedMessageStore, PeerInterfaceConfigStore,
+    PeerSecurityStore, RosterStore as SharedRosterStore,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 
@@ -48,6 +49,8 @@ pub struct RuntimeAssembly {
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
+    pub allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    pub peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
     pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
@@ -63,6 +66,8 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("doctor_ports", &self.doctor_ports)
+            .field("allowed_host_store", &"dyn AllowedHostStore")
+            .field("peer_security_store", &"dyn PeerSecurityStore")
             .field("remote_replay_store", &"dyn RemoteReplayStore")
             .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
             .finish()
@@ -128,6 +133,8 @@ fn assemble_sqlite_runtime_at_path(
         storage_backends,
         nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         peer_interface_config_store: sqlite_backend.peer_interface_config_store(),
+        allowed_host_store: sqlite_backend.allowed_host_store(),
+        peer_security_store: sqlite_backend.peer_security_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -169,6 +176,8 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         storage_backends,
         nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         peer_interface_config_store: sqlite_backend.peer_interface_config_store(),
+        allowed_host_store: sqlite_backend.allowed_host_store(),
+        peer_security_store: sqlite_backend.peer_security_store(),
         doctor_ports,
         remote_replay_store,
         storage_finalizer,
@@ -190,6 +199,14 @@ impl RuntimeAssembly {
 
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
         self.storage_backends.rosters.clone()
+    }
+
+    pub fn allowed_host_store_arc(&self) -> Arc<dyn AllowedHostStore + Send + Sync> {
+        self.allowed_host_store.clone()
+    }
+
+    pub fn peer_security_store_arc(&self) -> Arc<dyn PeerSecurityStore + Send + Sync> {
+        self.peer_security_store.clone()
     }
 }
 
@@ -251,6 +268,44 @@ pub fn with_default_peer_interface_config_store<T>(
     )?);
     let interface_store = sqlite_backend.peer_interface_config_store();
     let result = f(interface_store.as_ref());
+    let finalize_result =
+        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
+    match (result, finalize_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(_)) => Err(error),
+    }
+}
+
+pub fn with_default_allowed_host_store<T>(
+    f: impl FnOnce(&(dyn AllowedHostStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
+    let allowed_host_store = sqlite_backend.allowed_host_store();
+    let result = f(allowed_host_store.as_ref());
+    let finalize_result =
+        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
+    match (result, finalize_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(_)) => Err(error),
+    }
+}
+
+pub fn with_default_peer_security_store<T>(
+    f: impl FnOnce(&(dyn PeerSecurityStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
+        host_mail_db_path()?,
+        RuntimeSqliteObservability::disabled(),
+    )?);
+    let security_store = sqlite_backend.peer_security_store();
+    let result = f(security_store.as_ref());
     let finalize_result =
         SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
     match (result, finalize_result) {

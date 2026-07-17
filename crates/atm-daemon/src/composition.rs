@@ -1,7 +1,8 @@
-use crate::boundary_adapters::DaemonConfigIngress;
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+mod lifecycle;
+mod peer_listener_reload;
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
@@ -12,119 +13,17 @@ use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     peer_transport::PeerTransportConfig,
 };
-use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
+use atm_core::boundary::{RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
-use atm_storage::{
-    IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore, PeerInterfaceKey,
-};
+use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerInterfaceKey};
+use lifecycle::{RuntimeLifecycle, RuntimeLifecycleState};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 #[cfg(test)]
 use std::time::Duration;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum RuntimeLifecycleState {
-    Starting,
-    Running,
-    Draining,
-    #[default]
-    Stopped,
-}
-
-/// Serializes legal daemon runtime ownership transitions.
-#[derive(Debug, Default)]
-pub(crate) struct RuntimeLifecycle {
-    /// A single mutex is sufficient here because lifecycle transitions are
-    /// serialized control-plane events, not a high-frequency data path.
-    state: Mutex<RuntimeLifecycleState>,
-}
-
-impl RuntimeLifecycle {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    #[cfg(test)]
-    #[cfg_attr(windows, allow(dead_code))]
-    pub(crate) fn state(&self) -> RuntimeLifecycleState {
-        *self.state.lock().expect("runtime lifecycle state lock")
-    }
-
-    /// Transition the daemon runtime lifecycle to `next`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] with
-    /// [`atm_core::error_codes::AtmErrorCode::Validation`] when `next` would
-    /// violate the documented state machine, or
-    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
-    /// lifecycle lock is poisoned.
-    pub(crate) fn transition(
-        &self,
-        next: RuntimeLifecycleState,
-    ) -> Result<RuntimeLifecycleState, AtmError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
-        let current = *state;
-        if !matches!(
-            (current, next),
-            (
-                RuntimeLifecycleState::Stopped,
-                RuntimeLifecycleState::Starting
-            ) | (
-                RuntimeLifecycleState::Starting,
-                RuntimeLifecycleState::Running
-            ) | (
-                RuntimeLifecycleState::Starting,
-                RuntimeLifecycleState::Stopped
-            ) | (
-                RuntimeLifecycleState::Running,
-                RuntimeLifecycleState::Draining
-            ) | (
-                RuntimeLifecycleState::Draining,
-                RuntimeLifecycleState::Stopped
-            )
-        ) {
-            return Err(AtmError::validation(format!(
-                "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            ))
-            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
-        }
-        *state = next;
-        Ok(next)
-    }
-
-    /// Force the daemon runtime lifecycle back to `Stopped`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] with
-    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
-    /// lifecycle lock is poisoned while resetting the runtime state.
-    pub(crate) fn force_stopped(&self) -> Result<(), AtmError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
-        *state = RuntimeLifecycleState::Stopped;
-        Ok(())
-    }
-}
 
 /// Internal root for Phase R daemon runtime wiring.
 pub(crate) struct RuntimeComposition {
@@ -141,8 +40,6 @@ pub(crate) struct RuntimeComposition {
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
     peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
-    config_ingress: DaemonConfigIngress,
-    config_current_dir: PathBuf,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -161,8 +58,6 @@ impl std::fmt::Debug for RuntimeComposition {
                 "peer_interface_config_store",
                 &"dyn PeerInterfaceConfigStore",
             )
-            .field("config_ingress", &self.config_ingress)
-            .field("config_current_dir", &self.config_current_dir)
             .field("peer_transport_runtime", &self.peer_transport_runtime)
             .finish()
     }
@@ -217,10 +112,9 @@ impl RuntimeComposition {
     fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        current_dir: PathBuf,
+        _current_dir: PathBuf,
         runtime_assembly: RuntimeAssembly,
     ) -> Result<Self, AtmError> {
-        let config_ingress = DaemonConfigIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         // Runtime status snapshots are read on the hot doctor/status path, so
@@ -229,18 +123,15 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let peer_transport_config = load_peer_transport_config(
-            current_dir.clone(),
-            &config_ingress,
-            &composition_observability,
-        )?;
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
         let peer_transport_runtime = build_peer_transport_runtime(
             runtime_assembly.remote_replay_store.clone(),
-            peer_transport_config,
+            runtime_assembly.allowed_host_store.clone(),
+            runtime_assembly.peer_security_store.clone(),
+            PeerTransportConfig::default(),
             observability.clone(),
             status_cache.clone(),
         );
@@ -262,8 +153,6 @@ impl RuntimeComposition {
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
             peer_interface_config_store: runtime_assembly.peer_interface_config_store,
-            config_ingress,
-            config_current_dir: current_dir,
             peer_transport_runtime,
         })
     }
@@ -525,84 +414,6 @@ impl RuntimeComposition {
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         self.peer_transport_runtime.shutdown()
     }
-
-    fn refresh_peer_listeners(&self) -> Result<(), AtmError> {
-        let peer_transport_config = load_peer_transport_config(
-            self.config_current_dir.clone(),
-            &self.config_ingress,
-            &self.composition_observability,
-        )?;
-        let rows = self
-            .peer_interface_config_store
-            .list_interfaces()?
-            .into_iter()
-            .filter(|row| row.enabled)
-            .map(|row| ListenerRow {
-                key: Some(
-                    PeerInterfaceKey::new(row.interface_name.clone(), row.bind_addr, row.port)
-                        .expect("persisted daemon peer interface row uses a valid key"),
-                ),
-                listen_addr: std::net::SocketAddr::new(row.bind_addr, row.port),
-            })
-            .collect::<Vec<_>>();
-        let rows = if rows.is_empty() {
-            let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
-            tracing::warn!(
-                subsystem = "composition",
-                action = "peer_listener_legacy_config_fallback",
-                outcome = "deprecated",
-                "{}",
-                detail
-            );
-            self.composition_observability.emit_or_warn(
-                "peer_listener_legacy_config_fallback",
-                "deprecated",
-                detail,
-            );
-            peer_transport_config
-                .peer_listen_addr
-                .into_iter()
-                .map(|listen_addr| ListenerRow {
-                    key: None,
-                    listen_addr,
-                })
-                .collect::<Vec<_>>()
-        } else {
-            rows
-        };
-        let outcomes = self.peer_transport_runtime.reload_listeners(
-            rows.iter().map(|row| row.listen_addr).collect(),
-            self.request_dispatcher(),
-        )?;
-        let outcome_map = outcomes
-            .into_iter()
-            .map(|outcome| (outcome.listen_addr, outcome))
-            .collect::<std::collections::BTreeMap<_, _>>();
-        let now = IsoTimestamp::now();
-        for row in rows {
-            let Some(key) = row.key else {
-                continue;
-            };
-            let Some(outcome) = outcome_map.get(&row.listen_addr) else {
-                continue;
-            };
-            self.peer_interface_config_store.record_binding_update(
-                &PeerInterfaceBindingUpdate {
-                    key,
-                    observed_at: if outcome.error_message.is_none() {
-                        Some(now)
-                    } else {
-                        None
-                    },
-                    refresh_deadline_at: None,
-                    stale_at: outcome.error_message.as_ref().map(|_| now),
-                    last_bound_at: outcome.bound_addr.map(|_| now),
-                    last_bind_error: outcome.error_message.clone(),
-                },
-            )?;
-        }
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -622,12 +433,16 @@ fn build_host_ownership_adapter(
 
 fn build_peer_transport_runtime(
     replay_store: Arc<dyn RemoteReplayStore>,
+    allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
+    peer_security_store: Arc<dyn atm_storage::PeerSecurityStore + Send + Sync>,
     peer_transport_config: PeerTransportConfig,
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
 ) -> PeerTransportRuntime {
     PeerTransportRuntime::new_with_observability(
         Some(replay_store),
+        Some(allowed_host_store),
+        Some(peer_security_store),
         peer_transport_config,
         SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
         status_cache,
@@ -670,30 +485,6 @@ fn replay_store_assembly_failed(
         "Restore the host-scoped ATM SQLite replay store before starting atm-daemon so the required bounded replay-resume sweep can run.",
     )
     .with_source(error)
-}
-
-fn load_peer_transport_config(
-    current_dir: PathBuf,
-    config_ingress: &DaemonConfigIngress,
-    observability: &SubsystemObservability,
-) -> Result<PeerTransportConfig, AtmError> {
-    let config = config_ingress
-        .load_config(ConfigLoadRequest { current_dir })
-        .inspect_err(|_| {
-            observability.emit_or_warn(
-                "peer_transport_config_load",
-                "failed",
-                "daemon startup could not load peer transport config through ConfigIngress",
-            );
-        })?
-        .config;
-    PeerTransportConfig::from_config(config.as_ref()).inspect_err(|_| {
-        observability.emit_or_warn(
-            "peer_transport_config_validation",
-            "failed",
-            "daemon startup rejected invalid peer transport configuration",
-        );
-    })
 }
 
 fn build_request_dispatcher(
@@ -1088,83 +879,12 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
-    fn runtime_composition_fails_closed_when_peer_transport_config_is_invalid() {
+    fn durable_peer_interface_rows_refresh_without_legacy_fallback_warning() {
         let tempdir = TempDir::new().expect("tempdir");
         let workspace_dir = tempdir.path().join("workspace");
         let home_dir = tempdir.path().join("atm-home");
         std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
         std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\nremote_retry_budget = \"100ms\"\n",
-        )
-        .expect("invalid config");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
-
-        let result = RuntimeComposition::new(home_dir.clone());
-
-        let error = result.expect_err("invalid peer transport config should fail closed");
-        assert_eq!(
-            error.code,
-            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
-        );
-        assert!(
-            error
-                .primary_recovery()
-                .expect("recovery guidance")
-                .contains("valid target or argument"),
-            "{error}"
-        );
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn legacy_peer_listen_addr_fallback_emits_deprecation_warning() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let workspace_dir = tempdir.path().join("workspace");
-        let home_dir = tempdir.path().join("atm-home");
-        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-        std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\npeer_listen_addr = \"127.0.0.1:43121\"\n",
-        )
-        .expect("legacy config");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
-
-        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
-        runtime
-            .refresh_peer_listeners()
-            .expect("refresh peer listeners with legacy fallback");
-
-        let retained_log_path =
-            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
-        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
-        assert!(
-            retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
-            "{retained_log}"
-        );
-        assert!(
-            retained_log.contains("peer_listener_legacy_config_fallback"),
-            "{retained_log}"
-        );
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn durable_peer_interface_rows_do_not_emit_legacy_fallback_warning() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let workspace_dir = tempdir.path().join("workspace");
-        let home_dir = tempdir.path().join("atm-home");
-        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-        std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\npeer_listen_addr = \"127.0.0.1:43122\"\n",
-        )
-        .expect("legacy config also present");
         let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
 
@@ -1183,6 +903,14 @@ mod tests {
                 .expect("valid interface command"),
             )
             .expect("insert durable interface row");
+        runtime
+            .peer_interface_config_store
+            .set_interface_enabled(
+                &atm_storage::PeerInterfaceKey::new("lan0", IpAddr::V4(Ipv4Addr::LOCALHOST), 43123)
+                    .expect("peer interface key"),
+                true,
+            )
+            .expect("enable durable interface row");
 
         runtime
             .refresh_peer_listeners()
