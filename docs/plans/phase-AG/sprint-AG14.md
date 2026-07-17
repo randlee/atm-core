@@ -1,7 +1,7 @@
 ---
 id: AG.14
 title: Automated Integration Coverage For The Corrective Path
-status: in_progress
+status: complete
 branch: feature/pAG-s14-integration-coverage
 worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
 target: integrate/phase-AG
@@ -15,7 +15,7 @@ phase: AG
 sprint: AG.14
 worktree: ../atm-core-worktrees/feature/pAG-s14-integration-coverage
 branch: feature/pAG-s14-integration-coverage
-status: in_progress
+status: complete
 estimated_scope: medium
 ```
 
@@ -54,7 +54,7 @@ so the release does not depend only on manual smoke.
 | self-IP fail-closed when no listener is available | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation` |
 | self-IP unauthorized rejection | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation` |
 | self-IP secure requires-ack round trip | ADR-003 Tier-2 | `atm-daemon::tests::runtime_root::self_ip::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state` |
-| production `CrossHostDelivery` end-to-end over the real daemon local-IPC surface | ADR-003 Tier-3 | `atm-daemon::tests::runtime_root::local_ipc::local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state` |
+| production `CrossHostDelivery` end-to-end over the real daemon local-IPC surface | ADR-003 Tier-3 | `atm-daemon::tests::runtime_root::local_ipc::local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production_dispatch` |
 | notification classification for remote-target degradation | ADR-003 Tier-2 | `atm-daemon::peer_transport::tests::harness::localhost_remote_target_notification_degradation_is_classified_without_failing_delivery` |
 | retry-visible recovery for deferred remote-target sends | ADR-003 Tier-2 | `atm-daemon::peer_transport::tests::harness::localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable` |
 
