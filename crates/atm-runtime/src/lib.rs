@@ -11,6 +11,12 @@ mod legacy_storage_adapters;
 mod replay_store;
 mod sqlite_observability;
 
+pub use atm_storage::contract::{
+    AddPeerInterfaceCommand, AllowHostCommand, AllowedHostName, AllowedHostRow, PeerInterfaceKey,
+    PeerInterfaceKind, PeerInterfaceRow, PeerSecurityMode, PeerSecuritySettingsRow,
+    SetPeerSecurityModeCommand, TrustedPeerRow, UpdatePeerInterfaceCommand,
+    UpsertTrustedPeerCommand,
+};
 pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_default_runtime, assemble_sqlite_runtime,
     default_local_runtime, with_default_allowed_host_store,

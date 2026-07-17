@@ -309,7 +309,7 @@ struct StoredTrustedPeerRow {
 }
 
 fn load_local_identity_row(
-    connection: &rusqlite::Connection,
+    connection: &crate::shared_db::SqliteConnection,
     db: &crate::shared_db::SharedDb,
 ) -> Result<Option<LocalPeerIdentityRow>, AtmError> {
     connection
@@ -339,7 +339,7 @@ fn load_local_identity_row(
 }
 
 fn load_trusted_peer_row(
-    connection: &rusqlite::Connection,
+    connection: &crate::shared_db::SqliteConnection,
     db: &crate::shared_db::SharedDb,
     host: &AllowedHostName,
 ) -> Result<Option<TrustedPeerRow>, AtmError> {

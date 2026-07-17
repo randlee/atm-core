@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "record_heartbeat's AtmError::agent_not_found missing .with_recovery() guidance" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs — record_heartbeat's AtmError::agent_not_found(...) call is missing .with_recovery(...), inconsistent with every other call site in the codebase (ack/mod.rs:400, delivery_policy.rs:327, list.rs:213, read/mod.rs:807) and with this same file's other error paths." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/512f3afa> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s14/94b969b6> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/d05ee158> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-integrate/39dae6fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 604 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 681 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 895 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 895 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 895 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 895 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 794 ;
+  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "39dae6fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-integrate/39dae6fa> .
+
+<urn:atm:triage:worktree/pAG-s10/88eb5bcf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s11/8e9d1ac4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s12/cbc6a19a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s13/512f3afa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s14/94b969b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s15/d05ee158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-integrate/39dae6fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "39dae6fa" ;
+  triage:orderIndex 7 .
