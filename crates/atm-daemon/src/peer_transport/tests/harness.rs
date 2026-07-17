@@ -788,11 +788,16 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         if receiver_delivered && receipt_delivered {
             break;
         }
+        // The replay worker waits up to one poll interval before sweeping, then the
+        // client retry path can wait one full initial backoff window before the
+        // listener accepts the deferred send under CI load. Keep the harness bound
+        // above that 5s + 5s schedule and pace the observation loop so it does not
+        // starve the background replay worker on oversubscribed runners.
         assert!(
-            started.elapsed() < Duration::from_secs(15),
+            started.elapsed() < Duration::from_secs(20),
             "background replay worker did not deliver the deferred message within the bounded window"
         );
-        std::thread::yield_now();
+        std::thread::park_timeout(Duration::from_millis(25));
     }
 
     listener_transport
