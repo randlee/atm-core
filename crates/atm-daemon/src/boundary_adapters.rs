@@ -1,14 +1,30 @@
-#[cfg(test)]
-use atm_core::boundary;
-#[cfg(test)]
-use atm_core::error::AtmError;
+use atm_core::{
+    boundary::{self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse},
+    error::AtmError,
+};
 #[cfg(test)]
 use atm_storage::MessageEnvelope;
 
 #[cfg(test)]
 use crate::claude_compat::SourceFileRecord;
-#[cfg(test)]
 use crate::direct_boundaries;
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DaemonConfigIngress;
+
+impl DaemonConfigIngress {
+    pub(crate) const fn new() -> Self {
+        Self
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonConfigIngress {}
+
+impl ConfigIngress for DaemonConfigIngress {
+    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
+        direct_boundaries::load_workspace_config(request)
+    }
+}
 
 #[cfg(test)]
 #[derive(Clone, Debug, Default)]

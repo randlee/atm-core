@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 pub mod ack;
 pub(crate) mod caller_context;
 pub mod clear;
-pub mod daemon;
 pub mod doctor;
 pub mod help;
 pub(crate) mod internal_nudge;
@@ -20,7 +19,6 @@ pub(crate) mod util;
 
 pub use ack::AckCommand;
 pub use clear::ClearCommand;
-pub use daemon::DaemonCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -74,7 +72,6 @@ enum Command {
     Read(ReadCommand),
     Ack(AckCommand),
     Clear(ClearCommand),
-    Daemon(DaemonCommand),
     Log(LogCommand),
     Doctor(DoctorCommand),
     Help(HelpCommand),
@@ -93,7 +90,6 @@ impl Command {
             Self::Read(command) => command.run(observability),
             Self::Ack(command) => command.run(observability),
             Self::Clear(command) => command.run(observability),
-            Self::Daemon(command) => command.run(observability),
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability),
             Self::Help(command) => command.run(observability),

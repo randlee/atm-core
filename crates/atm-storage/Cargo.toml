@@ -15,4 +15,3 @@ serde_json.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 ulid.workspace = true
-sha2 = "0.10"

@@ -35,7 +35,10 @@ use atm_daemon_client::{
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 #[cfg(test)]
-use atm_runtime_test_support::install_sqlite_retained_runtime_factory as install_test_runtime_factory;
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV,
+    install_sqlite_retained_runtime_factory as install_test_runtime_factory, open_sqlite_boundary,
+};
 
 use crate::observability::CliObservability;
 
@@ -223,6 +226,22 @@ impl<'a> CliComposition<'a> {
             transport,
             observability_port,
             bootstrap_trace: None,
+            send_command: SendCommandEntryPoint::new(),
+            receive_command: ReceiveCommandEntryPoint::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_transport_with_bootstrap_trace(
+        transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
+        observability_port: &'a CliObservability,
+        bootstrap_trace: BootstrapTraceReport,
+    ) -> Self {
+        install_retained_runtime_factory();
+        Self {
+            transport,
+            observability_port,
+            bootstrap_trace: Some(bootstrap_trace),
             send_command: SendCommandEntryPoint::new(),
             receive_command: ReceiveCommandEntryPoint::new(),
         }
@@ -546,17 +565,41 @@ impl AtmGraftClient for CliComposition<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::io;
     use std::io::Write;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::time::Duration;
 
+    use atm_core::ack::AckRequest;
+    use atm_core::boundary;
+    use atm_core::boundary::ClientTransport;
+    use atm_core::clear::ClearQuery;
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+        BootstrapTraceReport, DoctorQuery, DoctorStatus,
+    };
     use atm_core::error::AtmError;
-    use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
-    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-    use atm_core::transport::testing::FakeClientTransport;
+    use atm_core::graft::AtmGraftClient;
+    use atm_core::protocol::{
+        ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    };
+    use atm_core::read::{PeekQuery, ReadQuery};
+    use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{
+        EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+        TEST_TEAM,
+    };
+    use atm_core::transport::testing::{
+        FakeClientTransport, HealthyObservability, LoopbackClientTransport,
+    };
+    use atm_core::types::ReadSelection;
+    use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
+    use chrono::Utc;
+    use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
     use tracing_subscriber::fmt::MakeWriter;
@@ -564,7 +607,8 @@ mod tests {
     use super::{
         AtmHomePath, CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, InvocationDir, LaunchGateGuard,
-        LocalIpcClientTransportAdapter, resolve_command_runtime_context,
+        LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary,
+        resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
 
@@ -631,6 +675,393 @@ mod tests {
         (result, buffer.contents())
     }
 
+    struct LoopbackFixture {
+        _env_guard: EnvGuard,
+        _tempdir: TempDir,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    }
+
+    impl LoopbackFixture {
+        fn new(recipient: &str) -> Self {
+            super::install_retained_runtime_factory();
+            let tempdir = tempfile::tempdir().expect("tempdir");
+            let home_dir = tempdir.path().to_path_buf();
+            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
+            let current_dir = tempdir.path().join("cwd");
+            fs::create_dir_all(&current_dir).expect("cwd");
+            fs::write(current_dir.join(".atm.toml"), "[atm]\n").expect("fixture atm config");
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                (
+                    SQLITE_RUNTIME_PATH_ENV,
+                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
+                ),
+            ]);
+            let fixture = Self {
+                _env_guard: env_guard,
+                _tempdir: tempdir,
+                home_dir,
+                current_dir,
+            };
+            fixture.write_team_config(recipient);
+            fixture
+        }
+
+        fn team_dir(&self) -> std::path::PathBuf {
+            self.home_dir.join(".claude").join("teams").join(TEST_TEAM)
+        }
+
+        fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
+            self.team_dir()
+                .join("inboxes")
+                .join(format!("{agent}.json"))
+        }
+
+        fn sqlite_db_path(&self) -> std::path::PathBuf {
+            self.home_dir.join("runtime").join("mail.sqlite3")
+        }
+
+        fn write_team_config(&self, recipient: &str) {
+            let team_dir = self.team_dir();
+            fs::create_dir_all(&team_dir).expect("team dir");
+            fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+            fs::create_dir_all(team_dir.join(".atm-state").join("workflow")).expect("workflow dir");
+            let config = TeamConfig {
+                members: vec![
+                    AgentMember::with_name(TEST_SENDER.parse().expect("sender")),
+                    AgentMember::with_name(recipient.parse().expect("recipient")),
+                    AgentMember::with_name(TEST_LEAD.parse().expect("lead")),
+                ],
+                ..Default::default()
+            };
+            fs::write(
+                team_dir.join("config.json"),
+                serde_json::to_vec(&config).expect("team config"),
+            )
+            .expect("write team config");
+            self.seed_sqlite_roster(recipient);
+        }
+
+        fn seed_sqlite_roster(&self, recipient: &str) {
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let roster_store = assembly.roster_store_arc();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let members = [TEST_SENDER, recipient, TEST_LEAD]
+                .into_iter()
+                .map(|agent| boundary::RosterEntry {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: atm_core::schema::AgentType::default(),
+                    model: atm_core::types::ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                })
+                .collect::<Vec<_>>();
+            roster_store
+                .replace_roster(
+                    &team,
+                    &members,
+                    Some(&boundary::ReplaySource::new("config.json").expect("source")),
+                )
+                .expect("seed sqlite roster");
+        }
+
+        fn write_inbox_values(&self, agent: &str, values: &[Value]) {
+            let inbox_path = self.inbox_path(agent);
+            if let Some(parent) = inbox_path.parent() {
+                fs::create_dir_all(parent).expect("inbox dir");
+            }
+            fs::write(
+                inbox_path,
+                serde_json::to_string_pretty(values).expect("json array"),
+            )
+            .expect("write inbox");
+            let messages = values
+                .iter()
+                .cloned()
+                .map(serde_json::from_value::<InboxMessage>)
+                .collect::<Result<Vec<_>, _>>()
+                .expect("message envelopes");
+            self.seed_sqlite_mailbox(agent, &messages);
+        }
+
+        fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
+            if self.sqlite_db_path().exists() {
+                let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+                let mail_store = assembly.mail_store_arc();
+                let team = TEST_TEAM.parse::<TeamName>().expect("team");
+                let agent_name = agent.parse::<AgentName>().expect("agent");
+                let metadata_rows = mail_store
+                    .query_mailbox_metadata(&team, &agent_name, None)
+                    .expect("mailbox rows");
+                return metadata_rows
+                    .into_iter()
+                    .map(|row| {
+                        mail_store
+                            .load_message(&team, &agent_name, &row.message_key)
+                            .expect("message record")
+                            .expect("stored message")
+                            .envelope
+                    })
+                    .collect();
+            }
+
+            let inbox_path = self.inbox_path(agent);
+            if let Ok(raw) = fs::read_to_string(&inbox_path) {
+                if raw.trim_start().starts_with('[') {
+                    let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                    return values
+                        .into_iter()
+                        .map(|value| serde_json::from_value(value).expect("message envelope"))
+                        .collect();
+                }
+                return raw
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| serde_json::from_str::<InboxMessage>(line).expect("json line"))
+                    .collect();
+            }
+
+            Vec::new()
+        }
+
+        fn write_inbox_messages(&self, agent: &str, messages: &[InboxMessage]) {
+            let values = messages
+                .iter()
+                .map(|message| serde_json::to_value(message).expect("message value"))
+                .collect::<Vec<_>>();
+            self.write_inbox_values(agent, &values);
+            self.seed_sqlite_mailbox(agent, messages);
+        }
+
+        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let mail_store = assembly.mail_store_arc();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let agent_name = agent.parse::<AgentName>().expect("agent");
+
+            for (index, message) in messages.iter().enumerate() {
+                let message_key = if let Some(message_id) = message.message_id {
+                    boundary::MessageKey::from(message_id)
+                } else {
+                    boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
+                };
+                mail_store
+                    .upsert_message(boundary::Message {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        message_key: message_key.clone(),
+                        envelope: message.clone(),
+                    })
+                    .expect("seed sqlite message");
+                mail_store
+                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        actor: agent_name.clone(),
+                        state: boundary::MailMessageState {
+                            team: team.clone(),
+                            agent: agent_name.clone(),
+                            actor: agent_name.clone(),
+                            message_key,
+                            read: message.read,
+                            pending_ack_at: message.pending_ack_at,
+                            acknowledged_at: message.acknowledged_at,
+                            expires_at: message.expires_at,
+                            deleted_at: None,
+                            updated_at: Some(message.timestamp),
+                        },
+                    })
+                    .expect("seed sqlite message state");
+            }
+        }
+
+        fn send_request(&self, body: &str) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_SENDER.parse().expect("caller"),
+                TEST_RECIPIENT_ADDRESS,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request")
+        }
+
+        fn send_request_to(&self, recipient: &str, body: &str) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_SENDER.parse().expect("caller"),
+                recipient,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request")
+        }
+
+        fn send_request_with_flags(
+            &self,
+            body: &str,
+            requires_ack: bool,
+            task_id: Option<atm_core::types::TaskId>,
+        ) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_SENDER.parse().expect("caller"),
+                TEST_RECIPIENT_ADDRESS,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                requires_ack,
+                task_id,
+                false,
+            )
+            .expect("send request")
+        }
+
+        fn ack_request(&self, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
+            AckRequest {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id,
+                reply_body: reply_body.to_string(),
+            }
+        }
+
+        fn read_query(&self) -> ReadQuery {
+            ReadQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                TEST_RECIPIENT.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query")
+        }
+
+        fn read_query_for(&self, caller: &str, message_id: AtmMessageId) -> ReadQuery {
+            ReadQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                None,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                false,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query")
+        }
+
+        fn peek_query_for(
+            &self,
+            caller: &str,
+            target: Option<&str>,
+            message_id: AtmMessageId,
+        ) -> PeekQuery {
+            PeekQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                caller.parse().expect("caller"),
+                target,
+                TEST_TEAM.parse().expect("team"),
+                ReadSelection::All,
+                false,
+                Some(&message_id.to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("peek query")
+        }
+
+        fn clear_query(&self) -> ClearQuery {
+            ClearQuery {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                caller_identity: TEST_RECIPIENT.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                older_than: None,
+                idle_only: false,
+                dry_run: false,
+            }
+        }
+
+        fn doctor_query(&self) -> DoctorQuery {
+            DoctorQuery {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+                ..DoctorQuery::default()
+            }
+        }
+
+        fn message(&self, text: &str, read: bool) -> InboxMessage {
+            InboxMessage {
+                from: TEST_LEAD.parse().expect("lead"),
+                text: text.to_string(),
+                timestamp: Utc::now().into(),
+                read,
+                source_team: Some(TEST_TEAM.parse().expect("team")),
+                summary: None,
+                message_id: Some(AtmMessageId::new()),
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: serde_json::Map::new(),
+            }
+        }
+
+        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, InboxMessage) {
+            let message_id = AtmMessageId::new();
+            let mut message = self.message(text, true);
+            message.message_id = Some(message_id);
+            message.requires_ack = true;
+            message.pending_ack_at = Some(Utc::now().into());
+            (message_id, message)
+        }
+    }
+
     #[test]
     fn fake_transport_maps_protocol_error_envelope_to_atm_error() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -664,6 +1095,422 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
+    fn loopback_transport_send_persists_inbox_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let transport_observability = Arc::new(atm_core::observability::NullObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(transport_observability)),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .send(fixture.send_request("hello from loopback"))
+            .expect("send outcome");
+
+        assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
+        assert_eq!(outcome.sender.as_str(), TEST_SENDER);
+        let inbox = fixture.inbox_contents(TEST_RECIPIENT);
+        assert_eq!(inbox.len(), 1);
+        assert_eq!(inbox[0].text, "hello from loopback");
+        assert_eq!(inbox[0].from.as_str(), TEST_SENDER);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_rejects_self_addressed_send_without_persisting_inbox() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let transport_observability = Arc::new(atm_core::observability::NullObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(transport_observability)),
+            &composition_observability,
+        );
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
+        );
+        assert!(fixture.inbox_contents(TEST_SENDER).is_empty());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_no_longer_emits_missing_config_notice_under_concurrency() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+        fixture.write_inbox_values(TEST_RECIPIENT, &[]);
+        fixture.write_inbox_values(ROLE_TEAM_LEAD, &[]);
+
+        let transport = Arc::new(LoopbackClientTransport::new(Arc::new(
+            atm_core::observability::NullObservability,
+        )));
+        let (first, second) = std::thread::scope(|scope| {
+            let first_request = fixture.send_request("first");
+            let second_request = fixture.send_request("second");
+            let first_transport = transport.clone();
+            let second_transport = transport.clone();
+            let first = scope.spawn(move || {
+                first_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                    first_request,
+                )))
+            });
+            let second = scope.spawn(move || {
+                second_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                    second_request,
+                )))
+            });
+            (
+                first.join().expect("first transport result"),
+                second.join().expect("second transport result"),
+            )
+        });
+
+        for (label, result) in [("first", &first), ("second", &second)] {
+            if let Err(error) = result {
+                assert_eq!(
+                    error.code,
+                    atm_core::error_codes::AtmErrorCode::MailboxLockTimeout,
+                    "{label} response: {result:?}"
+                );
+            }
+        }
+        let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+        assert_eq!(
+            notices.len(),
+            0,
+            "missing config is no longer a runtime send fallback, so no team-lead repair notice should be emitted"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .send(fixture.send_request_with_flags(
+                "needs acknowledgement",
+                false,
+                Some("TASK-314".parse().expect("task id")),
+            ))
+            .expect("send outcome");
+
+        assert!(outcome.requires_ack);
+        assert_eq!(
+            outcome.task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+
+        let inbox = fixture.inbox_contents(TEST_RECIPIENT);
+        assert_eq!(inbox.len(), 1);
+        assert_eq!(
+            inbox[0].task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+        assert!(inbox[0].pending_ack_at.is_some());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        // Plain informational send stays non-ack-requiring.
+        let plain_outcome = composition
+            .send(fixture.send_request("plain informational"))
+            .expect("plain send outcome");
+        assert!(!plain_outcome.requires_ack);
+        let plain_message_id = plain_outcome.message_id;
+
+        // Explicit requires-ack send persists durable pending-ack state.
+        let ack_required_outcome = composition
+            .send(fixture.send_request_with_flags("needs acknowledgement", true, None))
+            .expect("ack-required send outcome");
+        assert!(ack_required_outcome.requires_ack);
+        let ack_required_message_id = ack_required_outcome.message_id;
+
+        // Task send also persists durable pending-ack state.
+        let task_outcome = composition
+            .send(fixture.send_request_with_flags(
+                "task payload",
+                false,
+                Some("TASK-314".parse().expect("task id")),
+            ))
+            .expect("task send outcome");
+        assert!(task_outcome.requires_ack);
+        let task_message_id = task_outcome.message_id;
+
+        // Peek is the explicit non-mutating inspection path.
+        let peek_outcome = composition
+            .peek(fixture.peek_query_for(TEST_RECIPIENT, None, plain_message_id))
+            .expect("peek outcome");
+        assert!(!peek_outcome.mutation_applied);
+        assert_eq!(peek_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            peek_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_peek = inbox_after_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after peek");
+        assert!(!plain_after_peek.read);
+        assert!(plain_after_peek.pending_ack_at.is_none());
+        assert!(plain_after_peek.acknowledged_at.is_none());
+
+        // Cross-agent peek via target address also stays non-mutating.
+        let cross_agent_peek = composition
+            .peek(fixture.peek_query_for(
+                TEST_SENDER,
+                Some(TEST_RECIPIENT_ADDRESS),
+                plain_message_id,
+            ))
+            .expect("cross-agent peek outcome");
+        assert!(!cross_agent_peek.mutation_applied);
+        assert_eq!(cross_agent_peek.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            cross_agent_peek
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(false)
+        );
+
+        let inbox_after_cross_agent_peek = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_cross_agent_peek = inbox_after_cross_agent_peek
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after cross-agent peek");
+        assert!(!plain_after_cross_agent_peek.read);
+        assert!(plain_after_cross_agent_peek.pending_ack_at.is_none());
+        assert!(plain_after_cross_agent_peek.acknowledged_at.is_none());
+
+        // Read mutates read state but never manufactures pending-ack state.
+        let read_outcome = composition
+            .receive(fixture.read_query_for(TEST_RECIPIENT, plain_message_id))
+            .expect("read outcome");
+        assert!(read_outcome.mutation_applied);
+        assert_eq!(read_outcome.selected_message_id, Some(plain_message_id));
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.read),
+            Some(true)
+        );
+        assert_eq!(
+            read_outcome
+                .message
+                .as_ref()
+                .and_then(|message| message.envelope.pending_ack_at),
+            None
+        );
+
+        let inbox_after_read = fixture.inbox_contents(TEST_RECIPIENT);
+        let plain_after_read = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(plain_message_id))
+            .expect("plain inbox message after read");
+        assert!(plain_after_read.read);
+        assert!(plain_after_read.pending_ack_at.is_none());
+
+        let ack_required_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(ack_required_message_id))
+            .expect("ack-required inbox message");
+        assert!(ack_required_after_send.pending_ack_at.is_some());
+
+        let task_after_send = inbox_after_read
+            .iter()
+            .find(|message| message.message_id == Some(task_message_id))
+            .expect("task inbox message");
+        assert!(task_after_send.pending_ack_at.is_some());
+        assert_eq!(
+            task_after_send.task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+
+        // Canonical same-team self-addressed sends fail before persistence.
+        let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
+        let error = composition
+            .send(fixture.send_request_to(&self_address, "hello self"))
+            .expect_err("self-addressed send must fail");
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_read_surfaces_messages_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .receive(fixture.read_query())
+            .expect("read outcome");
+
+        assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome.message.expect("selected message").envelope.text,
+            "read me"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let error = composition
+            .receive(
+                ReadQuery::new(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                    TEST_SENDER.parse().expect("caller"),
+                    Some(TEST_RECIPIENT_ADDRESS),
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("query"),
+            )
+            .expect_err("cross-agent loopback read must fail");
+
+        assert!(error.is_validation(), "{error:?}");
+        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_clear_removes_read_messages_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("done", true)]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .clear(fixture.clear_query())
+            .expect("clear outcome");
+
+        assert_eq!(outcome.removed_total, 1);
+        assert_eq!(outcome.remaining_total, 0);
+        let read_outcome = composition
+            .receive(fixture.read_query())
+            .expect("read outcome after clear");
+        assert_eq!(read_outcome.count, 0);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_doctor_reports_health_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let observability = Arc::new(HealthyObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(observability)),
+            &composition_observability,
+        );
+
+        let report = composition
+            .doctor(fixture.doctor_query())
+            .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
+        assert_eq!(report.summary.error_count, 0);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn doctor_projects_bootstrap_trace_into_report() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let observability = Arc::new(HealthyObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport_with_bootstrap_trace(
+            Arc::new(LoopbackClientTransport::new(observability)),
+            &composition_observability,
+            BootstrapTraceReport {
+                daemon_connect: BootstrapConnectOutcome::Connected,
+                daemon_launch_gate: BootstrapLaunchGateOutcome::Skipped,
+                daemon_auto_start: BootstrapAutoStartOutcome::Skipped,
+                connect_detail: None,
+                launch_gate_detail: None,
+                auto_start_detail: None,
+            },
+        );
+
+        let report = composition
+            .doctor(fixture.doctor_query())
+            .expect("doctor report");
+
+        assert_eq!(
+            report.bootstrap_trace.as_ref().expect("bootstrap trace"),
+            &BootstrapTraceReport {
+                daemon_connect: BootstrapConnectOutcome::Connected,
+                daemon_launch_gate: BootstrapLaunchGateOutcome::Skipped,
+                daemon_auto_start: BootstrapAutoStartOutcome::Skipped,
+                connect_detail: None,
+                launch_gate_detail: None,
+                auto_start_detail: None,
+            }
+        );
+    }
+
+    #[test]
     fn bootstrap_propagates_daemon_availability_failure() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = DaemonSupervisor::new(
@@ -687,6 +1534,106 @@ mod tests {
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("daemon binary is missing"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_ack_appends_reply_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .ack(fixture.ack_request(message_id, "received and starting"))
+            .expect("ack outcome");
+
+        assert_eq!(outcome.team.as_str(), TEST_TEAM);
+        assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+        assert_eq!(outcome.message_id, message_id);
+        assert!(matches!(
+            &outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::Sent { reply_target, .. }
+                if reply_target.to_string() == format!("{TEST_LEAD}@{TEST_TEAM}")
+        ));
+
+        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
+        assert_eq!(sender_inbox.len(), 1);
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
+        let replies = fixture.inbox_contents(TEST_LEAD);
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0].text, "received and starting");
+        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].pending_ack_at.is_none());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let (message_id, mut pending_ack) = fixture.pending_ack_message("historical self poison");
+        pending_ack.from = TEST_SENDER.parse().expect("self sender");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .ack(fixture.ack_request(message_id, "resolved"))
+            .expect("self poison ack outcome");
+
+        assert!(matches!(
+            outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::SuppressedSelfAck
+        ));
+        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
+        assert_eq!(sender_inbox.len(), 1);
+        assert_eq!(sender_inbox[0].message_id, Some(message_id));
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
+        assert!(fixture.inbox_contents(TEST_LEAD).is_empty());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn cli_composition_supports_graft_client_surface_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+        let client: &dyn AtmGraftClient = &composition;
+
+        let send_outcome = client
+            .send_message(fixture.send_request("graft send"))
+            .expect("send through graft client surface");
+        assert_eq!(send_outcome.sender.as_str(), TEST_SENDER);
+
+        let read_outcome = client
+            .read_message(fixture.read_query())
+            .expect("read through graft client surface");
+        assert_eq!(read_outcome.count, 1);
+
+        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let ack_outcome = client
+            .acknowledge_message(fixture.ack_request(message_id, "received and starting"))
+            .expect("ack through graft client surface");
+        assert_eq!(ack_outcome.message_id, message_id);
     }
 
     #[test]
@@ -999,6 +1946,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn spawn_failure_maps_to_auto_start_failed() {
+        use std::fs;
+
         let tempdir = TempDir::new().expect("tempdir");
         let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
         let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
@@ -1009,7 +1958,7 @@ mod tests {
         } else {
             "invalid-atm-daemon"
         });
-        std::fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
+        fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
         let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
         let transport = LocalIpcClientTransportAdapter::new(socket_path);

@@ -100,18 +100,6 @@ of truth because it reconciles what was actually learned:
 - interface selection, allowlist enforcement, and doctor visibility must become
   first-class product surfaces before real cross-host closure can be trusted
 
-Bounded exception already exercised in this phase:
-
-- `AG-FIND-004` was discovered during AG.1's live viability attempt as a real
-  product defect in daemon-to-daemon bring-up, not a docs ambiguity
-- per Phase AG's own "fix real bugs in code" policy, that finding was fixed
-  in-sprint on `feature/pAG-s1-macos-execution` and carried by PR #551
-  instead of being deferred to a separate branch after the defect was already
-  isolated and understood
-- this exception is named, one-off, and limited to the `AG-FIND-004`
-  peer-listener viability fix; it does not authorize unrelated product-code
-  work to accumulate silently on AG planning branches
-
 Release claim this phase must validate:
 
 - cross-host communication is functionally operable through real product
@@ -629,40 +617,33 @@ Entry gate:
 - AG.4 and AG.5 are complete
 - AG.6 doctor visibility is complete
 
-### AG.8 Transport Security And Release-Language Reconciliation
+### AG.8 Transport Security And Encryption Hardening
 
 Primary objective:
 
-- reconcile the documented transport-security contract with the actual current
-  plain-TCP implementation line without claiming secure transport is already
-  shipped
+- reconcile and plan the late transport-security gap after functional
+  cross-host behavior is real
 
 Outputs:
 
-- requirements/architecture/readiness reconciliation for transport security
-- explicit statement of what earlier AG closure does and does not authorize
-- concrete AG.10 implementation scope for certificate, trust, handshake,
-  doctor, and smoke/test work
-- explicit record that AG.7 live host-pair validation is still pending
+- requirements/architecture reconciliation for transport security
+- implementation plan for encryption / peer-auth hardening
+- explicit release-language boundaries while this remains open
 
 Entry gate:
 
-- the AG.4/AG.5/AG.6/AG.7 functional code paths and local harness exist on the
-  current line
-- AG.7 live hardware rows may still be pending, but AG.8 must say so plainly
+- functional host-pair validation is already credible on the AG.4 / AG.5
+  surfaces
 
 ### AG.10 Secured Cross-Host Transport Implementation
 
 Primary objective:
 
-- implement the secured daemon-to-daemon transport defined concretely by AG.8
+- implement the actual secured daemon-to-daemon transport defined by AG.8
 
 Outputs:
 
-- TLS-backed daemon-to-daemon transport
-- on-demand local self-signed daemon certificate generation and durable storage
-- explicit peer trust approval / persistence path
-- explicit insecure-mode support with doctor/runtime visibility
+- secured transport implementation
 - secure loopback validation support
 - secure LAN/routed validation support
 
@@ -683,8 +664,7 @@ Outputs:
 - final findings ledger
 - readiness record
 - explicit statement of whether cross-host is:
-  - functionally release-usable only if the hard release blocker
-    `AG-FIND-005` is closed
+  - functionally release-usable
   - blocked
   - functionally usable but not transport-secure
 
@@ -697,9 +677,6 @@ Entry gate:
   - if `AG.10` is `PASS`, the verdict may include transport-security closure
   - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
     cross-host is functionally usable but not transport-secure
-  - if the hard release blocker `AG-FIND-005` remains open, the verdict must
-    remain `blocked` rather than downgrade the live send-path defect into a
-    caveat
 
 Execution owner:
 
@@ -982,6 +959,3 @@ Phase `AG` is complete only when all of the following are true:
   release-usable
 - any functional release-usable statement is explicit about whether it excludes
   transport security
-- no release-usable statement is allowed while the hard release blocker
-  `AG-FIND-005` remains open; the AG.11-AG.17 corrective chain is the only
-  closure path for that blocker

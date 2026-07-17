@@ -9,7 +9,6 @@ use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
 #[cfg(test)]
 use crate::schema::{AgentMember, TeamConfig};
 use crate::schema::{HOME_DIR_METADATA_KEY, canonical_home_dir};
-use crate::send::qualified_sender_identity;
 #[cfg(test)]
 use crate::types::AgentId;
 use crate::types::AgentName;
@@ -99,9 +98,8 @@ fn member_summary_from_roster(
 ) -> MemberSummary {
     MemberSummary {
         name: record.agent_name.clone(),
-        agent_id: metadata_string(&record.metadata_json, "agentId").unwrap_or_else(|| {
-            qualified_sender_identity(&record.agent_name, Some(&record.team_name))
-        }),
+        agent_id: metadata_string(&record.metadata_json, "agentId")
+            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
         agent_type: record.agent_type.to_string(),
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
@@ -140,7 +138,7 @@ fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, 
 #[cfg(test)]
 fn roster_record_agent_id(record: &RosterEntry) -> Result<AgentId, AtmError> {
     let raw_agent_id = metadata_string(&record.metadata_json, "agentId")
-        .unwrap_or_else(|| qualified_sender_identity(&record.agent_name, Some(&record.team_name)));
+        .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name));
     AgentId::new(raw_agent_id.clone()).map_err(|error| {
         AtmError::validation(format!(
             "roster member {}@{} has invalid persisted agentId '{}': {error}",

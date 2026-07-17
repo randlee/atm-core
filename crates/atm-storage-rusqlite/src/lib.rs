@@ -10,9 +10,6 @@
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
-mod peer_host_allowlist_store;
-mod peer_interface_store;
-mod peer_security_store;
 mod roster_store;
 mod shared_db;
 mod writer;
@@ -22,10 +19,7 @@ pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
-use atm_storage::contract::{
-    AllowedHostStore, Message, MessageKey, MessageQuery, MessageStore, PeerInterfaceConfigStore,
-    PeerSecurityStore, RosterStore,
-};
+use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AtmError, IsoTimestamp};
@@ -188,21 +182,6 @@ struct SqliteRosterStore {
 
 #[derive(Debug)]
 struct SqliteNudgeTemplateOverrideStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqlitePeerInterfaceConfigStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqliteAllowedHostStore {
-    db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-struct SqlitePeerSecurityStore {
     db: Arc<SharedDb>,
 }
 
@@ -464,9 +443,6 @@ pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
-    peer_interface_config_store: Arc<SqlitePeerInterfaceConfigStore>,
-    allowed_host_store: Arc<SqliteAllowedHostStore>,
-    peer_security_store: Arc<SqlitePeerSecurityStore>,
 }
 
 impl SqliteStorageBackend {
@@ -482,14 +458,7 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
-                Arc::clone(&db),
-            )),
-            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
-                &db,
-            ))),
-            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(Arc::clone(&db))),
-            peer_security_store: Arc::new(SqlitePeerSecurityStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
         })
     }
 
@@ -499,14 +468,7 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
-                Arc::clone(&db),
-            )),
-            peer_interface_config_store: Arc::new(SqlitePeerInterfaceConfigStore::new(Arc::clone(
-                &db,
-            ))),
-            allowed_host_store: Arc::new(SqliteAllowedHostStore::new(Arc::clone(&db))),
-            peer_security_store: Arc::new(SqlitePeerSecurityStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
         })
     }
 
@@ -552,18 +514,6 @@ impl SqliteStorageBackend {
         &self,
     ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
-    }
-
-    pub fn peer_interface_config_store(&self) -> Arc<dyn PeerInterfaceConfigStore + Send + Sync> {
-        self.peer_interface_config_store.clone()
-    }
-
-    pub fn allowed_host_store(&self) -> Arc<dyn AllowedHostStore + Send + Sync> {
-        self.allowed_host_store.clone()
-    }
-
-    pub fn peer_security_store(&self) -> Arc<dyn PeerSecurityStore + Send + Sync> {
-        self.peer_security_store.clone()
     }
 
     #[cfg(test)]
@@ -1011,10 +961,6 @@ mod tests {
         "test-agent".parse().expect("agent")
     }
 
-    fn test_sender_identity() -> String {
-        format!("{}@{}", agent(), team())
-    }
-
     fn message(key: &str, text: &str) -> Message {
         let team = team();
         let agent = agent();
@@ -1100,117 +1046,6 @@ mod tests {
         let loaded = store.load_roster(&team).expect("load roster");
         assert_eq!(loaded.members.len(), 1);
         assert_eq!(store.list_teams().expect("list teams"), vec![team]);
-    }
-
-    #[test]
-    fn sqlite_backend_saves_updates_disables_and_lists_peer_interfaces() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let store = backend.peer_interface_config_store();
-        let row = store
-            .add_interface(
-                atm_storage::AddPeerInterfaceCommand::new(
-                    "vpn0",
-                    "10.0.0.5".parse().expect("bind addr"),
-                    "10.0.0.5".parse().expect("advertise addr"),
-                    43101,
-                    atm_storage::PeerInterfaceKind::Vpn,
-                    test_sender_identity(),
-                )
-                .expect("add command"),
-            )
-            .expect("add interface");
-        assert_eq!(row.interface_name, "vpn0");
-        assert!(!row.enabled);
-
-        let updated = store
-            .update_interface(
-                atm_storage::UpdatePeerInterfaceCommand::new(
-                    atm_storage::PeerInterfaceKey::new(
-                        "vpn0",
-                        "10.0.0.5".parse().expect("bind addr"),
-                        43101,
-                    )
-                    .expect("key"),
-                    "10.0.0.6".parse().expect("new bind"),
-                    "10.0.0.6".parse().expect("advertise"),
-                    43101,
-                    atm_storage::PeerInterfaceKind::Vpn,
-                    test_sender_identity(),
-                    Some(false),
-                )
-                .expect("update command"),
-            )
-            .expect("update interface");
-        assert_eq!(updated.bind_addr.to_string(), "10.0.0.6");
-        assert!(!updated.enabled);
-
-        let listed = store.list_interfaces().expect("list interfaces");
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].bind_addr.to_string(), "10.0.0.6");
-        assert!(!listed[0].enabled);
-
-        let enabled = store
-            .set_interface_enabled(
-                &atm_storage::PeerInterfaceKey::new(
-                    "vpn0",
-                    "10.0.0.6".parse().expect("bind addr"),
-                    43101,
-                )
-                .expect("key"),
-                true,
-            )
-            .expect("enable interface");
-        assert!(enabled.enabled);
-    }
-
-    #[test]
-    fn sqlite_backend_allows_denies_removes_and_lists_hosts() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let store = backend.allowed_host_store();
-        let row = store
-            .allow_host(
-                atm_storage::AllowHostCommand::new(
-                    "10.10.100.98",
-                    test_sender_identity(),
-                    Some("windows host".to_string()),
-                )
-                .expect("allow command"),
-            )
-            .expect("allow host");
-        assert_eq!(row.host_name.as_str(), "10.10.100.98");
-        assert!(row.enabled);
-
-        let denied = store
-            .deny_host(
-                &"10.10.100.98"
-                    .parse::<atm_storage::AllowedHostName>()
-                    .expect("host name"),
-            )
-            .expect("deny host");
-        assert!(!denied.enabled);
-        assert!(denied.disabled_at.is_some());
-
-        let re_enabled = store
-            .allow_host(
-                atm_storage::AllowHostCommand::new("10.10.100.98", test_sender_identity(), None)
-                    .expect("re-enable command"),
-            )
-            .expect("re-enable host");
-        assert!(re_enabled.enabled);
-        assert!(re_enabled.disabled_at.is_none());
-
-        let listed = store.list_hosts().expect("list hosts");
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].host_name.as_str(), "10.10.100.98");
-
-        store
-            .remove_host(
-                &"10.10.100.98"
-                    .parse::<atm_storage::AllowedHostName>()
-                    .expect("host name"),
-            )
-            .expect("remove host");
-        assert!(store.list_hosts().expect("list after remove").is_empty());
     }
 
     #[test]

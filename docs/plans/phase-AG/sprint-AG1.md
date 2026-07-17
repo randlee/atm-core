@@ -41,8 +41,6 @@ This sprint is historical/accepted. It did the right early work:
 - exact evidence contract for setup and bring-up failures
 - one AG.1-only first-live-channel viability attempt that can open a finding
   but does not formally close `AG-VAL-003` or later rows
-- production inbound peer-listener fix for `AG-FIND-004`, landed in-sprint
-  after the viability attempt exposed a real daemon-to-daemon bring-up defect
 
 ## Required Validation
 
@@ -52,11 +50,6 @@ This sprint is historical/accepted. It did the right early work:
   - `AG-VAL-011`
   - AG.1 viability may exercise `AG-VAL-003` or `AG-VAL-005`, but does not
     formally close them
-- peer-listener deliverable
-  - `cargo test -p atm-daemon peer_transport -- --nocapture`
-  - `cargo test -p atm-daemon -- --nocapture`
-  - evidence artifact: retained `docs/plans/phase-AG/reports/macos-report.md`
-    entry naming PR #551 / the validation commit used for the AG.1 rerun
 
 ## Ownership
 

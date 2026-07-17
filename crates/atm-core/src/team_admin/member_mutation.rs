@@ -8,7 +8,6 @@ use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore}
 use crate::error::AtmError;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
-use crate::send::qualified_sender_identity;
 use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 use super::{filesystem, projection};
@@ -246,10 +245,7 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
     }
     extra.insert(
         "agentId".to_string(),
-        json!(qualified_sender_identity(
-            &request.member,
-            Some(&request.team)
-        )),
+        json!(format!("{}@{}", request.member, request.team)),
     );
     extra.insert(
         "joinedAt".to_string(),

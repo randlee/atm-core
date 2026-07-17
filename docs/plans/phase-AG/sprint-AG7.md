@@ -4,7 +4,7 @@ title: Live Cross-Host Revalidation
 status: planned
 branch: feature/pAG-s7-live-revalidation
 worktree: ../atm-core-worktrees/feature/pAG-s7-live-revalidation
-target: integrate/phase-AG
+target: develop
 ---
 
 # Sprint AG.7 — Live Cross-Host Revalidation

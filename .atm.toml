@@ -1,9 +1,6 @@
 [atm]
 default_team = "atm-dev"
 
-[daemon]
-peer_listen_addr = "0.0.0.0:43101"
-
 [atm.idle_notify]
 recipient = "team-lead"
 
