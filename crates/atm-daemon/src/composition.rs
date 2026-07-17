@@ -3,6 +3,7 @@ use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemO
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 mod lifecycle;
+mod peer_listener_reload;
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
@@ -16,10 +17,7 @@ use crate::{
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
-use atm_storage::{
-    AllowedHostStore, IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore,
-    PeerInterfaceKey,
-};
+use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerInterfaceKey};
 use lifecycle::{RuntimeLifecycle, RuntimeLifecycleState};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -428,84 +426,6 @@ impl RuntimeComposition {
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         self.peer_transport_runtime.shutdown()
-    }
-
-    fn refresh_peer_listeners(&self) -> Result<(), AtmError> {
-        let peer_transport_config = load_peer_transport_config(
-            self.config_current_dir.clone(),
-            &self.config_ingress,
-            &self.composition_observability,
-        )?;
-        let rows = self
-            .peer_interface_config_store
-            .list_interfaces()?
-            .into_iter()
-            .filter(|row| row.enabled)
-            .map(|row| ListenerRow {
-                key: Some(
-                    PeerInterfaceKey::new(row.interface_name.clone(), row.bind_addr, row.port)
-                        .expect("persisted daemon peer interface row uses a valid key"),
-                ),
-                listen_addr: std::net::SocketAddr::new(row.bind_addr, row.port),
-            })
-            .collect::<Vec<_>>();
-        let rows = if rows.is_empty() {
-            let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
-            tracing::warn!(
-                subsystem = "composition",
-                action = "peer_listener_legacy_config_fallback",
-                outcome = "deprecated",
-                "{}",
-                detail
-            );
-            self.composition_observability.emit_or_warn(
-                "peer_listener_legacy_config_fallback",
-                "deprecated",
-                detail,
-            );
-            peer_transport_config
-                .peer_listen_addr
-                .into_iter()
-                .map(|listen_addr| ListenerRow {
-                    key: None,
-                    listen_addr,
-                })
-                .collect::<Vec<_>>()
-        } else {
-            rows
-        };
-        let outcomes = self.peer_transport_runtime.reload_listeners(
-            rows.iter().map(|row| row.listen_addr).collect(),
-            self.request_dispatcher(),
-        )?;
-        let outcome_map = outcomes
-            .into_iter()
-            .map(|outcome| (outcome.listen_addr, outcome))
-            .collect::<std::collections::BTreeMap<_, _>>();
-        let now = IsoTimestamp::now();
-        for row in rows {
-            let Some(key) = row.key else {
-                continue;
-            };
-            let Some(outcome) = outcome_map.get(&row.listen_addr) else {
-                continue;
-            };
-            self.peer_interface_config_store.record_binding_update(
-                &PeerInterfaceBindingUpdate {
-                    key,
-                    observed_at: if outcome.error_message.is_none() {
-                        Some(now)
-                    } else {
-                        None
-                    },
-                    refresh_deadline_at: None,
-                    stale_at: outcome.error_message.as_ref().map(|_| now),
-                    last_bound_at: outcome.bound_addr.map(|_| now),
-                    last_bind_error: outcome.error_message.clone(),
-                },
-            )?;
-        }
-        Ok(())
     }
 }
 

@@ -3,46 +3,36 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Map;
-use tracing::warn;
-
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
-use crate::delivery_execution::{
-    DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
-};
-use crate::delivery_plan::{
-    DeliveryPlan, delivery_plan_disposition, logical_messages_from_persistence,
-};
 use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
+use crate::observability::ObservabilityPort;
+use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
+use serde::{Deserialize, Serialize};
 
+mod context;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[expect(
-    dead_code,
-    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
-)]
-mod hook_tmux;
 pub mod input;
 #[doc(hidden)]
 pub mod nudge_template;
+mod outcome;
 mod persistence;
 pub(crate) mod summary;
 mod threading_helpers;
 
+use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
 pub(crate) use threading_helpers::prepare_threaded_message;
 
@@ -416,305 +406,6 @@ fn send_mail_with_runtime_impl<
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Y.6 closeout keeps the explicit send outcome pieces visible at the sprint seam."
-)]
-fn finalize_send_outcome<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    observability: &dyn ObservabilityPort,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-    body: &str,
-    summary: &str,
-    message_id: AtmMessageId,
-    requires_ack: bool,
-    task_id: Option<TaskId>,
-    persistence: DeliveryPersistenceResult,
-) -> Result<SendOutcome, AtmError> {
-    let command_outcome = if request.dry_run {
-        SendCommandOutcome::DryRun
-    } else {
-        SendCommandOutcome::Sent
-    };
-    let mut outcome = build_send_outcome(
-        request,
-        context,
-        body,
-        summary,
-        message_id,
-        requires_ack,
-        task_id.clone(),
-        command_outcome,
-        &persistence,
-    );
-    if !request.dry_run {
-        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
-        hook::emit_post_send_effects(
-            runtime,
-            &mut outcome.warnings,
-            context.post_send_config.as_ref(),
-            post_send_emitter,
-            &context.recipient,
-            &context.delivery_snapshot,
-            &post_send_messages,
-        );
-        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
-        emit_delivery_plan_transitions(
-            observability,
-            DeliveryTransitionContext {
-                family: context.delivery_family,
-                team: &context.recipient.team,
-                agent: &context.recipient.agent,
-                sender: &context.canonical_sender,
-                message_id,
-                task_id: task_id.clone(),
-            },
-            &plan,
-            &execution,
-        )?;
-        outcome.warnings.extend(execution.warnings);
-    }
-    emit_send_command_event(
-        observability,
-        command_outcome.as_str(),
-        &outcome,
-        task_id,
-        &context.canonical_sender,
-    );
-    Ok(outcome)
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Y.6 closeout keeps the explicit send outcome fields aligned with the command contract."
-)]
-fn build_send_outcome(
-    request: &SendRequest,
-    context: &SendExecutionContext,
-    body: &str,
-    summary: &str,
-    message_id: AtmMessageId,
-    requires_ack: bool,
-    task_id: Option<TaskId>,
-    command_outcome: SendCommandOutcome,
-    persistence: &DeliveryPersistenceResult,
-) -> SendOutcome {
-    let mut outcome = SendOutcome {
-        action: CommandAction::Send,
-        team: context.recipient.team.clone(),
-        agent: context.recipient.agent.clone(),
-        sender: context.canonical_sender.clone(),
-        outcome: command_outcome,
-        message_id,
-        requires_ack,
-        task_id,
-        summary: Some(summary.to_string()),
-        message: request.dry_run.then_some(body.to_string()),
-        warnings: context.warnings.clone(),
-        dry_run: request.dry_run,
-    };
-    outcome
-        .warnings
-        .extend(persistence.warnings.iter().cloned());
-    outcome
-}
-
-fn build_send_delivery_plan(
-    context: &SendExecutionContext,
-    requires_ack: bool,
-    persistence: &DeliveryPersistenceResult,
-) -> Result<DeliveryPlan, AtmError> {
-    Ok(DeliveryPlan::new(
-        crate::delivery_plan::DeliveryPlanKind::Send,
-        delivery_plan_disposition(persistence.disposition),
-        crate::delivery_plan::delivery_target_for_snapshot(
-            &context.inbox_path,
-            &context.delivery_snapshot,
-        ),
-        context.recipient.clone(),
-        logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
-                )
-            })?,
-        persistence.warnings.clone(),
-    ))
-}
-
-fn post_send_messages_from_persistence(
-    persistence: &DeliveryPersistenceResult,
-    requires_ack: bool,
-) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
-    crate::delivery_plan::LogicalMessage::new(
-        persistence.original_message.clone(),
-        requires_ack,
-        false,
-    )
-    .map(|message| vec![message])
-    .map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted delivery record shape before retrying post-send emission.",
-        )
-    })
-}
-
-struct SendExecutionContext {
-    command_config: Option<config::AtmConfig>,
-    post_send_config: Option<config::AtmConfig>,
-    recipient: ResolvedRecipient,
-    canonical_sender: AgentName,
-    inbox_path: PathBuf,
-    delivery_snapshot: DeliveryRecipientSnapshot,
-    delivery_family: DeliveryEventFamily,
-    warnings: Vec<WarningEntry>,
-}
-
-fn prepare_send_context<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    request: &SendRequest,
-) -> Result<SendExecutionContext, AtmError> {
-    let command_config = runtime.load_config(&request.current_dir)?;
-    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
-        runtime,
-        &request.caller_team,
-        &request.caller_identity,
-    ) {
-        Ok(config) => (config, Vec::new()),
-        Err(error) => (
-            None,
-            vec![WarningEntry::with_code(
-                error.code,
-                format!(
-                    "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
-                ),
-                error.primary_recovery().map(str::to_owned),
-            )],
-        ),
-    };
-    let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
-    if request.remote_host.is_none() {
-        validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
-    }
-    let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let delivery_policy = DeliveryPolicyCoordinator::new();
-    let delivery_snapshot =
-        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
-    let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
-        request.parent_message_id,
-        request.thread_mode,
-    );
-    Ok(SendExecutionContext {
-        command_config,
-        post_send_config,
-        recipient,
-        canonical_sender,
-        inbox_path,
-        delivery_snapshot,
-        delivery_family,
-        warnings,
-    })
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Send persistence needs the explicit request/body/message envelope fields documented in the Y.4 state-machine seam."
-)]
-fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-    body: &str,
-    summary: &str,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
-    requires_ack: bool,
-    task_id: Option<TaskId>,
-) -> Result<DeliveryPersistenceResult, AtmError> {
-    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
-    if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
-            from: context.canonical_sender.clone(),
-            text: body.to_string(),
-            timestamp,
-            read: false,
-            source_team: Some(request.caller_team.clone()),
-            summary: Some(summary.to_string()),
-            message_id: Some(message_id),
-            requires_ack: ack_intent.requires_ack,
-            pending_ack_at: ack_intent.pending_ack_at,
-            acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
-            parent_message_id: request.parent_message_id,
-            thread_mode: request.thread_mode,
-            expires_at: request.expires_at,
-            task_id: task_id.clone(),
-            extra: Map::new(),
-        }));
-    }
-    let envelope = InboxMessage {
-        from: context.canonical_sender.clone(),
-        text: body.to_string(),
-        timestamp,
-        read: false,
-        source_team: Some(request.caller_team.clone()),
-        summary: Some(summary.to_string()),
-        message_id: Some(message_id),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: request.parent_message_id,
-        thread_mode: request.thread_mode,
-        expires_at: request.expires_at,
-        task_id: task_id.clone(),
-        extra: Map::new(),
-    };
-    let persistence = persist_message(
-        runtime,
-        &request.home_dir,
-        &context.delivery_snapshot,
-        &context.inbox_path,
-        &envelope,
-        false,
-    )?;
-    Ok(persistence)
-}
-
-fn emit_send_command_event(
-    observability: &dyn ObservabilityPort,
-    outcome_name: &'static str,
-    outcome: &SendOutcome,
-    task_id: Option<TaskId>,
-    canonical_sender: &AgentName,
-) {
-    if let Err(error) = observability.emit(CommandEvent {
-        command: "send",
-        action: action_name("send"),
-        outcome: outcome_label(outcome_name),
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
-        sender: canonical_sender.clone(),
-        message_id: Some(outcome.message_id),
-        requires_ack: outcome.requires_ack,
-        dry_run: outcome.dry_run,
-        task_id,
-        error_code: None,
-        error_message: None,
-    }) {
-        warn!(%error, command = "send", action = "send", "failed to emit send command event");
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
@@ -814,7 +505,13 @@ pub(super) fn qualified_sender_identity(
     sender_team: Option<&TeamName>,
 ) -> String {
     sender_team
-        .map(|team| format!("{sender}@{team}"))
+        .map(|team| {
+            AgentAddress {
+                agent: sender.clone(),
+                team: Some(team.clone()),
+            }
+            .to_string()
+        })
         .unwrap_or_else(|| sender.to_string())
 }
 
