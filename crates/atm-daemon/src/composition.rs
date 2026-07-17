@@ -1,4 +1,3 @@
-use crate::boundary_adapters::DaemonConfigIngress;
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
@@ -14,7 +13,7 @@ use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     peer_transport::PeerTransportConfig,
 };
-use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
+use atm_core::boundary::{RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerInterfaceKey};
@@ -41,8 +40,6 @@ pub(crate) struct RuntimeComposition {
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
     peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
-    config_ingress: DaemonConfigIngress,
-    config_current_dir: PathBuf,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -61,8 +58,6 @@ impl std::fmt::Debug for RuntimeComposition {
                 "peer_interface_config_store",
                 &"dyn PeerInterfaceConfigStore",
             )
-            .field("config_ingress", &self.config_ingress)
-            .field("config_current_dir", &self.config_current_dir)
             .field("peer_transport_runtime", &self.peer_transport_runtime)
             .finish()
     }
@@ -117,10 +112,9 @@ impl RuntimeComposition {
     fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        current_dir: PathBuf,
+        _current_dir: PathBuf,
         runtime_assembly: RuntimeAssembly,
     ) -> Result<Self, AtmError> {
-        let config_ingress = DaemonConfigIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         // Runtime status snapshots are read on the hot doctor/status path, so
@@ -129,11 +123,6 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let peer_transport_config = load_peer_transport_config(
-            current_dir.clone(),
-            &config_ingress,
-            &composition_observability,
-        )?;
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
@@ -142,7 +131,7 @@ impl RuntimeComposition {
             runtime_assembly.remote_replay_store.clone(),
             runtime_assembly.allowed_host_store.clone(),
             runtime_assembly.peer_security_store.clone(),
-            peer_transport_config,
+            PeerTransportConfig::default(),
             observability.clone(),
             status_cache.clone(),
         );
@@ -164,8 +153,6 @@ impl RuntimeComposition {
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
             peer_interface_config_store: runtime_assembly.peer_interface_config_store,
-            config_ingress,
-            config_current_dir: current_dir,
             peer_transport_runtime,
         })
     }
@@ -498,30 +485,6 @@ fn replay_store_assembly_failed(
         "Restore the host-scoped ATM SQLite replay store before starting atm-daemon so the required bounded replay-resume sweep can run.",
     )
     .with_source(error)
-}
-
-fn load_peer_transport_config(
-    current_dir: PathBuf,
-    config_ingress: &DaemonConfigIngress,
-    observability: &SubsystemObservability,
-) -> Result<PeerTransportConfig, AtmError> {
-    let config = config_ingress
-        .load_config(ConfigLoadRequest { current_dir })
-        .inspect_err(|_| {
-            observability.emit_or_warn(
-                "peer_transport_config_load",
-                "failed",
-                "daemon startup could not load peer transport config through ConfigIngress",
-            );
-        })?
-        .config;
-    PeerTransportConfig::from_config(config.as_ref()).inspect_err(|_| {
-        observability.emit_or_warn(
-            "peer_transport_config_validation",
-            "failed",
-            "daemon startup rejected invalid peer transport configuration",
-        );
-    })
 }
 
 fn build_request_dispatcher(
@@ -916,83 +879,12 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
-    fn runtime_composition_fails_closed_when_peer_transport_config_is_invalid() {
+    fn durable_peer_interface_rows_refresh_without_legacy_fallback_warning() {
         let tempdir = TempDir::new().expect("tempdir");
         let workspace_dir = tempdir.path().join("workspace");
         let home_dir = tempdir.path().join("atm-home");
         std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
         std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\nremote_retry_budget = \"100ms\"\n",
-        )
-        .expect("invalid config");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
-
-        let result = RuntimeComposition::new(home_dir.clone());
-
-        let error = result.expect_err("invalid peer transport config should fail closed");
-        assert_eq!(
-            error.code,
-            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
-        );
-        assert!(
-            error
-                .primary_recovery()
-                .expect("recovery guidance")
-                .contains("valid target or argument"),
-            "{error}"
-        );
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn legacy_peer_listen_addr_fallback_emits_deprecation_warning() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let workspace_dir = tempdir.path().join("workspace");
-        let home_dir = tempdir.path().join("atm-home");
-        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-        std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\npeer_listen_addr = \"127.0.0.1:43121\"\n",
-        )
-        .expect("legacy config");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
-
-        let runtime = RuntimeComposition::new(home_dir.clone()).expect("runtime");
-        runtime
-            .refresh_peer_listeners()
-            .expect("refresh peer listeners with legacy fallback");
-
-        let retained_log_path =
-            atm_core::home::host_log_dir_from_home(&home_dir).join("atm.log.jsonl");
-        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
-        assert!(
-            retained_log.contains("legacy daemon peer_listen_addr fallback is deprecated"),
-            "{retained_log}"
-        );
-        assert!(
-            retained_log.contains("peer_listener_legacy_config_fallback"),
-            "{retained_log}"
-        );
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn durable_peer_interface_rows_do_not_emit_legacy_fallback_warning() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let workspace_dir = tempdir.path().join("workspace");
-        let home_dir = tempdir.path().join("atm-home");
-        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-        std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\npeer_listen_addr = \"127.0.0.1:43122\"\n",
-        )
-        .expect("legacy config also present");
         let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
 

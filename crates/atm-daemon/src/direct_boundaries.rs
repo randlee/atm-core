@@ -1,10 +1,7 @@
 #[cfg(test)]
 use atm_core::boundary::MessageFingerprint;
-use atm_core::{
-    boundary::{ConfigLoadRequest, ConfigLoadResponse},
-    error::AtmError,
-    load_atm_config,
-};
+#[cfg(test)]
+use atm_core::error::AtmError;
 #[cfg(test)]
 use atm_storage::{AgentName, MessageEnvelope, TeamName};
 #[cfg(test)]
@@ -12,14 +9,6 @@ use std::path::Path;
 
 #[cfg(test)]
 use crate::claude_compat::SourceFileRecord;
-
-pub(crate) fn load_workspace_config(
-    request: ConfigLoadRequest,
-) -> Result<ConfigLoadResponse, AtmError> {
-    Ok(ConfigLoadResponse {
-        config: load_atm_config(&request.current_dir)?,
-    })
-}
 
 #[cfg(test)]
 pub(crate) fn import_inbox_source(
