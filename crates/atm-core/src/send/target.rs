@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::path::Path;
 
 use crate::address::AgentAddress;
@@ -11,6 +12,42 @@ use super::{SendMessageSource, file_policy, input};
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct PeerLoopbackHost(String);
+
+impl PeerLoopbackHost {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("loopback host must not be empty").with_recovery(
+                "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
+            ));
+        }
+        if trimmed.eq_ignore_ascii_case("localhost") || trimmed.parse::<IpAddr>().is_ok() {
+            return Ok(Self(trimmed.to_string()));
+        }
+        Err(AtmError::address_parse(format!(
+            "unsupported loopback host `{trimmed}`; expected `localhost` or a literal IP address"
+        ))
+        .with_recovery(
+            "Use `loopback@localhost` or `loopback@<literal-ip>` before retrying the loopback send.",
+        ))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn parse_cli_target(raw_target: &str) -> Option<Result<Self, AtmError>> {
+        let (agent, host) = raw_target.trim().split_once('@')?;
+        if !agent.eq_ignore_ascii_case("loopback") {
+            return None;
+        }
+        Some(Self::parse(host))
+    }
 }
 
 pub(crate) fn validate_non_self_recipient(
@@ -70,10 +107,7 @@ pub(crate) fn resolve_message_body(
     }
 }
 
-pub(crate) fn qualified_sender_identity(
-    sender: &AgentName,
-    sender_team: Option<&TeamName>,
-) -> String {
+pub fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&TeamName>) -> String {
     sender_team
         .map(|team| {
             AgentAddress {
