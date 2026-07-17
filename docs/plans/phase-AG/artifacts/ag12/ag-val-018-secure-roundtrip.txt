@@ -1,0 +1,65 @@
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-sender target/debug/atm daemon security identity --json
+{
+  "fingerprint_sha256": "55e41b63751ac5feca34694188a8421dad67f3cfcc4a49b1e102ccb0fec3b72d"
+}
+
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-sender target/debug/atm daemon security trust approve 127.0.0.1 --fingerprint <self-fingerprint> --display-name "AG12 localhost self trust" --json
+{
+  "row": {
+    "host_name": "127.0.0.1",
+    "fingerprint_sha256": "55e41b63751ac5feca34694188a8421dad67f3cfcc4a49b1e102ccb0fec3b72d",
+    "display_name": "AG12 localhost self trust",
+    "approved_by": "ag12-sender@ag12-localhost-proof-r2",
+    "approved_at": "2026-07-17T06:21:55.979939Z",
+    "updated_at": "2026-07-17T06:21:55.979939Z"
+  }
+}
+
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-sender target/debug/atm daemon security mode secure-required --json
+{
+  "mode": "secure-required",
+  "updated_by": "ag12-sender@ag12-localhost-proof-r2",
+  "updated_at": "2026-07-17T06:21:55.991032Z"
+}
+
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-sender target/debug/atm send ag12-receiver@ag12-localhost-proof-r2.localhost "hello secure localhost" --json
+{
+  "action": "send",
+  "team": "ag12-localhost-proof-r2",
+  "agent": "ag12-receiver",
+  "sender": "ag12-sender",
+  "outcome": "sent",
+  "message_id": "01KXQBT7YPZXR13JKF35FMHAJP",
+  "requires_ack": false,
+  "summary": "hello secure localhost"
+}
+
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-receiver target/debug/atm read --team ag12-localhost-proof-r2 --all --json
+{
+  "action": "read",
+  "team": "ag12-localhost-proof-r2",
+  "agent": "ag12-receiver",
+  "selection_mode": "all",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "history",
+    "class": "read",
+    "from": "ag12-sender",
+    "text": "hello secure localhost",
+    "timestamp": "2026-07-17T06:21:56.054061Z",
+    "read": true,
+    "source_team": "ag12-localhost-proof-r2",
+    "summary": "hello secure localhost",
+    "message_id": "01KXQBT7YPZXR13JKF35FMHAJP",
+    "requires_ack": false
+  },
+  "selected_message_id": "01KXQBT7YPZXR13JKF35FMHAJP",
+  "match_count": 4,
+  "additional_match_count": 3,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 1,
+    "history": 3
+  }
+}

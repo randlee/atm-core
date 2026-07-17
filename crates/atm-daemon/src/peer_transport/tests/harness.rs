@@ -428,3 +428,15 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
         .shutdown()
         .expect("shutdown peer listener");
 }
+
+#[test]
+#[serial_test::serial(env)]
+fn localhost_remote_target_notification_degradation_is_classified_without_failing_delivery() {
+    local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades();
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() {
+    local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry();
+}
