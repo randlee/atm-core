@@ -10,7 +10,6 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -30,16 +29,18 @@ mod persistence;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
+mod warning;
 
 use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
+pub use target::{PeerLoopbackHost, qualified_sender_identity};
 pub(crate) use target::{
-    ResolvedRecipient, qualified_sender_identity, resolve_message_body, resolve_recipient,
-    validate_non_self_recipient,
+    ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
 };
 pub(crate) use threading_helpers::prepare_threaded_message;
+pub use warning::WarningEntry;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -188,7 +189,6 @@ fn validate_send_target_segment(value: &str, kind: &str) -> Result<(), AtmError>
     }
     Ok(())
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
     pub home_dir: PathBuf,
@@ -275,50 +275,6 @@ impl SendCommandOutcome {
         match self {
             Self::Sent => "sent",
             Self::DryRun => "dry_run",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WarningEntry {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
-}
-
-impl WarningEntry {
-    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn with_code(
-        code: AtmErrorCode,
-        message: impl Into<String>,
-        recovery: Option<impl Into<String>>,
-    ) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn render(&self) -> String {
-        let message = match self.code {
-            Some(code) if !self.message.contains(code.as_str()) => {
-                format!("{} [{}]", self.message, code.as_str())
-            }
-            _ => self.message.clone(),
-        };
-        match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
-            None => message,
         }
     }
 }
