@@ -96,7 +96,12 @@ impl DaemonCrossHostDelivery {
         remote_host: &RemoteTargetHost,
     ) -> Result<SocketAddr, CrossHostDeliveryInfraError> {
         let port = self.resolve_remote_port()?;
-        (remote_host.as_str(), port)
+        let preferred_family = self
+            .peer_transport_runtime
+            .bound_addr()
+            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?
+            .map(|addr| addr.is_ipv4());
+        let resolved = (remote_host.as_str(), port)
             .to_socket_addrs()
             .map_err(|source| {
                 CrossHostDeliveryInfraError::RuntimeUnavailable(
@@ -111,7 +116,8 @@ impl DaemonCrossHostDelivery {
                     .with_source(source),
                 )
             })?
-            .next()
+            .collect::<Vec<_>>();
+        select_resolved_remote_endpoint(&resolved, preferred_family)
             .ok_or_else(|| {
                 CrossHostDeliveryInfraError::RuntimeUnavailable(
                     AtmError::address_parse(format!(
@@ -179,6 +185,20 @@ impl DaemonCrossHostDelivery {
     }
 }
 
+fn select_resolved_remote_endpoint(
+    resolved: &[SocketAddr],
+    preferred_ipv4: Option<bool>,
+) -> Option<SocketAddr> {
+    preferred_ipv4
+        .and_then(|is_ipv4| {
+            resolved
+                .iter()
+                .copied()
+                .find(|addr| addr.is_ipv4() == is_ipv4)
+        })
+        .or_else(|| resolved.first().copied())
+}
+
 impl boundary::sealed::Sealed for DaemonCrossHostDelivery {}
 
 impl CrossHostDelivery for DaemonCrossHostDelivery {
@@ -200,5 +220,40 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                 .map(SendOutcome::Delivered)
                 .or_else(|error| Ok(Self::classify_error(&error))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_resolved_remote_endpoint;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+
+    #[test]
+    fn select_resolved_remote_endpoint_prefers_matching_listener_family() {
+        let resolved = vec![
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 43101),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 43101),
+        ];
+        assert_eq!(
+            select_resolved_remote_endpoint(&resolved, Some(true)),
+            Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 43101))
+        );
+        assert_eq!(
+            select_resolved_remote_endpoint(&resolved, Some(false)),
+            Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 43101))
+        );
+    }
+
+    #[test]
+    fn select_resolved_remote_endpoint_falls_back_to_first_when_no_preference_matches() {
+        let resolved = vec![SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 43101)];
+        assert_eq!(
+            select_resolved_remote_endpoint(&resolved, Some(true)),
+            Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 43101))
+        );
+        assert_eq!(
+            select_resolved_remote_endpoint(&resolved, None),
+            Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 43101))
+        );
     }
 }
