@@ -221,6 +221,7 @@ fn build_cross_host_findings(
     interfaces: &[CrossHostInterfaceDoctorRow],
     enabled_allowlist_count: usize,
 ) -> Vec<DoctorFinding> {
+    let cross_host_unused = !legacy_fallback_active && !has_enabled_interface_rows;
     let mut findings = cross_host_listener_findings(
         legacy_fallback_active,
         has_enabled_interface_rows,
@@ -229,7 +230,11 @@ fn build_cross_host_findings(
     findings.extend(cross_host_degraded_bind_findings(interfaces));
     if enabled_allowlist_count == 0 {
         findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
+            severity: if cross_host_unused {
+                DoctorSeverity::Info
+            } else {
+                DoctorSeverity::Warning
+            },
             code: AtmErrorCode::WarningCrossHostAllowlistEmpty,
             message: "cross-host host authorization is enforced but no enabled daemon allowed-host rows exist".to_string(),
             remediation: Some(
@@ -264,7 +269,7 @@ fn cross_host_listener_findings(
         return Vec::new();
     }
     vec![DoctorFinding {
-        severity: DoctorSeverity::Warning,
+        severity: DoctorSeverity::Info,
         code: AtmErrorCode::WarningCrossHostListenerUnconfigured,
         message: "no enabled daemon interface rows are configured for cross-host listener binding"
             .to_string(),
