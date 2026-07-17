@@ -12,7 +12,7 @@ use atm_core::{
     send::{SendRequest, send_mail_with_runtime_and_post_send_emitter},
 };
 
-use crate::peer_transport::delivery::{RemoteFailureKind, SendOutcome as RemoteSendOutcome};
+use crate::peer_transport::delivery::SendOutcome as RemoteSendOutcome;
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
@@ -86,9 +86,7 @@ impl DaemonRequestDispatcher {
             .with_recovery(
                 "Verify the daemon interface rows and remote host reachability, then retry the remote send after the cross-host path is healthy.",
             )),
-            Ok(RemoteSendOutcome::RejectedTerminal(kind)) => Err(
-                remote_failure_kind_error(kind)
-            ),
+            Ok(RemoteSendOutcome::RejectedTerminal(error)) => Err(error),
             Ok(RemoteSendOutcome::OutcomeUnknown) => Err(AtmError::daemon_unavailable(
                 "remote delivery outcome is unknown",
             )
@@ -114,21 +112,5 @@ impl DaemonRequestDispatcher {
             daemon_release,
             code: atm_core::error_codes::AtmErrorCode::ClientDaemonVersionIncompatible,
         })
-    }
-}
-
-fn remote_failure_kind_error(kind: RemoteFailureKind) -> AtmError {
-    match kind {
-        RemoteFailureKind::TerminalProtocolRejected => AtmError::validation(
-            "remote daemon rejected the cross-host request protocol".to_string(),
-        )
-        .with_recovery(
-            "Align the sender and receiver daemon protocol versions before retrying.",
-        ),
-        RemoteFailureKind::TerminalMalformedTarget => {
-            AtmError::address_parse("remote target is malformed").with_recovery(
-                "Use `atm send <agent>@<team>.<host> ...` or `atm send <agent>@<team> --host <host> ...` with a valid host token before retrying.",
-            )
-        }
     }
 }
