@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE" ;
+  triage:title "AG-VAL-020 claims self-IP proof for all 6 functional-matrix items but 2 of 6 remain loopback-only" ;
+  triage:description "docs/plans/phase-AG/artifacts/ag13/ag-val-020-selfip-success.txt (regenerated in AG.13 Group 4, timestamped Fri Jul 17 2026) lists 4 'named proof points' as evidence the self-IP conversion covers the full functional matrix, and its narrative claims 'the AG.13 notification-classification and retry-visible-recovery proofs stay green after the self-IP conversion.' This is a mischaracterization of the same class as the original B5/B6 findings: of the 4 named proof points, only 2 (crates/atm-daemon/src/tests/runtime_root/self_ip.rs::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state and crates/atm-daemon/src/peer_transport/delivery.rs::resolve_remote_port_prefers_matching_interface_row_for_literal_self_ip) exercise the real non-loopback self-IP fixture (192.0.0.2). The other 2 named proof points -- notification classification and retry-visible recovery -- are the functions localhost_remote_target_notification_degradation_is_classified_without_failing_delivery (crates/atm-daemon/src/peer_transport/tests/harness.rs:434) and localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable (crates/atm-daemon/src/peer_transport/tests/harness.rs:557), both of which construct their listener/remote-target endpoints via Ipv4Addr::LOCALHOST (harness.rs:470 and harness.rs:584/605/606/617 respectively) -- i.e. still loopback-only, not self-IP. The AG-VAL-020 evidence file conflates 'self-IP conversion landed for the dispatch path' with 'all 6 functional-matrix items now have self-IP proof,' which is false for these 2 of 6 items. Genuine evidence exists (harness.rs tests really run and pass), but the checklist/evidence-file claim of full self-IP coverage across the functional matrix is not supported for the notification-classification and retry-visible-recovery items." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "documentation-accuracy" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/ag-val-020/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/notification/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/notification/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/retry/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/retry/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:notes "New finding surfaced at AG13-QA-3 recheck of commit 1791f5ab. Same mischaracterization class as B5/B6: genuine test evidence exists, but the checklist/evidence-file claim of full self-IP coverage across all 6 functional-matrix items overstates what was actually converted. 2 of 6 items (notification classification, retry-visible recovery) remain proven only against Ipv4Addr::LOCALHOST in harness.rs, not the host's real non-loopback self-IP (192.0.0.2) used by the self_ip.rs dispatcher tests. Fix requires either (a) converting these 2 harness.rs tests to use the same non-loopback self-IP fixture as self_ip.rs, or (b) correcting AG-VAL-020's evidence file and the smoke checklist to accurately scope the claim to the 4 items actually proven against self-IP." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/ag-val-020/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/artifacts/ag13/ag-val-020-selfip-success.txt" ;
+  triage:line 1 ;
+  triage:snippet "Claims 'the AG.13 notification-classification and retry-visible-recovery proofs stay green after the self-IP conversion' and lists both harness.rs functions as named proof points, overstating self-IP coverage for 2 of 6 functional-matrix items" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/notification/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 434 ;
+  triage:snippet "fn localhost_remote_target_notification_degradation_is_classified_without_failing_delivery() [named as a self-IP proof point in AG-VAL-020 but uses loopback fixtures]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/notification/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 470 ;
+  triage:snippet "SocketAddr::from((Ipv4Addr::LOCALHOST, 0)) [listener bound to loopback inside the notification-classification test, not the real self-IP]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/retry/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 557 ;
+  triage:snippet "fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() [named as a self-IP proof point in AG-VAL-020 but uses loopback fixtures]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B9-SELFIP-PARTIAL-COVERAGE/harness/retry/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 584 ;
+  triage:snippet "TcpListener::bind((Ipv4Addr::LOCALHOST, 0)) at 584, plus Ipv4Addr::LOCALHOST.into() at 605/606/617 [retry-visible-recovery test still built entirely on loopback endpoints/PeerInterfaceKey]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:worktree/pAG-s13/1791f5ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:orderIndex 13 .

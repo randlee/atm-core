@@ -14,38 +14,45 @@
   triage:severity "blocking" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/sprint-AG13/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/readiness/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
-  triage:notes "Process/documentation-accuracy issue. Entry Gate in sprint-AG13.md falsely claims AG.12 closure is complete, but readiness.md explicitly gates both AG.12 and AG.13 pending AG.11 landing. Both AG.11 and AG.12 remain unlanded with FAILED QA-1 verdicts. This compounds the ARCH-003/ARCH-004 pattern from AG.12 (building ahead of AG.11) one level deeper (AG.13 building ahead of AG.12, which itself never landed ahead of AG.11). Team-lead should consider whether this warrants attention independent of any held-findings convention. This is a blocking process violation that undermines plan integrity across three consecutive phases." .
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:notes "Process/documentation-accuracy issue. Entry Gate in sprint-AG13.md falsely claims AG.12 closure is complete, but readiness.md explicitly gates both AG.12 and AG.13 pending AG.11 landing. Both AG.11 and AG.12 remain unlanded with FAILED QA-1 verdicts. This compounds the ARCH-003/ARCH-004 pattern from AG.12 (building ahead of AG.11) one level deeper (AG.13 building ahead of AG.12, which itself never landed ahead of AG.11). Team-lead should consider whether this warrants attention independent of any held-findings convention. This is a blocking process violation that undermines plan integrity across three consecutive phases. STILL OPEN at AG13-QA-3 (commit 1791f5ab): AG13-FIX-1 Group 2 corrected the sprint-AG13.md Entry Gate wording, but readiness.md was never touched -- as of this recheck, readiness.md line 37 shows AG.11 as PASS, but line 38 still shows AG.12 as PENDING/TBD ('localhost full-function same-host remote-target proof not yet executed') and line 39 still shows AG.13 as PENDING/TBD ('self-IP full-function same-host proof not yet executed'), despite AG.13 now being 3 QA rounds deep with real code landed (commits 6d2afb4c, 8ce2f9ea, 1791f5ab). The gate criteria at lines 64-65 ('AG.12 does not begin until AG.11 lands' / 'AG.13 does not begin until AG.12 lands') remain violated in the tracked readiness state itself -- this is a live process-gate violation, not merely a stale wording issue, since readiness.md is the authoritative gate record and it has never been updated on this branch." .
 
 <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/sprint-AG13/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG13.md" ;
   triage:line 81 ;
-  triage:snippet "Entry Gate section claims \"AG.12 localhost remote-target closure is complete\" (lines 81-83)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Entry Gate section claims \"AG.12 localhost remote-target closure is complete\" (lines 81-83) -- wording corrected in AG13-FIX-1 Group 2, retained here for history" ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "6d2afb4c" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
 
 <urn:atm:triage:occurrence/AG13-FIND-B4-ENTRY-GATE-SEQUENCING/readiness/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/readiness.md" ;
   triage:line 37 ;
-  triage:snippet "Gate criteria: \"AG.12 does not begin until AG.11 lands\" / \"AG.13 does not begin until AG.12 lands\" (lines 37-39, 64-68) -- both violated" ;
+  triage:snippet "readiness.md line 37: AG.11 PASS; line 38: AG.12 still PENDING/TBD ('localhost full-function same-host remote-target proof not yet executed'); line 39: AG.13 still PENDING/TBD ('self-IP full-function same-host proof not yet executed'); lines 64-65 gate criteria ('AG.12 does not begin until AG.11 lands' / 'AG.13 does not begin until AG.12 lands') -- both violated and never corrected on this branch despite AG.13 being 3 QA rounds deep with real code landed" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "6d2afb4c" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
 
 <urn:atm:triage:worktree/pAG-s13/6d2afb4c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/pAG-s13/1791f5ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
   triage:orderIndex 13 .
