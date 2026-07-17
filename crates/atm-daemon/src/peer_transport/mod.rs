@@ -16,7 +16,6 @@ use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::AtmMessageId;
-use atm_core::send::RemoteDeliveryReceiptStatus;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecurityStore};
 
@@ -44,7 +43,8 @@ use config_helpers::{
     remote_replay_store_not_configured_error, remote_retry_budget_expiry_error,
 };
 use replay_persistence::{
-    finalize_replay_receipt, persist_outcome_unknown_request, replay_error_is_terminal,
+    complete_replay_record, expire_replay_record, fail_replay_record_terminal,
+    persist_outcome_unknown_request, replay_error_is_terminal, retain_replay_record,
 };
 use security::load_peer_security_mode;
 use server::PeerServerTransport;
@@ -269,75 +269,37 @@ impl PeerClientTransport {
         let now = IsoTimestamp::now();
         for mut record in records {
             if record.expires_at <= now {
-                if finalize_replay_receipt(
-                    &record,
-                    RemoteDeliveryReceiptStatus::Failed,
-                    "ATM failed deferred remote delivery because the bounded retry window expired before the remote daemon accepted the message.",
-                )? {
+                if expire_replay_record(replay_store.as_ref(), &record)? {
                     receipt_updates = receipt_updates.saturating_add(1);
                 }
-                replay_store.delete(&record.team, &record.agent, &record.message_key)?;
                 purged_expired = purged_expired.saturating_add(1);
                 continue;
             }
             match self.send_to_endpoint(record.peer_addr, record.request.clone()) {
                 Ok(_) => {
-                    if finalize_replay_receipt(
-                        &record,
-                        RemoteDeliveryReceiptStatus::Delivered,
-                        "ATM delivered the deferred remote message after replay resumed and the remote daemon accepted it.",
-                    )? {
+                    if complete_replay_record(replay_store.as_ref(), &self.observability, &record)?
+                    {
                         receipt_updates = receipt_updates.saturating_add(1);
                     }
-                    replay_store.delete(&record.team, &record.agent, &record.message_key)?;
-                    tracing::info!(
-                        message_key = %record.message_key,
-                        peer_addr = %record.peer_addr,
-                        replay_attempt_count = record.attempt_count,
-                        "daemon remote replay delivered successfully"
-                    );
-                    self.observability.emit_or_warn(
-                        "resume_pending_replay",
-                        "ok",
-                        "daemon remote replay delivered a retained record",
-                    );
                     delivered += 1;
                 }
                 Err(error) => {
                     if replay_error_is_terminal(&error) {
-                        if finalize_replay_receipt(
+                        if fail_replay_record_terminal(
+                            replay_store.as_ref(),
                             &record,
-                            RemoteDeliveryReceiptStatus::Failed,
-                            &format!(
-                                "ATM failed deferred remote delivery because the remote peer returned a terminal error: {}",
-                                error.message
-                            ),
+                            &error.message,
                         )? {
                             receipt_updates = receipt_updates.saturating_add(1);
                         }
-                        replay_store.delete(&record.team, &record.agent, &record.message_key)?;
                         continue;
                     }
-                    record.attempt_count = record.attempt_count.saturating_add(1);
-                    record.last_attempt_at = Some(IsoTimestamp::now());
-                    record.last_error = Some(error.code);
-                    tracing::warn!(
-                        subsystem = "peer_transport",
-                        action = "resume_replay",
-                        outcome = "skipped",
-                        message_key = %record.message_key,
-                        peer_addr = %record.peer_addr,
-                        replay_attempt_count = record.attempt_count,
-                        error_code = %error.code,
-                        error_message = %error.message,
-                        "daemon remote replay delivery attempt failed; retaining record"
-                    );
-                    self.observability.emit_or_warn(
-                        "resume_pending_replay",
-                        "degraded",
-                        "daemon remote replay delivery failed and retained the record for retry",
-                    );
-                    replay_store.enqueue(record)?;
+                    retain_replay_record(
+                        replay_store.as_ref(),
+                        &self.observability,
+                        &mut record,
+                        &error,
+                    )?;
                     retained += 1;
                 }
             }

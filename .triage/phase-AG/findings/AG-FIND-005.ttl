@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/AG-FIND-005>
   a triage:Finding ;
   triage:findingId "AG-FIND-005" ;
-  triage:title "Ordinary cross-host atm send never routes through peer_transport_runtime in production" ;
-  triage:description "An ordinary `atm send <agent@team>` to a remote host never invokes peer_transport_runtime. RequestEnvelope::Send dispatch only special-cases peer_loopback_host.is_some() -> dispatch_loopback_send; ordinary branch calls send_mail_with_runtime_and_post_send_emitter and never touches self.peer_transport_runtime. prepare_send_context resolves recipients as local mailbox lookups. composition.rs only assembles peer_transport_runtime for listener/replay lifecycle, never send dispatch." ;
+  triage:title "Corrective cross-host dispatch is implemented, but the validation ladder is still incomplete" ;
+  triage:description "The original defect was that ordinary host-qualified `atm send` could bypass peer transport and mutate the local mailbox path. AG.11 landed the typed remote-target contract and production cross-host dispatch boundary; AG.13 Group 1 extends that branch with immediate-wait/deferred-replay result handling. The remaining open work on this finding is validation closure, not the original missing dispatch branch: localhost proof, self-IP proof, automated integration coverage, and second-host smoke still need to complete before the finding can close phase-wide." ;
   triage:phaseId "phase-AG" ;
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
@@ -34,7 +34,7 @@
   triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
   triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
-  triage:notes "USER MANDATE: Any eventual fix must be fully isolated behind a trait or small set of traits for remote-send routing, must NOT spread through daemon code generally, and must NOT touch crates it doesn't belong in. This finding is explicitly deferred to a dedicated future sprint and must NOT be dispatched in this batch regardless of dispatch_ready computation. Fix dispatch is blocked pending user authorization for a dedicated future fix sprint." .
+  triage:notes "AG.11 plus AG.13 Group 1 removed the original production dispatch gap on the corrective line. The finding remains open only because the post-AG.11 validation ladder is still incomplete. USER MANDATE remains: remote-send routing stays behind a tight trait boundary and must not leak general socket logic into unrelated daemon code." .
 
 <urn:atm:triage:occurrence/AG-FIND-005/cross-host-communication/1>
   a triage:Occurrence ;
@@ -128,11 +128,11 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 73 ;
-  triage:snippet "send_mail_with_runtime_and_post_send_emitter(request, ...) [ordinary Send dispatch never routes through peer_transport_runtime]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "dispatch_compose_send routes non-empty request.remote_host through cross_host_delivery.deliver_remote and returns deferred receipt state instead of mutating the local mailbox path" ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "6d2afb4c" ;
+  triage:headSha "8ce2f9ea" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
 
 <urn:atm:triage:worktree/cross-host-communication/8841e870>
