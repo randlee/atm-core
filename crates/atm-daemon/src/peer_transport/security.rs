@@ -50,11 +50,6 @@ pub(super) fn open_client_tls_stream(
         ClientConnection::new(Arc::new(client_config), server_name).map_err(rustls_config_error)?;
     let mut tls = StreamOwned::new(connection, stream);
     complete_client_tls_handshake(&mut tls).map_err(rustls_io_error)?;
-    ensure_presented_peer_matches(
-        tls.conn.peer_certificates(),
-        &expected,
-        "remote daemon certificate fingerprint did not match the approved trusted peer row",
-    )?;
     Ok(tls)
 }
 
@@ -80,11 +75,6 @@ pub(super) fn open_server_tls_stream(
     let connection = ServerConnection::new(Arc::new(server_config)).map_err(rustls_config_error)?;
     let mut tls = StreamOwned::new(connection, stream);
     complete_server_tls_handshake(&mut tls).map_err(rustls_io_error)?;
-    ensure_presented_peer_matches(
-        tls.conn.peer_certificates(),
-        &expected,
-        "remote daemon client certificate fingerprint did not match the approved trusted peer row",
-    )?;
     Ok(tls)
 }
 
@@ -104,32 +94,6 @@ fn trusted_peer_fingerprint(
     Ok(row.fingerprint_sha256().to_string())
 }
 
-fn ensure_presented_peer_matches(
-    peer_certs: Option<&[CertificateDer<'static>]>,
-    expected_fingerprint: &str,
-    mismatch_message: &'static str,
-) -> Result<(), AtmError> {
-    let Some(peer_cert) = peer_certs.and_then(|certs| certs.first()) else {
-        return Err(AtmError::validation(
-            "remote daemon did not present a peer certificate during the secure transport handshake"
-                .to_string(),
-        )
-        .with_recovery(
-            "Ensure both daemons are running in secure-required mode with a generated local identity before retrying secure cross-host delivery.",
-        ));
-    };
-    let presented = sha256_hex(peer_cert.as_ref());
-    if presented != expected_fingerprint {
-        return Err(AtmError::validation(format!(
-            "{mismatch_message}; expected {expected_fingerprint}, received {presented}"
-        ))
-        .with_recovery(
-            "Approve the correct trusted peer fingerprint or remove the stale trust row before retrying secure cross-host delivery.",
-        ));
-    }
-    Ok(())
-}
-
 fn verify_presented_peer_fingerprint(
     end_entity: &CertificateDer<'_>,
     expected_fingerprint: &str,
@@ -142,6 +106,14 @@ fn verify_presented_peer_fingerprint(
     Err(rustls::Error::General(format!(
         "{mismatch_message}; expected {expected_fingerprint}, received {presented}"
     )))
+}
+
+fn note_adr030_pinned_fingerprint_time_model(_now: UnixTime) {
+    // ADR-030 governs this behavior. ATM cross-host TLS currently uses
+    // host-scoped fingerprint pinning from SQLite rather than PKI chain/expiry
+    // validation. rustls supplies a verification-time parameter; binding it
+    // explicitly here prevents that design choice from remaining an accidental
+    // silent discard inside the verifier callbacks.
 }
 
 fn certificate_der(identity: &LocalPeerIdentityRow) -> CertificateDer<'static> {
@@ -201,10 +173,10 @@ fn is_peer_certificate_validation_failure(message: &str) -> bool {
 }
 
 #[derive(Debug)]
-/// Deliberate trust model: same-host / cross-host ATM secure transport uses a
-/// pinned SHA256 certificate fingerprint from SQLite, not a PKI chain. The TLS
-/// handshake must reject any peer whose presented leaf certificate fingerprint
-/// does not match the approved row for that host.
+/// Deliberate trust model per ADR-030: same-host / cross-host ATM secure
+/// transport uses a pinned SHA256 certificate fingerprint from SQLite, not a
+/// PKI chain. The TLS handshake rejects any peer whose presented leaf
+/// certificate fingerprint does not match the approved row for that host.
 struct PinnedFingerprintServerVerifier {
     algorithms: WebPkiSupportedAlgorithms,
     expected_fingerprint: String,
@@ -217,8 +189,9 @@ impl ServerCertVerifier for PinnedFingerprintServerVerifier {
         _intermediates: &[CertificateDer<'_>],
         _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: UnixTime,
+        now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
+        note_adr030_pinned_fingerprint_time_model(now);
         verify_presented_peer_fingerprint(
             end_entity,
             &self.expected_fingerprint,
@@ -251,8 +224,8 @@ impl ServerCertVerifier for PinnedFingerprintServerVerifier {
 }
 
 #[derive(Debug)]
-/// Deliberate trust model: mutual TLS client authentication uses the same
-/// pinned-fingerprint verification as the server side. A peer client
+/// Deliberate trust model per ADR-030: mutual TLS client authentication uses
+/// the same pinned-fingerprint verification as the server side. A peer client
 /// certificate is accepted only when its SHA256 fingerprint matches the
 /// approved trust row for the connecting host.
 struct PinnedFingerprintClientVerifier {
@@ -270,8 +243,9 @@ impl ClientCertVerifier for PinnedFingerprintClientVerifier {
         &self,
         end_entity: &CertificateDer<'_>,
         _intermediates: &[CertificateDer<'_>],
-        _now: UnixTime,
+        now: UnixTime,
     ) -> Result<ClientCertVerified, rustls::Error> {
+        note_adr030_pinned_fingerprint_time_model(now);
         verify_presented_peer_fingerprint(
             end_entity,
             &self.expected_fingerprint,
