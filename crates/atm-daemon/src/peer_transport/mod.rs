@@ -6,7 +6,6 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use atm_core::AtmConfig;
 use atm_core::boundary::{
     self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStateRecord, RemoteReplayStore,
     RequestDispatcher,
@@ -23,6 +22,7 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 
 mod client_helpers;
 mod config_helpers;
+pub(crate) mod delivery;
 mod security;
 mod server;
 #[cfg(test)]
@@ -49,8 +49,6 @@ use server::PeerServerTransport;
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
-const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
-const MAX_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
@@ -136,44 +134,6 @@ impl Default for PeerTransportConfig {
             remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
             peer_listen_addr: None,
         }
-    }
-}
-
-impl PeerTransportConfig {
-    pub(crate) fn from_config(config: Option<&AtmConfig>) -> Result<Self, AtmError> {
-        if config.is_none() {
-            tracing::warn!(
-                subsystem = "peer_transport",
-                action = "config_default",
-                outcome = "default",
-                "no AtmConfig provided to PeerTransportConfig::from_config; using default remote_retry_budget"
-            );
-        }
-        let remote_retry_budget = config
-            .map(|config| config.daemon.remote_retry_budget)
-            .unwrap_or(DEFAULT_REMOTE_RETRY_BUDGET);
-        if remote_retry_budget < MIN_REMOTE_RETRY_BUDGET {
-            return Err(AtmError::validation(format!(
-                "daemon.remote_retry_budget must be at least {} second(s)",
-                MIN_REMOTE_RETRY_BUDGET.as_secs()
-            ))
-            .with_recovery(
-                "Raise daemon.remote_retry_budget to at least one second before starting atm-daemon.",
-            ));
-        }
-        if remote_retry_budget > MAX_REMOTE_RETRY_BUDGET {
-            return Err(AtmError::validation(format!(
-                "daemon.remote_retry_budget must not exceed {} second(s)",
-                MAX_REMOTE_RETRY_BUDGET.as_secs()
-            ))
-            .with_recovery(
-                "Lower daemon.remote_retry_budget to one week or less before starting atm-daemon.",
-            ));
-        }
-        Ok(Self {
-            remote_retry_budget,
-            peer_listen_addr: config.and_then(|config| config.daemon.peer_listen_addr),
-        })
     }
 }
 

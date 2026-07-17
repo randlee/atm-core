@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 use atm_core::{
@@ -11,8 +9,10 @@ use atm_core::{
     list::list_mail,
     protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    send::{RemoteTargetHost, SendRequest, send_mail_with_runtime_and_post_send_emitter},
+    send::{SendRequest, send_mail_with_runtime_and_post_send_emitter},
 };
+
+use crate::peer_transport::delivery::{RemoteFailureKind, SendOutcome as RemoteSendOutcome};
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
@@ -69,88 +69,33 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        if request.remote_host.is_some() {
-            return self.dispatch_remote_send(request);
-        }
-        let outcome = send_mail_with_runtime_and_post_send_emitter(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            post_send_emitter,
-        )?;
-        Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-    }
-
-    fn dispatch_remote_send(&self, mut request: SendRequest) -> Result<ResponseEnvelope, AtmError> {
-        let remote_host = request
-            .remote_host
-            .take()
-            .ok_or_else(|| AtmError::daemon_unavailable("remote host is missing"))?;
-        let endpoint = self.resolve_remote_endpoint(&remote_host)?;
-        self.peer_transport_runtime.send_to_endpoint(
-            endpoint,
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
-        )
-    }
-
-    fn resolve_remote_endpoint(
-        &self,
-        remote_host: &RemoteTargetHost,
-    ) -> Result<SocketAddr, AtmError> {
-        let port = self.resolve_remote_port()?;
-        (remote_host.as_str(), port)
-            .to_socket_addrs()
-            .map_err(|source| {
-                AtmError::address_parse(format!(
-                    "failed to resolve remote host `{}` on port {}",
-                    remote_host.as_str(),
-                    port
-                ))
-                .with_recovery(
-                    "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
-                )
-                .with_source(source)
-            })?
-            .next()
-            .ok_or_else(|| {
-                AtmError::address_parse(format!(
-                    "remote host `{}` did not resolve to any socket addresses",
-                    remote_host.as_str()
-                ))
-                .with_recovery(
-                    "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
-                )
-            })
-    }
-
-    fn resolve_remote_port(&self) -> Result<u16, AtmError> {
-        let enabled_ports = self
-            .peer_interface_config_store
-            .list_interfaces()?
-            .into_iter()
-            .filter(|row| row.enabled)
-            .map(|row| row.port)
-            .collect::<BTreeSet<_>>();
-        match enabled_ports.len() {
-            1 => Ok(*enabled_ports.iter().next().expect("one enabled port")),
-            0 => self
-                .peer_transport_runtime
-                .bound_addr()?
-                .map(|addr| addr.port())
-                .ok_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "remote delivery is unavailable because no enabled cross-host interface port is configured",
-                    )
-                    .with_recovery(
-                        "Add and enable one daemon interface row with `atm daemon interfaces add ...`, restart atm-daemon if required, and retry the remote send.",
-                    )
-                }),
-            _ => Err(AtmError::validation(
-                "remote delivery is ambiguous because multiple enabled cross-host ports are configured".to_string(),
+        let Some(remote_host) = request.remote_host.clone() else {
+            let outcome = send_mail_with_runtime_and_post_send_emitter(
+                request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                post_send_emitter,
+            )?;
+            return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
+        };
+        match self.cross_host_delivery.deliver_remote(request, remote_host) {
+            Ok(RemoteSendOutcome::Delivered(response)) => Ok(*response),
+            Ok(RemoteSendOutcome::Deferred) => Err(AtmError::daemon_unavailable(
+                "remote delivery was deferred because the cross-host path is not currently healthy",
             )
             .with_recovery(
-                "Reduce the enabled daemon interface set to one shared port before retrying remote sends that specify only `<host>`.",
+                "Verify the daemon interface rows and remote host reachability, then retry the remote send after the cross-host path is healthy.",
             )),
+            Ok(RemoteSendOutcome::RejectedTerminal(kind)) => Err(
+                remote_failure_kind_error(kind)
+            ),
+            Ok(RemoteSendOutcome::OutcomeUnknown) => Err(AtmError::daemon_unavailable(
+                "remote delivery outcome is unknown",
+            )
+            .with_recovery(
+                "Check the destination daemon and local replay state before retrying the remote send.",
+            )),
+            Err(error) => Err(error.into_atm_error()),
         }
     }
 
@@ -169,5 +114,21 @@ impl DaemonRequestDispatcher {
             daemon_release,
             code: atm_core::error_codes::AtmErrorCode::ClientDaemonVersionIncompatible,
         })
+    }
+}
+
+fn remote_failure_kind_error(kind: RemoteFailureKind) -> AtmError {
+    match kind {
+        RemoteFailureKind::TerminalProtocolRejected => AtmError::validation(
+            "remote daemon rejected the cross-host request protocol".to_string(),
+        )
+        .with_recovery(
+            "Align the sender and receiver daemon protocol versions before retrying.",
+        ),
+        RemoteFailureKind::TerminalMalformedTarget => {
+            AtmError::address_parse("remote target is malformed").with_recovery(
+                "Use `atm send <agent>@<team>.<host> ...` or `atm send <agent>@<team> --host <host> ...` with a valid host token before retrying.",
+            )
+        }
     }
 }

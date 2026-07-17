@@ -17,6 +17,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::peer_transport::delivery::{CrossHostDelivery, DaemonCrossHostDelivery};
 mod cross_host_doctor;
 mod dispatch_delivery;
 mod graft_post_send;
@@ -58,6 +59,7 @@ pub(crate) struct DaemonRequestDispatcher {
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     peer_transport_runtime: PeerTransportRuntime,
+    cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -83,6 +85,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 &self.storage_finalizer.is_some(),
             )
             .field("peer_transport_runtime", &self.peer_transport_runtime)
+            .field("cross_host_delivery", &"dyn CrossHostDelivery")
             .finish()
     }
 }
@@ -321,6 +324,7 @@ impl DaemonRequestDispatcher {
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
+        let peer_interface_config_store = runtime_assembly.peer_interface_config_store.clone();
         let roster_store = runtime_assembly.shared_roster_store_arc();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
@@ -347,11 +351,15 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
-            peer_interface_config_store: runtime_assembly.peer_interface_config_store,
+            peer_interface_config_store: peer_interface_config_store.clone(),
             allowed_host_store: runtime_assembly.allowed_host_store,
             peer_security_store: runtime_assembly.peer_security_store,
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
+            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
+                peer_interface_config_store,
+                peer_transport_runtime.clone(),
+            )),
             peer_transport_runtime,
         }
     }
@@ -582,6 +590,10 @@ impl DaemonRequestDispatcher {
             peer_security_store: runtime_assembly.peer_security_store.clone(),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
+            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
+                runtime_assembly.peer_interface_config_store.clone(),
+                peer_transport_runtime.clone(),
+            )),
             peer_transport_runtime,
         }
     }
