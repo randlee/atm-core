@@ -12,7 +12,6 @@ dependencies = [
  "atm-daemon-client",
  "atm-runtime",
  "atm-runtime-test-support",
- "atm-storage",
  "chrono",
  "clap",
  "interprocess",

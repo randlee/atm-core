@@ -1065,16 +1065,14 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
                     .map(AgentName::as_str),
                 Some(atm_core::test_support::TEST_SENDER)
             );
-            // daemon_context stays distinct: it reports the daemon's own
-            // launch-time process env, not the caller.
+            // daemon_context stays distinct, but atm-daemon must not read
+            // ATM_TEAM/ATM_IDENTITY directly, so team/identity remain unset
+            // even if the ambient process env disagrees with the caller.
             let daemon_context = report.daemon_context.expect("daemon context");
-            assert_eq!(
-                daemon_context.team.as_ref().map(TeamName::as_str),
-                Some("daemon-launch-team")
-            );
+            assert_eq!(daemon_context.team.as_ref().map(TeamName::as_str), None);
             assert_eq!(
                 daemon_context.identity.as_ref().map(AgentName::as_str),
-                Some("daemon-launch-identity")
+                None
             );
         }
         other => panic!("expected doctor response, got {other:?}"),

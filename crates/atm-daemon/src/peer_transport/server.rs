@@ -22,6 +22,8 @@ use super::{
     PEER_ACCEPT_ERROR_RETRY_BACKOFF, PEER_CONNECTION_IO_SLICE, PEER_LISTENER_ACCEPT_POLL_INTERVAL,
     PEER_LISTENER_SHUTDOWN_DEADLINE, PEER_REQUEST_DEADLINE, PeerAuthorizationPolicy, security,
 };
+#[path = "server_reload.rs"]
+mod server_reload;
 
 #[derive(Debug)]
 struct PeerServerHandle {
@@ -131,15 +133,7 @@ impl PeerServerTransport {
         listen_addrs: Vec<SocketAddr>,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     ) -> Result<Vec<PeerListenerOutcome>, AtmError> {
-        {
-            let mut configured = self.listen_addrs.lock().map_err(|_| {
-                AtmError::daemon_unavailable("peer listener config lock poisoned").with_recovery(
-                    "Restart atm-daemon before retrying cross-host peer listener reload.",
-                )
-            })?;
-            *configured = listen_addrs.clone();
-        }
-
+        server_reload::update_configured_listen_addrs(self, &listen_addrs)?;
         let desired = listen_addrs
             .iter()
             .copied()
@@ -150,66 +144,9 @@ impl PeerServerTransport {
             )
         })?;
 
-        let stale_addrs = state
-            .keys()
-            .copied()
-            .filter(|addr| !desired.contains(addr))
-            .collect::<Vec<_>>();
-        for stale_addr in stale_addrs {
-            if let Some(handle) = state.remove(&stale_addr) {
-                shutdown_listener_handle(handle)?;
-            }
-        }
-
-        let mut outcomes = Vec::new();
-        let mut failures = Vec::new();
-        for listen_addr in listen_addrs {
-            if let Some(handle) = state.get(&listen_addr) {
-                outcomes.push(PeerListenerOutcome {
-                    listen_addr,
-                    bound_addr: Some(handle.bound_addr),
-                    error_message: None,
-                });
-                continue;
-            }
-            match self.bind_and_spawn_listener(listen_addr, dispatcher.clone()) {
-                Ok((bound_addr, handle)) => {
-                    self.observability.emit_or_warn(
-                        "peer_listener_start",
-                        "ok",
-                        format!("daemon peer listener bound at {bound_addr}"),
-                    );
-                    state.insert(listen_addr, handle);
-                    outcomes.push(PeerListenerOutcome {
-                        listen_addr,
-                        bound_addr: Some(bound_addr),
-                        error_message: None,
-                    });
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "peer_transport",
-                        action = "reload_listener",
-                        outcome = "degraded",
-                        %listen_addr,
-                        %error,
-                        "daemon peer listener reload failed to rebind the configured address"
-                    );
-                    self.observability.emit_or_warn(
-                        "peer_listener_reload",
-                        "degraded",
-                        format!("daemon peer listener reload failed for {listen_addr}"),
-                    );
-                    self.record_degraded(listen_addr, &error);
-                    failures.push(format!("{listen_addr}: {}", error.message));
-                    outcomes.push(PeerListenerOutcome {
-                        listen_addr,
-                        bound_addr: None,
-                        error_message: Some(error.message.clone()),
-                    });
-                }
-            }
-        }
+        server_reload::drop_stale_listener_handles(&mut state, &desired)?;
+        let (outcomes, failures) =
+            server_reload::reload_requested_listeners(self, &mut state, listen_addrs, dispatcher)?;
 
         if failures.is_empty() {
             self.status_cache.clear_peer_listener_degraded();
@@ -550,51 +487,58 @@ fn handle_peer_connection(
     let deadline = Instant::now() + PEER_REQUEST_DEADLINE;
     match super::load_peer_security_mode(peer_security_store.as_ref())? {
         PeerSecurityMode::SecureRequired => {
-            let store = peer_security_store.as_ref().ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "daemon peer security store is unavailable in secure-required mode",
-                )
-                .with_recovery(
-                    "Restore the daemon peer security store before retrying secure cross-host delivery.",
-                )
-            })?;
-            let mut tls = security::open_server_tls_stream(stream, peer_addr, store)?;
-            let Some(header_bytes) = read_peer_frame_header_until(
-                &mut tls,
-                deadline,
-                terminate.as_ref(),
-                "failed to read remote peer request frame",
-            )?
-            else {
-                return Ok(());
-            };
-            let header = atm_core::protocol::decode_frame_header(
-                header_bytes,
-                "remote peer request frame exceeded the maximum supported size",
-            )?;
-            let frame = read_peer_frame_payload_until(
-                &mut tls,
-                header,
-                deadline,
-                terminate.as_ref(),
-                "failed to read remote peer request frame",
-            )?;
-            return handle_authorized_or_rejected_request(
-                &mut tls,
+            return handle_secure_peer_connection(
+                stream,
                 peer_addr,
                 dispatcher,
                 authorization_policy,
+                peer_security_store,
                 codec,
                 terminate,
                 registry,
-                frame,
                 deadline,
             );
         }
         PeerSecurityMode::InsecureAllowed => {}
     }
-    let Some(header_bytes) = read_peer_frame_header_until(
+    handle_insecure_peer_connection(
         &mut stream,
+        peer_addr,
+        dispatcher,
+        authorization_policy,
+        codec,
+        terminate,
+        registry,
+        deadline,
+    )
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the secure branch receives the fully-decoded peer transport context explicitly"
+)]
+fn handle_secure_peer_connection(
+    stream: TcpStream,
+    peer_addr: SocketAddr,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
+    codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
+    deadline: Instant,
+) -> Result<(), AtmError> {
+    let store = peer_security_store.as_ref().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "daemon peer security store is unavailable in secure-required mode",
+        )
+        .with_recovery(
+            "Restore the daemon peer security store before retrying secure cross-host delivery.",
+        )
+    })?;
+    let mut tls = security::open_server_tls_stream(stream, peer_addr, store)?;
+    let Some(header_bytes) = read_peer_frame_header_until(
+        &mut tls,
         deadline,
         terminate.as_ref(),
         "failed to read remote peer request frame",
@@ -607,14 +551,61 @@ fn handle_peer_connection(
         "remote peer request frame exceeded the maximum supported size",
     )?;
     let frame = read_peer_frame_payload_until(
-        &mut stream,
+        &mut tls,
         header,
         deadline,
         terminate.as_ref(),
         "failed to read remote peer request frame",
     )?;
     handle_authorized_or_rejected_request(
-        &mut stream,
+        &mut tls,
+        peer_addr,
+        dispatcher,
+        authorization_policy,
+        codec,
+        terminate,
+        registry,
+        frame,
+        deadline,
+    )
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the insecure branch receives the fully-decoded peer transport context explicitly"
+)]
+fn handle_insecure_peer_connection(
+    stream: &mut TcpStream,
+    peer_addr: SocketAddr,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    authorization_policy: Arc<dyn PeerAuthorizationPolicy>,
+    codec: &JsonAtmProtocolCodec,
+    terminate: Arc<AtomicBool>,
+    registry: Arc<ActiveConnectionRegistry>,
+    deadline: Instant,
+) -> Result<(), AtmError> {
+    let Some(header_bytes) = read_peer_frame_header_until(
+        stream,
+        deadline,
+        terminate.as_ref(),
+        "failed to read remote peer request frame",
+    )?
+    else {
+        return Ok(());
+    };
+    let header = atm_core::protocol::decode_frame_header(
+        header_bytes,
+        "remote peer request frame exceeded the maximum supported size",
+    )?;
+    let frame = read_peer_frame_payload_until(
+        stream,
+        header,
+        deadline,
+        terminate.as_ref(),
+        "failed to read remote peer request frame",
+    )?;
+    handle_authorized_or_rejected_request(
+        stream,
         peer_addr,
         dispatcher,
         authorization_policy,

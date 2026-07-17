@@ -814,6 +814,17 @@ fn render_cross_host_section(cross_host: &atm_core::doctor::CrossHostDoctorRepor
         "  Legacy fallback active: {}\n",
         render_bool(cross_host.legacy_fallback_active)
     ));
+    append_bound_endpoints(&mut output, cross_host);
+    append_cross_host_interfaces(&mut output, cross_host);
+    append_cross_host_allowlist(&mut output, cross_host);
+    append_cross_host_security(&mut output, cross_host);
+    output
+}
+
+fn append_bound_endpoints(
+    output: &mut String,
+    cross_host: &atm_core::doctor::CrossHostDoctorReport,
+) {
     if cross_host.bound_endpoints.is_empty() {
         output.push_str("  Bound endpoints: none\n");
     } else {
@@ -822,54 +833,70 @@ fn render_cross_host_section(cross_host: &atm_core::doctor::CrossHostDoctorRepor
             cross_host.bound_endpoints.join(", ")
         ));
     }
+}
 
+fn append_cross_host_interfaces(
+    output: &mut String,
+    cross_host: &atm_core::doctor::CrossHostDoctorReport,
+) {
     if cross_host.interfaces.is_empty() {
         output.push_str("  Durable interfaces: none\n");
-    } else {
-        output.push_str("  Durable interfaces:\n");
-        for row in &cross_host.interfaces {
-            output.push_str(&format!(
-                "    {} bind={}:{} advertise={}:{} enabled={} bound={} stale_at={} last_bound_at={} last_bind_error={}\n",
-                row.interface_name,
-                row.bind_addr,
-                row.port,
-                row.advertise_addr,
-                row.port,
-                row.enabled,
-                row.listener_bound,
-                row.stale_at
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "-".to_string()),
-                row.last_bound_at
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "-".to_string()),
-                row.last_bind_error.as_deref().unwrap_or("-")
-            ));
-        }
+        return;
     }
+    output.push_str("  Durable interfaces:\n");
+    for row in &cross_host.interfaces {
+        output.push_str(&format!(
+            "    {} bind={}:{} advertise={}:{} enabled={} bound={} stale_at={} last_bound_at={} last_bind_error={}\n",
+            row.interface_name,
+            row.bind_addr,
+            row.port,
+            row.advertise_addr,
+            row.port,
+            row.enabled,
+            row.listener_bound,
+            row.stale_at
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "-".to_string()),
+            row.last_bound_at
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "-".to_string()),
+            row.last_bind_error.as_deref().unwrap_or("-")
+        ));
+    }
+}
 
+fn append_cross_host_allowlist(
+    output: &mut String,
+    cross_host: &atm_core::doctor::CrossHostDoctorReport,
+) {
     output.push_str(&format!(
         "  Allowlist: enforced={} empty={}\n",
         cross_host.allowlist.enforced, cross_host.allowlist.empty
     ));
     if cross_host.allowlist.hosts.is_empty() {
         output.push_str("    hosts: none\n");
-    } else {
-        for row in &cross_host.allowlist.hosts {
-            output.push_str(&format!(
-                "    {} enabled={} disabled_at={} note={}\n",
-                row.host_name,
-                row.enabled,
-                row.disabled_at
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "-".to_string()),
-                row.note.as_deref().unwrap_or("-")
-            ));
-        }
+        return;
     }
+    for row in &cross_host.allowlist.hosts {
+        output.push_str(&format!(
+            "    {} enabled={} disabled_at={} note={}\n",
+            row.host_name,
+            row.enabled,
+            row.disabled_at
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "-".to_string()),
+            row.note.as_deref().unwrap_or("-")
+        ));
+    }
+}
+
+fn append_cross_host_security(
+    output: &mut String,
+    cross_host: &atm_core::doctor::CrossHostDoctorReport,
+) {
     output.push_str(&format!(
         "  Security: mode={} local_identity_present={}\n",
         cross_host.security.mode, cross_host.security.local_identity_present
@@ -894,7 +921,6 @@ fn render_cross_host_section(cross_host: &atm_core::doctor::CrossHostDoctorRepor
             row.display_name.as_deref().unwrap_or("-")
         ));
     }
-    output
 }
 
 #[cfg(test)]

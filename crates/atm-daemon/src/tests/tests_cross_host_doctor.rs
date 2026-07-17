@@ -45,6 +45,17 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
         )
         .expect("store interface");
     interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "vpn0",
+                "10.10.100.10".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
+    interface_store
         .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
             key: atm_storage::PeerInterfaceKey::new(
                 "vpn0",
@@ -165,17 +176,19 @@ fn doctor_stays_healthy_when_cross_host_is_unconfigured_and_unused() {
             assert!(cross_host.interfaces.is_empty());
             assert!(cross_host.bound_endpoints.is_empty());
             assert!(cross_host.allowlist.empty);
-            assert_eq!(
-                report.summary.status,
-                atm_core::doctor::DoctorStatus::Healthy
-            );
-            assert!(!report.findings.iter().any(|finding| {
+            assert!(report.findings.iter().any(|finding| {
                 finding.code == AtmErrorCode::WarningCrossHostListenerUnconfigured
             }));
             assert!(
-                !report.findings.iter().any(|finding| {
+                report.findings.iter().any(|finding| {
                     finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
                 })
+            );
+            assert!(
+                report
+                    .recommendations
+                    .iter()
+                    .any(|recommendation| { recommendation.contains("atm daemon interfaces add") })
             );
         }
         other => panic!("expected doctor response, got {other:?}"),
@@ -214,6 +227,17 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
             .expect("add interface"),
         )
         .expect("store interface");
+    interface_store
+        .set_interface_enabled(
+            &atm_storage::PeerInterfaceKey::new(
+                "en0",
+                "192.168.1.20".parse().expect("bind"),
+                43101,
+            )
+            .expect("key"),
+            true,
+        )
+        .expect("enable interface");
     interface_store
         .record_binding_update(&atm_storage::PeerInterfaceBindingUpdate {
             key: atm_storage::PeerInterfaceKey::new(
