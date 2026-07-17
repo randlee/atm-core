@@ -12,7 +12,7 @@
   triage:sweepScope "file_only" ;
   triage:category "documentation-accuracy" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B5-SELFIP-MISCHARACTERIZED/pAG-s13/1> ;
@@ -21,15 +21,15 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B5-SELFIP-MISCHARACTERIZED/pAG-s13/4> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
   triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
-  triage:notes "Partially-present: real test-run evidence exists (genuine cargo-test/CLI transcripts) but is attached to an inaccurate PASS claim. The evidence files contain no non-loopback IP addresses; they document loopback-only behavior, not the self-IP-against-real-interface proof required by AG-VAL-019/020. Fix requires either: (a) correct the checklist rows back to PENDING/FAIL with accurate description of what was actually proven (loopback routing only), or (b) produce genuine non-loopback-interface evidence showing actual self-IP binding and cross-host communication." .
+  triage:notes "Closed in AG.13 Group 4. AG-VAL-019 and AG-VAL-020 now point at regenerated evidence files that include the literal non-loopback self-IP fixture `192.0.0.2`, and the checklist rows now reference the real self-IP proofs in crates/atm-daemon/src/tests/runtime_root/self_ip.rs instead of the old loopback-relabeled path. Validation: cargo fmt --all, just lint, cargo test -p atm-daemon -p agent-team-mail-core all passed." .
 
 <urn:atm:triage:occurrence/AG13-FIND-B5-SELFIP-MISCHARACTERIZED/pAG-s13/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
   triage:line 47 ;
   triage:snippet "AG-VAL-019 checklist row marked PASS with loopback-only evidence" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
@@ -39,8 +39,8 @@
   triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
   triage:line 48 ;
   triage:snippet "AG-VAL-020 checklist row marked PASS with loopback-only evidence" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
@@ -50,8 +50,8 @@
   triage:file "docs/plans/phase-AG/artifacts/ag13/ag-val-019-selfip-unauthorized.txt" ;
   triage:line 1 ;
   triage:snippet "Evidence file contains loopback-only transcript, not self-IP proof (no 192./10./172./advertise/bind patterns)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
@@ -61,8 +61,8 @@
   triage:file "docs/plans/phase-AG/artifacts/ag13/ag-val-020-selfip-success.txt" ;
   triage:line 1 ;
   triage:snippet "Evidence file contains loopback-only transcript, not self-IP proof (no 192./10./172./advertise/bind patterns)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .

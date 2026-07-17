@@ -330,6 +330,85 @@ Retained AG.12 evidence recorded on Friday, July 17, 2026:
 - localhost secured-transport mismatch rejection proof:
   - `docs/plans/phase-AG/artifacts/ag12/ag-val-018-fingerprint-mismatch.txt`
 
+## Self-IP Remote-Target Operator Path (AG.13)
+
+Use this section for the AG.13 same-host self-IP proof lane only.
+
+Scope:
+
+- one host
+- one daemon runtime
+- two ATM identities on that same host
+- remote-target addressing through the host's own advertised or bound non-loopback
+  IP address
+
+Required behavior:
+
+- both supported self-IP syntaxes must normalize onto the same peer-transport
+  dispatch path:
+  - `<agent>@<team>.<self-ip>`
+  - `<agent>@<team> --host <self-ip>`
+- self-IP traffic must still obey host authorization rules before mailbox
+  mutation
+- the self-IP proof must use a real daemon interface row for the host's own
+  advertised or bound IP; do not relabel `localhost` or `127.0.0.1` evidence
+  as self-IP
+
+Minimal self-IP setup:
+
+1. use the AG.13 branch/worktree
+2. prepare disposable `ATM_HOME`, `ATM_CONFIG_HOME`, and `ATM_LOG_DIR`
+3. create the team bootstrap config and add at least:
+   - one sender identity
+   - one receiver identity
+4. identify one real non-loopback IP address that belongs to this host
+   - use the same literal IP for both the daemon interface row and the
+     remote-target send
+5. create and enable one daemon interface row for that IP
+   - example:
+     ```bash
+     atm daemon interfaces add en0 \
+       --bind-addr 192.168.1.20 \
+       --advertise-addr 192.168.1.20 \
+       --port 43101 \
+       --kind lan
+     atm daemon interfaces enable en0 192.168.1.20 43101
+     ```
+6. start the daemon from the repo root that contains the intended `.atm.toml`
+7. for unauthorized rejection proof, leave the self-IP absent from the
+   allowlist
+8. for success proof, explicitly allow the self-IP and rerun the same
+   remote-target send/read/ack path
+   - example:
+     ```bash
+     atm daemon hosts allow 192.168.1.20
+     ```
+
+Operational checks:
+
+- `atm doctor --json`
+  - verify the daemon reports the enabled self-IP interface row and healthy
+    listener state
+- `atm daemon interfaces list`
+  - verify the exact bind/advertise IP and port that the daemon will use
+- `atm send --json ... --host <self-ip>`
+  - use this when the operator wants the hostname separated from the mailbox
+    address
+- `atm send --json <agent>@<team>.<self-ip> ...`
+  - use this when the operator wants the inline remote-target syntax
+
+Expected self-IP troubleshooting outcomes:
+
+- if the self-IP is not allowlisted, the daemon must reject before mailbox
+  mutation
+- if the self-IP is allowlisted and the listener is healthy, send/read/ack
+  should succeed through the peer listener
+- if the daemon interface row is missing or disabled, the send must fail closed
+  instead of silently falling back to the local mailbox path
+- if secure mode is enabled, the self-IP proof uses the same pinned-fingerprint
+  trust contract as the localhost proof until a later transport-security sprint
+  changes that behavior
+
 ## Transport-Security Contract
 
 The documented architecture/requirements line says cross-host daemon transport
