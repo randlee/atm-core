@@ -34,7 +34,7 @@ This sprint owns the product answer to:
 
 - SQLite schema for allowed-host rows
 - CLI command surface for managing allowed hosts
-- daemon-side exact-host enforcement contract
+- daemon-side exact-hostname enforcement contract
 - requirements updates covering inbound host authorization:
   - `docs/requirements.md`
   - `docs/atm-daemon/requirements.md`
@@ -44,7 +44,7 @@ This sprint owns the product answer to:
   - `docs/atm-daemon/architecture.md`
 - ADR-029 defining the inbound host-authorization policy:
   - deny-by-default
-  - exact-host-only matching
+  - exact-hostname-only matching
   - enforcement before any mailbox mutation
   - interaction with loopback and future transport security
 - explicit reconciliation with `AG-FIND-004` and the loopback-bypass design
@@ -73,9 +73,9 @@ ON daemon_allowed_hosts (enabled, host_name);
 
 The CLI surface is:
 
-- `atm daemon hosts allow <host> [--note <text>]`
-- `atm daemon hosts deny <host>`
-- `atm daemon hosts remove <host>`
+- `atm daemon hosts allow <hostname> [--note <text>]`
+- `atm daemon hosts deny <hostname>`
+- `atm daemon hosts remove <hostname>`
 - `atm daemon hosts list [--json]`
 
 Expected behavior:
@@ -96,10 +96,8 @@ Concrete command rules:
 
 ## Enforcement Contract
 
-- inbound cross-host daemon connections are denied unless the presented remote
-  host token matches one enabled `daemon_allowed_hosts.host_name` row exactly
-- in the current transport, the presented remote host token is the remote
-  socket IP literal after one lowercase normalization
+- inbound cross-host daemon connections are denied unless the remote hostname
+  matches one enabled `daemon_allowed_hosts.host_name` row exactly
 - wildcard matching is forbidden
 - prefix/suffix/glob/regex/subnet-derived trust is forbidden
 - comparison is exact-string-only after one canonical lowercase normalization
