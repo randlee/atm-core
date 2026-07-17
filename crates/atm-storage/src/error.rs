@@ -397,7 +397,7 @@ impl AtmError {
             message,
         )
         .with_recovery(
-            "Fix the test seam configuration so it uses a valid FakeClientTransport or LoopbackClientTransport instance.",
+            "Fix the test seam configuration so it uses a valid approved test transport seam before rerunning the test.",
         )
     }
 

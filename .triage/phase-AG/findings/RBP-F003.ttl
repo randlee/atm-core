@@ -1,0 +1,100 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-F003" ;
+  triage:title "refresh_peer_listeners panics via .expect() instead of surfacing a structured AtmError" ;
+  triage:description "crates/atm-daemon/src/composition.rs:444-448 — refresh_peer_listeners panics via .expect(...) on a persisted-row reconstruction failure instead of surfacing a structured AtmError with recovery guidance — this is a daemon-reload path, not a graceful-degradation pattern like the rest of the file." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAG-s11-remote-target-contract" ;
+  triage:highestFixedBranch "feature/pAG-s12-localhost-proof" ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/8e9d1ac4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/s10/88eb5bcf> ;
+  triage:openOn <urn:atm:triage:worktree/s11/8e9d1ac4> ;
+  triage:fixedOn <urn:atm:triage:worktree/s12/cbc6a19a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s13/512f3afa> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14/94b969b6> ;
+  triage:fixedOn <urn:atm:triage:worktree/s15/d05ee158> ;
+  triage:absentOn <urn:atm:triage:worktree/integrate/39dae6fa> .
+
+<urn:atm:triage:occurrence/RBP-F003/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 447 ;
+  triage:snippet ".expect(\"persisted daemon peer interface row uses a valid key\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/88eb5bcf> .
+
+<urn:atm:triage:occurrence/RBP-F003/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 447 ;
+  triage:snippet ".expect(\"persisted daemon peer interface row uses a valid key\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/8e9d1ac4> .
+
+<urn:atm:triage:worktree/s10/88eb5bcf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s11/8e9d1ac4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s12/cbc6a19a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s13/512f3afa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s14/94b969b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s15/d05ee158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate/39dae6fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "39dae6fa" ;
+  triage:orderIndex 7 .

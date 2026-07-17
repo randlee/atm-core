@@ -2,6 +2,8 @@ use crate::boundary_adapters::DaemonConfigIngress;
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+mod lifecycle;
+mod peer_listener_reload;
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
@@ -15,117 +17,14 @@ use crate::{
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
-use atm_storage::{
-    AllowedHostStore, IsoTimestamp, PeerInterfaceBindingUpdate, PeerInterfaceConfigStore,
-    PeerInterfaceKey,
-};
+use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerInterfaceKey};
+use lifecycle::{RuntimeLifecycle, RuntimeLifecycleState};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 #[cfg(test)]
 use std::time::Duration;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum RuntimeLifecycleState {
-    Starting,
-    Running,
-    Draining,
-    #[default]
-    Stopped,
-}
-
-/// Serializes legal daemon runtime ownership transitions.
-#[derive(Debug, Default)]
-pub(crate) struct RuntimeLifecycle {
-    /// A single mutex is sufficient here because lifecycle transitions are
-    /// serialized control-plane events, not a high-frequency data path.
-    state: Mutex<RuntimeLifecycleState>,
-}
-
-impl RuntimeLifecycle {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    #[cfg(test)]
-    #[cfg_attr(windows, allow(dead_code))]
-    pub(crate) fn state(&self) -> RuntimeLifecycleState {
-        *self.state.lock().expect("runtime lifecycle state lock")
-    }
-
-    /// Transition the daemon runtime lifecycle to `next`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] with
-    /// [`atm_core::error_codes::AtmErrorCode::Validation`] when `next` would
-    /// violate the documented state machine, or
-    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
-    /// lifecycle lock is poisoned.
-    pub(crate) fn transition(
-        &self,
-        next: RuntimeLifecycleState,
-    ) -> Result<RuntimeLifecycleState, AtmError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
-        let current = *state;
-        if !matches!(
-            (current, next),
-            (
-                RuntimeLifecycleState::Stopped,
-                RuntimeLifecycleState::Starting
-            ) | (
-                RuntimeLifecycleState::Starting,
-                RuntimeLifecycleState::Running
-            ) | (
-                RuntimeLifecycleState::Starting,
-                RuntimeLifecycleState::Stopped
-            ) | (
-                RuntimeLifecycleState::Running,
-                RuntimeLifecycleState::Draining
-            ) | (
-                RuntimeLifecycleState::Draining,
-                RuntimeLifecycleState::Stopped
-            )
-        ) {
-            return Err(AtmError::validation(format!(
-                "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            ))
-            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
-        }
-        *state = next;
-        Ok(next)
-    }
-
-    /// Force the daemon runtime lifecycle back to `Stopped`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] with
-    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
-    /// lifecycle lock is poisoned while resetting the runtime state.
-    pub(crate) fn force_stopped(&self) -> Result<(), AtmError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
-        *state = RuntimeLifecycleState::Stopped;
-        Ok(())
-    }
-}
 
 /// Internal root for Phase R daemon runtime wiring.
 pub(crate) struct RuntimeComposition {
@@ -527,84 +426,6 @@ impl RuntimeComposition {
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         self.peer_transport_runtime.shutdown()
-    }
-
-    fn refresh_peer_listeners(&self) -> Result<(), AtmError> {
-        let peer_transport_config = load_peer_transport_config(
-            self.config_current_dir.clone(),
-            &self.config_ingress,
-            &self.composition_observability,
-        )?;
-        let rows = self
-            .peer_interface_config_store
-            .list_interfaces()?
-            .into_iter()
-            .filter(|row| row.enabled)
-            .map(|row| ListenerRow {
-                key: Some(
-                    PeerInterfaceKey::new(row.interface_name.clone(), row.bind_addr, row.port)
-                        .expect("persisted daemon peer interface row uses a valid key"),
-                ),
-                listen_addr: std::net::SocketAddr::new(row.bind_addr, row.port),
-            })
-            .collect::<Vec<_>>();
-        let rows = if rows.is_empty() {
-            let detail = "legacy daemon peer_listen_addr fallback is deprecated; configure durable listener rows with `atm daemon interfaces add` instead";
-            tracing::warn!(
-                subsystem = "composition",
-                action = "peer_listener_legacy_config_fallback",
-                outcome = "deprecated",
-                "{}",
-                detail
-            );
-            self.composition_observability.emit_or_warn(
-                "peer_listener_legacy_config_fallback",
-                "deprecated",
-                detail,
-            );
-            peer_transport_config
-                .peer_listen_addr
-                .into_iter()
-                .map(|listen_addr| ListenerRow {
-                    key: None,
-                    listen_addr,
-                })
-                .collect::<Vec<_>>()
-        } else {
-            rows
-        };
-        let outcomes = self.peer_transport_runtime.reload_listeners(
-            rows.iter().map(|row| row.listen_addr).collect(),
-            self.request_dispatcher(),
-        )?;
-        let outcome_map = outcomes
-            .into_iter()
-            .map(|outcome| (outcome.listen_addr, outcome))
-            .collect::<std::collections::BTreeMap<_, _>>();
-        let now = IsoTimestamp::now();
-        for row in rows {
-            let Some(key) = row.key else {
-                continue;
-            };
-            let Some(outcome) = outcome_map.get(&row.listen_addr) else {
-                continue;
-            };
-            self.peer_interface_config_store.record_binding_update(
-                &PeerInterfaceBindingUpdate {
-                    key,
-                    observed_at: if outcome.error_message.is_none() {
-                        Some(now)
-                    } else {
-                        None
-                    },
-                    refresh_deadline_at: None,
-                    stale_at: outcome.error_message.as_ref().map(|_| now),
-                    last_bound_at: outcome.bound_addr.map(|_| now),
-                    last_bind_error: outcome.error_message.clone(),
-                },
-            )?;
-        }
-        Ok(())
     }
 }
 

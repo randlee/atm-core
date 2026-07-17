@@ -160,7 +160,7 @@ struct StoredAllowedHostRow {
 }
 
 fn load_row(
-    connection: &rusqlite::Connection,
+    connection: &crate::shared_db::SqliteConnection,
     db: &crate::shared_db::SharedDb,
     host: &AllowedHostName,
 ) -> Result<Option<AllowedHostRow>, AtmError> {

@@ -138,6 +138,7 @@ impl SendCommand {
 }
 
 #[cfg(test)]
+<<<<<<< HEAD
 mod tests {
     use std::path::PathBuf;
 
