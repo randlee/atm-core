@@ -315,6 +315,7 @@ mod tests {
             sender: ROLE_TEAM_LEAD.parse().expect("sender"),
             outcome: SendCommandOutcome::Sent,
             message_id: AtmMessageId::new(),
+            receipt_message_id: None,
             requires_ack: false,
             task_id: None,
             summary: Some("body".to_string()),

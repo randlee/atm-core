@@ -12,28 +12,29 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "repo" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T22:30:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:verifyingCommit "a6a8343f" ;
+  triage:verifyingEvidence "docs/architecture.md:2688-2717 adds substantive 'Remote host path' subsection documenting durable interface/allowlist config storage, lifecycle, and fallback semantics. Terminology and semantics verified consistent with docs/requirements.md REQ-CORE-TRANSPORT-002A/002B/002D including exact match on doctor cross_host projection keys." ;
+  triage:triagedAt "2026-07-16T18:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG4-MISSING-ARCHITECTURE-DOC/s6/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG4-MISSING-ARCHITECTURE-DOC/s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG4-MISSING-ARCHITECTURE-DOC/s10/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG4-MISSING-ARCHITECTURE-DOC/s9/1> ;
   triage:fixedOn <urn:atm:triage:worktree/s4/c425c803> ;
   triage:fixedOn <urn:atm:triage:worktree/s5/6ed274cc> ;
-  triage:openOn <urn:atm:triage:worktree/s6/32f9f07b> ;
-  triage:openOn <urn:atm:triage:worktree/s7/530ee77c> ;
-  triage:openOn <urn:atm:triage:worktree/s10/fa5ca78e> ;
-  triage:openOn <urn:atm:triage:worktree/s9/c47dbae5> ;
-  triage:promoteTo <urn:atm:triage:worktree/s6/32f9f07b> .
+  triage:fixedOn <urn:atm:triage:worktree/s6/32f9f07b> ;
+  triage:fixedOn <urn:atm:triage:worktree/s7/530ee77c> ;
+  triage:fixedOn <urn:atm:triage:worktree/s10/fa5ca78e> ;
+  triage:fixedOn <urn:atm:triage:worktree/s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG4-MISSING-ARCHITECTURE-DOC/s6/1>
   a triage:Occurrence ;
   triage:file "docs/architecture.md" ;
   triage:line 2697 ;
   triage:snippet "fallback when no enabled durable interface rows exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:headSha "32f9f07b" ;
   triage:occursIn <urn:atm:triage:worktree/s6/32f9f07b> .
@@ -43,8 +44,8 @@
   triage:file "docs/architecture.md" ;
   triage:line 2697 ;
   triage:snippet "fallback when no enabled durable interface rows exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:headSha "530ee77c" ;
   triage:occursIn <urn:atm:triage:worktree/s7/530ee77c> .
@@ -54,8 +55,8 @@
   triage:file "docs/architecture.md" ;
   triage:line 2697 ;
   triage:snippet "fallback when no enabled durable interface rows exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:headSha "fa5ca78e" ;
   triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
@@ -65,8 +66,8 @@
   triage:file "docs/architecture.md" ;
   triage:line 2697 ;
   triage:snippet "fallback when no enabled durable interface rows exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:headSha "c47dbae5" ;
   triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
