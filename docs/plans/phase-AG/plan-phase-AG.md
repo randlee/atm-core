@@ -736,6 +736,18 @@ Outputs:
   - unhealthy path => return immediate deferred-delivery result
   - daemon continues bounded retry for `60s..120s`
   - final delivery/failure receipt lands in sender inbox
+- socket transport reuses the same ATM wire message shapes already used on
+  other transports; no transport-specific socket schema is introduced
+- `localhost` and self-IP same-host rows remain ordinary non-empty remote-host
+  sends on that same branch; no localhost-special code path is allowed
+- one authoritative deletion/reduction ledger for retained AG.3-AG.10
+  cross-host surfaces:
+  - remove env-driven peer endpoint control (`ATM_DAEMON_PEER_ADDR`) from the
+    intended steady-state operator path
+  - remove CLI-only loopback transport compatibility paths that bypass the
+    daemon runtime
+  - reduce any cross-host parsing or socket-policy logic that leaks outside the
+    sealed delivery/storage boundaries
 - requirements / architecture / ADR updates aligned to that dispatch rule
 - finding handoff to `AG-FIND-005`
 
