@@ -1,0 +1,111 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B2-PARSE-BYPASS-UNCLOSED>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B2-PARSE-BYPASS-UNCLOSED" ;
+  triage:title "RemoteTargetHost::parse remains public, bypassing SendTargetParser::parse_target" ;
+  triage:description "crates/atm-core/src/send/mod.rs has RemoteTargetHost::parse as a pub fn (currently at line ~60-61), allowing direct construction that bypasses the canonical SendTargetParser::parse_target path. crates/atm-daemon/src/tests/runtime_root/loopback.rs contains 6 RemoteTargetHost::parse bypass call sites at lines 66,181,278,431,549,646. AG13-QA-2 full recheck confirmed the bypass call-site count did NOT decrease from AG13-QA-1: the two new self-IP tests (dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation at line 480, body call at 549; dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state at line 590, body call at 646) both use the bypass with literal 127.0.0.1, not authorization/mailbox-mutation boundary validation." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/send-mod-decl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:notes "AG13-QA-1 and AG13-QA-2 both detected the same 6 bypass call sites. Despite addition of 2 new self-IP authorization tests in AG13, both new tests use the RemoteTargetHost::parse bypass pattern with 127.0.0.1, proving the bypass count has NOT decreased. The pub fn declaration at mod.rs:60-61 remains the root cause. Dispatch ready: true. Promotion target: feature/pAG-s13-selfip-proof." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/send-mod-decl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub fn parse(host: &str) -> Result<Self, ParseError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 66 ;
+  triage:snippet "RemoteTargetHost::parse(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 181 ;
+  triage:snippet "RemoteTargetHost::parse(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 278 ;
+  triage:snippet "RemoteTargetHost::parse(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 431 ;
+  triage:snippet "RemoteTargetHost::parse(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 549 ;
+  triage:snippet "RemoteTargetHost::parse(...) [dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B2/loopback-bypass-6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 646 ;
+  triage:snippet "RemoteTargetHost::parse(...) [dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .
