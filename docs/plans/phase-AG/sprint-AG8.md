@@ -1,6 +1,6 @@
 ---
 id: AG.8
-title: Transport Security Planning And Release-Language Reconciliation
+title: Transport Security And Encryption Hardening
 status: planned
 branch: feature/pAG-s8-transport-security-planning
 worktree: ../atm-core-worktrees/feature/pAG-s8-transport-security-planning
@@ -21,85 +21,54 @@ estimated_scope: medium
 
 ## Goal
 
-Lock the security direction for cross-host transport without implementing it in
-this sprint, and make every Phase AG requirement/architecture/readiness
-statement honest about the current line: functional peer-listener and
-control-plane code paths exist, but `AG-FIND-005` still blocks ordinary
-cross-host send dispatch, real AG.7 live host-pair evidence is still pending,
-and the shipped transport is not yet secured.
+Define the transport-security direction after functional cross-host operation
+is real and operator-manageable, without yet claiming the secured transport is
+implemented in this sprint.
 
 ## Deliverables
 
-- reconciled requirements/architecture wording for cross-host transport
-  security, including the distinction between the documented target contract and
-  the current plain-TCP implementation line
-- explicit phase-level statement of what earlier AG closure does and does not
-  authorize:
-  - AG.4/AG.5/AG.6/AG.7 code-path closure may support functional cross-host
-    claims only after the live rows pass
-  - no earlier AG sprint may imply TLS, peer-auth, or encryption closure
-- ADR-030 updated to define the accepted security sequencing and the concrete
-  AG.10 security direction
-- AG.10 sprint scope updated so implementation, tests, and smoke rows match the
-  chosen security direction
-- explicit record that AG.7 real Windows/macOS or Windows/Mac-Studio host-pair
-  validation is still pending and is not closed by this sprint
+- exact requirements/architecture reconciliation for cross-host encryption
+- implementation-plan scope for transport-security upgrades after functional
+  validation is green
+- explicit statement of what earlier AG closure does and does not authorize
+- ADR-030 for transport-security direction once AG functional closure exists
 
 ## Required Validation
 
 - reconcile `AG-FIND-001` against the actual implementation line
-- verify requirements, architecture, readiness, ADR-030, and AG.10 all say the
-  same thing about current plain TCP vs future secured transport
-- verify AG.8 does not require AG.7 live rows to be green; it requires the
-  functional code paths and harnesses to exist so the security plan is grounded
-  in the real transport shape
-- verify no AG.1-AG.9 document implicitly grants transport-security closure
-  before AG.10
+- define the late-sprint acceptance bar for encryption / peer authentication
+- ensure any earlier Phase AG "functional cross-host ready" verdict explicitly
+  excludes transport-security claims until this sprint closes
 
 ## Unit-Test Plan
 
-- review-only verification that every normative doc names the same current
-  state: durable interface selection exists, durable allowlist enforcement
-  exists, loopback diagnostics exist, live host-pair validation is still
-  pending, and transport security remains unimplemented
-- review-only verification that AG.10 names concrete trust, handshake, and
-  fallback behavior rather than vague "add TLS later" language
+- review-only verification that requirements, architecture, readiness, and the
+  ADR all describe the same late-sequenced security posture
+- review-only verification that no AG.4-AG.9 sprint silently implies secured
+  transport closure before the implementation sprint lands
 
 ## Integration-Test Plan
 
-- planning-only sprint: define AG.10 integration obligations, do not implement
-  or execute new integration behavior here
+- n/a for implementation behavior in this sprint; integration obligations are
+  owned by AG.10
 
 ## Smoke-Test Plan
 
-- planning-only sprint: define AG.10 secure smoke obligations, do not claim
-  secure smoke coverage in AG.8
-
-## Non-Closure / Out Of Scope
-
-- no transport-security implementation
-- no handshake code
-- no certificate generation or trust exchange code
-- no claim that AG.7 real host-pair validation is complete
-- no release claim that `1.3.1` cross-host transport is encrypted or
-  peer-authenticated
+- n/a for implementation behavior in this sprint; smoke obligations are owned
+  by AG.10
 
 ## Entry Gate
 
-- the functional cross-host code paths from AG.4/AG.5/AG.6/AG.7 exist on the
-  current implementation line
-- AG.7 live hardware reruns may still be pending; that pending evidence must be
-  recorded explicitly rather than hidden behind this sprint
+- functional cross-host operation, loopback support, interface selection,
+  allowlist enforcement, doctor visibility, and AG.7 live validation must
+  already exist
 
 ## Acceptance Criteria
 
-- the sprint text states clearly that transport security is intentionally
-  sequenced after functional cross-host control-plane work
-- requirements, architecture, readiness, findings, and ADR-030 agree that the
-  current line is plain TCP and that any release verdict must exclude
-  transport-security closure until AG.10 passes
-- AG.8 states exactly what earlier AG closure does and does not authorize
-- AG.8 does not claim a working secured daemon-to-daemon transport
-- AG.8 does not claim AG.7 real live host-pair validation is complete
-- AG.10 has concrete implementation/testing/smoke scope derived from the agreed
-  security direction
+- the sprint text states clearly that encryption/security is late-sequenced on
+  purpose
+- no earlier Phase AG sprint is allowed to imply TLS/security closure
+- requirements, architecture, and readiness wording stay consistent about what
+  remains unsecured until the implementation sprint closes
+- AG.8 does not claim a working secured daemon-to-daemon transport in this
+  sprint
