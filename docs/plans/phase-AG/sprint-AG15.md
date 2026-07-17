@@ -26,6 +26,8 @@ before introducing Windows-specific variables.
 
 ## Deliverables
 
+- Mac Studio bring-up and execution guide:
+  [ag15-macstudio-setup.md](./ag15-macstudio-setup.md)
 - other-Mac smoke evidence:
   - `AG-VAL-021A`
   - `AG-VAL-021B`
