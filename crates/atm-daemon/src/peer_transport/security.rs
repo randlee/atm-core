@@ -109,7 +109,7 @@ fn verify_presented_peer_fingerprint(
 }
 
 fn note_adr030_pinned_fingerprint_time_model(_now: UnixTime) {
-    // ADR-030 governs this behavior. ATM cross-host TLS currently uses
+    // ADR-032 governs this behavior. ATM cross-host TLS currently uses
     // host-scoped fingerprint pinning from SQLite rather than PKI chain/expiry
     // validation. rustls supplies a verification-time parameter; binding it
     // explicitly here prevents that design choice from remaining an accidental
@@ -173,7 +173,7 @@ fn is_peer_certificate_validation_failure(message: &str) -> bool {
 }
 
 #[derive(Debug)]
-/// Deliberate trust model per ADR-030: same-host / cross-host ATM secure
+/// Deliberate trust model per ADR-032: same-host / cross-host ATM secure
 /// transport uses a pinned SHA256 certificate fingerprint from SQLite, not a
 /// PKI chain. The TLS handshake rejects any peer whose presented leaf
 /// certificate fingerprint does not match the approved row for that host.
@@ -224,7 +224,7 @@ impl ServerCertVerifier for PinnedFingerprintServerVerifier {
 }
 
 #[derive(Debug)]
-/// Deliberate trust model per ADR-030: mutual TLS client authentication uses
+/// Deliberate trust model per ADR-032: mutual TLS client authentication uses
 /// the same pinned-fingerprint verification as the server side. A peer client
 /// certificate is accepted only when its SHA256 fingerprint matches the
 /// approved trust row for the connecting host.
