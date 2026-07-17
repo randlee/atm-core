@@ -53,6 +53,9 @@ contract instead of a local-mailbox fallthrough.
 - findings-ledger linkage to `AG-FIND-005`
 - one dedicated ADR (`ADR-031`) for the remote-target contract and dispatch
   boundary
+- one authoritative deletion/reduction ledger for stale AG.3-AG.10 cross-host
+  surfaces that must not survive the corrective line without an explicit
+  justification
 
 ## Boundary And Type Contract
 
@@ -123,6 +126,61 @@ Trait-surface rule:
 - the sprint requires one fixed production implementer set chosen by the
   composition root
 
+Transport and localhost invariants:
+
+- socket transport must reuse the same ATM wire message shapes already used on
+  the other transports; AG.11 must not introduce a transport-specific socket
+  message schema
+- `localhost` and self-IP same-host traffic are ordinary remote hosts routed
+  through the same parsing, dispatch, listener bind, and socket path as any
+  other host
+- no loopback-only branch, bypass flag, or localhost-special client path may be
+  introduced to make AG.12 or AG.13 pass
+
+## Paths To Delete Or Reduce
+
+This list is authoritative for the AG.11 corrective line. Any item retained
+after AG.11 must be justified explicitly in the AG.11 completion report and
+must remain behind the sealed cross-host delivery or storage boundary instead
+of leaking into general send/runtime code.
+
+- delete env-driven peer endpoint selection as an operator contract:
+  - `crates/atm-daemon/src/peer_transport.rs`
+    - `daemon_peer_endpoint_from_env`
+    - user-facing recovery/error text that instructs operators to set
+      `ATM_DAEMON_PEER_ADDR`
+  - `docs/plans/phase-AG/cross-host-setup-runbook.md`
+    - transitional `ATM_DAEMON_PEER_ADDR` setup steps must be removed once the
+      AG.4 / AG.5 SQLite-managed interface rows are the corrective authority
+- delete CLI-only loopback transport compatibility paths that bypass the daemon
+  runtime:
+  - `crates/atm-core/src/transport/testing.rs`
+    - `LoopbackClientTransport`
+    - loopback-only compatibility-preflight / heartbeat fallbacks
+  - `crates/atm/src/composition.rs`
+    - the `loopback_transport_*_without_daemon` test line must be replaced by
+      AG.12-AG.14 coverage that exercises the real remote-target path through
+      the daemon boundary
+- delete or reduce any cross-host parsing/classification logic that remains in
+  general runtime code after the typed `remote_host` contract exists:
+  - `crates/atm-daemon/src/runtime_health.rs`
+    - retain only the local-vs-remote branch decision and receipt/retry
+      orchestration that belongs above the delivery trait
+    - remove host-shape parsing, localhost special-casing, or socket-policy
+      decisions that can live inside the sealed delivery boundary instead
+- reduce composition-root leakage of transport configuration:
+  - `crates/atm-daemon/src/composition.rs`
+    - remove direct env-based peer transport configuration loading from the
+      production composition path
+    - retain only sealed storage-backed interface/allowlist loading and wiring
+      into the delivery runtime
+- delete any surviving documentation or test language that implies:
+  - loopback is a separate product mode rather than ordinary host routing
+  - special localhost handling is allowed
+  - socket transport may use a transport-specific message schema
+  - env variables remain the intended steady-state control plane for peer
+    routing
+
 ## Acceptance Criteria
 
 - both supported syntaxes normalize to the same typed remote-target field
@@ -135,6 +193,8 @@ Trait-surface rule:
 - local sends remain on the existing local mailbox path
 - same-host remote-target values do not require a dedicated loopback-only field
   or dispatch branch
+- same-host remote-target values use the same ATM wire message envelopes and
+  the same listener/socket path used for any other remote host
 - production composition installs a real non-test-double `CrossHostDelivery`
   implementation on the live send dispatch path
 - "healthy" means the daemon has a currently usable enabled interface row, a
@@ -142,6 +202,11 @@ Trait-surface rule:
   target host; otherwise the send takes the deferred branch immediately
 - the sprint closes only when the remote-target dispatch branch is observable in
   automated validation
+- the AG.11 completion report accounts for every entry in `Paths To Delete Or
+  Reduce` as either:
+  - deleted
+  - reduced behind the sealed delivery/storage boundary
+  - or explicitly deferred with a named follow-on finding
 
 ## Required Validation
 
@@ -159,6 +224,8 @@ Trait-surface rule:
   the Tier-3 end-to-end integration backstop is deferred to AG.14
 - one timeout-enforcement test proves the `10s` healthy-wait ceiling is a hard
   upper bound rather than best-effort behavior
+- one code-audit validation pass records the disposition of every entry under
+  `Paths To Delete Or Reduce`
 - requirements / architecture / ADR review proving the CLI contract and runtime
   branch are described consistently
 
