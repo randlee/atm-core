@@ -13,8 +13,7 @@ use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::DoctorQuery;
-use atm_core::doctor::DoctorStatus;
+use atm_core::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::AtmObservabilityHealthState;
@@ -862,7 +861,7 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
 
 #[test]
 #[serial_test::serial(env)]
-fn doctor_warns_when_cross_host_listener_is_unconfigured_and_allowlist_is_empty() {
+fn doctor_reports_info_when_cross_host_listener_is_unconfigured_and_unused() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -890,18 +889,19 @@ fn doctor_warns_when_cross_host_listener_is_unconfigured_and_allowlist_is_empty(
 
     match doctor {
         ResponseEnvelope::Doctor(report) => {
+            assert_eq!(report.summary.status, DoctorStatus::Healthy);
             let cross_host = report.cross_host.expect("cross host");
             assert!(cross_host.interfaces.is_empty());
             assert!(cross_host.bound_endpoints.is_empty());
             assert!(cross_host.allowlist.empty);
             assert!(report.findings.iter().any(|finding| {
                 finding.code == AtmErrorCode::WarningCrossHostListenerUnconfigured
+                    && finding.severity == DoctorSeverity::Info
             }));
-            assert!(
-                report.findings.iter().any(|finding| {
-                    finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
-                })
-            );
+            assert!(report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningCrossHostAllowlistEmpty
+                    && finding.severity == DoctorSeverity::Info
+            }));
             assert!(
                 report
                     .recommendations
