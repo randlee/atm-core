@@ -1,0 +1,141 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG10-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG10-004" ;
+  triage:title "send/mod.rs not reduced to public entrypoints only, orchestration helpers remain inline" ;
+  triage:description "The AG.10 addendum's recommended split shape for crates/atm-core/src/send/mod.rs was 'public entrypoints only', with orchestration logic moved to sibling modules. prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, and build_send_delivery_plan all remain in mod.rs at commit 88eb5bcf, PR #560, and persist across all subsequent AG sprint branches. File remains ~820-920 lines." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "refactoring" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-16T19:36:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG10-004/s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/s10/88eb5bcf> ;
+  triage:openOn <urn:atm:triage:worktree/s11/8e9d1ac4> ;
+  triage:openOn <urn:atm:triage:worktree/s12/cbc6a19a> ;
+  triage:openOn <urn:atm:triage:worktree/s13/512f3afa> ;
+  triage:openOn <urn:atm:triage:worktree/s14/94b969b6> ;
+  triage:openOn <urn:atm:triage:worktree/s15/d05ee158> ;
+  triage:promoteTo <urn:atm:triage:worktree/s15/d05ee158> ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/88eb5bcf> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/8e9d1ac4> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/cbc6a19a> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/512f3afa> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/94b969b6> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG10-004/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "prepare_send_context, persist_send_message, build_send_outcome, finalize_send_outcome, build_send_delivery_plan remain inline in mod.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/d05ee158> .
+
+<urn:atm:triage:worktree/s10/88eb5bcf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "88eb5bcf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s11/8e9d1ac4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s11-remote-target-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
+  triage:headSha "8e9d1ac4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s12/cbc6a19a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "cbc6a19a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s13/512f3afa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "512f3afa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s14/94b969b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s14-integration-coverage" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
+  triage:headSha "94b969b6" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s15/d05ee158>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "d05ee158" ;
+  triage:orderIndex 6 .

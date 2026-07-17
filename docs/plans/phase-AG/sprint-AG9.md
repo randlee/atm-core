@@ -31,7 +31,7 @@ with the actual release verdict.
 - final findings ledger
 - final readiness record
 - explicit statement of whether cross-host communication is:
-  - functionally release-usable only if `AG-FIND-005` is closed
+  - functionally release-usable
   - blocked
   - functionally usable but not transport-secure
 
@@ -71,8 +71,6 @@ with the actual release verdict.
   - if `AG.10` is `PASS`, the verdict may include transport-security closure
   - if `AG.10` is deferred, blocked, or out-of-scope, the verdict must state
     cross-host is functionally usable but not transport-secure
-  - if `AG-FIND-005` remains open, the verdict must remain `blocked`; it is a
-    hard release blocker closed only by the AG.11-AG.17 corrective chain
 
 ## Acceptance Criteria
 
@@ -82,5 +80,3 @@ with the actual release verdict.
 - final release wording is explicit about the difference between functional
   cross-host closure and transport-security closure
 - AG.10 is named explicitly as a precondition for any transport-security claim
-- AG-FIND-005 is named explicitly as a hard blocker for any release-usable
-  cross-host verdict
