@@ -1,14 +1,53 @@
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
-     Running unittests src/lib.rs (target/debug/deps/atm_daemon-eddf44d50b2b6ac5)
+$ target/debug/atm daemon hosts allow 127.0.0.1 --note "AG12 localhost smoke" --json
+{
+  "row": {
+    "host_name": "127.0.0.1",
+    "enabled": true,
+    "added_by": "arch-ctm@atm-dev",
+    "added_at": "2026-07-16T03:03:16.799774Z",
+    "updated_at": "2026-07-17T06:20:46.156957Z",
+    "note": "AG12 localhost smoke"
+  }
+}
 
-running 1 test
-test tests::runtime_root::dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox ... ok
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-sender target/debug/atm send ag12-receiver@ag12-localhost-proof-r2.localhost "hello localhost send-read" --json
+{
+  "action": "send",
+  "team": "ag12-localhost-proof-r2",
+  "agent": "ag12-receiver",
+  "sender": "ag12-sender",
+  "outcome": "sent",
+  "message_id": "01KXQBR3QH4FTVHRP284C7MRE2",
+  "requires_ack": false,
+  "summary": "hello localhost send-read"
+}
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 133 filtered out; finished in 0.13s
-
-     Running unittests src/main.rs (target/debug/deps/atm_daemon-c0195e43dc219d81)
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
-
+$ ATM_TEAM=ag12-localhost-proof-r2 ATM_IDENTITY=ag12-receiver target/debug/atm read --team ag12-localhost-proof-r2 --all --json
+{
+  "action": "read",
+  "team": "ag12-localhost-proof-r2",
+  "agent": "ag12-receiver",
+  "selection_mode": "all",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "history",
+    "class": "read",
+    "from": "ag12-sender",
+    "text": "hello localhost send-read",
+    "timestamp": "2026-07-17T06:20:46.193339Z",
+    "read": true,
+    "source_team": "ag12-localhost-proof-r2",
+    "summary": "hello localhost send-read",
+    "message_id": "01KXQBR3QH4FTVHRP284C7MRE2",
+    "requires_ack": false
+  },
+  "selected_message_id": "01KXQBR3QH4FTVHRP284C7MRE2",
+  "match_count": 1,
+  "additional_match_count": 0,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 0,
+    "history": 1
+  }
+}
