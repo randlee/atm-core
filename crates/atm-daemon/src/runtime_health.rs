@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::io::Write as _;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
@@ -9,7 +8,7 @@ use std::time::Duration;
 use atm_core::{
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
-    boundary::{self, GraftNudgeTarget, PostSendHookEvent},
+    boundary::{self},
     clear::clear_mail_with_runtime,
     doctor::{
         self, CrossHostAllowedHostDoctorRow, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
@@ -17,12 +16,8 @@ use atm_core::{
         DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
         DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
-    error::{AtmError, AtmErrorKind},
+    error::AtmError,
     error_codes::AtmErrorCode,
-    graft::{
-        GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-        read_graft_post_send_message, write_graft_post_send_message,
-    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -31,16 +26,14 @@ use atm_core::{
         TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    schema::canonical_home_dir,
     send::{RemoteTargetHost, SendRequest, send_mail_with_runtime_and_post_send_emitter},
 };
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+mod graft_post_send;
 use crate::peer_transport::PeerTransportRuntime;
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
@@ -49,6 +42,7 @@ pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::{AllowedHostStore, PeerInterfaceConfigStore, PeerSecurityStore, RosterStore};
+use graft_post_send::DaemonGraftPostSendPort;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -61,204 +55,6 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
-const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
-
-#[derive(Debug, Clone)]
-struct DaemonGraftPostSendPort {
-    runtime: LocalServiceRuntime,
-}
-
-impl DaemonGraftPostSendPort {
-    fn new(runtime: LocalServiceRuntime) -> Self {
-        Self { runtime }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonGraftPostSendPort {}
-
-impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
-    fn deliver_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        target: &GraftNudgeTarget,
-    ) -> Result<(), AtmError> {
-        let Some(member) = self
-            .runtime
-            .load_roster_member(&target.recipient_team, &target.recipient)?
-        else {
-            return Err(graft_recipient_unavailable_error(
-                event,
-                "recipient is missing from the authoritative ATM roster",
-            )
-            .with_recovery(
-                "Repair the roster row and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ));
-        };
-        let recipient_home_dir =
-            canonical_home_dir(&member.metadata_json).ok_or_else(|| graft_recipient_unavailable_error(
-                event,
-                "recipient has no authoritative home_dir for graft post-send delivery",
-            ).with_recovery(format!(
-                "Repair the roster row with `atm teams update-member --team {} --member {} --home-dir <path>` and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                target.recipient_team, target.recipient
-            )))?;
-        let endpoint_path = graft_receiver_socket_path_from_home(
-            recipient_home_dir.as_path(),
-            &target.recipient_team,
-            &target.recipient,
-        );
-        deliver_post_send_to_graft_receiver(&endpoint_path, event)
-    }
-}
-
-fn deliver_post_send_to_graft_receiver(
-    endpoint_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    let mut stream = connect_graft_receiver(endpoint_path, event)?;
-    apply_graft_post_send_deadlines(&stream, event)?;
-    let request = GraftPostSendRequest {
-        event: event.clone(),
-    };
-    write_graft_post_send_message(
-        &mut stream,
-        &request,
-        "failed to write graft post-send request",
-        "graft post-send request exceeded the bounded payload cap",
-    )
-    .map_err(|error| graft_transport_error(event, error))?;
-    stream
-        .flush()
-        .map_err(|source| graft_transport_error(event, AtmError::daemon_unavailable(
-            "failed to flush graft post-send request",
-        )
-        .with_recovery(
-            "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-        )
-        .with_source(source)))?;
-    match read_graft_post_send_message::<GraftPostSendResponse>(
-        &mut stream,
-        "failed to read graft post-send response",
-        "graft post-send response exceeded the bounded payload cap",
-    )
-    .map_err(|error| graft_transport_error(event, error))?
-    {
-        GraftPostSendResponse::Delivered => Ok(()),
-        GraftPostSendResponse::Error(error) => Err(error.into_atm_error()),
-    }
-}
-
-fn connect_graft_receiver(
-    endpoint_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<LocalSocketStream, AtmError> {
-    let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("graft-post-send-connect".to_string())
-        .spawn(move || {
-            let _ = result_tx.send(LocalSocketStream::connect(name));
-        })
-        .map_err(|source| {
-            graft_recipient_unavailable_error(
-                event,
-                "failed to spawn bounded graft post-send connect helper",
-            )
-            .with_recovery(
-                "Retry after the daemon can spawn one bounded same-host connect helper thread.",
-            )
-            .with_source(source)
-        })?;
-    match result_rx.recv_timeout(GRAFT_POST_SEND_CONNECT_DEADLINE) {
-        Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(
-            graft_recipient_unavailable_error(event, "recipient has no active graft receiver path")
-                .with_recovery(
-                    "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "timed out connecting to the graft receiver path",
-            )
-            .with_recovery(
-                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "graft post-send connect helper disconnected unexpectedly",
-            )
-            .with_recovery(
-                "Restart the daemon and the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-    }
-}
-
-fn apply_graft_post_send_deadlines(
-    stream: &LocalSocketStream,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    apply_graft_post_send_deadline(
-        stream.set_recv_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send receive timeout",
-    )?;
-    apply_graft_post_send_deadline(
-        stream.set_send_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send send timeout",
-    )
-}
-
-fn apply_graft_post_send_deadline(
-    result: std::io::Result<()>,
-    event: &PostSendHookEvent,
-    message: &'static str,
-) -> Result<(), AtmError> {
-    match result {
-        Ok(()) => Ok(()),
-        #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
-        Err(source) => Err(
-            graft_recipient_unavailable_error(event, message)
-                .with_recovery(
-                    "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-    }
-}
-
-fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    let mut graft_error = graft_recipient_unavailable_error(event, &error.message);
-    for recovery in error.recovery {
-        graft_error = graft_error.with_recovery(recovery);
-    }
-    graft_error
-}
-
-fn graft_recipient_unavailable_error(
-    event: &PostSendHookEvent,
-    message: impl Into<String>,
-) -> AtmError {
-    AtmError::new_with_code(
-        AtmErrorCode::PostSendGraftUnavailable,
-        AtmErrorKind::DaemonUnavailable,
-        format!(
-            "recipient {}@{} {}",
-            event.recipient,
-            event.recipient_team,
-            message.into()
-        ),
-    )
-}
 
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
@@ -662,16 +458,6 @@ impl DaemonCrossHostDelivery {
         &self,
         remote_host: &RemoteTargetHost,
     ) -> Result<SocketAddr, AtmError> {
-        if remote_host.as_str() == "localhost" {
-            return self.peer_transport_runtime.bound_addr()?.ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "remote delivery to localhost is unavailable because the daemon peer listener is not running",
-                )
-                .with_recovery(
-                    "Add and enable a daemon interface row with `atm daemon interfaces add ...`, restart atm-daemon if required, and retry the localhost remote send.",
-                )
-            });
-        }
         let port = self.resolve_remote_port()?;
         (remote_host.as_str(), port)
             .to_socket_addrs()
@@ -952,50 +738,14 @@ impl DaemonRequestDispatcher {
                 findings: vec![runtime_status_finding],
             });
         }
-        report.recommendations = report
-            .findings
-            .iter()
-            .filter_map(|finding| finding.remediation.clone())
-            .collect();
-        let status = doctor::health::status_from_findings(&report.findings);
-        let (info_count, warning_count, error_count) = report.findings.iter().fold(
-            (0usize, 0usize, 0usize),
-            |(info, warning, error), finding| match finding.severity {
-                DoctorSeverity::Info => (info + 1, warning, error),
-                DoctorSeverity::Warning => (info, warning + 1, error),
-                DoctorSeverity::Error => (info, warning, error + 1),
-            },
-        );
-        let message = match status {
-            DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-            DoctorStatus::Warning => "ATM doctor completed with warnings",
-            DoctorStatus::Error => "ATM doctor found critical issues",
-        };
-        report.summary = DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        };
+        rebuild_doctor_summary(&mut report);
         report.runtime_status = Some(runtime_status);
-        // `daemon_context` reports the daemon process's own launch-time
-        // environment, which is frozen when the singleton starts and does NOT
-        // track the requesting shell. It is deliberately distinct from
-        // `client_context` (threaded through the request payload in
-        // `DoctorQuery::caller_*`), which reflects the invoking CLI process.
-        // Surfacing the daemon's launch-time identity is diagnostically useful:
-        // it explains why an earlier release appeared to report a stale team or
-        // identity for every caller (see issue #548).
-        report.daemon_context = Some(DoctorExecutionContext {
-            team: atm_core::caller_context::read_cli_team_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            version: Some(ReleaseVersion::current()),
-        });
+        // `daemon_context` stays distinct from `client_context`, but it no
+        // longer reads ATM_TEAM/ATM_IDENTITY inside atm-daemon. Those env vars
+        // are owned by client entry points only, so the daemon reports its own
+        // version here while leaving team/identity unset. `client_context`
+        // remains the caller-threaded source of truth for request provenance.
+        report.daemon_context = Some(self.build_daemon_execution_context());
         Ok(report)
     }
 
@@ -1011,43 +761,9 @@ impl DaemonRequestDispatcher {
         let has_enabled_interface_rows = interface_rows.iter().any(|row| row.enabled);
         let legacy_fallback_active = !has_enabled_interface_rows && live_bound_addr.is_some();
 
-        let interfaces = interface_rows
-            .iter()
-            .map(|row| CrossHostInterfaceDoctorRow {
-                interface_name: row.interface_name.clone(),
-                bind_addr: row.bind_addr.to_string(),
-                advertise_addr: row.advertise_addr.to_string(),
-                port: row.port,
-                enabled: row.enabled,
-                listener_bound: row.enabled
-                    && row.last_bound_at.is_some()
-                    && row.last_bind_error.is_none(),
-                last_bound_at: row.last_bound_at,
-                last_bind_error: row.last_bind_error.clone(),
-                stale_at: row.stale_at,
-            })
-            .collect::<Vec<_>>();
-
-        let mut bound_endpoints = interfaces
-            .iter()
-            .filter(|row| row.listener_bound)
-            .map(|row| format!("{}:{}", row.bind_addr, row.port))
-            .collect::<Vec<_>>();
-        if bound_endpoints.is_empty()
-            && let Some(bound_addr) = live_bound_addr
-        {
-            bound_endpoints.push(bound_addr.to_string());
-        }
-
-        let allowlist_hosts = host_rows
-            .iter()
-            .map(|row| CrossHostAllowedHostDoctorRow {
-                host_name: row.host_name.to_string(),
-                enabled: row.enabled,
-                disabled_at: row.disabled_at,
-                note: row.note.clone(),
-            })
-            .collect::<Vec<_>>();
+        let interfaces = build_cross_host_interfaces(&interface_rows);
+        let bound_endpoints = collect_bound_endpoints(&interfaces, live_bound_addr);
+        let allowlist_hosts = build_cross_host_allowlist(&host_rows);
         let enabled_allowlist_count = host_rows.iter().filter(|row| row.enabled).count();
         let security = CrossHostSecurityDoctorReport {
             mode: security_settings.mode,
@@ -1067,66 +783,13 @@ impl DaemonRequestDispatcher {
                 .collect(),
         };
 
-        let mut findings = Vec::new();
-        if legacy_fallback_active {
-            let bound_addr = live_bound_addr.expect("checked above");
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostLegacyFallbackActive,
-                message: format!(
-                    "daemon cross-host listener is currently bound at {bound_addr} via legacy config fallback because no enabled durable interface rows exist"
-                ),
-                remediation: Some(
-                    "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor` so the durable interface rows become authoritative."
-                        .to_string(),
-                ),
-            });
-        } else if !has_enabled_interface_rows {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostListenerUnconfigured,
-                message:
-                    "no enabled daemon interface rows are configured for cross-host listener binding"
-                        .to_string(),
-                remediation: Some(
-                    "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor`."
-                        .to_string(),
-                ),
-            });
-        }
-
-        findings.extend(
-            interfaces
-                .iter()
-                .filter(|row| row.enabled && row.last_bind_error.is_some())
-                .map(|row| DoctorFinding {
-                    severity: DoctorSeverity::Warning,
-                    code: AtmErrorCode::WarningCrossHostListenerDegraded,
-                    message: format!(
-                        "daemon interface {} at {}:{} failed to bind for cross-host transport: {}",
-                        row.interface_name,
-                        row.bind_addr,
-                        row.port,
-                        row.last_bind_error.as_deref().unwrap_or("unknown bind failure")
-                    ),
-                    remediation: Some(
-                        "Run `atm daemon interfaces list` to inspect the row, correct the bind address or port, restart atm-daemon, and rerun `atm doctor`."
-                            .to_string(),
-                    ),
-                }),
+        let findings = build_cross_host_findings(
+            legacy_fallback_active,
+            has_enabled_interface_rows,
+            live_bound_addr,
+            &interfaces,
+            enabled_allowlist_count,
         );
-
-        if enabled_allowlist_count == 0 {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningCrossHostAllowlistEmpty,
-                message: "cross-host host authorization is enforced but no enabled daemon allowed-host rows exist".to_string(),
-                remediation: Some(
-                    "Run `atm daemon hosts allow <host>` for each remote peer that should be admitted, then rerun `atm doctor`."
-                        .to_string(),
-                ),
-            });
-        }
 
         Ok((
             CrossHostDoctorReport {
@@ -1142,6 +805,186 @@ impl DaemonRequestDispatcher {
             },
             findings,
         ))
+    }
+}
+
+fn rebuild_doctor_summary(report: &mut DoctorReport) {
+    report.recommendations = report
+        .findings
+        .iter()
+        .filter_map(|finding| finding.remediation.clone())
+        .collect();
+    let status = doctor::health::status_from_findings(&report.findings);
+    let (info_count, warning_count, error_count) = doctor_summary_counts(&report.findings);
+    let message = match status {
+        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Warning => "ATM doctor completed with warnings",
+        DoctorStatus::Error => "ATM doctor found critical issues",
+    };
+    report.summary = DoctorSummary {
+        status,
+        message: message.to_string(),
+        info_count,
+        warning_count,
+        error_count,
+    };
+}
+
+fn doctor_summary_counts(findings: &[DoctorFinding]) -> (usize, usize, usize) {
+    findings.iter().fold(
+        (0usize, 0usize, 0usize),
+        |(info, warning, error), finding| match finding.severity {
+            DoctorSeverity::Info => (info + 1, warning, error),
+            DoctorSeverity::Warning => (info, warning + 1, error),
+            DoctorSeverity::Error => (info, warning, error + 1),
+        },
+    )
+}
+
+fn build_cross_host_interfaces(
+    interface_rows: &[atm_storage::PeerInterfaceRow],
+) -> Vec<CrossHostInterfaceDoctorRow> {
+    interface_rows
+        .iter()
+        .map(|row| CrossHostInterfaceDoctorRow {
+            interface_name: row.interface_name.clone(),
+            bind_addr: row.bind_addr.to_string(),
+            advertise_addr: row.advertise_addr.to_string(),
+            port: row.port,
+            enabled: row.enabled,
+            listener_bound: row.enabled
+                && row.last_bound_at.is_some()
+                && row.last_bind_error.is_none(),
+            last_bound_at: row.last_bound_at,
+            last_bind_error: row.last_bind_error.clone(),
+            stale_at: row.stale_at,
+        })
+        .collect()
+}
+
+fn collect_bound_endpoints(
+    interfaces: &[CrossHostInterfaceDoctorRow],
+    live_bound_addr: Option<SocketAddr>,
+) -> Vec<String> {
+    let mut bound_endpoints = interfaces
+        .iter()
+        .filter(|row| row.listener_bound)
+        .map(|row| format!("{}:{}", row.bind_addr, row.port))
+        .collect::<Vec<_>>();
+    if bound_endpoints.is_empty()
+        && let Some(bound_addr) = live_bound_addr
+    {
+        bound_endpoints.push(bound_addr.to_string());
+    }
+    bound_endpoints
+}
+
+fn build_cross_host_allowlist(
+    host_rows: &[atm_storage::AllowedHostRow],
+) -> Vec<CrossHostAllowedHostDoctorRow> {
+    host_rows
+        .iter()
+        .map(|row| CrossHostAllowedHostDoctorRow {
+            host_name: row.host_name.to_string(),
+            enabled: row.enabled,
+            disabled_at: row.disabled_at,
+            note: row.note.clone(),
+        })
+        .collect()
+}
+
+fn build_cross_host_findings(
+    legacy_fallback_active: bool,
+    has_enabled_interface_rows: bool,
+    live_bound_addr: Option<SocketAddr>,
+    interfaces: &[CrossHostInterfaceDoctorRow],
+    enabled_allowlist_count: usize,
+) -> Vec<DoctorFinding> {
+    let mut findings = cross_host_listener_findings(
+        legacy_fallback_active,
+        has_enabled_interface_rows,
+        live_bound_addr,
+    );
+    findings.extend(cross_host_degraded_bind_findings(interfaces));
+    if enabled_allowlist_count == 0 {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningCrossHostAllowlistEmpty,
+            message: "cross-host host authorization is enforced but no enabled daemon allowed-host rows exist".to_string(),
+            remediation: Some(
+                "Run `atm daemon hosts allow <host>` for each remote peer that should be admitted, then rerun `atm doctor`."
+                    .to_string(),
+            ),
+        });
+    }
+    findings
+}
+
+fn cross_host_listener_findings(
+    legacy_fallback_active: bool,
+    has_enabled_interface_rows: bool,
+    live_bound_addr: Option<SocketAddr>,
+) -> Vec<DoctorFinding> {
+    if legacy_fallback_active {
+        let bound_addr = live_bound_addr.expect("checked above");
+        return vec![DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningCrossHostLegacyFallbackActive,
+            message: format!(
+                "daemon cross-host listener is currently bound at {bound_addr} via legacy config fallback because no enabled durable interface rows exist"
+            ),
+            remediation: Some(
+                "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor` so the durable interface rows become authoritative."
+                    .to_string(),
+            ),
+        }];
+    }
+    if has_enabled_interface_rows {
+        return Vec::new();
+    }
+    vec![DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningCrossHostListenerUnconfigured,
+        message: "no enabled daemon interface rows are configured for cross-host listener binding"
+            .to_string(),
+        remediation: Some(
+            "Run `atm daemon interfaces add <interface-name> --bind-addr <ip> --advertise-addr <ip> --port 43101 --kind <lan|vpn|loopback|other>`, restart atm-daemon, and rerun `atm doctor`."
+                .to_string(),
+        ),
+    }]
+}
+
+fn cross_host_degraded_bind_findings(
+    interfaces: &[CrossHostInterfaceDoctorRow],
+) -> Vec<DoctorFinding> {
+    interfaces
+        .iter()
+        .filter(|row| row.enabled && row.last_bind_error.is_some())
+        .map(|row| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningCrossHostListenerDegraded,
+            message: format!(
+                "daemon interface {} at {}:{} failed to bind for cross-host transport: {}",
+                row.interface_name,
+                row.bind_addr,
+                row.port,
+                row.last_bind_error.as_deref().unwrap_or("unknown bind failure")
+            ),
+            remediation: Some(
+                "Run `atm daemon interfaces list` to inspect the row, correct the bind address or port, restart atm-daemon, and rerun `atm doctor`."
+                    .to_string(),
+            ),
+        })
+        .collect()
+}
+
+impl DaemonRequestDispatcher {
+    fn build_daemon_execution_context(&self) -> DoctorExecutionContext {
+        DoctorExecutionContext {
+            team: None,
+            identity: None,
+            version: Some(ReleaseVersion::current()),
+        }
     }
 }
 
