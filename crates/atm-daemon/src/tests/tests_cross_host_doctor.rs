@@ -98,12 +98,15 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -162,12 +165,15 @@ fn doctor_stays_healthy_when_cross_host_is_unconfigured_and_unused() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -265,12 +271,15 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {

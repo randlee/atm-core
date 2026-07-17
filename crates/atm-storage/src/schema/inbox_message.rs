@@ -169,6 +169,12 @@ pub struct MessageEnvelope {
     pub expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
+    #[serde(
+        rename = "originHost",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub origin_host: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -209,6 +215,12 @@ struct RawMessageEnvelope {
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: Option<TaskId>,
+    #[serde(
+        rename = "originHost",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    origin_host: Option<String>,
     #[serde(flatten)]
     extra: Map<String, Value>,
 }
@@ -231,6 +243,7 @@ impl From<MessageEnvelope> for RawMessageEnvelope {
             thread_mode: value.thread_mode,
             expires_at: value.expires_at,
             task_id: value.task_id,
+            origin_host: value.origin_host,
             extra: value.extra,
         }
     }
@@ -257,6 +270,7 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
             thread_mode: value.thread_mode,
             expires_at: value.expires_at,
             task_id: value.task_id,
+            origin_host: value.origin_host,
             extra: value.extra,
         }
     }

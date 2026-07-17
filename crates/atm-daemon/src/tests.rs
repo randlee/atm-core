@@ -196,13 +196,16 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("heartbeat response");
     match response {
         ResponseEnvelope::Heartbeat(response) => {
@@ -222,12 +225,15 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     assert_eq!(snapshot.member_counts.active_members, 1);
 
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home.clone(),
-            team_override: Some(team.clone()),
-            ..atm_core::doctor::DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home.clone(),
+                team_override: Some(team.clone()),
+                ..atm_core::doctor::DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
     match doctor {
         ResponseEnvelope::Doctor(report) => {
@@ -282,13 +288,16 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
     let qa: AgentName = "qa-a".parse().expect("member");
 
     dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: leader.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: leader.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("initial heartbeat");
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
@@ -325,13 +334,16 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
     let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: leader.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: leader.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("initial heartbeat");
 
     let config_path = atm_home
@@ -382,23 +394,29 @@ fn heartbeat_rejects_live_pid_conflict() {
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("initial heartbeat");
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id().saturating_add(1),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::Idle,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id().saturating_add(1),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::Idle,
+            }),
+            None,
+        )
         .expect_err("live pid conflict");
 
     assert_eq!(error.code, AtmErrorCode::IdentityConflict);
@@ -435,23 +453,29 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: u32::MAX,
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::Idle,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: u32::MAX,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::Idle,
+            }),
+            None,
+        )
         .expect("initial dead-pid heartbeat");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team,
-            member,
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team,
+                member,
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("takeover heartbeat");
 
     match response {
@@ -544,13 +568,16 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     );
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }),
+            None,
+        )
         .expect("retry heartbeat");
 
     match response {
@@ -641,12 +668,15 @@ fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
     );
 
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..atm_core::doctor::DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..atm_core::doctor::DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -690,20 +720,26 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
 
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: test_team().clone(),
-            member: ROLE_TEAM_LEAD.parse().expect("member"),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::SessionEnded,
-        }))
+        .dispatch(
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: test_team().clone(),
+                member: ROLE_TEAM_LEAD.parse().expect("member"),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::SessionEnded,
+            }),
+            None,
+        )
         .and_then(|_| {
-            dispatcher.dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
-                home_dir: atm_home.clone(),
-                current_dir: atm_home,
-                team_override: Some(test_team().clone()),
-                ..atm_core::doctor::DoctorQuery::default()
-            }))
+            dispatcher.dispatch(
+                RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                    home_dir: atm_home.clone(),
+                    current_dir: atm_home,
+                    team_override: Some(test_team().clone()),
+                    ..atm_core::doctor::DoctorQuery::default()
+                }),
+                None,
+            )
         })
         .expect("doctor response");
 
@@ -815,12 +851,15 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -879,12 +918,15 @@ fn doctor_reports_info_when_cross_host_listener_is_unconfigured_and_unused() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -982,12 +1024,15 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: Some(test_team().clone()),
-            ..DoctorQuery::default()
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some(test_team().clone()),
+                ..DoctorQuery::default()
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {
@@ -1037,17 +1082,20 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path);
 
     let doctor = dispatcher
-        .dispatch(RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: atm_home.clone(),
-            current_dir: atm_home,
-            team_override: None,
-            caller_team: Some(test_team().clone()),
-            caller_identity: Some(
-                atm_core::test_support::TEST_SENDER
-                    .parse()
-                    .expect("caller identity"),
-            ),
-        }))
+        .dispatch(
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: None,
+                caller_team: Some(test_team().clone()),
+                caller_identity: Some(
+                    atm_core::test_support::TEST_SENDER
+                        .parse()
+                        .expect("caller identity"),
+                ),
+            }),
+            None,
+        )
         .expect("doctor response");
 
     match doctor {

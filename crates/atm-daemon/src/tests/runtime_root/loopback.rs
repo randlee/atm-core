@@ -66,7 +66,10 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
     request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect("dispatch loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -74,25 +77,28 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
     assert_eq!(outcome.agent.as_str(), "qa-a");
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -181,30 +187,36 @@ fn dispatcher_loopback_send_rejects_unauthorized_host_before_mailbox_mutation() 
     request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect_err("unauthorized localhost send must fail closed");
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -278,7 +290,10 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect("dispatch secure loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -287,25 +302,28 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     assert!(outcome.requires_ack);
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -315,16 +333,19 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     let source_message_id = message.envelope.message_id.expect("message id");
 
     let ack = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: atm_home.clone(),
-                current_dir: workspace_dir.clone(),
-                caller_identity: "qa-a".parse().expect("caller"),
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: source_message_id,
-                reply_body: "ack from secure localhost".to_string(),
-            },
-        )))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+                atm_core::ack::AckRequest {
+                    home_dir: atm_home.clone(),
+                    current_dir: workspace_dir.clone(),
+                    caller_identity: "qa-a".parse().expect("caller"),
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                    message_id: source_message_id,
+                    reply_body: "ack from secure localhost".to_string(),
+                },
+            )),
+            None,
+        )
         .expect("ack over secure localhost");
     let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
         panic!("expected ack response");
@@ -335,25 +356,28 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     ));
 
     let sender_read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read sender inbox");
     let ResponseEnvelope::Receive(report) = sender_read else {
         panic!("expected sender receive response");
@@ -431,7 +455,10 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
     request.remote_host = Some(RemoteTargetHost::parse("localhost").expect("host"));
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect("dispatch secure loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -439,25 +466,28 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
     assert_eq!(outcome.agent.as_str(), "qa-a");
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -549,30 +579,36 @@ fn dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation() {
     request.remote_host = Some(RemoteTargetHost::parse("127.0.0.1").expect("host"));
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect_err("self-ip send must fail closed");
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -646,7 +682,10 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     request.remote_host = Some(RemoteTargetHost::parse("127.0.0.1").expect("host"));
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect("dispatch secure self-ip send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -655,25 +694,28 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     assert!(outcome.requires_ack);
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");
@@ -683,16 +725,19 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     let source_message_id = message.envelope.message_id.expect("message id");
 
     let ack = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: atm_home.clone(),
-                current_dir: workspace_dir.clone(),
-                caller_identity: "qa-a".parse().expect("caller"),
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: source_message_id,
-                reply_body: "ack from secure self ip".to_string(),
-            },
-        )))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+                atm_core::ack::AckRequest {
+                    home_dir: atm_home.clone(),
+                    current_dir: workspace_dir.clone(),
+                    caller_identity: "qa-a".parse().expect("caller"),
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                    message_id: source_message_id,
+                    reply_body: "ack from secure self ip".to_string(),
+                },
+            )),
+            None,
+        )
         .expect("ack over secure self ip");
     let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
         panic!("expected ack response");
@@ -703,25 +748,28 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     ));
 
     let sender_read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read sender inbox");
     let ResponseEnvelope::Receive(report) = sender_read else {
         panic!("expected sender receive response");
@@ -780,30 +828,36 @@ fn dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation() {
     request.remote_host = Some(RemoteTargetHost::parse("127.0.0.1").expect("host"));
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+            None,
+        )
         .expect_err("self-ip send without listener must fail closed");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
 
     let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect("read self inbox");
     let ResponseEnvelope::Receive(report) = read else {
         panic!("expected receive response");

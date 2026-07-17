@@ -1098,6 +1098,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                origin_host: None,
                 extra: Map::new(),
             },
         };
@@ -1186,6 +1187,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            origin_host: None,
             extra: Map::new(),
         };
 

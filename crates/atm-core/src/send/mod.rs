@@ -205,6 +205,10 @@ pub struct SendRequest {
     pub expires_at: Option<crate::types::IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<RemoteTargetHost>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
 }
 
@@ -236,6 +240,8 @@ impl SendRequest {
             thread_mode: None,
             expires_at: None,
             remote_host: None,
+            origin_host: None,
+            acknowledges_message_id: None,
             dry_run,
         })
     }

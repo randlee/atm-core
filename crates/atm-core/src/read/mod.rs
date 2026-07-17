@@ -1234,6 +1234,7 @@ mod tests {
             thread_mode,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         }
     }
@@ -1478,6 +1479,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: serde_json::Map::new(),
         };
         (

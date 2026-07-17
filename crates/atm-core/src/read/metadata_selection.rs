@@ -75,6 +75,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
                 thread_mode: row.thread_mode,
                 expires_at: row.expires_at,
                 task_id: row.task_id.clone(),
+                origin_host: None,
                 extra: serde_json::Map::new(),
             },
         })

@@ -153,7 +153,8 @@ impl DaemonCrossHostDelivery {
             );
         }
         if error.code == AtmErrorCode::AddressParseFailed || error.is_validation() {
-            let mut terminal = AtmError::new_with_code(error.code, error.kind, error.message.clone());
+            let mut terminal =
+                AtmError::new_with_code(error.code, error.kind, error.message.clone());
             for recovery in &error.recovery {
                 terminal = terminal.with_recovery(recovery.clone());
             }
@@ -213,7 +214,10 @@ fn resolve_remote_port_for_host(
         .into_iter()
         .filter(|row| row.enabled)
         .collect::<Vec<_>>();
-    let enabled_ports = enabled_rows.iter().map(|row| row.port).collect::<BTreeSet<_>>();
+    let enabled_ports = enabled_rows
+        .iter()
+        .map(|row| row.port)
+        .collect::<BTreeSet<_>>();
     match enabled_ports.len() {
         1 => Ok(*enabled_ports.iter().next().expect("one enabled port")),
         0 => bound_addr.map(|addr| addr.port()).ok_or_else(|| {
@@ -257,7 +261,12 @@ mod tests {
     use atm_storage::PeerInterfaceKind;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-    fn interface_row(bind: Ipv4Addr, advertise: Ipv4Addr, port: u16, enabled: bool) -> atm_storage::PeerInterfaceRow {
+    fn interface_row(
+        bind: Ipv4Addr,
+        advertise: Ipv4Addr,
+        port: u16,
+        enabled: bool,
+    ) -> atm_storage::PeerInterfaceRow {
         atm_storage::PeerInterfaceRow {
             interface_id: i64::from(port),
             interface_name: format!("if-{port}"),
@@ -309,8 +318,18 @@ mod tests {
     #[test]
     fn resolve_remote_port_prefers_matching_interface_row_for_literal_self_ip() {
         let rows = vec![
-            interface_row(Ipv4Addr::new(127, 0, 0, 1), Ipv4Addr::new(127, 0, 0, 1), 43145, true),
-            interface_row(Ipv4Addr::new(192, 0, 0, 2), Ipv4Addr::new(192, 0, 0, 2), 43101, true),
+            interface_row(
+                Ipv4Addr::new(127, 0, 0, 1),
+                Ipv4Addr::new(127, 0, 0, 1),
+                43145,
+                true,
+            ),
+            interface_row(
+                Ipv4Addr::new(192, 0, 0, 2),
+                Ipv4Addr::new(192, 0, 0, 2),
+                43101,
+                true,
+            ),
         ];
         let host = RemoteTargetHost::parse("192.0.0.2").expect("host");
         let port = resolve_remote_port_for_host(rows, None, &host).expect("matching self-ip port");

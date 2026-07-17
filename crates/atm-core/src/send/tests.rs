@@ -56,6 +56,7 @@ fn message(
         thread_mode,
         expires_at: None,
         task_id: None,
+        origin_host: None,
         extra: Map::new(),
     }
 }
@@ -336,6 +337,7 @@ fn outbound_message() -> InboxMessage {
         thread_mode: None,
         expires_at: None,
         task_id: Some("task-123".parse().expect("task id")),
+        origin_host: None,
         extra: Map::new(),
     }
 }
@@ -355,6 +357,8 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         thread_mode: None,
         expires_at: None,
         remote_host: None,
+        origin_host: None,
+        acknowledges_message_id: None,
         dry_run: false,
     }
 }
@@ -523,6 +527,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         thread_mode: None,
         expires_at: None,
         task_id: original.task_id.clone(),
+        origin_host: None,
         extra: Map::new(),
     };
     let persistence = crate::send::DeliveryPersistenceResult::sqlite_failed_recovered(

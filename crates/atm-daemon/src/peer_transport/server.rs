@@ -696,7 +696,8 @@ fn handle_authorized_or_rejected_request(
         })?;
         return Ok(());
     }
-    let response = dispatch_peer_request(request, dispatcher, registry, deadline)?;
+    let peer_origin = Some(peer_addr.ip().to_string());
+    let response = dispatch_peer_request(request, dispatcher, registry, deadline, peer_origin)?;
     let response_frame = codec.response_to_frame(request_id, response)?;
     write_peer_frame_until(
         stream,
@@ -718,6 +719,7 @@ fn dispatch_peer_request(
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     registry: Arc<ActiveConnectionRegistry>,
     deadline: Instant,
+    peer_origin: Option<String>,
 ) -> Result<ResponseEnvelope, AtmError> {
     let (result_tx, result_rx): (SyncSender<Result<ResponseEnvelope, AtmError>>, Receiver<_>) =
         mpsc::sync_channel(1);
@@ -727,7 +729,9 @@ fn dispatch_peer_request(
         .name("peer-transport-dispatch".to_string())
         .spawn(move || {
             let _dispatch = dispatch_registry.register_dispatch_work();
-            let result = catch_unwind(AssertUnwindSafe(|| dispatcher.dispatch(request)));
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                dispatcher.dispatch(request, peer_origin.as_deref())
+            }));
             let _ = match result {
                 Ok(result) => result_tx.send(result),
                 Err(_) => result_tx.send(Err(AtmError::daemon_unavailable(

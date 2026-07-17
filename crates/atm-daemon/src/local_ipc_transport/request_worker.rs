@@ -412,7 +412,7 @@ fn spawn_dispatch_worker(
         .name("local-ipc-dispatch".to_string())
         .spawn(move || {
             let _dispatch_work = dispatch_registry.register_dispatch_work();
-            let _ = result_tx.send(dispatcher.dispatch(request));
+            let _ = result_tx.send(dispatcher.dispatch(request, None));
             let _ = completion_tx.send(());
         })
         .map_err(|source| {

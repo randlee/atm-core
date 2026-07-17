@@ -189,6 +189,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                origin_host: None,
                 extra: Default::default(),
             },
         };
@@ -238,6 +239,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             remote_host: None,
+            origin_host: None,
+            acknowledges_message_id: None,
             dry_run: false,
         }));
 
@@ -278,6 +281,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             remote_host: None,
+            origin_host: None,
+            acknowledges_message_id: None,
             dry_run: false,
         }));
 

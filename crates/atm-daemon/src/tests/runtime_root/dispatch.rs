@@ -26,21 +26,24 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path.clone());
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello add-member roster".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "qa-a@test-team",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello add-member roster".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
+            )),
+            None,
+        )
         .expect("dispatch send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = &response else {
         panic!("expected send response, got {response:?}");
@@ -79,21 +82,24 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     );
     let handle = std::thread::spawn(move || {
         let response = dispatcher
-            .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-                SendRequest::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    "qa-a@test-team",
-                    TEST_TEAM.parse().expect("team"),
-                    SendMessageSource::Inline("hello threaded dispatch".to_string()),
-                    None,
-                    false,
-                    None,
-                    false,
-                )
-                .expect("send request"),
-            )))
+            .dispatch(
+                RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                    SendRequest::new(
+                        atm_home.clone(),
+                        workspace_dir.clone(),
+                        ROLE_TEAM_LEAD.parse().expect("caller"),
+                        "qa-a@test-team",
+                        TEST_TEAM.parse().expect("team"),
+                        SendMessageSource::Inline("hello threaded dispatch".to_string()),
+                        None,
+                        false,
+                        None,
+                        false,
+                    )
+                    .expect("send request"),
+                )),
+                None,
+            )
             .expect("dispatch send");
         JsonAtmProtocolCodec
             .response_to_frame(next_request_id(), response)
@@ -130,21 +136,24 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
     );
     let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                &self_address,
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello self".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .dispatch(
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    &self_address,
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello self".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
+            )),
+            None,
+        )
         .expect_err("self-addressed daemon send must fail");
 
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
@@ -178,25 +187,28 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
         db_path.clone(),
     );
     let error = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                Some("qa-a@test-team"),
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
+        .dispatch(
+            RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    Some("qa-a@test-team"),
+                    TEST_TEAM.parse().expect("team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ),
+            None,
+        )
         .expect_err("cross-agent daemon read must fail");
 
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);

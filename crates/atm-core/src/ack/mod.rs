@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::boundary::PostSendHookEmitter;
+use crate::boundary::{AckReplyDeliveryPort, PostSendHookEmitter};
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
@@ -14,7 +14,10 @@ use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
-use crate::send::{ResolvedRecipient, input, persist_message, summary};
+use crate::send::{
+    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, input, persist_message,
+    summary,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -67,17 +70,22 @@ pub struct AckOutcome {
 pub struct ReplyTarget {
     agent: AgentName,
     team: TeamName,
+    host: Option<RemoteTargetHost>,
 }
 
 impl ReplyTarget {
-    fn new(agent: AgentName, team: TeamName) -> Self {
-        Self { agent, team }
+    fn new(agent: AgentName, team: TeamName, host: Option<RemoteTargetHost>) -> Self {
+        Self { agent, team, host }
     }
 }
 
 impl std::fmt::Display for ReplyTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.agent, self.team)
+        write!(f, "{}@{}", self.agent, self.team)?;
+        if let Some(host) = &self.host {
+            write!(f, ".{}", host.as_str())?;
+        }
+        Ok(())
     }
 }
 
@@ -96,12 +104,23 @@ impl<'de> Deserialize<'de> for ReplyTarget {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        let (agent, team) = value
+        let (agent, team_and_host) = value
             .split_once('@')
             .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
+        let (team, host) = match team_and_host.split_once('.') {
+            Some((team, host)) => (
+                team,
+                Some(
+                    RemoteTargetHost::parse(host)
+                        .map_err(|error| serde::de::Error::custom(error.message))?,
+                ),
+            ),
+            None => (team_and_host, None),
+        };
         Ok(Self::new(
             agent.parse().map_err(serde::de::Error::custom)?,
             team.parse().map_err(serde::de::Error::custom)?,
+            host,
         ))
     }
 }
@@ -138,7 +157,7 @@ pub fn ack_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime, None)
+    ack_mail_with_runtime_impl(request, observability, runtime, None, None)
 }
 
 pub fn ack_mail_with_runtime_and_post_send_emitter(
@@ -147,7 +166,29 @@ pub fn ack_mail_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+    ack_mail_with_runtime_impl(
+        request,
+        observability,
+        runtime,
+        Some(post_send_emitter),
+        None,
+    )
+}
+
+pub fn ack_mail_with_runtime_and_reply_delivery(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+    ack_reply_delivery: &dyn AckReplyDeliveryPort,
+) -> Result<AckOutcome, AtmError> {
+    ack_mail_with_runtime_impl(
+        request,
+        observability,
+        runtime,
+        Some(post_send_emitter),
+        Some(ack_reply_delivery),
+    )
 }
 
 fn ack_mail_with_runtime_impl<
@@ -157,6 +198,7 @@ fn ack_mail_with_runtime_impl<
     observability: &dyn ObservabilityPort,
     runtime: &R,
     post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    ack_reply_delivery: Option<&dyn AckReplyDeliveryPort>,
 ) -> Result<AckOutcome, AtmError> {
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
@@ -166,9 +208,15 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team).and_then(|context| {
-        finalize_ack_outcome(runtime, observability, post_send_emitter, context)
-    })
+    ack_mail_with_runtime_sqlite(
+        request,
+        observability,
+        runtime,
+        actor,
+        team,
+        ack_reply_delivery,
+    )
+    .and_then(|context| finalize_ack_outcome(runtime, observability, post_send_emitter, context))
 }
 
 fn ack_mail_with_runtime_sqlite<
@@ -179,6 +227,7 @@ fn ack_mail_with_runtime_sqlite<
     runtime: &R,
     actor: AgentName,
     team: TeamName,
+    ack_reply_delivery: Option<&dyn AckReplyDeliveryPort>,
 ) -> Result<FinalizeAckContextOwned, AtmError> {
     let (post_send_config, warnings) =
         match crate::send::hook::load_post_send_config_for_sender(runtime, &team, &actor) {
@@ -210,6 +259,7 @@ fn ack_mail_with_runtime_sqlite<
             team: &team,
             source: &source,
         },
+        ack_reply_delivery,
     )?;
     Ok(FinalizeAckContextOwned {
         actor,
@@ -232,6 +282,7 @@ enum PersistedAckReply {
         task_id: Option<TaskId>,
     },
     Sent(SentAckReply),
+    SentRemote(SentRemoteAckReply),
 }
 
 struct SentAckReply {
@@ -242,6 +293,15 @@ struct SentAckReply {
     task_id: Option<TaskId>,
     reply_inbox_path: PathBuf,
     persistence: Box<crate::send::DeliveryPersistenceResult>,
+}
+
+/// Ack reply that was routed back to the original remote sender's host via
+/// [`AckReplyDeliveryPort`] instead of being persisted into a local mailbox.
+struct SentRemoteAckReply {
+    reply_target: ReplyTarget,
+    reply_message_id: AtmMessageId,
+    reply_text: String,
+    task_id: Option<TaskId>,
 }
 
 struct FinalizeAckContext<'a> {
@@ -379,15 +439,21 @@ fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     source_record: &boundary::Message,
     current_team: &TeamName,
 ) -> Result<ReplyTarget, AtmError> {
-    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
-    ensure_roster_member_exists(
-        runtime,
-        &reply_team,
-        &reply_agent,
-        "Repair or reload the ATM roster before retrying the acknowledgement reply.",
-    )?;
+    let (reply_agent, reply_team, reply_host) =
+        resolve_reply_target(&source_record.envelope, current_team)?;
+    if reply_host.is_none() {
+        // Cross-host reply targets are validated against the remote host's
+        // roster when the reply is routed there; the local roster only knows
+        // about same-host agents.
+        ensure_roster_member_exists(
+            runtime,
+            &reply_team,
+            &reply_agent,
+            "Repair or reload the ATM roster before retrying the acknowledgement reply.",
+        )?;
+    }
 
-    Ok(ReplyTarget::new(reply_agent, reply_team))
+    Ok(ReplyTarget::new(reply_agent, reply_team, reply_host))
 }
 
 fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
@@ -406,6 +472,7 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
 fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     context: AckPersistenceContext<'_>,
+    ack_reply_delivery: Option<&dyn AckReplyDeliveryPort>,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
     let ack_intent = AckIntentFields::not_required();
@@ -426,6 +493,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         ack_timestamp,
         reply_text,
         ack_intent,
+        ack_reply_delivery,
     )
 }
 
@@ -476,7 +544,19 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     ack_timestamp: IsoTimestamp,
     reply_text: String,
     ack_intent: AckIntentFields,
+    ack_reply_delivery: Option<&dyn AckReplyDeliveryPort>,
 ) -> Result<PersistedAckReply, AtmError> {
+    if let Some(host) = persisted_source.reply_target.host.clone() {
+        return persist_remote_sent_ack_reply(
+            context,
+            persisted_source,
+            reply_text,
+            ack_intent,
+            host,
+            ack_reply_delivery,
+        );
+    }
+
     let reply_message_id = AtmMessageId::new();
     let reply_message = InboxMessage {
         from: context.actor.clone(),
@@ -494,6 +574,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        origin_host: None,
         extra: Map::new(),
     };
     let reply_inbox_path = runtime.inbox_path(
@@ -523,6 +604,60 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: persisted_source.task_id,
         reply_inbox_path,
         persistence: Box::new(persistence),
+    }))
+}
+
+/// Route an ack reply back to the original remote sender's host instead of
+/// persisting into a local mailbox. The local source-message ack state has
+/// already been persisted by [`persist_source_ack_state`] before this is
+/// called.
+fn persist_remote_sent_ack_reply(
+    context: &AckPersistenceContext<'_>,
+    persisted_source: PersistedSourceAck,
+    reply_text: String,
+    ack_intent: AckIntentFields,
+    host: RemoteTargetHost,
+    ack_reply_delivery: Option<&dyn AckReplyDeliveryPort>,
+) -> Result<PersistedAckReply, AtmError> {
+    let port = ack_reply_delivery.ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "cross-host acknowledgement reply delivery is not available in this runtime context",
+        )
+        .with_recovery(
+            "Retry `atm ack` through atm-daemon so the acknowledgement reply can be routed to the remote sender's host.",
+        )
+    })?;
+    let reply_message_id = AtmMessageId::new();
+    let to = format!(
+        "{}@{}",
+        persisted_source.reply_target.agent, persisted_source.reply_target.team
+    )
+    .parse()?;
+    let reply_request = SendRequest {
+        home_dir: home_dir(context.request).to_path_buf(),
+        current_dir: home_dir(context.request).to_path_buf(),
+        caller_identity: context.actor.clone(),
+        caller_team: context.team.clone(),
+        to,
+        message_source: SendMessageSource::Inline(reply_text.clone()),
+        summary_override: None,
+        requires_ack: ack_intent.requires_ack,
+        task_id: None,
+        parent_message_id: None,
+        thread_mode: None,
+        expires_at: None,
+        remote_host: Some(host),
+        origin_host: None,
+        acknowledges_message_id: Some(context.request.message_id),
+        dry_run: false,
+    };
+    port.deliver_reply(reply_request)?;
+
+    Ok(PersistedAckReply::SentRemote(SentRemoteAckReply {
+        reply_target: persisted_source.reply_target,
+        reply_message_id,
+        reply_text,
+        task_id: persisted_source.task_id,
     }))
 }
 
@@ -559,6 +694,11 @@ fn finalize_ack_outcome<
         PersistedAckReply::Sent(reply) => {
             finalize_sent_ack_outcome(runtime, observability, post_send_emitter, &context, reply)
         }
+        PersistedAckReply::SentRemote(reply) => Ok(finalize_sent_remote_ack_outcome(
+            &context,
+            observability,
+            reply,
+        )),
     }
 }
 
@@ -584,6 +724,38 @@ fn finalize_suppressed_self_ack_outcome(
         context.team.clone(),
         context.request_message_id,
         task_id.clone(),
+    );
+    outcome
+}
+
+/// Finalize an ack outcome for a reply that was routed cross-host via
+/// [`AckReplyDeliveryPort`]. Local post-send hook emission is intentionally
+/// skipped here: the remote daemon's own send/dispatch path is responsible
+/// for any nudge or post-send effects once it persists the reply.
+fn finalize_sent_remote_ack_outcome(
+    context: &FinalizeAckContext<'_>,
+    observability: &dyn ObservabilityPort,
+    reply: &SentRemoteAckReply,
+) -> AckOutcome {
+    let outcome = AckOutcome {
+        action: CommandAction::Ack,
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        message_id: context.request_message_id,
+        task_id: reply.task_id.clone(),
+        reply_disposition: AckReplyDisposition::Sent {
+            reply_message_id: reply.reply_message_id,
+            reply_target: reply.reply_target.clone(),
+        },
+        reply_text: reply.reply_text.clone(),
+        warnings: context.warnings.clone(),
+    };
+    record_ack_telemetry(
+        observability,
+        context.actor,
+        context.team.clone(),
+        context.request_message_id,
+        reply.task_id.clone(),
     );
     outcome
 }
@@ -779,13 +951,21 @@ fn record_ack_telemetry(
     }
 }
 
-fn resolve_reply_target(message: &InboxMessage, current_team: &TeamName) -> (AgentName, TeamName) {
+fn resolve_reply_target(
+    message: &InboxMessage,
+    current_team: &TeamName,
+) -> Result<(AgentName, TeamName, Option<RemoteTargetHost>), AtmError> {
     let identity = canonical_sender_identity(message);
     let team = message
         .source_team
         .clone()
         .unwrap_or_else(|| current_team.clone());
-    (identity, team)
+    let host = message
+        .origin_host
+        .as_deref()
+        .map(RemoteTargetHost::parse)
+        .transpose()?;
+    Ok((identity, team, host))
 }
 
 fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
@@ -813,12 +993,13 @@ mod tests {
 
     use super::{
         AckReplyDisposition, AckReplyStateMachine, FinalizeAckContextOwned, PersistedAckReply,
-        ReplyTarget, SentAckReply, canonical_sender_identity, finalize_ack_outcome,
-        resolve_reply_target,
+        ReplyTarget, SentAckReply, SentRemoteAckReply, canonical_sender_identity,
+        finalize_ack_outcome, resolve_reply_target,
     };
     use crate::boundary::{
-        self, BuiltInPostSendDispatch, MessageKey, NonClaudeOutboundDeliveryRequest,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter,
+        self, AckReplyDeliveryPort, BuiltInPostSendDispatch, MessageKey,
+        NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget, PostSendEmissionPath,
+        PostSendHookEmitter,
     };
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
     use crate::error::AtmErrorKind;
@@ -826,7 +1007,10 @@ mod tests {
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
-    use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
+    use crate::send::{
+        DeliveryPersistenceDisposition, DeliveryPersistenceResult, RemoteTargetHost, SendRequest,
+        WarningEntry,
+    };
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
@@ -877,6 +1061,7 @@ mod tests {
         source_row: boundary::MailStoreMailboxMetadataRow,
         source_record: boundary::Message,
         outbound_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+        persisted_states: Mutex<Vec<boundary::MailMessageState>>,
     }
 
     struct AckReloadRuntime {
@@ -1100,8 +1285,12 @@ mod tests {
 
         fn persist_message_state(
             &self,
-            _state: boundary::MailMessageState,
+            state: boundary::MailMessageState,
         ) -> Result<(), crate::error::AtmError> {
+            self.persisted_states
+                .lock()
+                .expect("persisted states")
+                .push(state);
             Ok(())
         }
     }
@@ -1280,6 +1469,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: serde_json::Map::new(),
         }
     }
@@ -1295,12 +1485,14 @@ mod tests {
         let mut message = message_with_from(ROLE_TEAM_LEAD);
         message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
 
-        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM));
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect("resolve reply target");
         assert_eq!(
             target,
             (
                 ROLE_TEAM_LEAD.parse().expect("agent"),
                 TEST_TEAM.parse().expect("team"),
+                None,
             )
         );
     }
@@ -1331,7 +1523,7 @@ mod tests {
         };
         let machine = AckReplyStateMachine::from_persistence(&persistence).expect("state machine");
         let plan = machine.into_reply_delivery_plan(
-            &super::ReplyTarget::new(agent.clone(), team.clone()),
+            &super::ReplyTarget::new(agent.clone(), team.clone(), None),
             &snapshot,
             std::path::Path::new("reply.jsonl"),
         );
@@ -1374,6 +1566,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: serde_json::Map::new(),
         };
         let persistence = DeliveryPersistenceResult {
@@ -1391,7 +1584,7 @@ mod tests {
             graft_post_send: false,
             roster_backed: true,
         };
-        let reply_target = ReplyTarget::new(agent.clone(), team.clone());
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone(), None);
         let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
@@ -1431,6 +1624,55 @@ mod tests {
             } if sent_id == reply_message_id
         ));
         assert_eq!(outcome.reply_text, reply_text);
+    }
+
+    #[test]
+    fn finalize_ack_outcome_for_remote_reply_skips_local_outbound_delivery() {
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let host = RemoteTargetHost::parse("other-mac.local").expect("host");
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone(), Some(host));
+        let persisted = PersistedAckReply::SentRemote(SentRemoteAckReply {
+            reply_target: reply_target.clone(),
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+        });
+        let runtime = AckRuntime {
+            outbound_deliveries: Mutex::new(Vec::new()),
+        };
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            None,
+            FinalizeAckContextOwned {
+                actor: "sender".parse::<AgentName>().expect("agent"),
+                team: team.clone(),
+                request_message_id,
+                persisted,
+                post_send_config: None,
+                warnings: Vec::new(),
+            },
+        )
+        .expect("finalize ack outcome");
+
+        assert!(runtime.outbound_messages().is_empty());
+        assert!(matches!(
+            outcome.reply_disposition,
+            AckReplyDisposition::Sent {
+                reply_message_id: sent_id,
+                ..
+            } if sent_id == reply_message_id
+        ));
+        assert_eq!(outcome.reply_text, reply_text);
+        assert_eq!(
+            reply_target.to_string(),
+            format!("{agent}@{team}.other-mac.local")
+        );
     }
 
     #[test]
@@ -1494,6 +1736,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: serde_json::Map::new(),
         };
         let persistence = DeliveryPersistenceResult {
@@ -1511,7 +1754,7 @@ mod tests {
             graft_post_send: true,
             roster_backed: true,
         };
-        let reply_target = ReplyTarget::new(agent.clone(), team.clone());
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone(), None);
         let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
@@ -1588,6 +1831,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: serde_json::Map::new(),
         };
         let persistence = DeliveryPersistenceResult {
@@ -1605,7 +1849,7 @@ mod tests {
             graft_post_send: true,
             roster_backed: true,
         };
-        let reply_target = ReplyTarget::new(agent, team.clone());
+        let reply_target = ReplyTarget::new(agent, team.clone(), None);
         let persisted = PersistedAckReply::Sent(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
@@ -1699,11 +1943,13 @@ mod tests {
                         thread_mode: None,
                         expires_at: None,
                         task_id: None,
+                        origin_host: None,
                         extra: Map::new(),
                     }
                 },
             },
             outbound_deliveries: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         };
 
         let error = super::ack_mail_with_runtime_impl(
@@ -1717,6 +1963,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
             None,
         )
         .expect_err("missing ATM roster member should fail");
@@ -1773,11 +2020,13 @@ mod tests {
                         thread_mode: None,
                         expires_at: None,
                         task_id: None,
+                        origin_host: None,
                         extra: Map::new(),
                     }
                 },
             },
             outbound_deliveries: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         };
 
         let outcome = super::ack_mail_with_runtime_impl(
@@ -1791,6 +2040,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
             None,
         )
         .expect("valid ATM roster member should ack successfully");
@@ -1808,6 +2058,142 @@ mod tests {
                 .lock()
                 .expect("non-claude deliveries")
                 .is_empty()
+        );
+    }
+
+    struct RecordingAckReplyDeliveryPort {
+        delivered: Mutex<Vec<SendRequest>>,
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingAckReplyDeliveryPort {}
+
+    impl AckReplyDeliveryPort for RecordingAckReplyDeliveryPort {
+        fn deliver_reply(&self, reply: SendRequest) -> Result<(), crate::error::AtmError> {
+            self.delivered
+                .lock()
+                .expect("delivered replies")
+                .push(reply);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn ack_mail_with_cross_host_origin_routes_reply_through_delivery_port_and_marks_source_acknowledged()
+     {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let actor = TEST_SENDER.parse::<AgentName>().expect("agent");
+        let remote_sender = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(team_dir.join("inboxes")).expect("team inbox dir");
+        let source_message_id = AtmMessageId::new();
+        let source_key = MessageKey::from(source_message_id);
+        let origin_host = "other-mac.local".to_string();
+        let runtime = AckRosterRuntime {
+            roster_members: vec![(team.clone(), actor.clone())],
+            inbox_path: tempdir.path().join("reply.jsonl"),
+            source_row: boundary::MailStoreMailboxMetadataRow {
+                message_key: source_key.clone(),
+                message_id: Some(source_message_id),
+                parent_message_id: None,
+                thread_mode: None,
+                from_agent: remote_sender.clone(),
+                summary: Some("summary".to_string()),
+                message_at: IsoTimestamp::now(),
+                read: false,
+                requires_ack: true,
+                pending_ack: true,
+                acknowledged_at: None,
+                expires_at: None,
+                task_id: None,
+            },
+            source_record: boundary::Message {
+                team: team.clone(),
+                agent: actor.clone(),
+                message_key: source_key,
+                envelope: {
+                    let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
+                    InboxMessage {
+                        from: remote_sender.clone(),
+                        text: "source".to_string(),
+                        timestamp: IsoTimestamp::now(),
+                        read: false,
+                        source_team: Some(team.clone()),
+                        summary: Some("summary".to_string()),
+                        message_id: Some(source_message_id),
+                        requires_ack: ack_intent.requires_ack,
+                        pending_ack_at: ack_intent.pending_ack_at,
+                        acknowledged_at: ack_intent.acknowledged_at,
+                        acknowledges_message_id: None,
+                        parent_message_id: None,
+                        thread_mode: None,
+                        expires_at: None,
+                        task_id: None,
+                        origin_host: Some(origin_host.clone()),
+                        extra: Map::new(),
+                    }
+                },
+            },
+            outbound_deliveries: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
+        };
+        let ack_reply_delivery = RecordingAckReplyDeliveryPort {
+            delivered: Mutex::new(Vec::new()),
+        };
+
+        let outcome = super::ack_mail_with_runtime_impl(
+            crate::ack::AckRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                caller_identity: actor.clone(),
+                caller_team: team.clone(),
+                message_id: source_message_id,
+                reply_body: "ack".to_string(),
+            },
+            &NullObservability,
+            &runtime,
+            None,
+            Some(&ack_reply_delivery),
+        )
+        .expect("cross-host ack reply should route through the delivery port");
+
+        assert_eq!(outcome.team, team);
+        assert_eq!(outcome.agent, actor);
+        assert_eq!(outcome.message_id, source_message_id);
+        assert!(matches!(
+            outcome.reply_disposition,
+            AckReplyDisposition::Sent { .. }
+        ));
+
+        let delivered = ack_reply_delivery
+            .delivered
+            .lock()
+            .expect("delivered replies");
+        assert_eq!(delivered.len(), 1);
+        let reply = &delivered[0];
+        assert_eq!(
+            reply.remote_host,
+            Some(RemoteTargetHost::parse(&origin_host).expect("host"))
+        );
+        assert_eq!(reply.acknowledges_message_id, Some(source_message_id));
+        assert_eq!(reply.caller_identity, actor);
+        assert_eq!(
+            reply.to,
+            format!("{remote_sender}@{team}").parse().expect("address")
+        );
+        drop(delivered);
+
+        let persisted_states = runtime.persisted_states.lock().expect("persisted states");
+        assert_eq!(persisted_states.len(), 1);
+        assert!(persisted_states[0].acknowledged_at.is_some());
+        assert!(persisted_states[0].read);
+        assert!(
+            runtime
+                .outbound_deliveries
+                .lock()
+                .expect("non-claude deliveries")
+                .is_empty(),
+            "remote ack reply must not persist into a local mailbox"
         );
     }
 
@@ -1841,6 +2227,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                origin_host: None,
                 extra: Map::new(),
             },
         };
@@ -1864,6 +2251,7 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                origin_host: None,
                 extra: Map::new(),
             },
         };
@@ -1899,6 +2287,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
             None,
         )
         .expect_err("stale pending metadata should be rejected after commit-time reload");
@@ -1972,10 +2361,12 @@ mod tests {
                     thread_mode: None,
                     expires_at: None,
                     task_id: None,
+                    origin_host: None,
                     extra: Map::new(),
                 },
             },
             outbound_deliveries: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         };
 
         let outcome = super::ack_mail_with_runtime_impl(
@@ -1989,6 +2380,7 @@ mod tests {
             },
             &NullObservability,
             &runtime,
+            None,
             None,
         )
         .expect("case-variant self target should suppress reply");

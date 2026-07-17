@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
+    ack::ack_mail_with_runtime_and_reply_delivery,
     boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
@@ -17,21 +17,27 @@ use crate::peer_transport::delivery::SendOutcome as RemoteSendOutcome;
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+        peer_origin: Option<&str>,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(mut request)) => {
+                request.origin_host = peer_origin.map(str::to_owned);
                 self.dispatch_compose_send(request, &post_send_emitter)
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
+                    ack_mail_with_runtime_and_reply_delivery(
                         request,
                         self.observability.as_ref(),
                         &self.service_runtime,
                         &post_send_emitter,
+                        self,
                     )?,
                 )))
             }
@@ -59,6 +65,36 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
+        }
+    }
+}
+
+impl boundary::AckReplyDeliveryPort for DaemonRequestDispatcher {
+    fn deliver_reply(&self, reply: SendRequest) -> Result<(), AtmError> {
+        let Some(remote_host) = reply.remote_host.clone() else {
+            return Err(AtmError::daemon_unavailable(
+                "cross-host acknowledgement reply delivery requires a remote host target",
+            )
+            .with_recovery(
+                "Retry `atm ack` after confirming the acknowledged message carried a remote origin host.",
+            ));
+        };
+        match self.cross_host_delivery.deliver_remote(reply, remote_host) {
+            Ok(RemoteSendOutcome::Delivered(_)) => Ok(()),
+            Ok(RemoteSendOutcome::Deferred) => Err(AtmError::daemon_unavailable(
+                "remote acknowledgement reply delivery was deferred because the cross-host path is not currently healthy",
+            )
+            .with_recovery(
+                "Verify the daemon interface rows and remote host reachability, then retry the acknowledgement after the cross-host path is healthy.",
+            )),
+            Ok(RemoteSendOutcome::RejectedTerminal(error)) => Err(error),
+            Ok(RemoteSendOutcome::OutcomeUnknown) => Err(AtmError::daemon_unavailable(
+                "remote acknowledgement reply delivery outcome is unknown",
+            )
+            .with_recovery(
+                "Check the destination daemon and local replay state before retrying the acknowledgement.",
+            )),
+            Err(error) => Err(error.into_atm_error()),
         }
     }
 }

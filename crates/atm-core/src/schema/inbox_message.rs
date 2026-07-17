@@ -235,6 +235,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -242,6 +243,52 @@ mod tests {
         let decoded: InboxMessage = serde_json::from_str(&encoded).expect("decode");
 
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn message_envelope_round_trips_origin_host_for_cross_host_messages() {
+        let envelope = InboxMessage {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: "hello".into(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("hello".into()),
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            origin_host: Some("other-mac.local".to_string()),
+            extra: Map::new(),
+        };
+
+        let encoded = serde_json::to_string(&envelope).expect("encode");
+        assert!(encoded.contains("\"originHost\":\"other-mac.local\""));
+        let decoded: InboxMessage = serde_json::from_str(&encoded).expect("decode");
+
+        assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn message_envelope_legacy_json_without_origin_host_defaults_to_none() {
+        let json = json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": true
+        });
+
+        let decoded: InboxMessage = serde_json::from_value(json).expect("decode");
+        assert_eq!(decoded.origin_host, None);
     }
 
     #[test]
@@ -385,6 +432,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -427,6 +475,7 @@ mod tests {
             thread_mode: Some(ThreadMode::AddDetails),
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -470,6 +519,7 @@ mod tests {
                     .expect("timestamp"),
             )),
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -508,6 +558,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -540,6 +591,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -583,6 +635,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -621,6 +674,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -660,6 +714,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra: Map::new(),
         };
 
@@ -704,6 +759,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            origin_host: None,
             extra,
         };
 

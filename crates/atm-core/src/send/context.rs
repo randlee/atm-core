@@ -92,11 +92,12 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
             requires_ack: ack_intent.requires_ack,
             pending_ack_at: ack_intent.pending_ack_at,
             acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
+            acknowledges_message_id: request.acknowledges_message_id,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
             expires_at: request.expires_at,
             task_id: task_id.clone(),
+            origin_host: request.origin_host.clone(),
             extra: Map::new(),
         }));
     }
@@ -111,11 +112,12 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
         requires_ack: ack_intent.requires_ack,
         pending_ack_at: ack_intent.pending_ack_at,
         acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
+        acknowledges_message_id: request.acknowledges_message_id,
         parent_message_id: request.parent_message_id,
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
+        origin_host: request.origin_host.clone(),
         extra: Map::new(),
     };
     persist_message(

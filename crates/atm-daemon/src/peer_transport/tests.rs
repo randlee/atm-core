@@ -216,6 +216,7 @@ impl RequestDispatcher for SleepingDispatcher {
     fn dispatch(
         &self,
         _request: RequestEnvelope,
+        _peer_origin: Option<&str>,
     ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
         thread::sleep(self.sleep_for);
         Ok(ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
@@ -240,8 +241,9 @@ impl RequestDispatcher for CountingDispatcher {
     fn dispatch(
         &self,
         request: RequestEnvelope,
+        peer_origin: Option<&str>,
     ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
         self.count.fetch_add(1, Ordering::SeqCst);
-        DoctorOnlyDispatcher.dispatch(request)
+        DoctorOnlyDispatcher.dispatch(request, peer_origin)
     }
 }

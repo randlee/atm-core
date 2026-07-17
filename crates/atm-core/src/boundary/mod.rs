@@ -101,7 +101,16 @@ pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
     ///
     /// Returns `AtmError` when protocol request routing or handler dispatch
     /// cannot produce a valid response.
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+    ///
+    /// `peer_origin` carries the presented remote host (for example the
+    /// connecting peer's IP address) when the request arrived over the
+    /// cross-host peer transport, and is `None` for same-host requests
+    /// dispatched over the local IPC transport.
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+        peer_origin: Option<&str>,
+    ) -> Result<ResponseEnvelope, AtmError>;
 }
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
@@ -256,6 +265,16 @@ pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError>;
+}
+
+/// BOUNDARY-AckReplyDeliveryPort — see docs/atm-core/boundaries.md.
+pub trait AckReplyDeliveryPort: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one cross-host acknowledgement reply cannot be
+    /// routed back to the original remote sender's host after local
+    /// acknowledgement state has already persisted.
+    fn deliver_reply(&self, reply: crate::send::SendRequest) -> Result<(), AtmError>;
 }
 
 /// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.

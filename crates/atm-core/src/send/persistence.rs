@@ -101,6 +101,7 @@ fn build_sqlite_failure_companion_message(
         thread_mode: None,
         expires_at: None,
         task_id: original_message.task_id.clone(),
+        origin_host: None,
         extra: Map::new(),
     }
 }

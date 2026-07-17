@@ -1546,6 +1546,7 @@ fn pending_ack_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        origin_host: None,
         extra: serde_json::Map::new(),
     }
 }
@@ -1576,6 +1577,7 @@ fn read_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        origin_host: None,
         extra: serde_json::Map::new(),
     }
 }
@@ -1606,6 +1608,7 @@ fn unread_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        origin_host: None,
         extra: serde_json::Map::new(),
     }
 }

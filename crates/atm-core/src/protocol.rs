@@ -27,6 +27,10 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "SendRequest carries the full compose-path payload (cross-host routing, threading, and ack-reply fields); boxing it would ripple `Box` deref/re-wrap through every same-host and cross-host dispatch call site for no runtime benefit at process-lifetime request-envelope volumes."
+)]
 pub enum SendRequestEnvelope {
     Compose(SendRequest),
     Acknowledge(AckRequest),

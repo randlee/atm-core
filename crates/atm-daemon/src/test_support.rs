@@ -57,6 +57,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
     fn dispatch(
         &self,
         request: RequestEnvelope,
+        _peer_origin: Option<&str>,
     ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
         match request {
             RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(Box::new(DoctorReport {
@@ -133,7 +134,11 @@ impl atm_core::boundary::sealed::Sealed for PanicDispatcherWithUnwindSignal {}
 
 #[cfg(test)]
 impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+        _peer_origin: Option<&str>,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let unwind_signal = PanicUnwindSignal(
             self.unwind_tx
                 .lock()
