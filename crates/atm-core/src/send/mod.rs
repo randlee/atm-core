@@ -382,6 +382,37 @@ fn is_false(value: &bool) -> bool {
 }
 
 #[cfg(test)]
+mod remote_target_parse_tests {
+    use super::parse_send_target;
+
+    #[test]
+    fn remote_target_syntaxes_normalize_to_the_same_contract() {
+        let inline = parse_send_target("qa-a@test-team.localhost", None).expect("inline target");
+        let explicit =
+            parse_send_target("qa-a@test-team", Some("localhost")).expect("explicit target");
+
+        assert_eq!(inline.to, explicit.to);
+        assert_eq!(inline.remote_host, explicit.remote_host);
+        assert_eq!(inline.to.to_string(), "qa-a@test-team");
+        assert_eq!(
+            inline.remote_host.as_ref().expect("remote host").as_str(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn remote_target_rejects_combined_inline_and_explicit_host_forms() {
+        let error = parse_send_target("qa-a@test-team.localhost", Some("127.0.0.1"))
+            .expect_err("combined host forms must fail");
+        assert!(
+            error
+                .message
+                .contains("cannot combine inline remote host syntax")
+        );
+    }
+}
+
+#[cfg(test)]
 mod graft_warning_tests;
 #[cfg(test)]
 mod tests;
