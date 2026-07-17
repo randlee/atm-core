@@ -108,7 +108,7 @@ fn verify_presented_peer_fingerprint(
     )))
 }
 
-fn note_adr030_pinned_fingerprint_time_model(_now: UnixTime) {
+fn note_adr032_pinned_fingerprint_time_model(_now: UnixTime) {
     // ADR-032 governs this behavior. ATM cross-host TLS currently uses
     // host-scoped fingerprint pinning from SQLite rather than PKI chain/expiry
     // validation. rustls supplies a verification-time parameter; binding it
@@ -191,7 +191,7 @@ impl ServerCertVerifier for PinnedFingerprintServerVerifier {
         _ocsp_response: &[u8],
         now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
-        note_adr030_pinned_fingerprint_time_model(now);
+        note_adr032_pinned_fingerprint_time_model(now);
         verify_presented_peer_fingerprint(
             end_entity,
             &self.expected_fingerprint,
@@ -245,7 +245,7 @@ impl ClientCertVerifier for PinnedFingerprintClientVerifier {
         _intermediates: &[CertificateDer<'_>],
         now: UnixTime,
     ) -> Result<ClientCertVerified, rustls::Error> {
-        note_adr030_pinned_fingerprint_time_model(now);
+        note_adr032_pinned_fingerprint_time_model(now);
         verify_presented_peer_fingerprint(
             end_entity,
             &self.expected_fingerprint,
