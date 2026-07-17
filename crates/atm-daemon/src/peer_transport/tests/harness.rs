@@ -629,6 +629,9 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         sender_status_cache.clone(),
     );
+    let replay_worker = sender_transport
+        .start_replay_resume_worker()
+        .expect("start replay worker");
     let sender_dispatcher = DaemonRequestDispatcher::new_for_test_with_peer_transport(
         atm_home.clone(),
         sender_status_cache,
@@ -720,85 +723,86 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         .start(listener_dispatcher.clone())
         .expect("start peer listener");
 
-    let summary = sender_transport
-        .resume_pending_replay()
-        .expect("resume pending replay");
-    assert_eq!(summary.delivered, 1);
-    assert_eq!(summary.retained, 0);
-    assert_eq!(summary.receipt_updates, 1);
+    let started = std::time::Instant::now();
+    loop {
+        let receiver_read = listener_dispatcher
+            .dispatch(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    "qa-a".parse().expect("caller"),
+                    None,
+                    test_team_name(),
+                    atm_core::types::ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ))
+            .expect("receiver read after replay should succeed");
+        let receiver_delivered = match receiver_read {
+            ResponseEnvelope::Receive(outcome) => outcome.message.is_some_and(|message| {
+                message.envelope.text == "retry after remote-target listener starts"
+            }),
+            other => panic!("unexpected receiver replay response: {other:?}"),
+        };
 
-    let receiver_read = listener_dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                "qa-a".parse().expect("caller"),
-                None,
-                test_team_name(),
-                atm_core::types::ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
-        .expect("receiver read after replay should succeed");
-    match receiver_read {
-        ResponseEnvelope::Receive(outcome) => {
-            let message = outcome.message.expect("delivered replay message");
-            assert_eq!(
-                message.envelope.text,
-                "retry after remote-target listener starts"
-            );
-        }
-        other => panic!("unexpected receiver replay response: {other:?}"),
-    }
+        let sender_recovery = sender_dispatcher
+            .dispatch(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    None,
+                    test_team_name(),
+                    atm_core::types::ReadSelection::All,
+                    false,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("read query"),
+            ))
+            .expect("sender recovery receipt should succeed");
+        let receipt_delivered = match sender_recovery {
+            ResponseEnvelope::Receive(outcome) => outcome.message.is_some_and(|message| {
+                message.envelope.message_id == Some(receipt_message_id)
+                    && message
+                        .envelope
+                        .text
+                        .contains("delivered the deferred remote message")
+            }),
+            other => panic!("unexpected sender recovery response: {other:?}"),
+        };
 
-    let sender_recovery = sender_dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                None,
-                test_team_name(),
-                atm_core::types::ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
-        .expect("sender recovery receipt should succeed");
-    match sender_recovery {
-        ResponseEnvelope::Receive(outcome) => {
-            let message = outcome.message.expect("updated delivery receipt");
-            assert_eq!(message.envelope.message_id, Some(receipt_message_id));
-            assert!(
-                message
-                    .envelope
-                    .text
-                    .contains("delivered the deferred remote message"),
-                "unexpected recovery receipt text: {}",
-                message.envelope.text
-            );
+        if receiver_delivered && receipt_delivered {
+            break;
         }
-        other => panic!("unexpected sender recovery response: {other:?}"),
+        assert!(
+            started.elapsed() < Duration::from_secs(15),
+            "background replay worker did not deliver the deferred message within the bounded window"
+        );
+        std::thread::yield_now();
     }
 
     listener_transport
         .shutdown()
         .expect("shutdown peer listener");
+    let _ = replay_worker.stop_tx.send(());
+    replay_worker
+        .join_handle
+        .join()
+        .expect("join replay worker");
 }
 
 #[test]

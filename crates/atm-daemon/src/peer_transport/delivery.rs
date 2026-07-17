@@ -14,14 +14,15 @@ use super::PeerTransportRuntime;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RemoteDeliveryDecision {
     HealthyImmediateWait,
+    DeferredRetry,
 }
 
 #[derive(Debug)]
 pub(crate) enum SendOutcome {
     Delivered(Box<ResponseEnvelope>),
-    Deferred,
+    Deferred { receipt_message_id: AtmMessageId },
     RejectedTerminal(AtmError),
-    OutcomeUnknown,
+    OutcomeUnknown { receipt_message_id: AtmMessageId },
 }
 
 #[derive(Debug)]
@@ -84,7 +85,17 @@ impl DaemonCrossHostDelivery {
         remote_host: &RemoteTargetHost,
     ) -> Result<(RemoteDeliveryDecision, SocketAddr), CrossHostDeliveryInfraError> {
         let endpoint = self.resolve_remote_endpoint(remote_host)?;
-        Ok((RemoteDeliveryDecision::HealthyImmediateWait, endpoint))
+        let decision = if self
+            .peer_transport_runtime
+            .bound_addr()
+            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?
+            .is_some()
+        {
+            RemoteDeliveryDecision::HealthyImmediateWait
+        } else {
+            RemoteDeliveryDecision::DeferredRetry
+        };
+        Ok((decision, endpoint))
     }
 
     fn resolve_remote_endpoint(
@@ -144,7 +155,9 @@ impl DaemonCrossHostDelivery {
 
     fn classify_error(error: &AtmError) -> SendOutcome {
         if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown {
-            return SendOutcome::OutcomeUnknown;
+            return SendOutcome::OutcomeUnknown {
+                receipt_message_id: AtmMessageId::new(),
+            };
         }
         if error.code == AtmErrorCode::ClientDaemonVersionIncompatible {
             return SendOutcome::RejectedTerminal(
@@ -163,9 +176,13 @@ impl DaemonCrossHostDelivery {
             return SendOutcome::RejectedTerminal(terminal);
         }
         if error.code == AtmErrorCode::DaemonUnavailable || error.is_timeout() {
-            return SendOutcome::Deferred;
+            return SendOutcome::Deferred {
+                receipt_message_id: AtmMessageId::new(),
+            };
         }
-        SendOutcome::Deferred
+        SendOutcome::Deferred {
+            receipt_message_id: AtmMessageId::new(),
+        }
     }
 }
 
@@ -196,6 +213,25 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         request.remote_host = None;
         let replay_request = request.clone();
         match decision {
+            RemoteDeliveryDecision::DeferredRetry => {
+                self.peer_transport_runtime
+                    .persist_remote_request_for_retry(
+                        endpoint,
+                        replay_request.caller_team.clone(),
+                        replay_request.caller_identity.clone(),
+                        boundary::MessageKey::from(deferred_receipt_message_id),
+                        RequestEnvelope::Send(SendRequestEnvelope::Compose(replay_request.clone())),
+                        Some(replay_request.caller_team.clone()),
+                        Some(replay_request.caller_identity.clone()),
+                        Some(deferred_receipt_message_id),
+                        Some(replay_request.to.to_string()),
+                        Some(remote_host.as_str().to_string()),
+                    )
+                    .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
+                Ok(SendOutcome::Deferred {
+                    receipt_message_id: deferred_receipt_message_id,
+                })
+            }
             RemoteDeliveryDecision::HealthyImmediateWait => self
                 .peer_transport_runtime
                 .send_to_endpoint_immediate_wait(
@@ -206,7 +242,10 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                 .map(SendOutcome::Delivered)
                 .or_else(|error| {
                     let outcome = Self::classify_error(&error);
-                    if matches!(outcome, SendOutcome::Deferred | SendOutcome::OutcomeUnknown) {
+                    if matches!(
+                        outcome,
+                        SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
+                    ) {
                         self.peer_transport_runtime
                             .persist_remote_request_for_retry(
                                 endpoint,
@@ -224,7 +263,15 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                             )
                             .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
                     }
-                    Ok(outcome)
+                    Ok(match outcome {
+                        SendOutcome::Deferred { .. } => SendOutcome::Deferred {
+                            receipt_message_id: deferred_receipt_message_id,
+                        },
+                        SendOutcome::OutcomeUnknown { .. } => SendOutcome::OutcomeUnknown {
+                            receipt_message_id: deferred_receipt_message_id,
+                        },
+                        other => other,
+                    })
                 }),
         }
     }
