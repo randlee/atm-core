@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::address::AgentAddress;
 use crate::boundary::{
     BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TeamNudgeTemplateOverrideRow,
@@ -25,7 +26,11 @@ pub fn resolve_template_body(
 }
 
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    format!("{}@{}", event.sender, event.sender_team)
+    AgentAddress {
+        agent: event.sender.clone(),
+        team: Some(event.sender_team.clone()),
+    }
+    .to_string()
 }
 
 pub fn render_resolved_built_in_nudge(

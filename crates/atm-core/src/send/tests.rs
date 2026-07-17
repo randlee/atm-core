@@ -7,7 +7,7 @@ use tempfile::tempdir;
 
 use super::{
     DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    build_send_delivery_plan, persist_message, prepare_threaded_message,
+    outcome::build_send_delivery_plan, persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,

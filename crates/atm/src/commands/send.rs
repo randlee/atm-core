@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use atm_core::address::AgentAddress;
 use atm_core::send::{PeerLoopbackHost, SendMessageSource, SendRequest, input};
 use atm_core::types::TaskId;
 use clap::Args;
@@ -81,12 +82,11 @@ impl SendCommand {
         let loopback_host = PeerLoopbackHost::parse_cli_target(&self.to).transpose()?;
         let target = loopback_host
             .as_ref()
-            .map(|_| {
-                format!(
-                    "{}@{}",
-                    caller_context.caller_identity, caller_context.caller_team
-                )
+            .map(|_| AgentAddress {
+                agent: caller_context.caller_identity.clone(),
+                team: Some(caller_context.caller_team.clone()),
             })
+            .map(|address| address.to_string())
             .unwrap_or_else(|| self.to.clone());
         let message_source = self.build_message_source()?;
         let mut request = SendRequest::new(
