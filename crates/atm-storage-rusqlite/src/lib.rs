@@ -1078,6 +1078,41 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_backend_round_trips_origin_host_for_cross_host_messages() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut original = message("atm:test-origin-host", "hello from another host");
+        original.envelope.origin_host = Some("other-mac.local".to_string());
+
+        store.save_message(&original).expect("save");
+        let loaded = store
+            .load_message(&original.message_key)
+            .expect("load")
+            .expect("message");
+
+        assert_eq!(
+            loaded.envelope.origin_host,
+            Some("other-mac.local".to_string())
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_legacy_message_without_origin_host_reads_back_none() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let original = message("atm:test-legacy-origin-host", "hello");
+        assert_eq!(original.envelope.origin_host, None);
+
+        store.save_message(&original).expect("save");
+        let loaded = store
+            .load_message(&original.message_key)
+            .expect("load")
+            .expect("message");
+
+        assert_eq!(loaded.envelope.origin_host, None);
+    }
+
+    #[test]
     fn sqlite_backend_saves_loads_and_lists_rosters() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.roster_store();

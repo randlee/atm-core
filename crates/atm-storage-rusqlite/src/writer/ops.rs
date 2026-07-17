@@ -296,6 +296,12 @@ struct StorageEnvelope<'a> {
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: &'a Option<atm_storage::types::TaskId>,
+    #[serde(
+        rename = "originHost",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    origin_host: &'a Option<String>,
     #[serde(flatten)]
     extra: &'a serde_json::Map<String, serde_json::Value>,
 }
@@ -320,6 +326,7 @@ impl<'a> StorageEnvelope<'a> {
             thread_mode: &envelope.thread_mode,
             expires_at: envelope.expires_at,
             task_id: &envelope.task_id,
+            origin_host: &envelope.origin_host,
             extra: &envelope.extra,
         }
     }
