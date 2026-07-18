@@ -319,13 +319,26 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        runtime_assembly: RuntimeAssembly,
+        mut runtime_assembly: RuntimeAssembly,
         peer_transport_runtime: PeerTransportRuntime,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let peer_interface_config_store = runtime_assembly.peer_interface_config_store.clone();
         let roster_store = runtime_assembly.shared_roster_store_arc();
+        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> =
+            Arc::new(DaemonCrossHostDelivery::new(
+                peer_interface_config_store.clone(),
+                peer_transport_runtime.clone(),
+            ));
+        runtime_assembly.service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            runtime_assembly.message_store_arc(),
+            roster_store.clone(),
+            runtime_assembly.nudge_template_override_store.clone(),
+            Arc::new(crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound::new_with_cross_host_delivery(
+                Arc::clone(&cross_host_delivery),
+            )),
+        );
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -356,10 +369,7 @@ impl DaemonRequestDispatcher {
             peer_security_store: runtime_assembly.peer_security_store,
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
-            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
-                peer_interface_config_store,
-                peer_transport_runtime.clone(),
-            )),
+            cross_host_delivery,
             peer_transport_runtime,
         }
     }
@@ -556,8 +566,21 @@ impl DaemonRequestDispatcher {
         );
         let runtime_observability: std::sync::Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
-        let runtime_assembly =
+        let mut runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
+        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> =
+            Arc::new(DaemonCrossHostDelivery::new(
+                runtime_assembly.peer_interface_config_store.clone(),
+                peer_transport_runtime.clone(),
+            ));
+        runtime_assembly.service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            runtime_assembly.message_store_arc(),
+            runtime_assembly.shared_roster_store_arc(),
+            runtime_assembly.nudge_template_override_store.clone(),
+            Arc::new(crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound::new_with_cross_host_delivery(
+                Arc::clone(&cross_host_delivery),
+            )),
+        );
         match build_runtime_status_cache_state(
             None,
             runtime_assembly.shared_roster_store_arc().as_ref(),
@@ -590,10 +613,7 @@ impl DaemonRequestDispatcher {
             peer_security_store: runtime_assembly.peer_security_store.clone(),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
-            cross_host_delivery: Arc::new(DaemonCrossHostDelivery::new(
-                runtime_assembly.peer_interface_config_store.clone(),
-                peer_transport_runtime.clone(),
-            )),
+            cross_host_delivery,
             peer_transport_runtime,
         }
     }

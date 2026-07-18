@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use atm_core::protocol::{
+    DirectDeliveryOutcome, DirectDeliveryRequest, RequestEnvelope, ResponseEnvelope,
+    SendRequestEnvelope, SendResponseEnvelope,
+};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
@@ -49,6 +52,12 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
         remote_host: RemoteTargetHost,
         deferred_receipt_message_id: AtmMessageId,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
+
+    fn deliver_direct(
+        &self,
+        request: DirectDeliveryRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError>;
 }
 
 #[derive(Clone)]
@@ -221,7 +230,9 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                         replay_request.caller_team.clone(),
                         replay_request.caller_identity.clone(),
                         boundary::MessageKey::from(deferred_receipt_message_id),
-                        RequestEnvelope::Send(SendRequestEnvelope::Compose(replay_request.clone())),
+                        RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+                            replay_request.clone(),
+                        ))),
                         Some(replay_request.caller_team.clone()),
                         Some(replay_request.caller_identity.clone()),
                         Some(deferred_receipt_message_id),
@@ -237,7 +248,7 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                 .peer_transport_runtime
                 .send_to_endpoint_immediate_wait(
                     endpoint,
-                    RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+                    RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
                 )
                 .map(Box::new)
                 .map(SendOutcome::Delivered)
@@ -253,9 +264,9 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                                 replay_request.caller_team.clone(),
                                 replay_request.caller_identity.clone(),
                                 boundary::MessageKey::from(deferred_receipt_message_id),
-                                RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
                                     replay_request.clone(),
-                                )),
+                                ))),
                                 Some(replay_request.caller_team.clone()),
                                 Some(replay_request.caller_identity.clone()),
                                 Some(deferred_receipt_message_id),
@@ -274,6 +285,32 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                         other => other,
                     })
                 }),
+        }
+    }
+
+    fn deliver_direct(
+        &self,
+        request: DirectDeliveryRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> {
+        let (_, endpoint) = self.decide_remote_delivery(&remote_host)?;
+        let response = self
+            .peer_transport_runtime
+            .send_to_endpoint_immediate_wait(
+                endpoint,
+                RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request)),
+            )
+            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
+        match response {
+            ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(outcome)) => Ok(outcome),
+            other => Err(CrossHostDeliveryInfraError::InternalInvariantViolation(
+                AtmError::daemon_unavailable(format!(
+                    "remote daemon returned unexpected response for direct delivery: {other:?}"
+                ))
+                .with_recovery(
+                    "Align the sender and receiver daemon protocol paths before retrying the cross-host acknowledgement reply.",
+                ),
+            )),
         }
     }
 }

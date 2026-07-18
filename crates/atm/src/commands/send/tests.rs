@@ -229,6 +229,53 @@ fn build_request_parses_inline_remote_target_and_records_host() {
 
 #[test]
 #[serial(env)]
+fn build_request_normalizes_inline_and_explicit_remote_target_forms_equally() {
+    let _env = EnvGuard::set_many([
+        ("ATM_IDENTITY", Some("env-sender")),
+        ("ATM_TEAM", Some(TEST_TEAM)),
+    ]);
+    let inline = SendCommand {
+        to: "recipient-a@test-team.localhost".to_string(),
+        message: Some("hello".to_string()),
+        team: None,
+        host: None,
+        file: None,
+        stdin: false,
+        summary: None,
+        requires_ack: false,
+        task_id: None,
+        dry_run: false,
+        json: false,
+    }
+    .build_request(".".into(), ".".into())
+    .expect("inline request");
+    let explicit = SendCommand {
+        to: "recipient-a@test-team".to_string(),
+        message: Some("hello".to_string()),
+        team: None,
+        host: Some("localhost".to_string()),
+        file: None,
+        stdin: false,
+        summary: None,
+        requires_ack: false,
+        task_id: None,
+        dry_run: false,
+        json: false,
+    }
+    .build_request(".".into(), ".".into())
+    .expect("explicit request");
+
+    assert_eq!(inline.to, explicit.to);
+    assert_eq!(inline.remote_host, explicit.remote_host);
+    assert_eq!(inline.to.to_string(), "recipient-a@test-team");
+    assert_eq!(
+        inline.remote_host.as_ref().map(RemoteTargetHost::as_str),
+        Some("localhost")
+    );
+}
+
+#[test]
+#[serial(env)]
 fn build_request_rejects_mixed_inline_and_explicit_host() {
     let _env = EnvGuard::set_many([
         ("ATM_IDENTITY", Some("env-sender")),

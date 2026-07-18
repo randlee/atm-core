@@ -156,6 +156,8 @@ pub enum ProjectionAppendMode {
 pub struct NonClaudeOutboundDeliveryRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_host: Option<String>,
     pub recipient_pane_id: Option<PaneId>,
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
     /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and

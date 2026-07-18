@@ -64,7 +64,7 @@ pub enum SendMessageSource {
 pub struct RemoteTargetHost(String);
 
 impl RemoteTargetHost {
-    fn parse(value: &str) -> Result<Self, AtmError> {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             return Err(AtmError::address_parse("remote host must not be empty").with_recovery(
@@ -210,6 +210,8 @@ pub struct SendRequest {
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<RemoteTargetHost>,
     pub dry_run: bool,
 }
@@ -241,6 +243,7 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            source_remote_host: None,
             remote_host: None,
             dry_run,
         })
@@ -379,6 +382,37 @@ fn send_mail_with_runtime_impl<
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+#[cfg(test)]
+mod remote_target_parse_tests {
+    use super::parse_send_target;
+
+    #[test]
+    fn remote_target_syntaxes_normalize_to_the_same_contract() {
+        let inline = parse_send_target("qa-a@test-team.localhost", None).expect("inline target");
+        let explicit =
+            parse_send_target("qa-a@test-team", Some("localhost")).expect("explicit target");
+
+        assert_eq!(inline.to, explicit.to);
+        assert_eq!(inline.remote_host, explicit.remote_host);
+        assert_eq!(inline.to.to_string(), "qa-a@test-team");
+        assert_eq!(
+            inline.remote_host.as_ref().expect("remote host").as_str(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn remote_target_rejects_combined_inline_and_explicit_host_forms() {
+        let error = parse_send_target("qa-a@test-team.localhost", Some("127.0.0.1"))
+            .expect_err("combined host forms must fail");
+        assert!(
+            error
+                .message
+                .contains("cannot combine inline remote host syntax")
+        );
+    }
 }
 
 #[cfg(test)]

@@ -246,6 +246,7 @@ mod tests {
         DeliveryRecipientSnapshot {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
+            remote_host: None,
             harness,
             recipient_pane_id: None,
             local_tmux_post_send: false,

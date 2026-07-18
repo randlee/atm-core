@@ -562,6 +562,7 @@ mod tests {
         let snapshot = DeliveryRecipientSnapshot {
             agent: recipient.agent.clone(),
             team: recipient.team.clone(),
+            remote_host: None,
             harness: DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
             local_tmux_post_send: true,
@@ -654,6 +655,7 @@ mod tests {
         let snapshot = DeliveryRecipientSnapshot {
             agent: recipient.agent.clone(),
             team: recipient.team.clone(),
+            remote_host: None,
             harness: DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
             local_tmux_post_send: true,
@@ -748,6 +750,7 @@ mod tests {
         let snapshot = DeliveryRecipientSnapshot {
             agent: recipient.agent.clone(),
             team: recipient.team.clone(),
+            remote_host: None,
             harness: DeliveryHarnessPath::ClaudeCode,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
             local_tmux_post_send: true,
@@ -799,6 +802,7 @@ mod tests {
         let snapshot = DeliveryRecipientSnapshot {
             agent: recipient.agent.clone(),
             team: recipient.team.clone(),
+            remote_host: None,
             harness: DeliveryHarnessPath::NonClaude,
             recipient_pane_id: None,
             local_tmux_post_send: false,
