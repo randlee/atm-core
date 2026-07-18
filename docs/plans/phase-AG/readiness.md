@@ -35,8 +35,8 @@ release line.
 | `AG.9` | `PENDING` | `TBD` | reviewed earlier final-verdict sprint for the pre-corrective line; not the authoritative final verdict while `AG-FIND-005` remains open |
 | `AG.10` | `PENDING` | `TBD` | secured cross-host transport implementation not yet executed; any transport-security claim still depends on this sprint |
 | `AG.11` | `PASS` | `branch HEAD after AG11-MERGEFWD-FIX-1 push` | typed remote-target contract, production cross-host dispatch boundary, legacy listener-fallback deletion, and AG.11 validation all landed; follow-on localhost/self-IP/other-host proof remains in AG.12-AG.16 |
-| `AG.12` | `PENDING` | `TBD` | localhost full-function same-host remote-target proof not yet executed |
-| `AG.13` | `PENDING` | `TBD` | self-IP full-function same-host proof not yet executed |
+| `AG.12` | `PASS` | `ab37a826` | localhost full-function same-host remote-target proof landed and is now the merged same-host localhost baseline for the corrective chain |
+| `AG.13` | `FAIL` | `aa2a52d9` | self-IP same-host proof now carries the landed deferred-delivery policy, corrected readiness state, and corrected self-IP evidence scope on this branch; merge-gate closure is awaiting QA recheck of the current branch head rather than the stale QA-3 snapshot |
 | `AG.14` | `PENDING` | `TBD` | automated integration coverage for the corrective path not yet executed |
 | `AG.15` | `PENDING` | `TBD` | other-Mac cross-host smoke not yet executed across the full corrective matrix |
 | `AG.16` | `PENDING` | `TBD` | Windows/macOS cross-host smoke not yet executed across the full corrective matrix |

@@ -26,6 +26,7 @@ pub mod input;
 pub mod nudge_template;
 mod outcome;
 mod persistence;
+mod remote_receipt;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
@@ -35,6 +36,11 @@ use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
+pub use remote_receipt::RemoteDeliveryReceiptStatus;
+#[doc(hidden)]
+pub use remote_receipt::{
+    finalize_remote_delivery_receipt_with_runtime, persist_remote_delivery_receipt_with_runtime,
+};
 pub use target::{PeerLoopbackHost, qualified_sender_identity};
 pub(crate) use target::{
     ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
@@ -58,7 +64,7 @@ pub enum SendMessageSource {
 pub struct RemoteTargetHost(String);
 
 impl RemoteTargetHost {
-    pub fn parse(value: &str) -> Result<Self, AtmError> {
+    fn parse(value: &str) -> Result<Self, AtmError> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             return Err(AtmError::address_parse("remote host must not be empty").with_recovery(
@@ -250,6 +256,8 @@ pub struct SendOutcome {
     pub sender: AgentName,
     pub outcome: SendCommandOutcome,
     pub message_id: AtmMessageId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_message_id: Option<AtmMessageId>,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -267,6 +275,7 @@ pub struct SendOutcome {
 #[serde(rename_all = "snake_case")]
 pub enum SendCommandOutcome {
     Sent,
+    Deferred,
     DryRun,
 }
 
@@ -274,6 +283,7 @@ impl SendCommandOutcome {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Sent => "sent",
+            Self::Deferred => "deferred",
             Self::DryRun => "dry_run",
         }
     }

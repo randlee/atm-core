@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B1-DELIVERY-POLICY>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B1-DELIVERY-POLICY" ;
+  triage:title "Delivery-result policy (10s healthy-wait, deferred-retry, receipt) remains unimplemented" ;
+  triage:description "peer_transport/mod.rs (now split into crates/atm-daemon/src/runtime_health/dispatch_delivery.rs and crates/atm-daemon/src/peer_transport/delivery.rs) never implements the ADR-031-specified delivery-result policy. RemoteDeliveryDecision enum only has HealthyImmediateWait variant (no DeferredRetry). SendOutcome::Deferred is a bare unit variant, not Deferred{receipt_message_id} as ADR-031 specifies. dispatch_delivery.rs:83-88 converts a Deferred outcome directly into a synchronous Err returned to the caller -- no background retry task, no 60-120s bounded retry window, no receipt written to sender's inbox. This recurs from AG11 B1 / AG12 B4, now fully specified in docs/requirements.md:3632-3653 (REQ-CORE-TRANSPORT-004) and ADR-031 (docs/adr/ADR-031-remote-target-contract-and-cross-host-dispatch.md, lines 52-55,114-147) but still uncoded." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B1-DELIVERY-POLICY/pAG-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B1-DELIVERY-POLICY/pAG-s13/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/1791f5ab> ;
+  triage:notes "Recurrence from AG11 B1 / AG12 B4: same underlying delivery-result policy gap. Confirmed unchanged at AG13-QA-2 full recheck of commit 6d2afb4c. Fix-eligible and dispatch-ready. Requires implementation of: (1) RemoteDeliveryDecision::DeferredRetry variant, (2) SendOutcome::Deferred{receipt_message_id} payload, (3) background retry task with 60-120s bounded window, (4) receipt message delivery to sender's inbox per ADR-031:114-147. STILL OPEN at AG13-QA-3 (commit 1791f5ab): AG13-FIX-1 Group 1 (commit 8ce2f9ea) was claimed to close this finding, but quality-mgr's independent recheck at AG13-QA-3 found the commit did not touch RemoteDeliveryDecision or SendOutcome at all -- no DeferredRetry variant/struct payload was added, and no background retry loop exists anywhere in the codebase (resume_pending_replay only runs once at daemon startup; a message deferred mid-run is never retried until the daemon restarts). The retry budget also remains short of the ADR-031 spec: currently implemented as a 30s wait / 5s cap rather than the specified 60-120s window / 30s cap. The Group-1 fix claim was inaccurate and must not be treated as closing this finding." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B1-DELIVERY-POLICY/pAG-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 83 ;
+  triage:snippet "dispatch_delivery.rs:83-88 [Deferred outcome converted directly to synchronous Err, no background retry task or receipt]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B1-DELIVERY-POLICY/pAG-s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 13 ;
+  triage:snippet "RemoteDeliveryDecision enum [missing DeferredRetry variant] and SendOutcome::Deferred [bare unit, not Deferred{receipt_message_id}]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/1791f5ab> .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/pAG-s13/1791f5ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "1791f5ab" ;
+  triage:orderIndex 13 .

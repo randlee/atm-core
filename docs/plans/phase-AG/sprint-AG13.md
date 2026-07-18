@@ -1,10 +1,10 @@
 ---
 id: AG.13
 title: Self-IP Full-Function Same-Host Proof
-status: planned
+status: in_progress
 branch: feature/pAG-s13-selfip-proof
 worktree: ../atm-core-worktrees/feature/pAG-s13-selfip-proof
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.13 — Self-IP Full-Function Same-Host Proof
@@ -15,7 +15,7 @@ phase: AG
 sprint: AG.13
 worktree: ../atm-core-worktrees/feature/pAG-s13-selfip-proof
 branch: feature/pAG-s13-selfip-proof
-status: planned
+status: in_progress
 estimated_scope: medium
 ```
 
@@ -37,15 +37,16 @@ advertised or bound IP address.
 - self-IP same-host remote-target sends use the same cross-host dispatch branch
   proven in AG.12
 - unauthorized self-IP same-host traffic is rejected before mailbox mutation
-- authorized self-IP same-host traffic supports the full functional matrix:
+- authorized self-IP same-host traffic proves the self-IP core delivery matrix:
   - durable send
   - receiver read
   - `--requires-ack`
   - reply-state mutation
-  - nudge/notification classification
-  - retry-visible recovery
 - unhealthy self-IP transport returns immediate deferred status and later
   writes final delivery/failure receipt into sender inbox
+- companion localhost integration proofs remain the retained evidence for
+  nudge/notification classification and retry-visible recovery until dedicated
+  self-IP fixtures exist
 - no result in this sprint is allowed to rely on the local mailbox path as a
   hidden fallback
 
@@ -63,8 +64,9 @@ advertised or bound IP address.
 
 - self-IP same-host integration coverage for send/read/ack
 - self-IP same-host unauthorized rejection before mailbox mutation
-- self-IP same-host nudge/notification classification
-- self-IP same-host retry-visible recovery
+- companion localhost integration coverage for nudge/notification
+  classification
+- companion localhost integration coverage for retry-visible recovery
 
 ## Smoke-Test Plan
 
@@ -80,7 +82,9 @@ advertised or bound IP address.
 
 ## Entry Gate
 
-- AG.12 localhost remote-target closure is complete
+- AG.12 is landed on this corrective branch; AG.13 must continue to keep
+  `readiness.md` aligned with the real landed state rather than reverting to
+  `PENDING/TBD`
 
 ## Ownership
 

@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B7-DELEGATING-WRAPPER-TESTS>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B7-DELEGATING-WRAPPER-TESTS" ;
+  triage:title "Required nudge/notification-classification + retry-visible-recovery functional matrix still not genuinely covered for the remote-target path" ;
+  triage:description "AG13-QA-1 found zero test coverage for remote-target path notification classification and retry-visible recovery. Commit 6d2afb4c added ~90 new lines to crates/atm-daemon/src/peer_transport/tests/harness.rs including two new wrapper tests (localhost_remote_target_notification_degradation_is_classified_without_failing_delivery and localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable at lines 433-441) and a third test at lines 446-476 (local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender). However, the wrapper tests are one-line DELEGATIONS to pre-existing AG.12 test bodies (local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades and local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry at harness.rs:282-331+) with zero new test logic. The third test also binds only to Ipv4Addr::LOCALHOST, exercising no actual remote-target paths. This cannot count as genuine AG.13 coverage of self-IP/remote-target path functionality since no new test logic exercises that path specifically." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B7/delegating-wrapper-tests-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B7/delegating-wrapper-tests-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B7/localhost-only-allowlist-test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B7/pre-existing-ag12-bodies> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:notes "Closed in the current AG.13 fix set. The two delegating wrappers were replaced with AG.13-owned remote-target test bodies that drive DaemonRequestDispatcher with host-qualified requests, prove deferred delivery receipt emission, prove replay-visible recovery after listener startup, and prove sender-side receipt update after replay completion. Validation: cargo fmt --all, just lint, cargo test -p atm-daemon -p agent-team-mail-core all passed." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B7/delegating-wrapper-tests-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 433 ;
+  triage:snippet "fn localhost_remote_target_notification_degradation_is_classified_without_failing_delivery() [one-line delegation to AG.12 test body local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B7/delegating-wrapper-tests-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 438 ;
+  triage:snippet "fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() [one-line delegation to AG.12 test body local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B7/localhost-only-allowlist-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 446 ;
+  triage:snippet "fn local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender() [binds only to Ipv4Addr::LOCALHOST, never exercises actual remote-target paths]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B7/pre-existing-ag12-bodies>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 282 ;
+  triage:snippet "Pre-existing AG.12 test bodies (local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades and local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry) at lines 282-331+, unchanged in AG.13, now delegated to by new wrapper functions" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .

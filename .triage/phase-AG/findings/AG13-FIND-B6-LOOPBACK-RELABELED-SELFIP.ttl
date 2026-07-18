@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B6-LOOPBACK-RELABELED-SELFIP>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B6-LOOPBACK-RELABELED-SELFIP" ;
+  triage:title "Self-IP tests remain loopback-relabeled, not proof against a real advertised interface IP" ;
+  triage:description "The two self-IP test functions in crates/atm-daemon/src/tests/runtime_root/loopback.rs (post-split location; original runtime_root.rs was split by commit 714b1c67 into dispatch.rs, local_ipc.rs, loopback.rs, mod.rs) -- dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation (line 480, body calls RemoteTargetHost::parse(\"127.0.0.1\") at line 549) and dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state (line 590, body calls the same at line 646) -- still bind/allow-list 127.0.0.1/Ipv4Addr::LOCALHOST, byte-for-byte the same mechanism as AG.12's loopback tests. AG13-QA-2 additionally confirmed via RBP that both are structurally near-identical copies of the file's pre-existing loopback test dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox (lines 1-93) -- same tempdir/roster/allow_host('127.0.0.1', ...) scaffolding, just renamed. No fixture in the entire diff exercises the host's actual advertised/bound network-interface IP as sprint-AG13.md and the smoke checklist require." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-self-ip-send/480> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-self-ip-send/549> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-secure-self-ip/590> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-secure-self-ip/646> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B6/loopback-template/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> ;
+  triage:notes "Closed in AG.13 Group 4. The self-IP proof now uses a shared non-loopback self-IP fixture discovered at runtime (`192.0.0.2` in the validated run), the hardcoded `127.0.0.1` remote-host targets are gone from the self-IP tests, and the old loopback-relabeled unauthorized self-IP test was removed from runtime_root/loopback.rs. Validation: cargo fmt --all, just lint, cargo test -p atm-daemon -p agent-team-mail-core all passed." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-self-ip-send/480>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 480 ;
+  triage:snippet "dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation() function definition [uses loopback-only fixtures]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-self-ip-send/549>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 549 ;
+  triage:snippet "RemoteTargetHost::parse(\"127.0.0.1\") [hardcoded loopback in self-IP test]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-secure-self-ip/590>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 590 ;
+  triage:snippet "dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() function definition [uses loopback-only fixtures]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B6/dispatcher-secure-self-ip/646>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 646 ;
+  triage:snippet "RemoteTargetHost::parse(\"127.0.0.1\") [hardcoded loopback in secure self-IP test]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> .
+
+<urn:atm:triage:occurrence/AG13-FIND-B6/loopback-template/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 1 ;
+  triage:snippet "dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() lines 1-93 [template for both self-IP tests: same tempdir/roster/allow_host scaffold]" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c> .
+
+<urn:atm:triage:worktree/pAG-s13-selfip-proof/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .

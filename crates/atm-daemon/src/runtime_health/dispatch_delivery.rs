@@ -9,10 +9,14 @@ use atm_core::{
     list::list_mail,
     protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    send::{SendRequest, send_mail_with_runtime_and_post_send_emitter},
+    schema::AtmMessageId,
+    send::{
+        SendCommandOutcome, SendOutcome, SendRequest, persist_remote_delivery_receipt_with_runtime,
+        send_mail_with_runtime_and_post_send_emitter,
+    },
 };
 
-use crate::peer_transport::delivery::{RemoteFailureKind, SendOutcome as RemoteSendOutcome};
+use crate::peer_transport::delivery::SendOutcome as RemoteSendOutcome;
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
@@ -78,23 +82,32 @@ impl DaemonRequestDispatcher {
             )?;
             return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
         };
-        match self.cross_host_delivery.deliver_remote(request, remote_host) {
+        let deferred_receipt_message_id = AtmMessageId::new();
+        match self.cross_host_delivery.deliver_remote(
+            request.clone(),
+            remote_host.clone(),
+            deferred_receipt_message_id,
+        ) {
             Ok(RemoteSendOutcome::Delivered(response)) => Ok(*response),
-            Ok(RemoteSendOutcome::Deferred) => Err(AtmError::daemon_unavailable(
-                "remote delivery was deferred because the cross-host path is not currently healthy",
-            )
-            .with_recovery(
-                "Verify the daemon interface rows and remote host reachability, then retry the remote send after the cross-host path is healthy.",
+            Ok(RemoteSendOutcome::Deferred { receipt_message_id }) => Ok(ResponseEnvelope::Send(
+                SendResponseEnvelope::Sent(build_remote_deferred_outcome(
+                    &self.service_runtime,
+                    &request,
+                    &remote_host,
+                    receipt_message_id,
+                    "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
+                )?),
             )),
-            Ok(RemoteSendOutcome::RejectedTerminal(kind)) => Err(
-                remote_failure_kind_error(kind)
+            Ok(RemoteSendOutcome::RejectedTerminal(error)) => Err(error),
+            Ok(RemoteSendOutcome::OutcomeUnknown { receipt_message_id }) => Ok(
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(build_remote_deferred_outcome(
+                    &self.service_runtime,
+                    &request,
+                    &remote_host,
+                    receipt_message_id,
+                    "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
+                )?)),
             ),
-            Ok(RemoteSendOutcome::OutcomeUnknown) => Err(AtmError::daemon_unavailable(
-                "remote delivery outcome is unknown",
-            )
-            .with_recovery(
-                "Check the destination daemon and local replay state before retrying the remote send.",
-            )),
             Err(error) => Err(error.into_atm_error()),
         }
     }
@@ -117,18 +130,45 @@ impl DaemonRequestDispatcher {
     }
 }
 
-fn remote_failure_kind_error(kind: RemoteFailureKind) -> AtmError {
-    match kind {
-        RemoteFailureKind::TerminalProtocolRejected => AtmError::validation(
-            "remote daemon rejected the cross-host request protocol".to_string(),
-        )
-        .with_recovery(
-            "Align the sender and receiver daemon protocol versions before retrying.",
-        ),
-        RemoteFailureKind::TerminalMalformedTarget => {
-            AtmError::address_parse("remote target is malformed").with_recovery(
-                "Use `atm send <agent>@<team>.<host> ...` or `atm send <agent>@<team> --host <host> ...` with a valid host token before retrying.",
-            )
-        }
-    }
+fn build_remote_deferred_outcome(
+    runtime: &atm_core::LocalServiceRuntime,
+    request: &SendRequest,
+    remote_host: &atm_core::send::RemoteTargetHost,
+    receipt_message_id: AtmMessageId,
+    receipt_body: &str,
+) -> Result<SendOutcome, AtmError> {
+    let _receipt = persist_remote_delivery_receipt_with_runtime(
+        runtime,
+        &request.home_dir,
+        &request.caller_team,
+        &request.caller_identity,
+        receipt_message_id,
+        &request.to,
+        remote_host.as_str(),
+        request.task_id.clone(),
+        receipt_body,
+    )?;
+    Ok(SendOutcome {
+        action: atm_core::types::CommandAction::Send,
+        team: request
+            .to
+            .team
+            .clone()
+            .unwrap_or_else(|| request.caller_team.clone()),
+        agent: request.to.agent.clone(),
+        sender: request.caller_identity.clone(),
+        outcome: SendCommandOutcome::Deferred,
+        message_id: receipt_message_id,
+        receipt_message_id: Some(receipt_message_id),
+        requires_ack: request.requires_ack || request.task_id.is_some(),
+        task_id: request.task_id.clone(),
+        summary: Some(format!(
+            "ATM deferred remote delivery to {} via {}",
+            request.to,
+            remote_host.as_str()
+        )),
+        message: Some(receipt_body.to_string()),
+        warnings: Vec::new(),
+        dry_run: false,
+    })
 }
