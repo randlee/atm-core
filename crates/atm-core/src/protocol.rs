@@ -20,6 +20,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
+use crate::schema::InboxMessage;
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -30,6 +31,7 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 pub enum SendRequestEnvelope {
     Compose(SendRequest),
     Acknowledge(AckRequest),
+    DirectDeliver(DirectDeliveryRequest),
 }
 
 /// Shared protocol send-shaped response envelope.
@@ -37,6 +39,19 @@ pub enum SendRequestEnvelope {
 pub enum SendResponseEnvelope {
     Sent(SendOutcome),
     Acknowledged(AckOutcome),
+    DirectDelivered(DirectDeliveryOutcome),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectDeliveryRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub messages: Vec<InboxMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DirectDeliveryOutcome {
+    pub delivered_messages: usize,
 }
 
 /// Shared protocol request envelope.
@@ -313,6 +328,7 @@ impl fmt::Display for RequestId {
 pub enum MessageKind {
     SendComposeRequest = 0x0001,
     SendAcknowledgeRequest = 0x0002,
+    SendDirectDeliverRequest = 0x000a,
     HeartbeatRequest = 0x0003,
     CompatibilityPreflightRequest = 0x0009,
     ListRequest = 0x0004,
@@ -322,6 +338,7 @@ pub enum MessageKind {
     DoctorRequest = 0x0008,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
+    SendDirectDeliveredResponse = 0x100a,
     HeartbeatResponse = 0x1003,
     CompatibilityVerdictResponse = 0x1009,
     ListResponse = 0x1004,
@@ -342,6 +359,7 @@ impl MessageKind {
             self,
             Self::SendComposeRequest
                 | Self::SendAcknowledgeRequest
+                | Self::SendDirectDeliverRequest
                 | Self::HeartbeatRequest
                 | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
@@ -364,6 +382,7 @@ impl TryFrom<u16> for MessageKind {
         let kind = match value {
             0x0001 => Self::SendComposeRequest,
             0x0002 => Self::SendAcknowledgeRequest,
+            0x000a => Self::SendDirectDeliverRequest,
             0x0003 => Self::HeartbeatRequest,
             0x0009 => Self::CompatibilityPreflightRequest,
             0x0004 => Self::ListRequest,
@@ -373,6 +392,7 @@ impl TryFrom<u16> for MessageKind {
             0x0008 => Self::DoctorRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
+            0x100a => Self::SendDirectDeliveredResponse,
             0x1003 => Self::HeartbeatResponse,
             0x1009 => Self::CompatibilityVerdictResponse,
             0x1004 => Self::ListResponse,
@@ -744,6 +764,9 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
             MessageKind::SendAcknowledgeRequest
         }
+        RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(_)) => {
+            MessageKind::SendDirectDeliverRequest
+        }
         RequestEnvelope::CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
         RequestEnvelope::List(_) => MessageKind::ListRequest,
@@ -759,6 +782,9 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => MessageKind::SendSentResponse,
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
             MessageKind::SendAcknowledgedResponse
+        }
+        ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(_)) => {
+            MessageKind::SendDirectDeliveredResponse
         }
         ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,

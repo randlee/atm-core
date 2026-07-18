@@ -64,7 +64,7 @@ pub enum SendMessageSource {
 pub struct RemoteTargetHost(String);
 
 impl RemoteTargetHost {
-    fn parse(value: &str) -> Result<Self, AtmError> {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             return Err(AtmError::address_parse("remote host must not be empty").with_recovery(
@@ -210,6 +210,8 @@ pub struct SendRequest {
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<RemoteTargetHost>,
     pub dry_run: bool,
 }
@@ -241,6 +243,7 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            source_remote_host: None,
             remote_host: None,
             dry_run,
         })

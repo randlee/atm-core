@@ -9,6 +9,10 @@ use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
 use crate::error::AtmError;
 use crate::types::IsoTimestamp;
 
+const METADATA_KEY: &str = "metadata";
+const ATM_METADATA_KEY: &str = "atm";
+const REMOTE_HOST_METADATA_KEY: &str = "remoteHost";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AckIntentFields {
     pub(crate) requires_ack: bool,
@@ -60,13 +64,44 @@ pub(crate) fn to_shared_inbox_value(message: &InboxMessage) -> Result<Value, Atm
 }
 
 fn strip_metadata_atm_namespace(object: &mut Map<String, Value>) {
-    let Some(metadata) = object.get_mut("metadata").and_then(Value::as_object_mut) else {
+    let Some(metadata) = object.get_mut(METADATA_KEY).and_then(Value::as_object_mut) else {
         return;
     };
-    metadata.remove("atm");
+    metadata.remove(ATM_METADATA_KEY);
     if metadata.is_empty() {
-        object.remove("metadata");
+        object.remove(METADATA_KEY);
     }
+}
+
+pub(crate) fn remote_host(message: &InboxMessage) -> Option<&str> {
+    message
+        .extra
+        .get(METADATA_KEY)
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get(ATM_METADATA_KEY))
+        .and_then(Value::as_object)
+        .and_then(|atm| atm.get(REMOTE_HOST_METADATA_KEY))
+        .and_then(Value::as_str)
+}
+
+pub(crate) fn set_remote_host(message: &mut InboxMessage, remote_host: &str) {
+    let metadata = message
+        .extra
+        .entry(METADATA_KEY.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let metadata = metadata
+        .as_object_mut()
+        .expect("message metadata must stay object-shaped");
+    let atm = metadata
+        .entry(ATM_METADATA_KEY.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let atm = atm
+        .as_object_mut()
+        .expect("ATM metadata namespace must stay object-shaped");
+    atm.insert(
+        REMOTE_HOST_METADATA_KEY.to_string(),
+        Value::String(remote_host.to_string()),
+    );
 }
 
 fn strip_removed_compatibility_fields(object: &mut Map<String, Value>) {

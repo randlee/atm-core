@@ -221,6 +221,7 @@ impl RetainedServiceRuntime for TestRuntime {
             .push(NonClaudeOutboundDeliveryRequest {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
+                remote_host: recipient.remote_host.clone(),
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             });
@@ -310,6 +311,7 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
     DeliveryRecipientSnapshot {
         agent: AgentName::from_validated("recipient"),
         team: TeamName::from_validated(TEST_TEAM),
+        remote_host: None,
         harness,
         recipient_pane_id: None,
         local_tmux_post_send: false,
@@ -354,6 +356,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
+        source_remote_host: None,
         remote_host: None,
         dry_run: false,
     }
