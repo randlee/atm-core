@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::AtmError;
-use crate::validation::validate_path_segment;
+use crate::validation::{validate_agent_at_team, validate_path_segment};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -125,13 +125,7 @@ impl AgentId {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         let trimmed = value.trim();
-        match trimmed.split_once('@') {
-            Some((agent, team)) => {
-                validate_path_segment(agent, "agent id")?;
-                validate_path_segment(team, "agent id")?;
-            }
-            None => validate_path_segment(trimmed, "agent id")?,
-        }
+        validate_agent_at_team(trimmed, "agent id")?;
         Ok(Self(trimmed.to_string()))
     }
 
@@ -271,7 +265,14 @@ mod tests {
 
     #[test]
     fn agent_id_new_rejects_invalid_path_segments() {
-        for invalid in ["", ".hidden", "two..dots", "bad/name", "bad name"] {
+        for invalid in [
+            "",
+            ".hidden",
+            "two..dots",
+            "bad/name",
+            "bad name",
+            "role@bad.team",
+        ] {
             assert!(
                 AgentId::new(invalid).is_err(),
                 "expected `{invalid}` to fail"

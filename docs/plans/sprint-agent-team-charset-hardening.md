@@ -79,28 +79,25 @@ sprint should centralize these rather than patching each one independently.
    authoritative identifier policy and have the second seam delegate to it
    instead of preserving two hand-maintained allowlists.
 
-2. Send-target parsing carries its own extra delimiter rule on top of the base
-   validator.
+2. Historical AG send-target parser references were removed before this
+   develop-based fix branch was cut.
    - `crates/atm-core/src/send/mod.rs::validate_send_target_segment`
    - `crates/atm-core/src/send/mod.rs::parse_send_target_impl`
-   This path currently re-checks `.` locally because inline remote-target
-   parsing splits `<agent>@<team>.<host>` on `.` after `@`. Once the shared
-   identifier policy reserves delimiter characters globally, this seam should
-   stop owning a second local charset rule and should rely on the centralized
-   identifier validator plus the shared address parser contract.
+   do not exist in this worktree. They remain historical AG planning notes,
+   not active seams on this branch.
 
-3. Address parsing and reply-target parsing each own their own delimiter split
-   logic.
+3. The current live split seams on this branch are narrower than the AG notes
+   originally described.
    - `crates/atm-core/src/address.rs::AgentAddress::from_str` uses
      `split_once('@')`
-   - `crates/atm-core/src/send/mod.rs::parse_send_target_impl` uses
-     `split_once('@')`, `split_once('.')`, and inline/local mixed-form checks
-   - `crates/atm-core/src/ack/mod.rs` parses reply targets with
-     `split_once('.')` on the `team_and_host` portion
-   The code sprint should identify whether these should share one parsed-address
-   model or one parser boundary, so that future forms such as
-   `<agent>:<session>@<team>.<host>` do not spread delimiter ownership across
-   unrelated modules.
+   - `crates/atm-core/src/ack/mod.rs::ReplyTarget::deserialize` uses
+     `split_once('@')`
+   - `crates/atm-storage/src/validation.rs::validate_agent_at_team` now owns
+     the shared `agent@team` split+validate helper used by
+     `crates/atm-storage/src/types.rs::AgentId::new`
+   Future work should decide whether these should collapse into one typed
+   parser boundary so later forms such as `<agent>:<session>@<team>.<host>` do
+   not spread delimiter ownership across unrelated modules.
 
 4. Storage-side typed constructors depend directly on the storage validator.
    - `crates/atm-storage/src/types.rs::AgentName::from_str`
@@ -137,6 +134,10 @@ sprint should centralize these rather than patching each one independently.
 - `crates/atm-storage/src/validation.rs` is the authoritative validator.
 - `crates/atm-core/src/address.rs` now delegates to the shared validator
   instead of carrying a second hand-maintained implementation.
+- `crates/atm-storage/src/validation.rs::validate_agent_at_team` is now the
+  shared `agent@team` validation helper used by `AgentId::new`; the stale AG
+  send-target parser references in the earlier inventory were historical and
+  are not present on this branch.
 - PR #572 is superseded by this broader fix if this branch lands first.
 
 ## Acceptance Criteria
